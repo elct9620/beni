@@ -1,0 +1,691 @@
+//! kobako-mruby-sys — mruby C API FFI surface for the kobako Guest Binary.
+//!
+//! This crate is the boundary between `kobako-wasm` and `libmruby.a`.
+//! It carries two pieces of FFI surface:
+//!
+//!   1. Hand-written `extern "C"` declarations for the mruby C API
+//!      subset the Guest Binary calls.
+//!   2. Companion C shims (compiled by the crate's `build.rs`) that
+//!      wrap mruby's macro-only APIs in real `MRB_API` functions Rust
+//!      can reach through `extern "C"` — `kobako_get_exc`,
+//!      `kobako_value_is_integer`, `kobako_unbox_*`, `kobako_io_fwrite`,
+//!      `kobako_load_bytecode`, the `kobako_*_value` constant accessors.
+//!
+//! ## Why hand-rolled and not bindgen
+//!
+//! A future bindgen-driven binding generated from `vendor/mruby/include/`
+//! at build time is anticipated, scoped to this crate so libclang
+//! becomes a sys-only build dependency rather than something every
+//! `kobako-wasm` build must pay for. The current `build.rs` does not
+//! run bindgen; the FFI surface below is small and stable across
+//! mruby 3.x / 4.x and easy to maintain by hand for now.
+//!
+//! Hand-declaring the surface as `extern "C"` gives us:
+//!
+//!   * A wasm32 build that links against `libmruby.a` (the Rake driver
+//!     stages the archive — see `tasks/wasm.rake` and `tasks/mruby.rake`).
+//!   * A host-target build that compiles cleanly: every mruby symbol is
+//!     `#[cfg(target_arch = "wasm32")]`-gated, so the rlib used by
+//!     `cargo test` on macOS / Linux never needs the symbols resolved.
+//!
+//! When bindgen lands here, the safe layer in `kobako-wasm`
+//! (`src/mruby/{state,value,ccontext}.rs`) continues to import from this
+//! crate exactly as it does today — only the contents of this `lib.rs`
+//! and the cross-crate path remain unchanged.
+//!
+//! ## What is bound
+//!
+//! The mruby C API functions called from the kobako boot / bridge
+//! mechanism:
+//!
+//!   * Module / class / method registration:
+//!     `mrb_define_module`, `mrb_define_class_under`,
+//!     `mrb_define_singleton_method`, `mrb_define_method`.
+//!   * Lookup: `mrb_class_ptr`, `mrb_class_name`, `mrb_class_get`,
+//!     `mrb_class_get_under`.
+//!   * Argument unpack: `mrb_get_args`.
+//!   * String round-trip: `mrb_str_new`, `mrb_str_new_cstr`,
+//!     `mrb_str_to_cstr`.
+//!   * Exception path: `mrb_raise`, `mrb_check_error`, `mrb_protect_error`.
+//!   * State lifecycle: `mrb_open`, `mrb_close`.
+//!   * Source evaluation: `mrb_load_nstring`, `mrb_load_nstring_cxt`,
+//!     `mrb_load_irep_buf`.
+//!   * Compiler context: `mrb_ccontext_new` / `_free` / `_filename`.
+//!   * The `mrb_value` boxing helpers (declared as opaque `extern "C"`
+//!     against the companion C shims to side-step the static-inline
+//!     issue).
+//!
+//! No other mruby C API is touched here.
+//!
+//! ## ABI / opaque types
+//!
+//! `mrb_value` layout depends on mruby compile-time configuration. For
+//! wasm32 with `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT` the value
+//! is a 32-bit word-box (`struct { uintptr_t w }` where `uintptr_t` is
+//! 4 bytes). We treat `mrb_value` as opaque and never inspect its bits
+//! — the boxing helpers above are the only way we construct or
+//! destructure values. Hand-rolled bit patterns would be an ABI
+//! assumption violation; macro-routed values are not.
+
+#![allow(non_camel_case_types)]
+#![allow(dead_code)]
+
+use core::ffi::c_void;
+#[cfg(target_arch = "wasm32")]
+use core::ffi::{c_char, c_int};
+
+/// `mrb_bool` — mruby's boolean C type (unsigned char / u8).
+#[cfg(target_arch = "wasm32")]
+pub type mrb_bool = u8;
+
+/// `mrb_protect_error_func` — function pointer type accepted by
+/// `mrb_protect_error`. Receives `mrb` + `userdata` and returns an
+/// `mrb_value`.
+#[cfg(target_arch = "wasm32")]
+pub type mrb_protect_error_func =
+    unsafe extern "C" fn(mrb: *mut mrb_state, userdata: *mut c_void) -> mrb_value;
+
+/// `mrb_state` — partial mirror of mruby's public state struct from
+/// `vendor/mruby/include/mruby.h`. Only the leading prefix up to and
+/// including `object_class` is reflected; every preceding field is bound
+/// as `*mut c_void` because kobako never inspects them. Fields past
+/// `object_class` are intentionally elided — we only ever receive
+/// `*mut mrb_state` from mruby itself (never allocate one ourselves) and
+/// never perform pointer arithmetic past the declared tail, so the real
+/// trailing layout is irrelevant.
+///
+/// Exposing `object_class` lets the install paths spell the canonical
+/// `mrb->object_class` idiom used by upstream mrbgems (e.g.
+/// `mrbgems/mruby-io/src/io.c` line 2241), avoiding the runtime
+/// `mrb_class_get(mrb, "Object")` lookup and the `mrb_warn` that
+/// `mrb_define_class` emits when handed a NULL super class.
+///
+/// The compile-time offset assertion below pins the prefix layout to
+/// the vendored mruby 4.0.0 ABI; any future vendor bump that reorders
+/// the prefix will fail to compile rather than silently read the
+/// wrong field. The six padding fields are private because they exist
+/// solely to align `object_class` at the correct offset; `object_class`
+/// itself is `pub` so the kobako-wasm install paths can spell
+/// `(*mrb).object_class` directly without a getter shim.
+#[repr(C)]
+pub struct mrb_state {
+    jmp: *mut c_void,      // struct mrb_jmpbuf *
+    c: *mut c_void,        // struct mrb_context *
+    root_c: *mut c_void,   // struct mrb_context *
+    globals: *mut c_void,  // struct iv_tbl *
+    exc: *mut c_void,      // struct RObject *
+    top_self: *mut c_void, // struct RObject *
+    pub object_class: *mut RClass,
+}
+
+const _: () = assert!(
+    core::mem::offset_of!(mrb_state, object_class) == 6 * core::mem::size_of::<*const c_void>(),
+    "mrb_state.object_class offset diverged from vendored mruby 4.0.0 layout"
+);
+
+/// Opaque pointer to an mruby compiler context (`mrb_ccontext *`). Used
+/// to attach a filename to a compile unit so the produced IREP carries
+/// `debug_info`, which `pack_backtrace` in `vendor/mruby/src/backtrace.c`
+/// requires to record stack frames.
+pub type mrb_ccontext = c_void;
+
+/// Opaque mruby value. The layout is target-specific:
+///
+/// - **wasm32-wasip1** (production target): `mrb_value` is `struct { uintptr_t w }`
+///   where `uintptr_t` is 4 bytes → `mrb_value` is exactly 4 bytes.
+///   This is the `MRB_WORDBOX_NO_INLINE_FLOAT` configuration produced by
+///   the kobako build config (`build_config/wasi.rb`).
+///
+/// - **host target** (macOS/Linux aarch64/x86_64, used for `cargo test`):
+///   The mruby C API is not linked so the exact layout does not matter;
+///   we use a 16-byte opaque placeholder that is large enough to cover any
+///   documented layout and satisfies alignment requirements.
+///
+/// The wasm32 size is critical: if the Rust type is larger than the C type,
+/// the Rust compiler emits sret-style calls (return via out-pointer) that
+/// do not match the wasm32 C ABI where a 4-byte return fits in a register.
+#[cfg(target_arch = "wasm32")]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct mrb_value {
+    pub w: u32,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct mrb_value {
+    _payload: [u64; 2],
+}
+
+impl mrb_value {
+    /// Construct an opaque all-zero `mrb_value`. On wasm32 this produces
+    /// `{ w: 0 }` which is mruby's `nil` value (MRB_Qnil = 0). On the host
+    /// target this produces a zeroed 16-byte placeholder.
+    pub const fn zeroed() -> Self {
+        #[cfg(target_arch = "wasm32")]
+        {
+            Self { w: 0 }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Self { _payload: [0, 0] }
+        }
+    }
+}
+
+/// Opaque `RClass *` — pointer to mruby class object.
+pub type RClass = c_void;
+
+/// Opaque `RObject *` — pointer to a generic mruby object header.
+pub type RObject = c_void;
+
+/// `mrb_sym` — interned symbol id. mruby uses 32-bit symbol ids by
+/// default; treat as opaque.
+pub type mrb_sym = u32;
+
+/// C function pointer matching mruby's method-implementation signature
+/// `mrb_value (*)(mrb_state*, mrb_value)`. Used by `mrb_define_method`
+/// and `mrb_define_singleton_method`.
+pub type mrb_func_t = unsafe extern "C" fn(mrb: *mut mrb_state, self_: mrb_value) -> mrb_value;
+
+/// `mrb_aspec` — packed argument specification (e.g. `MRB_ARGS_REQ(4)`).
+/// In mruby this is a `uint32_t`. Construction macros listed below.
+pub type mrb_aspec = u32;
+
+/// `MRB_ARGS_NONE()` — no arguments.
+pub const MRB_ARGS_NONE: mrb_aspec = 0;
+
+/// `MRB_ARGS_ANY()` — accept any number of arguments. Matches mruby's
+/// `MRB_ARGS_REST()` shape: 0 required, 0 optional, rest=1.
+pub const MRB_ARGS_ANY: mrb_aspec = 1 << 12;
+
+/// `MRB_ARGS_REQ(n)` — `n` required positional arguments.
+#[inline]
+pub const fn mrb_args_req(n: u32) -> mrb_aspec {
+    (n & 0x1f) << 18
+}
+
+// --------------------------------------------------------------------
+// FFI declarations.
+// --------------------------------------------------------------------
+//
+// Only declared on wasm32 — the host-target rlib build deliberately
+// has no libmruby.a in its link graph (see `build.rs` early-return on
+// non-wasm32). Gating these here means `cargo test` on host compiles
+// without unresolved symbols.
+
+#[cfg(target_arch = "wasm32")]
+extern "C" {
+    /// `mrb_define_module(mrb, name)` — defines or returns the module
+    /// named `name` at top level.
+    pub fn mrb_define_module(mrb: *mut mrb_state, name: *const c_char) -> *mut RClass;
+
+    /// `mrb_define_module_under(mrb, outer, name)` — defines or returns
+    /// the module `name` nested under `outer`.
+    pub fn mrb_define_module_under(
+        mrb: *mut mrb_state,
+        outer: *mut RClass,
+        name: *const c_char,
+    ) -> *mut RClass;
+
+    /// `mrb_define_class_under(mrb, outer, name, super_)` — defines a
+    /// class `name` under `outer`, inheriting from `super_`.
+    pub fn mrb_define_class_under(
+        mrb: *mut mrb_state,
+        outer: *mut RClass,
+        name: *const c_char,
+        super_: *mut RClass,
+    ) -> *mut RClass;
+
+    /// `mrb_define_singleton_method(mrb, obj, name, func, aspec)` —
+    /// defines a singleton-class method on `obj`.
+    pub fn mrb_define_singleton_method(
+        mrb: *mut mrb_state,
+        obj: *mut RObject,
+        name: *const c_char,
+        func: mrb_func_t,
+        aspec: mrb_aspec,
+    );
+
+    // NOTE: mrb_class_ptr is a C macro, not a real function:
+    //   #define mrb_class_ptr(v) ((struct RClass*)(mrb_ptr(v)))
+    // With MRB_WORDBOX_NO_INLINE_FLOAT + MRB_INT32 (wasm32 config),
+    // mrb_ptr(val) resolves to the raw pointer stored in the lower 32 bits.
+    // Use `val.w as *mut RClass` inline at bridge call sites; do NOT
+    // declare it here as an extern "C" fn (that would produce a wasm
+    // import for a symbol that doesn't exist as a real C function in
+    // libmruby.a).
+
+    /// `mrb_class_name(mrb, c)` — returns the class's full Ruby name
+    /// (e.g. `"MyService::KV"`).
+    pub fn mrb_class_name(mrb: *mut mrb_state, c: *mut RClass) -> *const c_char;
+
+    /// `mrb_get_args(mrb, format, ...)` — variadic argument unpack.
+    /// We only need the rest-array form `"*"` — guarded by C calling
+    /// convention varargs (`...`).
+    pub fn mrb_get_args(mrb: *mut mrb_state, format: *const c_char, ...) -> c_int;
+
+    /// `mrb_raise(mrb, c, msg)` — raises an exception of class `c`
+    /// with `msg`. Used in the wire-fault path.
+    pub fn mrb_raise(mrb: *mut mrb_state, c: *mut RClass, msg: *const c_char) -> !;
+
+    /// `mrb_class_get_under(mrb, outer, name)` — fetches a class by
+    /// name under `outer`. Used to resolve `Kobako::RPC::WireError` etc.
+    /// when raising from the C bridge.
+    pub fn mrb_class_get_under(
+        mrb: *mut mrb_state,
+        outer: *mut RClass,
+        name: *const c_char,
+    ) -> *mut RClass;
+
+    /// `mrb_define_class(mrb, name, super_)` — defines a top-level
+    /// class. Not currently used directly (the boot mechanism only
+    /// calls `mrb_define_class_under` for `Kobako::RPC` and the future
+    /// preamble subclasses), but declared here so future error-class
+    /// registration paths have a stable binding.
+    pub fn mrb_define_class(
+        mrb: *mut mrb_state,
+        name: *const c_char,
+        super_: *mut RClass,
+    ) -> *mut RClass;
+
+    /// `mrb_open()` — creates and initializes a new mruby interpreter
+    /// state. Returns NULL on allocation failure. Called once at the
+    /// start of every `__kobako_eval` invocation.
+    pub fn mrb_open() -> *mut mrb_state;
+
+    /// `mrb_close(mrb)` — destroys the mruby state and frees all
+    /// associated memory. Called at the end of `__kobako_eval`.
+    pub fn mrb_close(mrb: *mut mrb_state);
+
+    /// `mrb_load_nstring(mrb, s, len)` — compiles and evaluates the
+    /// Ruby source string `s[0..len]`. Returns the last expression
+    /// value; sets `mrb->exc` on parse or runtime error.
+    pub fn mrb_load_nstring(mrb: *mut mrb_state, s: *const c_char, len: usize) -> mrb_value;
+
+    /// `mrb_load_nstring_cxt(mrb, s, len, cxt)` — context-aware variant
+    /// of `mrb_load_nstring`. Compiling under a `mrb_ccontext` with a
+    /// filename set populates the resulting IREP's `debug_info`, which
+    /// is what `pack_backtrace` in `vendor/mruby/src/backtrace.c`
+    /// requires to record a stack frame — without it `Exception#backtrace`
+    /// returns an empty array (docs/wire-codec.md § Panic Envelope).
+    pub fn mrb_load_nstring_cxt(
+        mrb: *mut mrb_state,
+        s: *const c_char,
+        len: usize,
+        cxt: *mut mrb_ccontext,
+    ) -> mrb_value;
+
+    /// `mrb_load_irep_buf(mrb, buf, size)` — loads and evaluates a
+    /// precompiled RITE bytecode blob (as emitted by `mrbc -o foo.mrb`).
+    /// Returns the last expression value; sets `mrb->exc` on a malformed
+    /// blob (header mismatch, truncated section, version drift). Used at
+    /// install time to bring in `mrblib/io.rb` and `mrblib/kernel.rb`
+    /// without paying the parse-source cost on every `__kobako_eval`.
+    pub fn mrb_load_irep_buf(
+        mrb: *mut mrb_state,
+        buf: *const core::ffi::c_void,
+        size: usize,
+    ) -> mrb_value;
+
+    /// `mrb_ccontext_new(mrb)` — allocate a compiler context. Returned
+    /// pointer is owned by the caller and must be released with
+    /// `mrb_ccontext_free`.
+    pub fn mrb_ccontext_new(mrb: *mut mrb_state) -> *mut mrb_ccontext;
+
+    /// `mrb_ccontext_free(mrb, cxt)` — release a compiler context.
+    pub fn mrb_ccontext_free(mrb: *mut mrb_state, cxt: *mut mrb_ccontext);
+
+    /// `mrb_ccontext_filename(mrb, c, s)` — set the script filename used
+    /// for debug info. The pointer is interned by mruby; the input
+    /// string only has to live for the duration of the call.
+    pub fn mrb_ccontext_filename(
+        mrb: *mut mrb_state,
+        cxt: *mut mrb_ccontext,
+        s: *const c_char,
+    ) -> *const c_char;
+
+    /// `mrb_obj_classname(mrb, obj)` — returns a pointer to the class
+    /// name C string of `obj`. The pointer is owned by mruby and must
+    /// not be freed.
+    pub fn mrb_obj_classname(mrb: *mut mrb_state, obj: mrb_value) -> *const c_char;
+
+    /// `mrb_funcall(mrb, val, name, argc, ...)` — variadic Ruby method
+    /// call from C. Used to call `.message` on an exception value.
+    /// The call frame is not protected — callers must ensure `mrb->exc`
+    /// is already set as a known exception before calling this.
+    ///
+    /// Prefer `mrb_funcall_argv` (the non-variadic counterpart) when
+    /// the call site has a fixed argv slice — it gives the Rust borrow
+    /// checker something to verify and avoids variadic-FFI footguns.
+    pub fn mrb_funcall(
+        mrb: *mut mrb_state,
+        val: mrb_value,
+        name: *const c_char,
+        argc: c_int,
+        ...
+    ) -> mrb_value;
+
+    /// `mrb_funcall_argv(mrb, val, mid, argc, argv)` — non-variadic
+    /// counterpart to `mrb_funcall`. Takes a pre-interned method
+    /// symbol and an `argv` array pointer. Used by `mrb_value::call`
+    /// (`crate::mruby::value`) so call sites stop reaching for the
+    /// variadic `mrb_funcall`.
+    pub fn mrb_funcall_argv(
+        mrb: *mut mrb_state,
+        val: mrb_value,
+        mid: mrb_sym,
+        argc: c_int,
+        argv: *const mrb_value,
+    ) -> mrb_value;
+
+    /// `mrb_str_to_cstr(mrb, str)` — returns a NUL-terminated C string
+    /// from an mruby String value. The pointer is valid until the next
+    /// GC cycle; callers must copy before yielding control to mruby.
+    pub fn mrb_str_to_cstr(mrb: *mut mrb_state, str: mrb_value) -> *mut c_char;
+
+    /// `mrb_protect_error(mrb, body, userdata, error)` — calls `body`
+    /// via a protected frame. On exception, `*error` is set to TRUE and
+    /// the return value is the exception object. On success, `*error` is
+    /// FALSE and the return value is `body`'s return value.
+    pub fn mrb_protect_error(
+        mrb: *mut mrb_state,
+        body: mrb_protect_error_func,
+        userdata: *mut c_void,
+        error: *mut mrb_bool,
+    ) -> mrb_value;
+
+    /// `mrb_check_error(mrb)` — returns TRUE if `mrb->exc` is set, then
+    /// clears it. Used after `mrb_load_nstring` to detect exceptions
+    /// without accessing the struct field directly.
+    pub fn mrb_check_error(mrb: *mut mrb_state) -> mrb_bool;
+
+    /// `mrb_sym_name(mrb, sym)` — returns the C string name for a symbol.
+    /// Used to extract the method name from `method_missing` args.
+    pub fn mrb_sym_name(mrb: *mut mrb_state, sym: mrb_sym) -> *const c_char;
+
+    /// `mrb_str_new_cstr(mrb, str)` — creates a new mruby String from a
+    /// NUL-terminated C string.
+    pub fn mrb_str_new_cstr(mrb: *mut mrb_state, s: *const c_char) -> mrb_value;
+
+    /// `mrb_ary_entry(ary, offset)` — returns the element at `offset` in
+    /// `ary`. No bounds checking on the C side; caller must ensure offset
+    /// is in range.
+    ///
+    /// `offset` is `mrb_int` which on wasm32 (MRB_INT32 config) is a 32-bit
+    /// signed integer.
+    pub fn mrb_ary_entry(ary: mrb_value, offset: i32) -> mrb_value;
+
+    /// `mrb_hash_keys(mrb, hash)` — returns an Array of the hash's keys.
+    pub fn mrb_hash_keys(mrb: *mut mrb_state, hash: mrb_value) -> mrb_value;
+
+    /// `mrb_hash_get(mrb, hash, key)` — returns the value for `key` in
+    /// `hash`, or nil if not present.
+    pub fn mrb_hash_get(mrb: *mut mrb_state, hash: mrb_value, key: mrb_value) -> mrb_value;
+
+    /// `mrb_hash_p(mrb, obj)` — NOTE: this is a predicate macro in mruby,
+    /// not a real C function. Checking is done via mrb_obj_classname
+    /// comparison instead.
+
+    /// `mrb_intern_cstr(mrb, str)` — interns a NUL-terminated C string
+    /// as a symbol. Used to build string keys for mrb_hash_get.
+    pub fn mrb_intern_cstr(mrb: *mut mrb_state, str: *const c_char) -> mrb_sym;
+
+    /// `mrb_str_new(mrb, p, len)` — create a new mruby String from `p[0..len]`.
+    ///
+    /// `len` is `mrb_int` which on wasm32 (MRB_INT32 config) is a 32-bit
+    /// signed integer.
+    pub fn mrb_str_new(mrb: *mut mrb_state, p: *const c_char, len: i32) -> mrb_value;
+
+    /// `mrb_boxing_int_value(mrb, n)` — construct an mruby Integer value
+    /// from a C `mrb_int`. Used to box integer RPC responses back into the
+    /// mruby VM without string round-tripping.
+    ///
+    /// `n` is `mrb_int` which on wasm32 (MRB_INT32 config) is a 32-bit
+    /// signed integer.
+    pub fn mrb_boxing_int_value(mrb: *mut mrb_state, n: i32) -> mrb_value;
+
+    /// `mrb_word_boxing_float_value(mrb, f)` — construct an mruby Float value
+    /// via the word-boxing allocator. Used on wasm32 with
+    /// MRB_WORDBOX_NO_INLINE_FLOAT where floats are heap-allocated.
+    pub fn mrb_word_boxing_float_value(mrb: *mut mrb_state, f: f64) -> mrb_value;
+
+    /// `mrb_define_method(mrb, c, name, func, aspec)` — defines an instance
+    /// method on class `c`. Used to register instance-level `method_missing`
+    /// on `Kobako::RPC::Handle` so handle objects forward method calls to the
+    /// host through `Kobako::dispatch_invoke` (docs/behavior.md B-17).
+    pub fn mrb_define_method(
+        mrb: *mut mrb_state,
+        c: *mut RClass,
+        name: *const c_char,
+        func: mrb_func_t,
+        aspec: mrb_aspec,
+    );
+
+    /// `mrb_obj_new(mrb, c, argc, argv)` — allocates and initializes a new
+    /// instance of class `c`, calling `initialize` with `argc` arguments
+    /// from `argv`. Used to create `Kobako::RPC::Handle` instances.
+    pub fn mrb_obj_new(
+        mrb: *mut mrb_state,
+        c: *mut RClass,
+        argc: i32,
+        argv: *const mrb_value,
+    ) -> mrb_value;
+
+    /// `mrb_iv_set(mrb, obj, sym, val)` — sets the instance variable
+    /// identified by `sym` on `obj` to `val`. Used by the Handle `initialize`
+    /// C shim to stash the Handle id.
+    pub fn mrb_iv_set(mrb: *mut mrb_state, obj: mrb_value, sym: mrb_sym, val: mrb_value);
+
+    /// `mrb_iv_get(mrb, obj, sym)` — returns the instance variable identified
+    /// by `sym` on `obj`, or `mrb_nil_value()` if not set.
+    pub fn mrb_iv_get(mrb: *mut mrb_state, obj: mrb_value, sym: mrb_sym) -> mrb_value;
+
+    /// `mrb_class_get(mrb, name)` — fetches a top-level class by name
+    /// (e.g. `"RuntimeError"`). Used to resolve the parent class for
+    /// `Kobako::ServiceError` / `Kobako::RPC::WireError` in
+    /// `crate::kobako::Kobako::install_raw`.
+    pub fn mrb_class_get(mrb: *mut mrb_state, name: *const c_char) -> *mut RClass;
+
+    /// `mrb_define_global_const(mrb, name, val)` — bind a top-level
+    /// constant by NUL-terminated name (e.g. `STDOUT`, `STDERR`). The
+    /// constant is reachable from any script context via its bare name
+    /// (`STDOUT`) and via `Object::STDOUT`.
+    pub fn mrb_define_global_const(mrb: *mut mrb_state, name: *const c_char, val: mrb_value);
+
+    /// `mrb_gv_set(mrb, sym, val)` — assign a global variable
+    /// (Ruby `$name`). Pair with `mrb_intern_cstr(mrb, "$name\0")` to
+    /// obtain the symbol. Used to wire `$stdout` and `$stderr` to the
+    /// freshly-constructed `IO` instances at install time.
+    pub fn mrb_gv_set(mrb: *mut mrb_state, sym: mrb_sym, val: mrb_value);
+
+    /// `mrb_ary_new(mrb)` — constructs a fresh empty mruby Array. Used
+    /// as the base for incremental construction via `mrb_ary_push` when
+    /// materializing a wire `Value::Array(items)` into a live mruby
+    /// Array from Rust (docs/wire-codec.md § Type Mapping #7).
+    pub fn mrb_ary_new(mrb: *mut mrb_state) -> mrb_value;
+
+    /// `mrb_ary_push(mrb, ary, value)` — appends `value` to the end of
+    /// `ary`. Paired with `mrb_ary_new` to build mruby Arrays from
+    /// Rust-side iterators.
+    pub fn mrb_ary_push(mrb: *mut mrb_state, ary: mrb_value, value: mrb_value);
+
+    /// `mrb_hash_new(mrb)` — constructs a fresh empty mruby Hash. Used
+    /// as the base for incremental construction via `mrb_hash_set` when
+    /// materializing a wire `Value::Map(pairs)` into a live mruby Hash
+    /// from Rust (docs/wire-codec.md § Type Mapping #8).
+    pub fn mrb_hash_new(mrb: *mut mrb_state) -> mrb_value;
+
+    /// `mrb_hash_set(mrb, hash, key, val)` — assigns `key => val` in
+    /// `hash`. Mirror of the mruby `[]=` operator. Paired with
+    /// `mrb_hash_new` to build mruby Hashes from Rust-side iterators.
+    pub fn mrb_hash_set(mrb: *mut mrb_state, hash: mrb_value, key: mrb_value, val: mrb_value);
+
+    /// `kobako_load_bytecode(mrb, buf, size)` — load + validate +
+    /// execute a `#preload(binary:)` snippet (docs/behavior.md B-32
+    /// binary: form). Returns 0 on success and non-zero when the load
+    /// failed; failures set `mrb->exc` so the caller's existing
+    /// `take_pending_panic` flow extracts class / message / backtrace
+    /// uniformly with the source snippet path. Implemented in
+    /// `src/mruby/bytecode.c` so the IREP layout knowledge stays inside
+    /// a C translation unit driven by mruby's own headers.
+    pub fn kobako_load_bytecode(
+        mrb: *mut mrb_state,
+        buf: *const core::ffi::c_void,
+        size: usize,
+    ) -> core::ffi::c_int;
+
+    /// `kobako_get_exc(mrb)` — layout-safe accessor for `mrb->exc`.
+    ///
+    /// Returns `mrb_obj_value(mrb->exc)` if an exception is pending, or
+    /// `mrb_nil_value()` if `mrb->exc` is NULL. Implemented in
+    /// `src/mruby/exc.c` using mruby's own headers so that the
+    /// struct field offset is always correct for the compiler and mruby
+    /// version in use — no Rust-side byte-offset arithmetic required.
+    ///
+    /// Does NOT clear the exception. Callers must invoke `mrb_check_error`
+    /// after consuming the returned value to reset `mrb->exc`.
+    pub fn kobako_get_exc(mrb: *mut mrb_state) -> mrb_value;
+
+    /// `kobako_value_is_integer(v)` — C shim wrapper over the mruby
+    /// `mrb_integer_p(v)` macro (alias of `mrb_fixnum_p` in mruby 4.x).
+    /// Returns TRUE when `v` carries `MRB_TT_INTEGER`. Pair with
+    /// [`kobako_unbox_integer`] for the direct-unbox path used by
+    /// `extract_handle_id` / `collection_len` (`crate::kobako`) and
+    /// `read_fd` (`crate::kobako::io`).
+    pub fn kobako_value_is_integer(v: mrb_value) -> mrb_bool;
+
+    /// `kobako_value_is_float(v)` — C shim wrapper over the mruby
+    /// `mrb_float_p(v)` macro. TRUE when `v` carries `MRB_TT_FLOAT`.
+    /// Pair with [`kobako_unbox_float`].
+    pub fn kobako_value_is_float(v: mrb_value) -> mrb_bool;
+
+    /// `kobako_unbox_integer(v)` — C shim wrapper over the mruby
+    /// `mrb_integer(v)` macro. Returns the raw `mrb_int` payload
+    /// (signed 32-bit on the wasm32 MRB_INT32 config).
+    ///
+    /// # Safety contract
+    ///
+    /// The macro's underlying expansion assumes `v` is Integer-tagged.
+    /// Callers MUST gate this with [`kobako_value_is_integer`]
+    /// returning TRUE; calling on a non-Integer value is undefined
+    /// behaviour per mruby's macro contract.
+    pub fn kobako_unbox_integer(v: mrb_value) -> i32;
+
+    /// `kobako_unbox_float(v)` — C shim wrapper over the mruby
+    /// `mrb_float(v)` macro. Returns the raw `mrb_float` (`f64`)
+    /// payload without going through `Float#to_s`, preserving full
+    /// precision.
+    ///
+    /// # Safety contract
+    ///
+    /// As [`kobako_unbox_integer`]: the caller MUST gate this with
+    /// [`kobako_value_is_float`].
+    pub fn kobako_unbox_float(v: mrb_value) -> f64;
+
+    /// `kobako_nil_value()` — wraps mruby's own `mrb_nil_value()`
+    /// macro. Returns the canonical `nil` mrb_value for the current
+    /// word-box configuration, sparing kobako from having to mirror
+    /// the bit pattern in Rust.
+    pub fn kobako_nil_value() -> mrb_value;
+
+    /// `kobako_true_value()` — wraps mruby's `mrb_true_value()` macro.
+    pub fn kobako_true_value() -> mrb_value;
+
+    /// `kobako_false_value()` — wraps mruby's `mrb_false_value()` macro.
+    pub fn kobako_false_value() -> mrb_value;
+
+    /// `kobako_class_value(c)` — C shim that wraps mruby's inline
+    /// `mrb_obj_value(p)` so a cached `*mut RClass` can be folded back
+    /// into the `mrb_value` form expected by `mrb_const_defined` /
+    /// `mrb_const_get`. Implementation lives in `src/mruby/value.c`.
+    pub fn kobako_class_value(c: *mut RClass) -> mrb_value;
+
+    /// `mrb_const_defined(mrb, mod, sym)` — TRUE when constant `sym` is
+    /// defined on `mod` (with inheritance). The `mod` argument must be
+    /// the `mrb_value` form of a module / class — wrap a cached
+    /// `*mut RClass` via [`kobako_class_value`] before calling.
+    pub fn mrb_const_defined(mrb: *mut mrb_state, mod_: mrb_value, sym: mrb_sym) -> mrb_bool;
+
+    /// `mrb_const_get(mrb, mod, sym)` — fetch the constant value at
+    /// `sym` from `mod`. Sets `mrb->exc` if the constant is undefined,
+    /// so callers should gate with [`mrb_const_defined`] first.
+    pub fn mrb_const_get(mrb: *mut mrb_state, mod_: mrb_value, sym: mrb_sym) -> mrb_value;
+
+    /// `mrb_respond_to(mrb, obj, mid)` — TRUE when `obj` answers to
+    /// the method named by `mid`. Used to enforce the E-28 entrypoint
+    /// constraint (the resolved constant must respond to `:call`).
+    pub fn mrb_respond_to(mrb: *mut mrb_state, obj: mrb_value, mid: mrb_sym) -> mrb_bool;
+
+    /// `mrb_intern_str(mrb, str)` — intern the bytes of an mruby
+    /// String value as a Symbol. Used to turn a host-decoded
+    /// entrypoint name (which arrives as a `Vec<u8>` of arbitrary
+    /// length, not necessarily NUL-safe) into a symbol without the
+    /// NUL-termination requirement of [`mrb_intern_cstr`].
+    pub fn mrb_intern_str(mrb: *mut mrb_state, str: mrb_value) -> mrb_sym;
+
+    /// `kobako_io_fwrite(mrb, fd, argv, argc)` — C shim that coerces
+    /// each `argv[i]` to a String (via `mrb_obj_as_string`) and writes
+    /// its bytes to the fd-selected stream: `fd == 2` routes to
+    /// `stderr`, anything else (canonically `1`) to `stdout`. Returns
+    /// the total bytes accepted by `fwrite` across all arguments.
+    ///
+    /// The shim consolidates three pieces of state Rust cannot reach
+    /// portably: the `RSTRING_PTR` / `RSTRING_LEN` macros, the
+    /// `mrb_obj_as_string` coercion, and wasi-libc's `stdout` /
+    /// `stderr` `FILE *` globals. See `src/mruby/io.c`.
+    pub fn kobako_io_fwrite(
+        mrb: *mut mrb_state,
+        fd: c_int,
+        argv: *const mrb_value,
+        argc: i32,
+    ) -> i32;
+}
+
+// --------------------------------------------------------------------
+// Compile-time signature checks (host target).
+// --------------------------------------------------------------------
+//
+// On the host target the FFI block is absent, so we cannot link-check
+// the symbols. We *can* however verify the type aliases and constants
+// resolve and that constructed function pointers have the expected
+// shape — this catches accidental signature drift in the FFI block.
+// Cheap regression net.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mrb_args_constants_match_mruby_layout() {
+        // `MRB_ARGS_REQ(n)` packs `n` into bits 18..23 of the aspec
+        // word. mruby header: `((mrb_aspec)((n)&0x1f) << 18)`.
+        assert_eq!(mrb_args_req(4), 4 << 18);
+        assert_eq!(mrb_args_req(0), 0);
+        assert_eq!(MRB_ARGS_ANY, 1 << 12);
+        assert_eq!(MRB_ARGS_NONE, 0);
+    }
+
+    #[test]
+    fn mrb_value_size_covers_known_layouts() {
+        // The documented word-box layouts top out at 8 bytes
+        // (NaN-boxing on 64-bit), but
+        // we reserve 16 bytes so future layouts (e.g. an experimental
+        // 128-bit Capn-style boxing) do not require an ABI break.
+        assert!(core::mem::size_of::<mrb_value>() >= 8);
+        assert_eq!(core::mem::align_of::<mrb_value>(), 8);
+    }
+
+    #[test]
+    fn mrb_func_t_is_a_valid_extern_c_fn_pointer() {
+        // Compile-time check: building a function with the expected
+        // signature must coerce to `mrb_func_t` without an explicit
+        // cast. If the `mrb_func_t` shape ever drifts, this function
+        // definition fails to compile.
+        unsafe extern "C" fn _stub(_mrb: *mut mrb_state, _self_: mrb_value) -> mrb_value {
+            mrb_value::zeroed()
+        }
+        let _f: mrb_func_t = _stub;
+    }
+}
