@@ -1,0 +1,13 @@
+# Pin the Rust toolchain so local builds and CI stay byte-identical.
+#
+# beni itself is a plain mruby toolchain; wasm32-wasip1 is kept only as a
+# build-verification target for the wasi consumption path (kobako). When
+# building for that target, the channel moves in lockstep with the wasi-sdk
+# version: the wasm32-wasip1 crt1-command.o references __wasi_init_tp from
+# 1.96 onward, and wasi-sdk 33's libc.a supplies that symbol. Bump the pair
+# together — in both this repo and kobako. Host-only work is unaffected.
+[toolchain]
+channel = "1.96.0"
+components = ["clippy", "rustfmt"]
+targets = ["wasm32-wasip1"]
+profile = "minimal"

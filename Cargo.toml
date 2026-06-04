@@ -1,0 +1,11 @@
+# Cargo workspace for the beni crates; the beni Ruby gem cohabits at the
+# repo root (rb-sys uses the same gem + crates layout).
+[workspace]
+members = ["crates/beni-sys", "crates/beni"]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/elct9620/beni"

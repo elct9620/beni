@@ -1,0 +1,16 @@
+# beni-sys — bindgen FFI surface over the mruby C API.
+#
+# The real binding surface is being extracted from the kobako project
+# (wasm/mruby-sys); this version reserves the crate name while that
+# migration is in progress. Consumed by the typed `beni` wrapper crate.
+
+[package]
+name = "beni-sys"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Reserved: bindgen FFI bindings over the mruby C API, under active development."
+
+[lib]
+crate-type = ["rlib"]

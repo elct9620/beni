@@ -1,0 +1,10 @@
+/.bundle/
+/target/
+/vendor/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/

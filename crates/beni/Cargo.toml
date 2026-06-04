@@ -1,0 +1,23 @@
+# beni — typed Rust wrapper over the `beni-sys` FFI surface.
+#
+# Mirrors the magnus / rb-sys split applied at the mruby boundary:
+# `beni-sys` owns the bindgen-generated FFI declarations; this crate
+# owns the typed abstractions above it. The real wrapper is being
+# extracted from the kobako project (wasm/mruby); this version
+# reserves the crate name while that migration is in progress.
+
+[package]
+name = "beni"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Reserved: typed Rust binding for mruby, under active development."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# Path dependency for local development; the version requirement is
+# what crates.io consumers resolve against.
+beni-sys = { path = "../beni-sys", version = "0.0.0" }

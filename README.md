@@ -1,0 +1,46 @@
+# Beni
+
+mruby toolchain monorepo — a Ruby gem that manages the mruby build chain and
+Rust crates that bind the mruby C API, extracted from the
+[kobako](https://github.com/elct9620/kobako) project.
+
+> **Status**: under active development. The published `0.0.0` versions reserve
+> the package names while the build chain and binding crates are extracted
+> from kobako; no usable API ships yet.
+
+## Packages
+
+| Package | Registry | Role |
+|---|---|---|
+| `beni` gem | rubygems.org | mruby dependency manager — vendors mruby source, builds `libmruby.a`, future mrbgem management |
+| `beni-sys` crate | crates.io | bindgen FFI surface over the mruby C API |
+| `beni` crate | crates.io | typed Rust wrapper over `beni-sys` (magnus analog) |
+
+## Toolchain
+
+beni targets plain mruby and is not bound to WebAssembly. `rust-toolchain.toml`
+keeps `wasm32-wasip1` only as a build-verification target for downstream wasi
+consumers (kobako). For that target the Rust channel and the wasi-sdk version
+move in lockstep (the wasm32-wasip1 `crt1-command.o` references
+`__wasi_init_tp` from Rust 1.96 onward; wasi-sdk 33's `libc.a` supplies that
+symbol) — bump the pair together, in both this repo and kobako. Host builds
+are unaffected by the pairing.
+
+## Development
+
+After checking out the repo, run `bin/setup` to install dependencies. Then,
+run `rake test` to run the tests. You can also run `bin/console` for an
+interactive prompt that will allow you to experiment.
+
+The Rust crates live under `crates/` in a Cargo workspace at the repo root;
+`cargo check --workspace` covers both.
+
+## Contributing
+
+Bug reports and pull requests are welcome on GitHub at
+https://github.com/elct9620/beni.
+
+## License
+
+The gem and crates are available as open source under the terms of the
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
