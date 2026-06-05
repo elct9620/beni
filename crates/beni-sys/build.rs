@@ -154,7 +154,7 @@ fn main() {
 
     // wasi-sdk setjmp library — required because the wasi libmruby.a
     // uses setjmp/longjmp via the new WebAssembly exception handling
-    // mechanism (`build_config/beni.rb` sets
+    // mechanism (`build_config/wasi_toolchain.rb` sets
     // `-mllvm -wasm-use-legacy-eh=false`). This produces calls to
     // `__wasm_setjmp`, `__wasm_longjmp`, and `__wasm_setjmp_test`
     // which live in wasi-sdk's `libsetjmp.a` (not in Rust's

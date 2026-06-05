@@ -2,7 +2,7 @@
  * wrapper.h — bindgen entry point for the beni-sys crate.
  *
  * Pulled in by `build.rs::run_bindgen` to expose the mruby C API
- * the kobako Guest Binary needs. No hand-written C translation
+ * surface the `beni` wrapper builds on. No hand-written C translation
  * units live in the crate any more: the static inline wrappers
  * below are the entire C surface, and bindgen's `wrap_static_fns`
  * emits a single trampoline file from them.
@@ -112,9 +112,9 @@ mrb_nil_p_func(mrb_value v)
 
 /* RBreak predicate. Counterpart to `mrb_break_p(o)` in
  * <mruby/value.h>, which expands via `mrb_type(o) == MRB_TT_BREAK`.
- * Safe on any `mrb_value`; only reads the type tag. Used by
- * `__kobako_yield_to_block` to gate the `break` / Proc-`return`
- * classification (docs/behavior.md B-25 / E-21). */
+ * Safe on any `mrb_value`; only reads the type tag. Yield helpers
+ * use it to gate the `break` / Proc-`return` classification of a
+ * value escaping a protected block call. */
 static inline mrb_bool
 mrb_break_p_func(mrb_value v)
 {
@@ -124,7 +124,7 @@ mrb_break_p_func(mrb_value v)
 /* Read the `val` field of an RBreak-tagged `mrb_value`.
  *
  * Counterpart to the `mrb_break_value_get(brk)` macro in
- * <mruby/error.h> with kobako's MRB_WORD_BOXING configuration
+ * <mruby/error.h> under beni's pinned word-boxing configuration
  * (which leaves `MRB_USE_RBREAK_VALUE_UNION` undefined, so the
  * macro resolves to a simple `brk->val` read).
  *
@@ -139,10 +139,10 @@ mrb_break_value_func(mrb_value v)
 
 /* Read the `ci_break_index` field of an RBreak-tagged `mrb_value`.
  * The index points at the destination callinfo frame mruby will
- * unwind to. `__kobako_yield_to_block` compares it against the
- * pre-yield baseline from `mrb_current_ci_index_func` to discriminate
- * a real `break` (target ≥ baseline) from a non-orphan Proc `return`
- * (target < baseline) per docs/behavior.md E-21. */
+ * unwind to. Yield helpers compare it against the pre-yield baseline
+ * from `mrb_current_ci_index_func` to discriminate a real `break`
+ * (target ≥ baseline) from a non-orphan Proc `return`
+ * (target < baseline). */
 static inline uintptr_t
 mrb_break_ci_index_func(mrb_value v)
 {

@@ -24,11 +24,11 @@
 //! ## Why bindgen runs from inside this crate
 //!
 //! Confining the bindgen call here keeps libclang a sys-only build
-//! dependency. The downstream `beni` wrapper (and through it,
-//! `kobako-wasm`) consumes this crate as a path dependency and
-//! never sees bindgen — so the cost of staging libclang sits in
-//! one place, against one well-defined header set (`src/wrapper.h`),
-//! instead of leaking into every consumer build.
+//! dependency. The downstream `beni` wrapper (and every embedder
+//! behind it) consumes this crate without ever seeing bindgen — so
+//! the cost of staging libclang sits in one place, against one
+//! well-defined header set (`src/wrapper.h`), instead of leaking
+//! into every consumer build.
 //!
 //! ## No typed wrappers here
 //!
@@ -61,13 +61,13 @@
 use core::ffi::c_void;
 
 // --------------------------------------------------------------------
-// bindgen-generated FFI surface (wasm32 only).
+// bindgen-generated FFI surface (`mruby_linked` builds).
 // --------------------------------------------------------------------
 //
-// On the host target the FFI block is absent. Tests that target the
-// pure-Rust unit suite (codec / outcome / transport envelope) still
-// need `mrb_value` / `mrb_state` / `RClass` etc. to resolve as
-// types — the stub aliases below cover that.
+// When no vendored `libmruby.a` is staged the FFI block is absent.
+// Code that compiles without linking mruby still needs `mrb_value` /
+// `mrb_state` / `RClass` etc. to resolve as types — the stub aliases
+// below cover that.
 //
 // The generated `bindings.rs` is `include!`-d into a private
 // submodule so the `#![allow(clippy::all)]` / `#![allow(warnings)]`
@@ -138,9 +138,8 @@ const _: () = assert!(
 
 /// Read `mrb->object_class` from a raw `*mut mrb_state`. Companion
 /// accessor for code paths that hold a raw pointer rather than an
-/// `Mrb` borrow — currently the `install_*` helpers in
-/// `kobako-wasm/src/kobako/install.rs` which are themselves called
-/// with a raw `*mut mrb_state` from `Kobako::install`.
+/// `Mrb` borrow — typically install/registration helpers that mruby
+/// calls back with a bare `*mut mrb_state`.
 ///
 /// Prefer the `beni` wrapper's `Mrb::object_class` when an `Mrb`
 /// borrow is in scope.
@@ -157,15 +156,15 @@ pub unsafe fn mrb_object_class(mrb: *mut mrb_state) -> *mut RClass {
 }
 
 // --------------------------------------------------------------------
-// Host-target placeholders.
+// Placeholder types (no staged toolchain).
 // --------------------------------------------------------------------
 //
-// bindgen does not run on non-wasm32 (see `build.rs`'s early return),
-// so the rlib needs hand-written placeholders for the type names the
-// consumer's pure-Rust unit tests reference. These types are not
-// link-checked against any C definition; they exist only to make
-// signatures compile so `mrb_func_t` shape tests and similar fixtures
-// keep running on host CI.
+// bindgen does not run when no `libmruby.a` is staged (see
+// `build.rs`'s early return), so the rlib needs hand-written
+// placeholders for the type names consumers reference. These types
+// are not link-checked against any C definition; they exist only to
+// make signatures compile so `mrb_func_t` shape tests and plain
+// `cargo check` for registry consumers keep working.
 
 #[cfg(not(mruby_linked))]
 pub type mrb_state = c_void;
@@ -194,8 +193,8 @@ pub struct mrb_value {
 }
 #[cfg(not(mruby_linked))]
 impl mrb_value {
-    /// All-zero `mrb_value`. On the host target this produces a
-    /// zeroed 16-byte placeholder.
+    /// All-zero `mrb_value`. In placeholder mode this produces a
+    /// zeroed 16-byte stand-in.
     pub const fn zeroed() -> Self {
         Self { _payload: [0, 0] }
     }
