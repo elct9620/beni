@@ -1,0 +1,22 @@
+module Beni
+  module Vendor
+    class Tarball
+      VERSION_MARKER: String
+
+      @tarball: String
+      @top_level_dir: String
+      @final_dir: String
+      @version: String
+
+      def initialize: (tarball: String, top_level_dir: String, final_dir: String, version: String) -> void
+
+      def prepare: () -> void
+
+      private
+
+      def installed_version: () -> String?
+
+      def extract_to_staging: () -> String
+    end
+  end
+end

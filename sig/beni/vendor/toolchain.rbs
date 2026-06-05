@@ -1,0 +1,30 @@
+module Beni
+  module Vendor
+    class Toolchain
+      attr_reader name: String
+      attr_reader version_label: String
+      attr_reader base_url: String
+      attr_reader tarball_name: String
+      attr_reader top_level_dir: String
+      attr_reader vendor_dir: String
+
+      def initialize: (name: String, version_label: String, base_url: String, tarball_name: String, top_level_dir: String, vendor_dir: String) -> void
+
+      def task_name: () -> Symbol
+
+      def sha_key: () -> String
+
+      def url: () -> String
+
+      def final_dir: () -> String
+
+      def tarball_path: () -> String
+
+      def fetch: () -> String
+
+      def verify: () -> String
+
+      def install: () -> void
+    end
+  end
+end

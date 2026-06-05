@@ -4,4 +4,10 @@ target :lib do
   signature "sig"
 
   check "lib"
+
+  library "digest"
+  library "open-uri"
+  library "net-http"
+  library "uri"
+  library "socket"
 end

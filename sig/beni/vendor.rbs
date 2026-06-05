@@ -1,0 +1,19 @@
+module Beni
+  module Vendor
+    WASI_SDK_VERSION: String
+    WASI_SDK_MINOR: String
+    WASI_SDK_FULL_VERSION: String
+    MRUBY_VERSION: String
+    WASI_SDK_PLATFORM: String
+
+    def self?.toolchains: (vendor_dir: String) -> Array[Toolchain]
+
+    def self?.wasi_sdk: (vendor_dir: String) -> Toolchain
+
+    def self?.mruby: (vendor_dir: String) -> Toolchain
+
+    def self?.base_url_for: (String default) -> String
+
+    def self?.expected_sha256: (String key) -> String
+  end
+end

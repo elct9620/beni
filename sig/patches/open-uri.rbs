@@ -1,0 +1,10 @@
+# Patch: rbs' open-uri stdlib signatures only cover the module function
+# +URI.open+; the instance form +URI::Generic#open+ (mixed in via
+# +OpenURI::OpenRead+ for http/https/ftp URIs at runtime) is missing.
+# Declared here so +Beni::Vendor::Downloader#download+ type-checks.
+module URI
+  class Generic
+    def open: (?String mode) -> (StringIO & OpenURI::Meta)
+            | [T] (?String mode) { (StringIO | Tempfile) -> T } -> T
+  end
+end

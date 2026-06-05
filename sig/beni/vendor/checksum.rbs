@@ -1,0 +1,22 @@
+module Beni
+  module Vendor
+    class Checksum
+      @path: String
+      @expected_sha: String
+
+      def initialize: (String path, String expected_sha) -> void
+
+      def verify_or_pin: () -> String
+
+      private
+
+      def expected?: () -> bool
+
+      def sha256: () -> String
+
+      def verify_against_expected: (String actual, String sidecar) -> void
+
+      def verify_or_pin_sidecar: (String actual, String sidecar) -> void
+    end
+  end
+end

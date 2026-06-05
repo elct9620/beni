@@ -1,0 +1,24 @@
+module Beni
+  module Vendor
+    class Downloader
+      MAX_RETRIES: Integer
+
+      TRANSIENT_ERRORS: Array[singleton(StandardError)]
+
+      @url: String
+      @dest: String
+
+      def initialize: (String url, String dest) -> void
+
+      def download: () -> void
+
+      private
+
+      def with_retry: [T] () { () -> T } -> T
+
+      def permanent?: (StandardError error) -> bool
+
+      def warn_and_sleep: (StandardError error, Integer attempt) -> void
+    end
+  end
+end
