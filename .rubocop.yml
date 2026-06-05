@@ -5,10 +5,9 @@ inherit_mode:
     - Exclude
 
 AllCops:
-  # Kept at the gemspec's required_ruby_version floor (>= 3.2), unlike
-  # kobako (an app pinned to 3.3) — a gem must not use syntax newer than
-  # the oldest Ruby it supports.
-  TargetRubyVersion: 3.2
+  # Kept at the gemspec's required_ruby_version floor (>= 3.3) — a gem
+  # must not use syntax newer than the oldest Ruby it supports.
+  TargetRubyVersion: 3.3
   NewCops: enable
   SuggestExtensions: false
   # The consumer-scenario harnesses vendor a full mruby tree each;
