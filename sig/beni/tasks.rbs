@@ -1,0 +1,34 @@
+module Beni
+  class Tasks < Rake::TaskLib
+    DEFAULT_BUILD_CONFIG: String
+
+    attr_accessor vendor_dir: String
+    attr_accessor build_config: String
+    attr_accessor targets: Array[String]
+
+    @builder: Builder?
+    @toolchains: Array[Vendor::Toolchain]?
+
+    def initialize: () ?{ (Tasks) -> void } -> void
+
+    private
+
+    def builder: () -> Builder
+
+    def toolchains: () -> Array[Vendor::Toolchain]
+
+    def define: () -> void
+
+    def define_vendor_namespace: () -> void
+
+    def define_vendor_setup_task: () -> void
+
+    def define_vendor_clean_tasks: () -> void
+
+    def define_toolchain_tasks: (Vendor::Toolchain toolchain) -> void
+
+    def define_build_task: () -> void
+
+    def define_clean_task: () -> void
+  end
+end
