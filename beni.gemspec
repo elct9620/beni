@@ -32,7 +32,7 @@ Gem::Specification.new do |spec|
       (f == gemspec) ||
         f.start_with?(*%w[bin/ Gemfile .gitignore test/ .github/ .rubocop.yml
                           crates/ Cargo.toml Cargo.lock rust-toolchain.toml
-                          tasks/])
+                          tasks/ build_config/])
     end
   end
   spec.bindir = "exe"

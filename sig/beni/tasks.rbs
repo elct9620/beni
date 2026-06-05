@@ -29,5 +29,7 @@ module Beni
     def define_build_task: () -> void
 
     def define_clean_task: () -> void
+
+    def define_config_task: () -> void
   end
 end

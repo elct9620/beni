@@ -22,7 +22,7 @@ module Beni
       Tasks.new { |tasks| tasks.vendor_dir = VENDOR_DIR }
 
       %w[
-        beni:build beni:clean
+        beni:build beni:clean beni:config
         beni:vendor:setup beni:vendor:setup:mruby
         beni:vendor:clean beni:vendor:clobber
       ].each do |name|

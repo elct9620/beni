@@ -8,3 +8,4 @@ end
 
 require_relative "beni/vendor"
 require_relative "beni/builder"
+require_relative "beni/build_config"

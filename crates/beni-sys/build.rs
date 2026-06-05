@@ -25,7 +25,7 @@
 //      crate sources include the generated bindings instead of the
 //      host placeholders.
 //
-// Target selection mirrors `build_config/beni.rb`: the host target
+// Target selection mirrors `build_config/mruby.rb`: the host target
 // links `vendor/mruby/build/host/lib/libmruby.a` (native build) and
 // wasm32 links `vendor/mruby/build/wasi/lib/libmruby.a` (wasi-sdk
 // cross build). Both archives are built with the same ABI-bearing
@@ -64,7 +64,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 /// ABI-bearing defines mirrored from `BeniBuildConfig::ABI_DEFINES`
-/// (build_config/beni.rb). Both `libmruby.a` archives are compiled
+/// (build_config/mruby.rb). Both `libmruby.a` archives are compiled
 /// with these; bindgen and the trampoline compile must see the same
 /// set or the mrb_value layout silently diverges from the archive.
 const ABI_DEFINES: &[&str] = &["MRB_INT32", "MRB_WORDBOX_NO_INLINE_FLOAT"];
@@ -79,7 +79,7 @@ fn main() {
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
     let is_wasm = target_arch == "wasm32";
     // Matches the MRuby::Build / MRuby::CrossBuild names in
-    // build_config/beni.rb, which shape the vendor build tree layout.
+    // build_config/mruby.rb, which shape the vendor build tree layout.
     let mruby_build_name = if is_wasm { "wasi" } else { "host" };
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -154,7 +154,7 @@ fn main() {
 
     // wasi-sdk setjmp library — required because the wasi libmruby.a
     // uses setjmp/longjmp via the new WebAssembly exception handling
-    // mechanism (`build_config/wasi_toolchain.rb` sets
+    // mechanism (`build_config/mruby.rb` sets
     // `-mllvm -wasm-use-legacy-eh=false`). This produces calls to
     // `__wasm_setjmp`, `__wasm_longjmp`, and `__wasm_setjmp_test`
     // which live in wasi-sdk's `libsetjmp.a` (not in Rust's

@@ -24,6 +24,7 @@ module Beni
   #
   #   rake beni:build           — fetch toolchains + build libmruby.a per target
   #   rake beni:clean           — remove mruby build trees (keeps source)
+  #   rake beni:config[path]    — generate a customizable build config
   #   rake beni:vendor:setup    — download & unpack the configured toolchains
   #   rake beni:vendor:clean    — remove unpacked toolchains (keeps tarball cache)
   #   rake beni:vendor:clobber  — remove the vendor tree entirely
@@ -71,6 +72,7 @@ module Beni
         define_vendor_namespace
         define_build_task
         define_clean_task
+        define_config_task
       end
     end
 
@@ -123,6 +125,15 @@ module Beni
       desc "Remove mruby's build trees (keeps vendored mruby source)"
       task :clean do
         builder.clean
+      end
+    end
+
+    def define_config_task
+      desc "Generate a customizable mruby build config (default: build_config/mruby.rb)"
+      task :config, [:path] do |_task, args|
+        path = args[:path] || File.expand_path("build_config/mruby.rb")
+        BuildConfig.generate(path)
+        puts "[beni] generated #{path} — point Beni::Tasks#build_config at it"
       end
     end
   end

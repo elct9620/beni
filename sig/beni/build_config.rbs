@@ -1,0 +1,7 @@
+module Beni
+  module BuildConfig
+    TEMPLATE: String
+
+    def self?.generate: (String dest) -> String
+  end
+end
