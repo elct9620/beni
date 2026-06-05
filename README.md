@@ -4,9 +4,10 @@ mruby toolchain monorepo — a Ruby gem that manages the mruby build chain and
 Rust crates that bind the mruby C API, extracted from the
 [kobako](https://github.com/elct9620/kobako) project.
 
-> **Status**: under active development. The published `0.0.0` versions reserve
-> the package names while the build chain and binding crates are extracted
-> from kobako; no usable API ships yet.
+> **Status**: early stage. The gem ships the vendor + build chain
+> (`Beni::Tasks`, `rake beni:config`) and the crates link and wrap the
+> resulting `libmruby.a`. Published versions remain `0.0.0` until the first
+> release cut; APIs may still change without notice.
 
 ## Packages
 

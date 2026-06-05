@@ -8,10 +8,10 @@ Gem::Specification.new do |spec|
   spec.authors = ["Aotokitsuruya"]
   spec.email = ["contact@aotoki.me"]
 
-  spec.summary = "mruby dependency manager"
-  spec.description = "Reserved: mruby dependency manager that vendors mruby source and builds " \
-                     "libmruby.a, under active development. The build chain is being extracted " \
-                     "from the kobako project."
+  spec.summary = "mruby vendoring and build toolchain"
+  spec.description = "Vendors a pinned mruby and builds libmruby.a through a Rake task " \
+                     "library, with generated build configs for customization. Aims to grow " \
+                     "into a full mruby dependency manager."
   spec.homepage = "https://github.com/elct9620/beni"
   spec.license = "Apache-2.0"
   spec.required_ruby_version = ">= 3.2.0"
