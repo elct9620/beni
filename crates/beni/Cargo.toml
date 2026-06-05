@@ -1,10 +1,14 @@
-# beni — typed Rust wrapper over the `beni-sys` FFI surface.
+# beni — typed Rust wrapper crate over the `beni-sys` FFI surface.
 #
 # Mirrors the magnus / rb-sys split applied at the mruby boundary:
-# `beni-sys` owns the bindgen-generated FFI declarations; this crate
-# owns the typed abstractions above it. The real wrapper is being
-# extracted from the kobako project (wasm/mruby); this version
-# reserves the crate name while that migration is in progress.
+# `beni-sys` owns the bindgen-generated `extern "C"` surface and the
+# layout-safe C shims; this crate owns every Rust-level abstraction
+# above it (the `Mrb` / `Ccontext` RAII types, the `Value` / `Class` /
+# `Array` / `Hash` newtypes, the `IntoValue` / `FromValue` trait seam,
+# the `Format`-based `mrb_get_args` dispatch, and the `protect`
+# closure wrapper). Consumers `use beni::Mrb` for typed access and
+# fall through to `beni::sys::mrb_*` only at the raw-FFI escape
+# hatch.
 
 [package]
 name = "beni"
@@ -12,12 +16,16 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Reserved: typed Rust binding for mruby, under active development."
+description = "Typed Rust wrapper over the mruby C API, sitting on the `beni-sys` bindgen surface."
 
 [lib]
+# `rlib` only — consumers link this crate as a path / registry
+# dependency; their own artefact carries the final symbol surface.
 crate-type = ["rlib"]
 
 [dependencies]
-# Path dependency for local development; the version requirement is
-# what crates.io consumers resolve against.
+# `beni-sys` — sibling crate carrying the bindgen-generated FFI
+# surface plus the layout-safe C shims. Re-exported through `sys` for
+# raw-FFI escape hatch access (`beni::sys::mrb_*`). The version
+# requirement is what registry consumers resolve against.
 beni-sys = { path = "../beni-sys", version = "0.0.0" }
