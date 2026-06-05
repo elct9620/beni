@@ -22,7 +22,8 @@ the resulting `libmruby.a`.
 - The same `version`, `build_config`, and `toolchains` inputs always produce
   the same staged archive and compile-flags sidecar.
 - A crate that depends on `beni` but does not opt into mruby still compiles
-  (placeholder mode), so `beni` is safe to take as a transitive dependency.
+  for host targets (placeholder mode), so `beni` is safe to take as a
+  transitive dependency in host builds.
 
 ## Success criteria
 
@@ -118,8 +119,8 @@ Behaviors:
 
 ### beni-sys crate — FFI surface
 
-- FFI bindings are generated against the staged archive and aligned via the
-  compile-flags sidecar, so the bindings always match how the archive was
+- FFI bindings are generated against the discovered archive and aligned via
+  the compile-flags sidecar, so the bindings always match how the archive was
   actually built. The crate follows the `-sys` crate convention.
 - One archive serves one cargo build target. Archive discovery is
   environment-driven, highest precedence first:
@@ -184,10 +185,10 @@ Behaviors:
 | `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
 | `beni:config` with `build_config` left at its `nil` default | task fails, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
-| Staged archive missing its compile-flags sidecar | `beni-sys` build fails and names the sidecar, never silently falls back to placeholder mode |
+| Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the sidecar, never silently falls back to placeholder mode |
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
-| Staged mruby at a version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
-| wasm32 build missing the staged archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
+| Discovered archive at an mruby version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
+| wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
 | `Mrb::open` without a linked mruby | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` when the caller is Rust, or as an mruby exception when the caller is mruby; never unwinds into mruby's C frames |
