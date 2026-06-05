@@ -16,6 +16,17 @@ Layout/LineLength:
   Exclude:
     - "*.gemspec"
 
+# `namespace :rust` in tasks/rust.rake declares the verification legs
+# (host check / test, wasm check, default-ABI test, verify) as one
+# desc/task pair each, with the bodies delegating to
+# tasks/support/beni_rust.rb; the block exceeds the default 25-line
+# budget through task count alone. Other .rake files are expected to
+# fit the default. Same shape as kobako's tasks/vendor.rake exemption.
+Metrics/BlockLength:
+  Exclude:
+    - "tasks/rust.rake"
+    - "*.gemspec"
+
 # ruby/rbs upstream documents `class X < Data.define(...)` as the
 # Steep-friendly form for typed Value Objects — the assignment form
 # (`X = Data.define(...)`) leaves Data's auto-generated methods inside
