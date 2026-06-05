@@ -12,16 +12,22 @@
 # gem's own `beni:build` task (dogfooding — see Beni::Tasks in the
 # Rakefile).
 #
-#   $ rake rust:check       — cargo check, host target (placeholder mode
-#                             when libmruby.a is absent)
-#   $ rake rust:test        — cargo test, host target; with beni:build
-#                             done this links the real native libmruby.a
-#   $ rake rust:check:wasm  — cargo check on wasm32-wasip1 (degrades to
-#                             host with a warning when the Rust target
-#                             is not provisioned)
-#   $ rake rust:verify      — beni:build + the three tasks above; the
-#                             single local entry point for "does the
-#                             Rust side compile everywhere".
+#   $ rake rust:check        — cargo check, host target (placeholder mode
+#                              when libmruby.a is absent)
+#   $ rake rust:test         — cargo test, host target; with beni:build
+#                              done this links the real native libmruby.a
+#   $ rake rust:check:wasm   — cargo check on wasm32-wasip1 (degrades to
+#                              host with a warning when the Rust target
+#                              is not provisioned)
+#   $ rake rust:test:default — cargo test against an mruby built with the
+#                              untouched upstream default config — the
+#                              gem's clean-build behaviour (64-bit
+#                              mrb_int on 64-bit hosts). Catches
+#                              width-coincidence bugs that the repo's
+#                              MRB_INT32 validation config masks.
+#   $ rake rust:verify       — beni:build + the four tasks above; the
+#                              single local entry point for "does the
+#                              Rust side compile and pass everywhere".
 
 require_relative "support/beni_rust"
 
@@ -56,6 +62,34 @@ namespace :rust do
     end
   end
 
-  desc "Full local compile verification: beni:build + host check/test + wasm32 check"
-  task verify: ["beni:build", "rust:check", "rust:test", "rust:check:wasm"]
+  namespace :test do
+    # The default-ABI leg: build the vendored mruby with NO MRUBY_CONFIG
+    # (mruby falls back to its own build_config/default.rb — what a
+    # clean consumer build gets) into a scratch build dir, then run the
+    # wrapper tests against that archive. On 64-bit hosts this exercises
+    # the mrb_int = int64_t layout the repo's MRB_INT32 validation
+    # config never sees, so type/width coincidences cannot hide.
+    #
+    # The scratch build dir lives under tmp/ (gitignored) and is
+    # incremental across runs; the cargo target dir is split off so the
+    # MRUBY_LIB_DIR switch does not invalidate the main verification
+    # cache.
+    desc "cargo test against an upstream-default mruby build (64-bit mrb_int on 64-bit hosts)"
+    task default: "beni:vendor:setup:mruby" do
+      abort "cargo not on PATH; install Rust toolchain to run rust:test:default" unless BeniRust.cargo_available?
+
+      build_dir = File.join(BeniRust::ROOT, "tmp", "mruby-default-build")
+      lib_dir = File.join(build_dir, "host", "lib")
+      flags_mak = File.join(lib_dir, "libmruby.flags.mak")
+      mruby_dir = File.join(BeniRust::ROOT, "vendor", "mruby")
+
+      sh({ "MRUBY_BUILD_DIR" => build_dir }, RbConfig.ruby, "-S", "rake", "default", flags_mak,
+         chdir: mruby_dir)
+      sh({ "MRUBY_LIB_DIR" => lib_dir }, "cargo", "test", "-p", "beni",
+         "--target-dir", File.join(BeniRust::ROOT, "target", "default-abi"))
+    end
+  end
+
+  desc "Full local compile verification: beni:build + host check/test + wasm32 check + default-ABI test"
+  task verify: ["beni:build", "rust:check", "rust:test", "rust:check:wasm", "rust:test:default"]
 end

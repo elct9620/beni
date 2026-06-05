@@ -147,7 +147,7 @@ pub mod format {
 
         fn read(mrb: &Mrb) -> &[Value] {
             let mut argv: *const sys::mrb_value = core::ptr::null();
-            let mut argc: core::ffi::c_int = 0;
+            let mut argc: sys::mrb_int = 0;
             // SAFETY: as `O::read`; the `"*"` format writes the argv
             // pointer + length pair.
             unsafe {
@@ -155,7 +155,7 @@ pub mod format {
                     mrb.as_ptr(),
                     Self::FMT.as_ptr(),
                     &mut argv as *mut *const sys::mrb_value,
-                    &mut argc as *mut core::ffi::c_int,
+                    &mut argc as *mut sys::mrb_int,
                 );
             }
             slice_from_argv(argv, argc)
@@ -172,7 +172,7 @@ pub mod format {
         fn read(mrb: &Mrb) -> (sys::mrb_sym, &[Value]) {
             let mut sym: sys::mrb_sym = 0;
             let mut argv: *const sys::mrb_value = core::ptr::null();
-            let mut argc: core::ffi::c_int = 0;
+            let mut argc: sys::mrb_int = 0;
             // SAFETY: as `O::read`.
             unsafe {
                 sys::mrb_get_args(
@@ -180,7 +180,7 @@ pub mod format {
                     Self::FMT.as_ptr(),
                     &mut sym as *mut sys::mrb_sym,
                     &mut argv as *mut *const sys::mrb_value,
-                    &mut argc as *mut core::ffi::c_int,
+                    &mut argc as *mut sys::mrb_int,
                 );
             }
             (sym, slice_from_argv(argv, argc))
@@ -202,7 +202,7 @@ pub mod format {
         fn read(mrb: &Mrb) -> (sys::mrb_sym, &[Value], Value) {
             let mut sym: sys::mrb_sym = 0;
             let mut argv: *const sys::mrb_value = core::ptr::null();
-            let mut argc: core::ffi::c_int = 0;
+            let mut argc: sys::mrb_int = 0;
             let mut block_raw = sys::mrb_value::zeroed();
             // SAFETY: as `O::read`; the `"n*&"` format writes the
             // leading symbol, the argv pointer + length pair, and a
@@ -213,7 +213,7 @@ pub mod format {
                     Self::FMT.as_ptr(),
                     &mut sym as *mut sys::mrb_sym,
                     &mut argv as *mut *const sys::mrb_value,
-                    &mut argc as *mut core::ffi::c_int,
+                    &mut argc as *mut sys::mrb_int,
                     &mut block_raw as *mut sys::mrb_value,
                 );
             }
@@ -248,7 +248,7 @@ pub mod format {
     }
 }
 
-/// Cast a `mrb_get_args` rest-form `(*const mrb_value, c_int)` pair
+/// Cast a `mrb_get_args` rest-form `(*const mrb_value, mrb_int)` pair
 /// into a borrowed `&[Value]`. mruby may set the pointer to NULL when
 /// the rest count is zero; reading `len` bytes from NULL would be UB,
 /// so the helper folds that into an empty slice.
@@ -257,7 +257,7 @@ pub mod format {
 /// `Mrb` (the call frame that produced argv).
 #[cfg(mruby_linked)]
 #[inline]
-fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: core::ffi::c_int) -> &'a [Value] {
+fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: sys::mrb_int) -> &'a [Value] {
     if argc > 0 && !argv.is_null() {
         // SAFETY: Value is `#[repr(transparent)]` over mrb_value;
         // mruby owns the buffer for the duration of the call frame
@@ -265,5 +265,50 @@ fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: core::ffi::c_int) -> &
         unsafe { core::slice::from_raw_parts(argv as *const Value, argc as usize) }
     } else {
         &[]
+    }
+}
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use super::format::Rest;
+    use super::*;
+
+    /// Bridge body for `rest_count`: reads the rest array via the
+    /// `"*"` format and returns its length as an mruby Integer.
+    unsafe extern "C" fn rest_count(mrb: *mut sys::mrb_state, _self: Value) -> Value {
+        // SAFETY: mruby invokes the bridge with a live state pointer
+        // that outlives the call frame.
+        let mrb = unsafe { Mrb::borrow_raw(&mrb) };
+        let args = mrb.get_args::<Rest>();
+        Value::from_int(mrb, args.len() as sys::mrb_int)
+    }
+
+    // The `"*"` count out-param is written by mruby through `mrb_int*`
+    // (`GET_ARG(mrb_int*)` in vendor/mruby/src/class.c). Typing it
+    // narrower compiles under MRB_INT32 but corrupts the stack under
+    // 64-bit mrb_int — a width coincidence the repo's validation
+    // config cannot see. Exercising the full bridge → get_args →
+    // count path under whatever ABI the linked archive uses keeps
+    // that coincidence from coming back (`rake rust:test:default`
+    // runs this against an upstream-default 64-bit-mrb_int archive).
+    #[test]
+    fn rest_format_reads_the_argc_mruby_writes() {
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        // SAFETY: mrb_args_any_func is a pure aspec-bit computation.
+        class.define_method(&mrb, c"rest_count", rest_count, unsafe {
+            sys::mrb_args_any_func()
+        });
+
+        let receiver = class.obj_new(&mrb, &[]);
+        let args = [
+            Value::from_int(&mrb, 1),
+            Value::from_int(&mrb, 2),
+            Value::from_int(&mrb, 3),
+        ];
+        let count = receiver.call(&mrb, c"rest_count", &args);
+
+        assert!(count.is_integer(), "bridge must return an Integer");
+        assert_eq!(unsafe { count.unbox_integer() }, 3);
     }
 }

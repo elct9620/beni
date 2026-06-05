@@ -385,13 +385,7 @@ impl Value {
         // contract; `sym` was interned against the same VM (caller
         // contract).
         Value(unsafe {
-            sys::mrb_funcall_argv(
-                mrb.as_ptr(),
-                self.0,
-                sym,
-                args.len() as core::ffi::c_int,
-                argv,
-            )
+            sys::mrb_funcall_argv(mrb.as_ptr(), self.0, sym, args.len() as sys::mrb_int, argv)
         })
     }
 
