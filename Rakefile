@@ -9,6 +9,10 @@ require "rubocop/rake_task"
 
 RuboCop::RakeTask.new
 
+require "steep/rake_task"
+
+Steep::RakeTask.new
+
 Dir.glob(File.join(__dir__, "tasks", "*.rake")).sort.each { |f| load f }
 
-task default: %i[test rubocop]
+task default: %i[test rubocop steep]
