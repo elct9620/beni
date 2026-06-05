@@ -52,6 +52,7 @@ end
 | Setting | Type | Default |
 |---|---|---|
 | `vendor_dir` | directory path — where toolchains unpack and mruby builds | `vendor/` under the Rakefile's working directory; `BENI_VENDOR_DIR` env var overrides |
+| `version` | mruby release version to download | `"4.0.0"` |
 | `build_config` | mruby build-config file path, or `nil` for mruby's upstream default | `nil` |
 | `targets` | array of build-target names, matching the `MRuby::Build.new(<name>)` names in the config | `["host"]` |
 | `toolchains` | array of toolchain names to vendor, from `mruby` and `wasi-sdk` | `["mruby"]` |
@@ -60,7 +61,7 @@ end
 |---|---|
 | `beni:build` | toolchains staged, `libmruby.a` built per target |
 | `beni:clean` | mruby build trees removed, vendored source kept |
-| `beni:config[path]` | self-contained, editable build config generated |
+| `beni:config` | self-contained, editable build config generated at the `build_config` path |
 | `beni:vendor:setup` | configured toolchains downloaded and unpacked |
 | `beni:vendor:clean` | unpacked toolchains removed, tarball cache kept |
 | `beni:vendor:clobber` | vendor tree removed entirely |
@@ -73,10 +74,10 @@ Behaviors:
   build config owns the target definitions, and beni never reads the config.
   The two lists align by verification. Targets the config defines beyond
   `targets` build as usual and are not verified.
-- Customization goes through `beni:config`: the generated file requires
-  nothing from beni at build time, builds without edits, and belongs to the
-  consumer — beni never rewrites it. Generation refuses to overwrite an
-  existing file.
+- Customization goes through `beni:config`, which writes to the path the
+  `build_config` setting names. The generated file requires nothing from
+  beni at build time, builds without edits, and belongs to the consumer —
+  beni never rewrites it. Generation refuses to overwrite an existing file.
 - Every build writes the compile-flags sidecar (`libmruby.flags.mak`) next to
   each archive; this sidecar is the single alignment channel to the crates.
 
@@ -84,17 +85,22 @@ Behaviors:
 
 - bindgen runs against the staged archive and reads the compile-flags sidecar,
   so the generated bindings always match how the archive was actually built.
-- One archive serves one cargo build target. `MRUBY_LIB_DIR` — the `-sys`
-  crate `*_LIB_DIR` convention — names the directory containing the active
-  target's archive and compile-flags sidecar; when unset, the crate probes
-  the default vendor layout, resolving the mruby build name from the cargo
-  target (`wasm32` → `wasi`, anything else → `host`).
+- One archive serves one cargo build target. Archive discovery is
+  environment-driven, highest precedence first:
+  1. `MRUBY_LIB_DIR` — the `-sys` crate `*_LIB_DIR` convention — names the
+     directory containing the active target's archive and compile-flags
+     sidecar.
+  2. `BENI_VENDOR_DIR` names the vendor tree the gem populated; the crate
+     reads `mruby/build/<name>/lib/` under it, resolving the mruby build
+     name from the cargo target (`wasm32` → `wasi`, anything else →
+     `host`).
+  3. With neither variable set, no archive is linked: a host build compiles
+     in placeholder mode, a wasm32 build fails.
 - A wasm32 build generates bindings against the wasi sysroot and links
   wasi-sdk's setjmp library; `WASI_SDK_PATH` names the unpacked wasi-sdk
-  root, defaulting to the staged toolchain.
+  root, defaulting to `wasi-sdk/` under the vendor tree.
 - Supports one FFI surface per mruby minor version; supported versions: 4.0.
-- Without a staged archive, a host build compiles in placeholder mode: `cargo
-  check` passes, no FFI surface is exported.
+- In placeholder mode `cargo check` passes and no FFI surface is exported.
 - A `mruby_linked` cfg reflects whether a real archive is linked; downstream
   crates read it to gate their mruby-dependent code. It is capability-driven,
   never a cargo feature.
@@ -119,8 +125,9 @@ Behaviors:
   there. An `Err` from `init` aborts setup and surfaces to the embedder.
 - The safe API cannot cause undefined behavior; anything not yet wrapped is
   reachable through the re-exported `beni::sys` escape hatch.
-- In placeholder mode the wrapper compiles with the same modules gated by
-  `mruby_linked`.
+- In placeholder mode the wrapper's full API surface still compiles;
+  `Mrb::open` returns an error, so no interpreter ever exists to operate
+  on.
 
 ## Error scenarios
 
@@ -128,9 +135,11 @@ Behaviors:
 |---|---|
 | Toolchain download fails checksum verification | build aborts, no partial unpack |
 | `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
+| `beni:config` with `build_config` unset | task fails, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
 | Staged archive missing its compile-flags sidecar | `beni-sys` build fails and names the sidecar, never silently falls back to placeholder mode |
-| wasm32 build without the staged toolchain | `beni-sys` build fails, never falls back to placeholder mode |
+| `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
+| wasm32 build missing the staged archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
 | `Mrb::open` without a linked mruby | returns an error value, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
@@ -143,4 +152,4 @@ Behaviors:
 | archive | the built `libmruby.a` for one target |
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | compile-flags sidecar | the per-archive record of defines/flags the crates align with |
-| placeholder mode | crate compilation without a staged archive |
+| placeholder mode | host crate compilation with no archive discovery variable set — no mruby linked |
