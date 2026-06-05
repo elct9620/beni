@@ -1,6 +1,10 @@
 /.bundle/
 /vendor/
 
+# Consumer-scenario harnesses vendor into their own directory so each
+# run stays isolated from the repo's dogfooding vendor tree.
+/test/scenarios/*/vendor/
+
 # Native build artifacts (any nesting level, matching kobako's rules):
 # cargo target dirs, C objects, static libs (libmruby.a), and Ruby
 # native-extension outputs with their mkmf build log.

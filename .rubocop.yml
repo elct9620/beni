@@ -1,3 +1,9 @@
+# Append to the default Exclude list (vendor/, tmp/, …) instead of
+# replacing it — the repo-root vendor tree must stay excluded.
+inherit_mode:
+  merge:
+    - Exclude
+
 AllCops:
   # Kept at the gemspec's required_ruby_version floor (>= 3.2), unlike
   # kobako (an app pinned to 3.3) — a gem must not use syntax newer than
@@ -5,6 +11,10 @@ AllCops:
   TargetRubyVersion: 3.2
   NewCops: enable
   SuggestExtensions: false
+  # The consumer-scenario harnesses vendor a full mruby tree each;
+  # only the harness Rakefiles themselves are ours to lint.
+  Exclude:
+    - "test/scenarios/*/vendor/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

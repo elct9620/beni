@@ -3,7 +3,12 @@
 require "bundler/gem_tasks"
 require "minitest/test_task"
 
-Minitest::TestTask.create
+# Unit tests only — the consumer-scenario harnesses under
+# test/scenarios/ vendor a full mruby tree whose own *_test.rb files
+# the default glob would sweep in.
+Minitest::TestTask.create do |t|
+  t.test_globs = ["test/test_*.rb", "test/beni/**/test_*.rb"]
+end
 
 require "rubocop/rake_task"
 

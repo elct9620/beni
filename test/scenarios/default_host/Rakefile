@@ -1,0 +1,35 @@
+# frozen_string_literal: true
+
+# Consumer scenario: the gem's zero-configuration path.
+#
+# A consumer adds `Beni::Tasks.new` to its Rakefile with no settings:
+# mruby alone is vendored, the build runs mruby's untouched upstream
+# build_config/default.rb, and the single `host` target is produced.
+# Run from this directory so the default vendor_dir resolves here,
+# exactly as it would in a consumer's project root:
+#
+#   $ cd test/scenarios/default_host && rake beni:build scenario:verify
+#
+# Unlike the repo-root Rakefile (custom config, host + wasi cross
+# build), this exercises the path a consumer hits first — including
+# the real tarball download when the vendor tree is absent.
+$LOAD_PATH.unshift File.expand_path("../../../lib", __dir__)
+
+require "beni/tasks"
+
+Beni::Tasks.new
+
+namespace :scenario do
+  desc "Assert the artifacts beni:build must leave behind"
+  task :verify do
+    artifacts = %w[
+      vendor/mruby/build/host/lib/libmruby.a
+      vendor/mruby/build/host/lib/libmruby.flags.mak
+    ].map { |rel| File.expand_path(rel, __dir__) }
+
+    missing = artifacts.reject { |path| File.exist?(path) }
+    abort "[scenario] missing artifacts:\n  #{missing.join("\n  ")}" unless missing.empty?
+
+    puts "[scenario] default_host artifacts verified: #{artifacts.join(", ")}"
+  end
+end
