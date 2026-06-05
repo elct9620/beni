@@ -71,7 +71,7 @@ impl Array {
     /// constructor makes this safe for any in-range or out-of-range
     /// integer `idx`.
     #[inline]
-    pub fn entry(self, idx: i32) -> Value {
+    pub fn entry(self, idx: sys::mrb_int) -> Value {
         // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
         // contract; `mrb_ary_entry` is bounds-tolerant.
         Value::from_raw(unsafe { sys::mrb_ary_entry(self.0.as_raw(), idx) })

@@ -57,6 +57,16 @@ module Beni
       assert_predicate builder, :built?
     end
 
+    def test_built_eh_requires_flags_mak_alongside_each_archive
+      builder = Builder.new(vendor_dir: @dir)
+      path = builder.libmruby_path("host")
+      FileUtils.mkdir_p(File.dirname(path))
+      FileUtils.touch(path)
+
+      refute_predicate builder, :built?,
+                       "an archive without libmruby.flags.mak must trigger a (cheap, incremental) rebuild"
+    end
+
     def test_ensure_built_skips_the_build_when_artifacts_exist
       touch_libmruby(@builder, "host")
 
@@ -133,10 +143,13 @@ module Beni
       builder
     end
 
+    # Fakes a fully built target: the archive plus the flags.mak
+    # sidecar the build always requests alongside it.
     def touch_libmruby(builder, target)
       path = builder.libmruby_path(target)
       FileUtils.mkdir_p(File.dirname(path))
       FileUtils.touch(path)
+      FileUtils.touch(File.join(File.dirname(path), "libmruby.flags.mak"))
     end
   end
 end

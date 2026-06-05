@@ -178,7 +178,14 @@ pub type mrb_sym = u32;
 pub type mrb_aspec = u32;
 #[cfg(not(mruby_linked))]
 pub type mrb_bool = bool;
-#[cfg(not(mruby_linked))]
+/// Mirrors mrbconf.h's platform default (`MRB_INT64` on 64-bit,
+/// `MRB_INT32` on 32-bit) so placeholder signatures match what
+/// bindgen would emit for an upstream-default archive on the same
+/// target. Build configs that pin a width override this via the
+/// real bindings, not the placeholder.
+#[cfg(all(not(mruby_linked), target_pointer_width = "64"))]
+pub type mrb_int = i64;
+#[cfg(all(not(mruby_linked), not(target_pointer_width = "64")))]
 pub type mrb_int = i32;
 #[cfg(not(mruby_linked))]
 pub type mrb_float = f64;

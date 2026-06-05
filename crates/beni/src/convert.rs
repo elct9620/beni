@@ -34,9 +34,14 @@ pub trait FromValue: Sized {
 }
 
 impl IntoValue for i32 {
+    // `sys::mrb_int` follows the archive's config: the conversion is
+    // a lossless widening under 64-bit width and an identity under
+    // `MRB_INT32` — clippy only sees the latter when checking against
+    // a 32-bit-pinned archive, hence the targeted allow.
+    #[allow(clippy::useless_conversion)]
     #[inline]
     fn into_value(self, mrb: &Mrb) -> Value {
-        Value::from_int(mrb, self)
+        Value::from_int(mrb, self.into())
     }
 }
 
@@ -59,11 +64,23 @@ impl IntoValue for bool {
 }
 
 impl FromValue for i32 {
+    // Mirror of the `IntoValue for i32` allow: `try_from` is a real
+    // range check under 64-bit `sys::mrb_int` and an infallible
+    // identity under `MRB_INT32`.
+    #[allow(clippy::useless_conversion)]
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
+        if !value.is_integer() {
+            return None;
+        }
         // SAFETY: the unbox precondition (MRB_TT_INTEGER tagging) is
-        // established by the `is_integer` guard immediately before it.
-        value.is_integer().then(|| unsafe { value.unbox_integer() })
+        // established by the `is_integer` guard immediately above.
+        let raw = unsafe { value.unbox_integer() };
+        // `sys::mrb_int` follows the archive's configured width; when
+        // it is 64-bit (mruby's 64-bit platform default) an
+        // out-of-i32-range integer is not representable — downcast
+        // failure, same contract as a type-tag mismatch.
+        Self::try_from(raw).ok()
     }
 }
 
@@ -73,5 +90,31 @@ impl FromValue for f64 {
         // SAFETY: the unbox precondition (MRB_TT_FLOAT tagging) is
         // established by the `is_float` guard immediately before it.
         value.is_float().then(|| unsafe { value.unbox_float() })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Boxes through mruby's generic `mrb_int_value` / `mrb_float_value`
+    // constructors and unboxes through the macro-expanding C helpers —
+    // the full ABI-alignment path. A bindgen/archive layout mismatch
+    // (wrong defines fed to the trampoline compile) corrupts these
+    // roundtrips before anything else.
+    #[test]
+    fn scalars_roundtrip_through_a_live_vm() {
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let int_val = 42i32.into_value(&mrb);
+        assert_eq!(i32::from_value(int_val), Some(42));
+
+        let float_val = 1.5f64.into_value(&mrb);
+        assert_eq!(f64::from_value(float_val), Some(1.5));
+
+        // Cross-type downcasts fail cleanly instead of misreading the
+        // payload.
+        assert_eq!(i32::from_value(float_val), None);
+        assert_eq!(f64::from_value(int_val), None);
     }
 }

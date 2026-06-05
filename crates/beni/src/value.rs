@@ -216,22 +216,25 @@ impl Value {
         Self(Immediates::get().qfalse)
     }
 
-    /// `mrb_boxing_int_value(mrb, n)` — construct an mruby Integer
-    /// from `n`. Under the pinned `MRB_INT32` config the payload is
-    /// signed 32-bit.
+    /// `mrb_int_value(mrb, n)` — construct an mruby Integer from `n`,
+    /// via mruby's own boxing-agnostic `MRB_INLINE` constructor
+    /// (reached through bindgen's static-fn trampoline, compiled with
+    /// the same defines as the linked archive). `sys::mrb_int` follows
+    /// the archive's configured width — 64-bit under mruby's 64-bit
+    /// platform default, 32-bit under `MRB_INT32` or on wasm32.
     #[inline]
-    pub fn from_int(mrb: &Mrb, n: i32) -> Self {
+    pub fn from_int(mrb: &Mrb, n: sys::mrb_int) -> Self {
         // SAFETY: `mrb` is alive by the `&Mrb` borrow.
-        Self(unsafe { sys::mrb_boxing_int_value(mrb.as_ptr(), n) })
+        Self(unsafe { sys::mrb_int_value(mrb.as_ptr(), n) })
     }
 
-    /// `mrb_word_boxing_float_value(mrb, f)` — construct an mruby
-    /// Float from `f`. Under the pinned `MRB_WORDBOX_NO_INLINE_FLOAT`
-    /// config floats are heap-allocated.
+    /// `mrb_float_value(mrb, f)` — construct an mruby Float from `f`,
+    /// via mruby's boxing-agnostic `MRB_INLINE` constructor (same
+    /// trampoline route as `Value::from_int`).
     #[inline]
-    pub fn from_float(mrb: &Mrb, f: f64) -> Self {
+    pub fn from_float(mrb: &Mrb, f: sys::mrb_float) -> Self {
         // SAFETY: `mrb` is alive by the `&Mrb` borrow.
-        Self(unsafe { sys::mrb_word_boxing_float_value(mrb.as_ptr(), f) })
+        Self(unsafe { sys::mrb_float_value(mrb.as_ptr(), f) })
     }
 
     /// `mrb_obj_as_string(mrb, self)` — coerce `self` to a String
@@ -339,17 +342,18 @@ impl Value {
     }
 
     /// Recover the `*mut RClass` pointer from a class-tagged
-    /// `Value`. Implements the C macro `mrb_class_ptr(v)` —
-    /// `((struct RClass*)(mrb_ptr(v)))` — inline so we do not have
-    /// to declare it as an extern "C" fn (it is a macro, not a real
-    /// C function).
+    /// `Value`, via the `mrb_class_ptr_func` static-inline wrapper in
+    /// `wrapper.h` — the `mrb_class_ptr(v)` macro expands inside the
+    /// C compiler, which sees the same boxing config the linked
+    /// archive was built with.
     ///
     /// # Safety
     ///
     /// `self` must be a class-tagged `Value`.
     #[inline]
     pub unsafe fn as_class_ptr(self) -> *mut sys::RClass {
-        self.0.w as *mut sys::RClass
+        // SAFETY: forwarded from caller.
+        unsafe { sys::mrb_class_ptr_func(self.0) }
     }
 
     /// Invoke `self.<method>(args...)` via the non-variadic
@@ -431,33 +435,25 @@ impl Value {
     /// `Value::is_integer`; calling on a non-Integer is undefined
     /// behaviour per mruby's macro contract.
     #[inline]
-    pub unsafe fn unbox_integer(self) -> i32 {
+    pub unsafe fn unbox_integer(self) -> sys::mrb_int {
         // SAFETY: forwarded from caller.
         unsafe { sys::mrb_integer_func(self.0) }
     }
 
-    /// Direct `mrb_float(v)` unbox. Preserves full f64 precision.
-    ///
-    /// Under `MRB_WORDBOX_NO_INLINE_FLOAT` (beni's pinned
-    /// config) Float values are always object-tagged with two
-    /// trailing zero bits — `mrb_value.w` is the `RFloat *` word
-    /// directly, so we cast through it instead of routing through
-    /// the `mrb_val_union` static inline (whose `union mrb_value_`
-    /// return type carries a wasm32 FFI ABI mismatch between
-    /// bindgen's trampoline and rustc). The result is fed to
-    /// mruby's own `mrb_rfloat_value` (`static inline`, reached via
-    /// bindgen's static-fn trampoline) which reads the f64 payload
-    /// out of `RFloat`.
+    /// Direct `mrb_float(v)` unbox via the `mrb_float_func`
+    /// static-inline wrapper in `wrapper.h`. The `mrb_float(o)` macro
+    /// expands differently per boxing mode (inline-rotated word,
+    /// RFloat heap read, NaN payload); expanding it inside the C
+    /// compiler keeps the unbox correct for whatever config the
+    /// linked archive was built with.
     ///
     /// # Safety
     ///
     /// As `Value::unbox_integer`: caller has confirmed Float-tagging.
     #[inline]
-    pub unsafe fn unbox_float(self) -> f64 {
-        // SAFETY: forwarded from caller. Float-tagged values have
-        // the object-tag bit pattern, so `w` aliases an `RFloat *`.
-        let fp = self.0.w as *mut sys::RFloat;
-        unsafe { sys::mrb_rfloat_value(fp) }
+    pub unsafe fn unbox_float(self) -> sys::mrb_float {
+        // SAFETY: forwarded from caller.
+        unsafe { sys::mrb_float_func(self.0) }
     }
 
     /// `mrb_ary_entry(self, idx)` — read the element at `idx` from
@@ -470,7 +466,7 @@ impl Value {
     /// returns `mrb_nil_value` rather than reading past the buffer;
     /// passing a non-Array yields an undefined `Value`.
     #[inline]
-    pub unsafe fn ary_entry(self, idx: i32) -> Value {
+    pub unsafe fn ary_entry(self, idx: sys::mrb_int) -> Value {
         // SAFETY: forwarded from caller.
         Value(unsafe { sys::mrb_ary_entry(self.0, idx) })
     }

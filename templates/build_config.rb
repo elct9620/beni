@@ -40,10 +40,10 @@ unless defined?(BeniBuildConfig)
     # ABI-bearing defines applied to BOTH the host and wasi targets,
     # keeping `mrb_int` width and float boxing identical across them
     # (without MRB_INT32 a 64-bit host defaults to MRB_INT64 while
-    # wasm32 stays 32-bit — see mruby's mrbconf.h). The typed wrapper
-    # in the beni crates currently pins this layout; every libmruby.a
-    # it links against must be built — and bindgen'd — with the same
-    # defines.
+    # wasm32 stays 32-bit — see mruby's mrbconf.h). The beni crates
+    # align themselves automatically: their build script parses the
+    # `libmruby.flags.mak` sidecar each build leaves next to the
+    # archive, so edits here flow into bindgen without code changes.
     ABI_DEFINES = %w[
       MRB_INT32
       MRB_WORDBOX_NO_INLINE_FLOAT

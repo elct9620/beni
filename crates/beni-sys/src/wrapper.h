@@ -72,6 +72,27 @@ mrb_obj_ptr_func(mrb_value v)
   return mrb_obj_ptr(v);
 }
 
+/* Class pointer extractor from a class-tagged mrb_value.
+ * Counterpart to the `mrb_class_ptr(v)` macro in <mruby/value.h>.
+ * The pointer read depends on the boxing mode, so it must expand in
+ * the C compiler — which sees the same defines libmruby.a was built
+ * with — rather than being mirrored as a Rust-side word read. */
+static inline struct RClass *
+mrb_class_ptr_func(mrb_value v)
+{
+  return mrb_class_ptr(v);
+}
+
+/* Float unbox. Counterpart to the `mrb_float(o)` macro, whose
+ * expansion differs per boxing mode (inline-rotated word, RFloat
+ * heap read, NaN payload). Routing through the C compiler keeps the
+ * unbox correct for whatever config libmruby.a was built with. */
+static inline mrb_float
+mrb_float_func(mrb_value v)
+{
+  return mrb_float(v);
+}
+
 /* GC arena bracketing helpers. mruby exposes these as macros that
  * read / write `mrb->gc.arena_idx`; bindgen treats `mrb_gc` as
  * opaque (workaround for the bitfield mis-pack on wasm32, see

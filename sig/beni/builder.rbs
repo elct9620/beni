@@ -24,6 +24,8 @@ module Beni
 
     private
 
+    def artifact_paths: () -> Array[String]
+
     def run_mruby_rake: (Hash[String, String] env, Array[String] cmd) -> void
 
     def env: () -> Hash[String, String]

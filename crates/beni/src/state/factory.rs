@@ -18,12 +18,11 @@ impl Mrb {
     /// `bytes`. The buffer is copied into the mruby heap; the slice
     /// only has to live for the duration of the call.
     ///
-    /// `bytes.len()` saturates to `i32::MAX` (mruby's `mrb_int` is
-    /// signed 32-bit under the pinned `MRB_INT32` config). Real
-    /// callers stay far below that.
+    /// `bytes.len()` saturates to `sys::mrb_int::MAX` (the archive's
+    /// configured integer width). Real callers stay far below that.
     #[inline]
     pub fn str_new(&self, bytes: &[u8]) -> Value {
-        let len = bytes.len().min(i32::MAX as usize) as i32;
+        let len = bytes.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
         // SAFETY: `self` is alive by the `&self` borrow; `bytes`
         // outlives the synchronous call.
         Value::from_raw(unsafe {

@@ -37,10 +37,14 @@ module Beni
       targets.map { |target| libmruby_path(target) }
     end
 
-    # True when every target's +libmruby.a+ is already present, letting
-    # callers skip the build without spawning a subprocess.
+    # True when every target's artifacts — +libmruby.a+ plus the
+    # +libmruby.flags.mak+ sidecar +beni-sys+ parses for ABI alignment
+    # — are already present, letting callers skip the build without
+    # spawning a subprocess. An archive without its sidecar (e.g. a
+    # tree built before flags.mak joined the contract) triggers a
+    # rebuild, which is incremental and only emits the missing file.
     def built?
-      libmruby_paths.all? { |path| File.exist?(path) }
+      artifact_paths.all? { |path| File.exist?(path) }
     end
 
     # Idempotent build entry point for +rake beni:build+: skip with a
@@ -83,6 +87,12 @@ module Beni
 
     private
 
+    # Every artifact the build must leave behind: the per-target
+    # archive and its flags.mak sidecar.
+    def artifact_paths
+      libmruby_paths + flags_mak_paths
+    end
+
     # Spawn mruby's rake with the parent environment plus the +env+
     # overlay. Extracted as a seam so tests can fake the subprocess
     # while observing the full env + cmd contract.
@@ -109,7 +119,7 @@ module Beni
     end
 
     def verify_artifacts!
-      libmruby_paths.each do |path|
+      artifact_paths.each do |path|
         raise Error, "[beni] build completed but #{path} is missing" unless File.exist?(path)
       end
     end

@@ -249,7 +249,9 @@ impl Class {
         let argv = args.as_ptr() as *const sys::mrb_value;
         // SAFETY: `mrb` is alive; `self` and every `args` entry
         // originate from the same VM.
-        Value::from_raw(unsafe { sys::mrb_obj_new(mrb.as_ptr(), self.0, args.len() as i32, argv) })
+        Value::from_raw(unsafe {
+            sys::mrb_obj_new(mrb.as_ptr(), self.0, args.len() as sys::mrb_int, argv)
+        })
     }
 
     /// `mrb_raise(mrb, self, msg)` — raise an exception of this class

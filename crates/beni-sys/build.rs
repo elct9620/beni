@@ -28,10 +28,15 @@
 // Target selection mirrors `build_config/mruby.rb`: the host target
 // links `vendor/mruby/build/host/lib/libmruby.a` (native build) and
 // wasm32 links `vendor/mruby/build/wasi/lib/libmruby.a` (wasi-sdk
-// cross build). Both archives are built with the same ABI-bearing
-// defines (`ABI_DEFINES` below mirrors `BeniBuildConfig::ABI_DEFINES`)
-// and bindgen + the trampoline compile see the same defines, so the
-// generated surface always matches the linked archive's layout.
+// cross build). The ABI-bearing `-D` defines are NOT hard-coded:
+// they are parsed from the `libmruby.flags.mak` sidecar mruby writes
+// next to each archive (mruby's official embedder interface,
+// recording the exact compile flags; `Beni::Builder` requests it on
+// every build), so bindgen and the trampoline compile always see
+// what the archive was actually built with — whatever the build
+// config, including mruby's untouched upstream default, where the
+// flag list is empty and mrbconf.h's header-level platform defaults
+// apply identically to both sides.
 //
 // When no `libmruby.a` is staged, host targets fall back to a
 // placeholder build (no bindgen, no link directives — `src/lib.rs`
@@ -63,11 +68,42 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-/// ABI-bearing defines mirrored from `BeniBuildConfig::ABI_DEFINES`
-/// (build_config/mruby.rb). Both `libmruby.a` archives are compiled
-/// with these; bindgen and the trampoline compile must see the same
-/// set or the mrb_value layout silently diverges from the archive.
-const ABI_DEFINES: &[&str] = &["MRB_INT32", "MRB_WORDBOX_NO_INLINE_FLOAT"];
+/// Extract the `-D` defines from the `libmruby.flags.mak` sidecar in
+/// `lib_dir` — the flags the staged archive was actually compiled
+/// with. bindgen and the trampoline compile must see the same set or
+/// the `mrb_value` layout silently diverges from the archive, so a
+/// staged archive without its sidecar fails loudly instead of
+/// guessing. (`MRUBY_CFLAGS = ...` is plain space-separated tokens;
+/// only the `-D` ones matter here — include paths and target flags
+/// are constructed independently below.)
+fn parse_abi_defines(lib_dir: &Path) -> Vec<String> {
+    let flags_mak = lib_dir.join("libmruby.flags.mak");
+    let content = std::fs::read_to_string(&flags_mak).unwrap_or_else(|_| {
+        panic!(
+            "beni-sys: {} is missing. The staged libmruby.a's compile flags are \
+             unknown, so bindgen cannot be aligned with the archive. Re-run \
+             `bundle exec rake beni:build` (which requests the sidecar), or for \
+             an externally built archive invoke mruby's rake with the sidecar's \
+             file task — `rake <build_dir>/lib/libmruby.flags.mak`.",
+            flags_mak.display()
+        )
+    });
+    let cflags = content
+        .lines()
+        .find_map(|line| line.strip_prefix("MRUBY_CFLAGS = "))
+        .unwrap_or_else(|| {
+            panic!(
+                "beni-sys: {} has no `MRUBY_CFLAGS = ` line — unrecognized \
+                 flags.mak layout",
+                flags_mak.display()
+            )
+        });
+    cflags
+        .split_whitespace()
+        .filter(|token| token.starts_with("-D"))
+        .map(str::to_owned)
+        .collect()
+}
 
 fn main() {
     println!("cargo:rerun-if-env-changed=MRUBY_LIB_DIR");
@@ -132,11 +168,22 @@ fn main() {
     let wasi_sdk = if is_wasm { wasi_sdk.as_deref() } else { None };
     let mruby_build_include = mruby_build_include.as_deref().unwrap();
 
+    // The archive's actual compile defines, from its flags.mak
+    // sidecar. Re-run when the sidecar changes — a rebuilt archive
+    // with different defines must re-bindgen.
+    let mruby_lib_path = PathBuf::from(mruby_lib_dir.as_ref().unwrap());
+    println!(
+        "cargo:rerun-if-changed={}",
+        mruby_lib_path.join("libmruby.flags.mak").display()
+    );
+    let abi_defines = parse_abi_defines(&mruby_lib_path);
+
     run_bindgen(
         &manifest_dir,
         &mruby_include,
         mruby_build_include,
         wasi_sdk,
+        &abi_defines,
         &bindings_rs,
         &static_wrappers_c,
     );
@@ -144,6 +191,7 @@ fn main() {
         &mruby_include,
         mruby_build_include,
         wasi_sdk,
+        &abi_defines,
         &static_wrappers_c,
     );
 
@@ -179,6 +227,7 @@ fn run_bindgen(
     mruby_include: &Path,
     mruby_build_include: &Path,
     wasi_sdk: Option<&str>,
+    abi_defines: &[String],
     bindings_rs: &Path,
     static_wrappers_c: &Path,
 ) {
@@ -189,8 +238,9 @@ fn run_bindgen(
             .clang_arg("--target=wasm32-wasi")
             .clang_arg(format!("--sysroot={}/share/wasi-sysroot", wasi_sdk));
     }
-    for define in ABI_DEFINES {
-        builder = builder.clang_arg(format!("-D{}", define));
+    // `-D<name>[=<value>]` tokens straight from flags.mak.
+    for define in abi_defines {
+        builder = builder.clang_arg(define);
     }
     let bindings = builder
         // WORKAROUND rust-bindgen #751: clang's wasm32 frontend defaults
@@ -239,6 +289,7 @@ fn compile_trampolines(
     mruby_include: &Path,
     mruby_build_include: &Path,
     wasi_sdk: Option<&str>,
+    abi_defines: &[String],
     static_wrappers_c: &Path,
 ) {
     if !static_wrappers_c.exists() {
@@ -257,8 +308,10 @@ fn compile_trampolines(
             .compiler(format!("{}/bin/clang", wasi_sdk))
             .flag(format!("--sysroot={}/share/wasi-sysroot", wasi_sdk));
     }
-    for define in ABI_DEFINES {
-        build.define(define, None);
+    // `-D<name>[=<value>]` tokens straight from flags.mak, passed as
+    // raw flags so name=value pairs survive untouched.
+    for define in abi_defines {
+        build.flag(define);
     }
     build
         .file(static_wrappers_c)
