@@ -60,16 +60,16 @@ use core::ptr::NonNull;
 
 /// Owning handle to a live mruby VM. Closed automatically on drop.
 ///
-/// On non-wasm32 targets the inner pointer field is absent because
-/// `Mrb::open` always returns `Err` there; the type still compiles
-/// so that `Result<Mrb, MrbOpenError>` is a uniform return type
-/// across targets.
+/// In placeholder builds (no staged `libmruby.a`) the inner pointer
+/// field is absent because `Mrb::open` always returns `Err`; the
+/// type still compiles so that `Result<Mrb, MrbOpenError>` is a
+/// uniform return type across builds.
 ///
-/// On wasm32 the type is `#[repr(transparent)]` over
+/// When mruby is linked the type is `#[repr(transparent)]` over
 /// `NonNull<mrb_state>` so `Mrb::borrow_raw` can fabricate a `&Mrb`
 /// reference from a raw `*mut mrb_state` received at a C-bridge
 /// frame. The two layouts are byte-identical there.
-#[cfg_attr(target_arch = "wasm32", repr(transparent))]
+#[cfg_attr(mruby_linked, repr(transparent))]
 pub struct Mrb {
     #[cfg(mruby_linked)]
     state: NonNull<sys::mrb_state>,
