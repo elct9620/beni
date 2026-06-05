@@ -1,6 +1,9 @@
 /.bundle/
-/target/
 /vendor/
+
+# Rust build artifacts (any nesting level, matching kobako's rules)
+target/
+*.o
 /.yardoc
 /_yardoc/
 /coverage/
