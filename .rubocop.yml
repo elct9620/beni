@@ -1,8 +1,28 @@
 AllCops:
+  # Kept at the gemspec's required_ruby_version floor (>= 3.2), unlike
+  # kobako (an app pinned to 3.3) — a gem must not use syntax newer than
+  # the oldest Ruby it supports.
   TargetRubyVersion: 3.2
+  NewCops: enable
+  SuggestExtensions: false
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+Layout/LineLength:
+  Exclude:
+    - "*.gemspec"
+
+# ruby/rbs upstream documents `class X < Data.define(...)` as the
+# Steep-friendly form for typed Value Objects — the assignment form
+# (`X = Data.define(...)`) leaves Data's auto-generated methods inside
+# a `do ... end` block that Steep cannot see, forcing every type
+# carrying validation logic to wrap its body in `# steep:ignore`.
+# We pick Steep over Rubocop here; the only visible cost is one
+# anonymous superclass entry in `.ancestors`. Same choice as kobako.
+# https://github.com/ruby/rbs/blob/master/docs/data_and_struct.md
+Style/DataInheritance:
+  Enabled: false

@@ -13,6 +13,6 @@ require "steep/rake_task"
 
 Steep::RakeTask.new
 
-Dir.glob(File.join(__dir__, "tasks", "*.rake")).sort.each { |f| load f }
+Dir.glob(File.join(__dir__, "tasks", "*.rake")).each { |f| load f }
 
 task default: %i[test rubocop steep]
