@@ -65,6 +65,12 @@ jobs:
         run: cargo fmt --all -- --check
       - name: cargo clippy (host placeholder)
         run: cargo clippy --workspace -- -D warnings
+      # Same doc gate as the local Stop hook — rustdoc warnings
+      # (broken intra-doc links, bad code fences) fail the lane.
+      - name: cargo doc
+        run: cargo doc --workspace --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: -D warnings
 
   # Integration lane: the repo's full dogfooding chain on every
   # WASI_SDK_PLATFORM detection branch. rust:verify drives a real
