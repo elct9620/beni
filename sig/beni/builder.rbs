@@ -3,10 +3,10 @@ module Beni
     DEFAULT_TARGETS: Array[String]
 
     attr_reader vendor_dir: String
-    attr_reader build_config: String
+    attr_reader build_config: String?
     attr_reader targets: Array[String]
 
-    def initialize: (vendor_dir: String, build_config: String, ?targets: Array[String]) -> void
+    def initialize: (vendor_dir: String, ?build_config: String?, ?targets: Array[String]) -> void
 
     def mruby_dir: () -> String
 
@@ -24,9 +24,11 @@ module Beni
 
     private
 
-    def run_mruby_rake: (Array[String] cmd) -> void
+    def run_mruby_rake: (Hash[String, String] env, Array[String] cmd) -> void
 
     def env: () -> Hash[String, String]
+
+    def flags_mak_paths: () -> Array[String]
 
     def verify_artifacts!: () -> void
   end

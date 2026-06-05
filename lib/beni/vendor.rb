@@ -48,11 +48,30 @@ module Beni
       else "x86_64-linux"
       end
 
+    # Known toolchain names mapped to their factory methods. +Beni::Tasks+
+    # selects from this registry by name (mruby alone by default; wasi-sdk
+    # is opt-in for cross builds targeting wasm32-wasip1).
+    TOOLCHAIN_FACTORIES = {
+      "mruby" => :mruby,
+      "wasi-sdk" => :wasi_sdk
+    }.freeze
+
     module_function
 
-    # All tarball-based vendor toolchains, anchored on +vendor_dir+.
-    def toolchains(vendor_dir:)
-      [wasi_sdk(vendor_dir: vendor_dir), mruby(vendor_dir: vendor_dir)]
+    # Tarball-based vendor toolchains selected by +names+ (defaults to
+    # every known toolchain), anchored on +vendor_dir+. Raises for a
+    # name outside +TOOLCHAIN_FACTORIES+ so a typo in a Rakefile fails
+    # at task-definition time, not mid-build.
+    def toolchains(vendor_dir:, names: TOOLCHAIN_FACTORIES.keys)
+      names.map do |name|
+        factory = TOOLCHAIN_FACTORIES[name]
+        unless factory
+          raise Error,
+                "unknown vendor toolchain #{name.inspect} (known: #{TOOLCHAIN_FACTORIES.keys.join(", ")})"
+        end
+
+        public_send(factory, vendor_dir: vendor_dir)
+      end
     end
 
     def wasi_sdk(vendor_dir:)

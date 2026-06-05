@@ -43,10 +43,13 @@ bundle exec rake rust:verify   # beni:build + check/test (host) + check (wasm32)
 
 `beni:vendor:setup` downloads the pinned mruby + wasi-sdk tarballs into
 `vendor/`; `beni:build` produces `vendor/mruby/build/{host,wasi}/lib/libmruby.a`
-from the gem-shipped `build_config/beni.rb` (both targets pin the same
-ABI-bearing defines — `MRB_INT32`, `MRB_WORDBOX_NO_INLINE_FLOAT`). Without
-the staged toolchain, plain `cargo check --workspace` still passes in a
-placeholder mode that exports no FFI surface.
+from the repo's validation config `build_config/beni.rb` (both targets pin the
+same ABI-bearing defines — `MRB_INT32`, `MRB_WORDBOX_NO_INLINE_FLOAT`). That
+config is the repo's own — `Beni::Tasks` defaults to no `MRUBY_CONFIG`, so a
+consumer's clean build uses mruby's untouched upstream
+`build_config/default.rb` (a single native `host` target). Without the staged
+toolchain, plain `cargo check --workspace` still passes in a placeholder mode
+that exports no FFI surface.
 
 ## Contributing
 

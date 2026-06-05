@@ -23,11 +23,39 @@ module Beni
 
       %w[
         beni:build beni:clean
-        beni:vendor:setup beni:vendor:setup:wasi_sdk beni:vendor:setup:mruby
+        beni:vendor:setup beni:vendor:setup:mruby
         beni:vendor:clean beni:vendor:clobber
       ].each do |name|
         assert Rake::Task.task_defined?(name), "expected task #{name} to be defined"
       end
+    end
+
+    def test_wasi_sdk_toolchain_is_opt_in
+      Tasks.new { |tasks| tasks.vendor_dir = VENDOR_DIR }
+
+      refute Rake::Task.task_defined?("beni:vendor:setup:wasi_sdk"),
+             "expected wasi-sdk setup task to be absent by default"
+    end
+
+    def test_toolchains_are_customizable
+      Tasks.new do |tasks|
+        tasks.vendor_dir = VENDOR_DIR
+        tasks.toolchains = %w[mruby wasi-sdk]
+      end
+
+      assert Rake::Task.task_defined?("beni:vendor:setup:wasi_sdk")
+      assert Rake::Task.task_defined?("beni:vendor:setup:mruby")
+    end
+
+    def test_unknown_toolchain_name_fails_fast
+      error = assert_raises(Beni::Error) do
+        Tasks.new do |tasks|
+          tasks.vendor_dir = VENDOR_DIR
+          tasks.toolchains = %w[mruby msvc]
+        end
+      end
+
+      assert_match(/msvc/, error.message)
     end
 
     def test_build_depends_on_vendor_setup
@@ -47,11 +75,10 @@ module Beni
       assert_includes Rake::Task["beni:vendor:setup:mruby"].prerequisites, mruby_tarball
     end
 
-    def test_default_build_config_is_shipped_with_the_gem
-      tasks = Tasks.new
+    def test_default_build_config_is_nil_so_mruby_uses_its_own_default
+      tasks = Tasks.new { |config| config.vendor_dir = VENDOR_DIR }
 
-      assert_equal Tasks::DEFAULT_BUILD_CONFIG, tasks.build_config
-      assert_path_exists Tasks::DEFAULT_BUILD_CONFIG
+      assert_nil tasks.build_config
     end
 
     def test_vendor_clean_removes_unpacked_trees_but_keeps_the_tarball_cache
@@ -102,7 +129,7 @@ module Beni
     def with_vendor_fixture
       dir = Dir.mktmpdir("beni-tasks")
       Tasks.new { |tasks| tasks.vendor_dir = dir }
-      unpacked = File.join(dir, "wasi-sdk")
+      unpacked = File.join(dir, "mruby")
       cache = File.join(dir, ".cache")
       FileUtils.mkdir_p(unpacked)
       FileUtils.mkdir_p(cache)

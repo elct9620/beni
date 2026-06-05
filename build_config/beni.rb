@@ -1,7 +1,12 @@
 # frozen_string_literal: true
 
-# Default mruby build configuration shipped with the beni gem.
-# ============================================================
+# The beni repo's own validation build config (host + wasm32-wasip1).
+# ====================================================================
+#
+# NOT the gem's default: +Beni::Tasks+ defaults to no +MRUBY_CONFIG+,
+# letting mruby use its untouched upstream +build_config/default.rb+.
+# This config exists to validate the toolchain against the repo's
+# wasm verification target, mirroring the downstream (kobako) setup.
 #
 # Drives mruby's build system to produce the `libmruby.a` archives the
 # beni crates link against, one per default target:
@@ -16,10 +21,9 @@
 # +BeniBuildConfig::ABI_DEFINES+): the typed wrapper in `crates/beni`
 # pins MRB_INT32 + MRB_WORDBOX_NO_INLINE_FLOAT semantics, so every
 # libmruby.a it links against must be built — and bindgen'd — with the
-# same layout. Consumers with different needs point +Beni::Tasks+ at
-# their own config (this file is a copyable starting point; the
-# +:wasi+ toolchain it loads stays reusable via
-# +ENV["BENI_BUILD_CONFIG_DIR"]+ — see wasi_toolchain.rb).
+# same layout. Consumers with similar needs point +Beni::Tasks+ at
+# their own config (this file is a copyable starting point — see
+# wasi_toolchain.rb, the sibling file it loads by relative path).
 #
 # This file is `load`ed by mruby's rake when +Beni::Builder+ sets
 # `MRUBY_CONFIG` to its absolute path; vendor paths resolve through the
@@ -30,11 +34,9 @@
 load File.expand_path("wasi_toolchain.rb", __dir__)
 
 # mruby auto-enables its mrbgems lockfile (MRuby::Lockfile's class body
-# calls +enable+ on load) and writes it next to MRUBY_CONFIG. For this
-# gem-shipped config that would mean writing into the installed gem
-# directory — read-only on most setups. Dependency pinning is beni's
-# own (future) lock mechanism, not mruby's, so the default config opts
-# out.
+# calls +enable+ on load) and writes it next to MRUBY_CONFIG. Dependency
+# pinning is beni's own (future) lock mechanism, not mruby's, so this
+# config opts out.
 MRuby::Lockfile.disable
 
 # Config-time constants shared across both default targets. Only defined

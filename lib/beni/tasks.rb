@@ -12,18 +12,19 @@ module Beni
   #
   #   Beni::Tasks.new
   #
-  # or with overrides:
+  # or with overrides (a custom config cross-building to wasm32-wasip1):
   #
   #   Beni::Tasks.new do |tasks|
   #     tasks.build_config = File.expand_path("build_config/custom.rb")
-  #     tasks.targets = %w[host]
+  #     tasks.targets = %w[host wasi]
+  #     tasks.toolchains = %w[mruby wasi-sdk]
   #   end
   #
   # Defined tasks:
   #
   #   rake beni:build           — fetch toolchains + build libmruby.a per target
   #   rake beni:clean           — remove mruby build trees (keeps source)
-  #   rake beni:vendor:setup    — download & unpack all vendor toolchains
+  #   rake beni:vendor:setup    — download & unpack the configured toolchains
   #   rake beni:vendor:clean    — remove unpacked toolchains (keeps tarball cache)
   #   rake beni:vendor:clobber  — remove the vendor tree entirely
   #
@@ -33,22 +34,24 @@ module Beni
   #   * +vendor_dir+   — where toolchains unpack and mruby builds; defaults
   #     to +vendor/+ under the Rakefile's working directory, or the
   #     +BENI_VENDOR_DIR+ env var when set (test-fixture relocation).
-  #   * +build_config+ — mruby build config path; defaults to the
-  #     gem-shipped host + wasm32-wasip1 config. Custom configs can +load+
-  #     the gem's WASM-target template via +ENV["BENI_BUILD_CONFIG_DIR"]+.
+  #   * +build_config+ — mruby build config path; defaults to +nil+, which
+  #     lets mruby use its own +build_config/default.rb+ — the upstream
+  #     defaults, untouched.
   #   * +targets+      — build-target names to verify after the build,
-  #     matching the +MRuby::Build.new(<name>)+ names in +build_config+.
+  #     matching the +MRuby::Build.new(<name>)+ names in the config
+  #     (the upstream default config names its single target +host+).
+  #   * +toolchains+   — vendor toolchain names to download, from
+  #     +Vendor::TOOLCHAIN_FACTORIES+; defaults to mruby alone. Add
+  #     +wasi-sdk+ when the build config cross-compiles to wasm.
   class Tasks < Rake::TaskLib
-    # Gem-shipped default mruby build config (host + wasm32-wasip1).
-    DEFAULT_BUILD_CONFIG = File.join(BUILD_CONFIG_DIR, "beni.rb")
-
-    attr_accessor :vendor_dir, :build_config, :targets
+    attr_accessor :vendor_dir, :build_config, :targets, :toolchains
 
     def initialize
       super
       @vendor_dir = ENV["BENI_VENDOR_DIR"] || File.expand_path("vendor")
-      @build_config = DEFAULT_BUILD_CONFIG
+      @build_config = nil
       @targets = Builder::DEFAULT_TARGETS
+      @toolchains = %w[mruby]
       yield self if block_given?
       define
     end
@@ -59,8 +62,8 @@ module Beni
       @builder ||= Builder.new(vendor_dir: vendor_dir, build_config: build_config, targets: targets)
     end
 
-    def toolchains
-      @toolchains ||= Vendor.toolchains(vendor_dir: vendor_dir)
+    def vendor_toolchains
+      @vendor_toolchains ||= Vendor.toolchains(vendor_dir: vendor_dir, names: toolchains)
     end
 
     def define
@@ -73,21 +76,21 @@ module Beni
 
     def define_vendor_namespace
       namespace :vendor do
-        toolchains.each { |toolchain| define_toolchain_tasks(toolchain) }
+        vendor_toolchains.each { |toolchain| define_toolchain_tasks(toolchain) }
         define_vendor_setup_task
         define_vendor_clean_tasks
       end
     end
 
     def define_vendor_setup_task
-      desc "Fetch and unpack all build-time vendor toolchains (#{toolchains.map(&:name).join(" + ")})"
-      task setup: toolchains.map { |toolchain| "setup:#{toolchain.task_name}" }
+      desc "Fetch and unpack the build-time vendor toolchains (#{vendor_toolchains.map(&:name).join(" + ")})"
+      task setup: vendor_toolchains.map { |toolchain| "setup:#{toolchain.task_name}" }
     end
 
     def define_vendor_clean_tasks
       desc "Remove unpacked vendor toolchains (keeps cached tarballs)"
       task :clean do
-        toolchains.each { |toolchain| FileUtils.rm_rf(toolchain.final_dir) }
+        vendor_toolchains.each { |toolchain| FileUtils.rm_rf(toolchain.final_dir) }
       end
 
       desc "Remove #{vendor_dir} entirely (unpacked trees and cached tarballs)"

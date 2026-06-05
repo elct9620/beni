@@ -7,11 +7,26 @@ module Beni
   class TestVendor < Minitest::Test
     VENDOR_DIR = "/tmp/beni-vendor-test"
 
-    def test_toolchains_returns_wasi_sdk_and_mruby_anchored_on_vendor_dir
+    def test_toolchains_returns_every_known_toolchain_anchored_on_vendor_dir
       toolchains = Vendor.toolchains(vendor_dir: VENDOR_DIR)
 
-      assert_equal %w[wasi-sdk mruby], toolchains.map(&:name)
+      assert_equal %w[mruby wasi-sdk], toolchains.map(&:name)
       assert(toolchains.all? { |t| t.final_dir.start_with?(VENDOR_DIR) })
+    end
+
+    def test_toolchains_selects_by_name_in_the_given_order
+      toolchains = Vendor.toolchains(vendor_dir: VENDOR_DIR, names: %w[wasi-sdk])
+
+      assert_equal %w[wasi-sdk], toolchains.map(&:name)
+    end
+
+    def test_toolchains_rejects_unknown_names
+      error = assert_raises(Beni::Error) do
+        Vendor.toolchains(vendor_dir: VENDOR_DIR, names: %w[msvc])
+      end
+
+      assert_match(/msvc/, error.message)
+      assert_match(/mruby/, error.message)
     end
 
     def test_wasi_sdk_pins_version_and_platform

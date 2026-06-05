@@ -8,15 +8,12 @@
 # and the GNU archive format. A cross build opts in via
 # +conf.toolchain :wasi+.
 #
-# Shipped with the beni gem. The default config (+beni.rb+, sibling
-# file) loads it, and user-supplied build configs can reuse it without
-# copying:
+# Loaded by the repo's validation config (+beni.rb+, sibling file) via
+# relative path; custom build configs copy what they need.
 #
-#   load File.join(ENV.fetch("BENI_BUILD_CONFIG_DIR"), "wasi_toolchain.rb")
-#
-# +Beni::Builder+ exports +BENI_BUILD_CONFIG_DIR+ (this directory) and
-# +BENI_VENDOR_DIR+ (the vendor tree root) when it drives mruby's rake;
-# +WASI_SDK_PATH+ overrides the wasi-sdk location directly.
+# +Beni::Builder+ exports +BENI_VENDOR_DIR+ (the vendor tree root) when
+# it drives mruby's rake; +WASI_SDK_PATH+ overrides the wasi-sdk
+# location directly.
 #
 # Config-time constants live in a dedicated namespace, only defined on
 # first load, so `load`-ing this file twice in the same process does not
