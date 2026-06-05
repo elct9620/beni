@@ -123,22 +123,29 @@ jobs:
 
   # Consumer lane: each harness under test/scenarios/ is a
   # consumer-shaped Rakefile run from its own directory through the
-  # gem's task interface, plain rake without Bundler — exactly what a
-  # consumer's clean checkout does. default_host is the
+  # gem's task interface alone (scenario:setup → beni:build →
+  # scenario:verify), plain rake without Bundler. default_host is the
   # zero-configuration path: mruby alone, upstream default config,
-  # host target.
+  # host target — platform-sensitive (mruby's native toolchain
+  # detection), so it runs on every OS. generated_config drives the
+  # rake beni:config → cross-build chain; the mechanism is
+  # platform-independent and the resulting config already builds on
+  # all three OS in the verify lane, so one OS suffices.
   scenario:
     runs-on: ${{ matrix.os }}
     name: Scenario ${{ matrix.scenario }} (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-          - macos-latest
-        scenario:
-          - default_host
+        include:
+          - os: ubuntu-latest
+            scenario: default_host
+          - os: ubuntu-24.04-arm
+            scenario: default_host
+          - os: macos-latest
+            scenario: default_host
+          - os: ubuntu-latest
+            scenario: generated_config
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -149,5 +156,5 @@ jobs:
         with:
           ruby-version: '3.4'
       - name: Build through the gem's task interface
-        run: rake beni:build scenario:verify
+        run: rake scenario:setup beni:build scenario:verify
         working-directory: test/scenarios/${{ matrix.scenario }}

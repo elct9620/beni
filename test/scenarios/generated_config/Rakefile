@@ -1,0 +1,48 @@
+# frozen_string_literal: true
+
+# Consumer scenario: the gem's customization path, end to end.
+#
+# A consumer who needs more than the upstream defaults runs
+# `rake beni:config` to materialize the gem-shipped template, then
+# points Beni::Tasks at the generated file — here host + wasm32-wasip1,
+# which also pulls in the wasi-sdk toolchain. Unlike the repo-root
+# Rakefile (whose config is committed and only pinned to the template
+# by an identity test), this drives the generate → build chain through
+# the gem's task interface alone. Run from this directory:
+#
+#   $ cd test/scenarios/generated_config && rake scenario:setup beni:build scenario:verify
+$LOAD_PATH.unshift File.expand_path("../../../lib", __dir__)
+
+require "beni/tasks"
+
+CONFIG = File.expand_path("build_config/mruby.rb", __dir__)
+
+Beni::Tasks.new do |tasks|
+  tasks.build_config = CONFIG
+  tasks.targets = %w[host wasi]
+  tasks.toolchains = %w[mruby wasi-sdk]
+end
+
+namespace :scenario do
+  desc "Generate the build config via the gem's beni:config task"
+  task :setup do
+    next if File.exist?(CONFIG)
+
+    Rake::Task["beni:config"].invoke(CONFIG)
+  end
+
+  desc "Assert the artifacts beni:build must leave behind"
+  task :verify do
+    artifacts = [CONFIG] + %w[
+      vendor/mruby/build/host/lib/libmruby.a
+      vendor/mruby/build/host/lib/libmruby.flags.mak
+      vendor/mruby/build/wasi/lib/libmruby.a
+      vendor/mruby/build/wasi/lib/libmruby.flags.mak
+    ].map { |rel| File.expand_path(rel, __dir__) }
+
+    missing = artifacts.reject { |path| File.exist?(path) }
+    abort "[scenario] missing artifacts:\n  #{missing.join("\n  ")}" unless missing.empty?
+
+    puts "[scenario] generated_config artifacts verified: #{artifacts.join(", ")}"
+  end
+end

@@ -2,8 +2,10 @@
 /vendor/
 
 # Consumer-scenario harnesses vendor into their own directory so each
-# run stays isolated from the repo's dogfooding vendor tree.
+# run stays isolated from the repo's dogfooding vendor tree; their
+# build configs are scenario:setup output, regenerated every run.
 /test/scenarios/*/vendor/
+/test/scenarios/*/build_config/
 
 # Native build artifacts (any nesting level, matching kobako's rules):
 # cargo target dirs, C objects, static libs (libmruby.a), and Ruby

@@ -8,7 +8,7 @@
 # Run from this directory so the default vendor_dir resolves here,
 # exactly as it would in a consumer's project root:
 #
-#   $ cd test/scenarios/default_host && rake beni:build scenario:verify
+#   $ cd test/scenarios/default_host && rake scenario:setup beni:build scenario:verify
 #
 # Unlike the repo-root Rakefile (custom config, host + wasi cross
 # build), this exercises the path a consumer hits first — including
@@ -20,6 +20,12 @@ require "beni/tasks"
 Beni::Tasks.new
 
 namespace :scenario do
+  # Part of the harness contract every scenario implements
+  # (setup → beni:build → verify); the zero-configuration path has
+  # nothing to prepare.
+  desc "No-op: the zero-configuration path needs no preparation"
+  task :setup
+
   desc "Assert the artifacts beni:build must leave behind"
   task :verify do
     artifacts = %w[
