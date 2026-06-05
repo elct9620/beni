@@ -69,6 +69,10 @@ Behaviors:
 
 - A clean build with no `build_config` uses mruby's untouched upstream
   default config.
+- `targets` declares which archives `beni:build` requests and verifies; the
+  build config owns the target definitions, and beni never reads the config.
+  The two lists align by verification. Targets the config defines beyond
+  `targets` build as usual and are not verified.
 - Customization goes through `beni:config`: the generated file requires
   nothing from beni at build time, builds without edits, and belongs to the
   consumer — beni never rewrites it. Generation refuses to overwrite an
@@ -114,7 +118,7 @@ Behaviors:
 | Scenario | Behavior |
 |---|---|
 | Toolchain download fails checksum verification | build aborts, no partial unpack |
-| `beni:build` with a config naming targets not in `targets` | verification fails, missing archives reported |
+| `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
 | Staged archive missing its compile-flags sidecar | `beni-sys` build fails and names the sidecar, never silently falls back to placeholder mode |
 | `Mrb::open` without a linked mruby | returns an error value, never aborts |
@@ -127,5 +131,6 @@ Behaviors:
 |---|---|
 | toolchain | a vendored build dependency (mruby source, wasi-sdk) |
 | archive | the built `libmruby.a` for one target |
+| staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | compile-flags sidecar | the per-archive record of defines/flags the crates align with |
 | placeholder mode | crate compilation without a staged archive |
