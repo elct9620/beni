@@ -18,9 +18,9 @@ impl Mrb {
     /// `bytes`. The buffer is copied into the mruby heap; the slice
     /// only has to live for the duration of the call.
     ///
-    /// `bytes.len()` saturates to `i32::MAX` (mruby's `mrb_int` on
-    /// wasm32 is signed 32-bit). Real callers never reach that — the
-    /// host-side String size cap (8 MiB) sits well below.
+    /// `bytes.len()` saturates to `i32::MAX` (mruby's `mrb_int` is
+    /// signed 32-bit under the pinned `MRB_INT32` config). Real
+    /// callers stay far below that.
     #[inline]
     pub fn str_new(&self, bytes: &[u8]) -> Value {
         let len = bytes.len().min(i32::MAX as usize) as i32;

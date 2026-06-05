@@ -38,15 +38,16 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 
-// Safe-layer modules. These hold the kobako abstractions over the
+// Safe-layer modules. These hold the typed abstractions over the
 // bindgen FFI surface: `Mrb` / `Ccontext` RAII, typed `Value` /
 // `Class` / `Array` / `Hash` newtypes, and the `cstr!` / `cstr_ptr`
 // C-string helpers.
 //
-// `ccontext` / `array` / `hash` / `convert` are wasm32-only because
-// their bodies call mruby functions that are only linked on wasm32;
-// including them on host targets would surface `unresolved import`
-// errors as soon as `cargo test` ran the crate on the host target.
+// `ccontext` / `array` / `hash` / `convert` exist only under
+// `mruby_linked` because their bodies call mruby functions that
+// resolve only when a vendored `libmruby.a` is linked; including
+// them in placeholder builds would surface `unresolved import`
+// errors as soon as `cargo check` ran without a staged toolchain.
 #[cfg(mruby_linked)]
 pub mod array;
 #[cfg(mruby_linked)]
@@ -94,10 +95,11 @@ pub use beni_sys as sys;
 /// alias to `sys::mrb_func_t` happens once inside
 /// `Class::define_method` / `define_singleton_method`.
 ///
-/// Unconditional (not wasm32-gated) so the host-target sanity test
+/// Unconditional (not `mruby_linked`-gated) so the sanity test
 /// `typed_mrb_func_t_coerces_from_value_bridge` (in `tests` below)
 /// pins the bridge signature → typed alias coercion at compile time
-/// against the host placeholders for `mrb_state` / `mrb_value`.
+/// even in placeholder builds, against the placeholder
+/// `mrb_state` / `mrb_value` types.
 pub type mrb_func_t = unsafe extern "C" fn(mrb: *mut sys::mrb_state, self_: Value) -> Value;
 
 #[cfg(test)]

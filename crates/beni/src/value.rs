@@ -4,12 +4,11 @@
 //!
 //! Three reasons stack here:
 //!
-//! 1. **Orphan rule** — `mrb_value` is declared at this crate's root
-//!    so the FFI ABI stays accessible to other crates. Consumers
-//!    (notably `kobako-wasm`) previously could not attach inherent
-//!    methods to it; the predecessor of this module worked around
-//!    that with a `MrbValueExt` extension trait. Wrapping the type
-//!    inside this crate removes the trait + per-call-site `use`.
+//! 1. **Orphan rule** — `mrb_value` is declared in `beni-sys` so the
+//!    FFI ABI stays accessible to other crates, which means no crate
+//!    downstream of it can attach inherent methods. Wrapping the type
+//!    here removes the extension-trait + per-call-site `use`
+//!    workaround that restriction otherwise forces.
 //! 2. **API surface clarity** — methods that operate on values
 //!    (classname, to_string, predicates, unboxers) become inherent
 //!    on `Value`, so the call shape is `val.classname(mrb)` rather
@@ -21,11 +20,12 @@
 //!
 //! ## ABI guarantee
 //!
-//! `Value` is `#[repr(transparent)]` over `mrb_value`. The wasm32
-//! `mrb_value` is a 4-byte word; `Value` is therefore also 4 bytes
-//! and shares the C ABI. This matters at the `mrb_func_t` boundary:
+//! `Value` is `#[repr(transparent)]` over `mrb_value`. Under beni's
+//! pinned word-boxing config `mrb_value` is a single machine word
+//! (4 bytes on wasm32, 8 on 64-bit hosts); `Value` shares that
+//! layout and the C ABI. This matters at the `mrb_func_t` boundary:
 //! a bridge declared with `Value` parameters and return type
-//! produces the same wasm function signature as one declared with
+//! produces the same function signature as one declared with
 //! `mrb_value`. Round-tripping through `Value::from_raw` /
 //! `Value::into_raw` is therefore a no-op at the codegen level.
 //!
@@ -58,8 +58,8 @@ macro_rules! cstr {
 
 /// Coerce a NUL-terminated byte slice to `*const c_char`. Used for the
 /// top-of-file `const X: &[u8] = b"...\0"` declarations that already
-/// carry their NUL terminator — `cstr_ptr(KOBAKO_NAME)` reads cleaner
-/// than `KOBAKO_NAME.as_ptr() as *const core::ffi::c_char`.
+/// carry their NUL terminator — `cstr_ptr(CLASS_NAME)` reads cleaner
+/// than `CLASS_NAME.as_ptr() as *const core::ffi::c_char`.
 ///
 /// The caller must guarantee `b` ends with `0u8` — debug builds assert.
 #[inline]
@@ -78,8 +78,7 @@ pub const fn cstr_ptr(b: &[u8]) -> *const core::ffi::c_char {
 // are decided at libmruby build time and do not vary across
 // `mrb_state` instances. Capturing them once via the C shims sidesteps
 // a cross-FFI call every time a hot path wants `nil` / `true` /
-// `false`. Previous home: `kobako::Immediates` in the consumer crate;
-// re-located here so the cache ships from the same crate as `Value`.
+// `false`.
 
 #[cfg(mruby_linked)]
 struct Immediates {
@@ -88,10 +87,10 @@ struct Immediates {
     qfalse: sys::mrb_value,
 }
 
-// SAFETY: `mrb_value` on wasm32 is a `#[repr(C)] struct { w: u32 }` —
-// plain old data with no interior mutability. `Immediates` therefore
-// shares only `Copy` snapshots and is trivially Sync across the
-// single-threaded wasm execution model.
+// SAFETY: `mrb_value` under word boxing is a `#[repr(C)]` struct
+// holding a single integer word — plain old data with no interior
+// mutability. `Immediates` therefore shares only `Copy` snapshots,
+// which is sound to read from any thread.
 #[cfg(mruby_linked)]
 unsafe impl Sync for Immediates {}
 
@@ -184,7 +183,7 @@ impl Value {
         self.0
     }
 
-    /// All-zero `Value`. On wasm32 with the kobako mruby
+    /// All-zero `Value`. Under beni's pinned word-boxing
     /// configuration this matches `mrb_nil_value()` (MRB_Qnil = 0),
     /// but callers that need a guaranteed nil should prefer
     /// `Value::nil` which reads through the mruby shim. The
@@ -218,7 +217,8 @@ impl Value {
     }
 
     /// `mrb_boxing_int_value(mrb, n)` — construct an mruby Integer
-    /// from `n`. On wasm32 (`MRB_INT32`) the payload is signed 32-bit.
+    /// from `n`. Under the pinned `MRB_INT32` config the payload is
+    /// signed 32-bit.
     #[inline]
     pub fn from_int(mrb: &Mrb, n: i32) -> Self {
         // SAFETY: `mrb` is alive by the `&Mrb` borrow.
@@ -226,8 +226,8 @@ impl Value {
     }
 
     /// `mrb_word_boxing_float_value(mrb, f)` — construct an mruby
-    /// Float from `f`. Used on wasm32 with
-    /// `MRB_WORDBOX_NO_INLINE_FLOAT` where floats are heap-allocated.
+    /// Float from `f`. Under the pinned `MRB_WORDBOX_NO_INLINE_FLOAT`
+    /// config floats are heap-allocated.
     #[inline]
     pub fn from_float(mrb: &Mrb, f: f64) -> Self {
         // SAFETY: `mrb` is alive by the `&Mrb` borrow.
@@ -438,7 +438,7 @@ impl Value {
 
     /// Direct `mrb_float(v)` unbox. Preserves full f64 precision.
     ///
-    /// Under `MRB_WORDBOX_NO_INLINE_FLOAT` (the wasm32 kobako
+    /// Under `MRB_WORDBOX_NO_INLINE_FLOAT` (beni's pinned
     /// config) Float values are always object-tagged with two
     /// trailing zero bits — `mrb_value.w` is the `RFloat *` word
     /// directly, so we cast through it instead of routing through

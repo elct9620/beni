@@ -1,4 +1,4 @@
-//! RITE / kobako bytecode loaders on `Mrb`.
+//! RITE bytecode loaders on `Mrb`.
 //!
 //! Inherent methods that drop a compiled blob into the live mruby VM
 //! and run its top-level Proc.
@@ -27,9 +27,9 @@ impl Mrb {
         })
     }
 
-    /// Load + validate + execute a `#preload(binary:)` snippet.
-    /// Returns 0 on success and 1 on structural failure (E-37 RITE
-    /// version drift / E-38 corrupt or non-RITE body). Top-level
+    /// Load + validate + execute a precompiled bytecode blob.
+    /// Returns 0 on success and 1 on structural failure (RITE
+    /// version drift, corrupt or non-RITE body). Top-level
     /// exceptions from a successful load are left in `mrb->exc` for
     /// downstream extraction.
     ///
@@ -37,11 +37,11 @@ impl Mrb {
     /// execution via `mrb_read_irep_buf`) with arena bracketing and
     /// a structural-failure classifier; on parse failure a
     /// `RuntimeError` is synthesised under `mrb->exc` so the
-    /// caller's existing `take_pending_panic` flow sees a normal
-    /// exception. The classifier reads the RITE binary header
-    /// directly from `bytes` so the diagnostic distinguishes
-    /// "shorter than header" / "wrong ident" / "version mismatch" /
-    /// "corrupt body".
+    /// caller's pending-exception flow sees a normal exception. The
+    /// classifier reads the RITE binary header directly from
+    /// `bytes` so the diagnostic distinguishes "shorter than
+    /// header" / "wrong ident" / "version mismatch" / "corrupt
+    /// body".
     pub fn load_bytecode(&self, bytes: &[u8]) -> core::ffi::c_int {
         // mruby/irep.h documents that `mrb_load_irep*` calls retain
         // one RProc per invocation in the arena; bracketing with
@@ -61,9 +61,9 @@ impl Mrb {
         };
 
         if irep.is_null() {
-            // E-37 (version) or E-38 (corrupt body / non-RITE
-            // input). The caller's class-override step folds the
-            // synthesised exception into BytecodeError.
+            // Version drift, corrupt body, or non-RITE input. The
+            // synthesised exception surfaces through `mrb->exc`
+            // exactly like a native raise.
             self.set_bytecode_exc(classify_structural_failure(bytes));
             // SAFETY: arena index from the matching save above.
             unsafe { sys::mrb_gc_arena_restore_func(self.as_ptr(), ai) };

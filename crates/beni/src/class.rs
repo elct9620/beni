@@ -13,18 +13,17 @@
 //!
 //! ## ABI guarantee
 //!
-//! `Class` is `#[repr(transparent)]` over `*mut RClass`. The wasm32
-//! pointer width is 4 bytes; `Class` is therefore also 4 bytes and
-//! shares the C ABI. This matters at the FFI boundary — a struct
-//! field of type `Class` round-trips into mruby's own `RClass *`
-//! slot without any conversion.
+//! `Class` is `#[repr(transparent)]` over `*mut RClass`, so it is
+//! pointer-sized and shares the C ABI on every target. This matters
+//! at the FFI boundary — a struct field of type `Class` round-trips
+//! into mruby's own `RClass *` slot without any conversion.
 //!
 //! ## Module alias
 //!
 //! mruby represents both Modules and Classes with the same
 //! `struct RClass` type at the C level. `Module` is a transparent
 //! type alias for `Class` so install paths can read
-//! `let kobako_mod: Module = …` for a module handle and
+//! `let helpers_mod: Module = …` for a module handle and
 //! `let handle_class: Class = …` for a class handle without changing
 //! the underlying representation.
 //!
@@ -47,10 +46,11 @@ use beni_sys as sys;
 /// back to the raw pointer via `Class::as_raw` when calling raw
 /// mruby APIs (`mrb_define_method`, `mrb_define_class_under`, …).
 ///
-/// Available on both targets to mirror `Value`'s cross-target shape:
-/// the newtype is `#[repr(transparent)]` and carries no mruby linkage,
-/// so its constructors compile for free on host. Methods that talk to
-/// mruby live behind `#[cfg(mruby_linked)]`.
+/// Available in both linked and placeholder builds to mirror
+/// `Value`'s shape: the newtype is `#[repr(transparent)]` and carries
+/// no mruby linkage, so its constructors compile without a staged
+/// toolchain. Methods that talk to mruby live behind
+/// `#[cfg(mruby_linked)]`.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Class(pub(crate) *mut sys::RClass);

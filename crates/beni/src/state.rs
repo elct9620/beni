@@ -3,8 +3,8 @@
 //!
 //! `Mrb` owns a freshly opened mruby VM. `Mrb::open` allocates a
 //! new state via `mrb_open`; `Drop` releases it via `mrb_close`.
-//! Callers that still reach for the raw FFI (during the staged
-//! migration) use `Mrb::as_ptr` as an explicit escape hatch.
+//! Callers that still reach for the raw FFI use `Mrb::as_ptr` as an
+//! explicit escape hatch.
 //!
 //! `Mrb` is intentionally `!Send` and `!Sync` (inherited from
 //! `NonNull<mrb_state>`): mruby's `mrb_state` is single-threaded and
@@ -17,18 +17,18 @@
 //! 1. Every function that takes one must be `unsafe fn` even when it
 //!    does nothing more than forward to FFI — "unsafe contagion"
 //!    across every helper that touches the VM.
-//! 2. Manual `mrb_close` calls scatter across every panic-outcome
-//!    path in `__kobako_eval`. Forgetting one is a quiet memory leak
-//!    the type system cannot catch.
+//! 2. Manual `mrb_close` calls scatter across every error path of an
+//!    embedder's eval entry point. Forgetting one is a quiet memory
+//!    leak the type system cannot catch.
 //!
 //! `Mrb` fixes both: the owning type makes "the VM is live" provable
 //! by the borrow checker, and `Drop` makes `mrb_close` automatic.
 //!
 //! ## Capability clusters
 //!
-//! The mruby C API surface that the kobako guest actually uses is
-//! grouped into per-concern files under `state::`. Each file extends
-//! `Mrb` with inherent methods covering one concern:
+//! The mruby C API surface the typed layer covers is grouped into
+//! per-concern files under `state::`. Each file extends `Mrb` with
+//! inherent methods covering one concern:
 //!
 //!   * `factory` — `String` / `Array` / `Hash` factories
 //!   * `symbol` — symbol intern + name lookup
@@ -38,7 +38,7 @@
 //!     ZST markers (currently the only trait-based cluster — see the
 //!     `args` module doc for the pattern, applicable to future
 //!     clusters once combinatorial pressure shows up)
-//!   * `load` — RITE / kobako bytecode loaders
+//!   * `load` — RITE bytecode loaders
 //!   * `protect` — closure-based `mrb_protect_error`
 //!
 //! Splitting per concern keeps each file's surface small and the
@@ -76,8 +76,8 @@ pub struct Mrb {
 }
 
 /// Returned by `Mrb::open` when `mrb_open` returns NULL (allocation
-/// failure inside mruby) or on the host target where `mrb_open` is
-/// not linked.
+/// failure inside mruby) or in placeholder builds where `mrb_open`
+/// is not linked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MrbOpenError;
 
@@ -92,7 +92,7 @@ impl std::error::Error for MrbOpenError {}
 impl Mrb {
     /// Open a fresh mruby state. Returns `MrbOpenError` when
     /// mruby's allocator cannot produce a state (or unconditionally
-    /// on the host target — the mruby C API is not linked into the
+    /// in placeholder builds — no mruby C API is linked into the
     /// rlib).
     pub fn open() -> Result<Self, MrbOpenError> {
         #[cfg(mruby_linked)]
@@ -111,9 +111,7 @@ impl Mrb {
     /// Raw `*mut mrb_state`. Use only at FFI boundaries that have
     /// not yet migrated to safe methods. The returned pointer is
     /// valid for the lifetime of `&self`; callers must not call
-    /// `mrb_close` on it (the `Mrb` Drop owns that). wasm32-only —
-    /// host targets cannot construct an `Mrb`, so the raw-pointer
-    /// escape hatch has no callers there.
+    /// `mrb_close` on it (the `Mrb` Drop owns that).
     #[cfg(mruby_linked)]
     #[inline]
     pub fn as_ptr(&self) -> *mut sys::mrb_state {
@@ -222,8 +220,7 @@ impl Mrb {
     /// the `crate::mrb_state` struct is `pub(crate)` so this
     /// accessor is the one external entry point. The free function
     /// `crate::mrb_object_class` remains for code paths that hold
-    /// only a raw `*mut mrb_state` (currently the kobako-wasm
-    /// install helpers).
+    /// only a raw `*mut mrb_state`.
     #[cfg(mruby_linked)]
     #[inline]
     pub fn object_class(&self) -> Class {
@@ -245,10 +242,10 @@ impl Drop for Mrb {
 #[cfg(not(mruby_linked))]
 impl Drop for Mrb {
     fn drop(&mut self) {
-        // Unreachable: `Mrb::open` always returns `Err` on host
-        // targets, so no `Mrb` value can be constructed there.
+        // Unreachable: `Mrb::open` always returns `Err` in
+        // placeholder builds, so no `Mrb` value can be constructed.
         // Required only so the type satisfies `Drop` uniformly
-        // across targets.
+        // across builds.
     }
 }
 

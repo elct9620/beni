@@ -1,22 +1,19 @@
 //! Rust ↔ mruby `Value` conversion traits — the typed layer over the
 //! raw boxing / unboxing primitives in `value.rs`.
 //!
-//! This is beni-sys's small slice of the magnus conversion
-//! contract: `IntoValue` mirrors magnus's `IntoValue` (Rust → value,
-//! infallible boxing), `FromValue` mirrors magnus's `TryConvert`
-//! (value → Rust, fallible downcast). Both sit ON TOP of the unsafe tag
-//! primitives in `value.rs` (`Value::from_int` / `is_integer` +
-//! `unbox_integer` / …): those primitives are the C-bind floor, these
-//! traits are the safe typed seam consumers call. Keeping the two layers
-//! in separate files makes a future `beni` (typed) / `beni-sys` (FFI)
-//! crate split a move rather than an untangling — the traits travel to
-//! `beni`, the primitives stay here.
+//! This is beni's small slice of the magnus conversion contract:
+//! `IntoValue` mirrors magnus's `IntoValue` (Rust → value, infallible
+//! boxing), `FromValue` mirrors magnus's `TryConvert` (value → Rust,
+//! fallible downcast). Both sit ON TOP of the unsafe tag primitives in
+//! `value.rs` (`Value::from_int` / `is_integer` + `unbox_integer` / …):
+//! those primitives are the C-bind floor, these traits are the safe
+//! typed seam consumers call.
 //!
-//! Scope is deliberately the scalar leaf types the kobako codec
-//! round-trips (`i32` / `f64` / `bool`). This is NOT the full magnus
-//! hierarchy — no typed-value (`RArray` / `RString`) conversion family
-//! and no owned/borrowed split; the `Array` / `Hash` newtypes keep their
-//! own `as_value` / `from_value_unchecked` ladder.
+//! Scope is deliberately the scalar leaf types (`i32` / `f64` /
+//! `bool`). This is NOT the full magnus hierarchy — no typed-value
+//! (`RArray` / `RString`) conversion family and no owned/borrowed
+//! split; the `Array` / `Hash` newtypes keep their own `as_value` /
+//! `from_value_unchecked` ladder.
 
 use crate::{Mrb, Value};
 

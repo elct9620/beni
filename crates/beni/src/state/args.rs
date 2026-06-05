@@ -224,8 +224,8 @@ pub mod format {
     /// `mrb_get_args(mrb, "io", &n, &val)` — read an integer followed
     /// by an object. The `"i"` specifier writes an `mrb_int`, so the
     /// out-param is typed `sys::mrb_int` (not `c_int`) to match mruby's
-    /// own width contract rather than coincide with it on the wasm32
-    /// `MRB_INT32` build.
+    /// own width contract rather than coincide with it under the
+    /// pinned `MRB_INT32` config.
     pub struct Io;
     impl Format for Io {
         type Output<'a> = (sys::mrb_int, Value);
