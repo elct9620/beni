@@ -10,8 +10,30 @@ the resulting `libmruby.a`.
 
 - Rust developers who embed mruby and want typed, memory-safe APIs instead of
   raw FFI.
-- Projects (e.g. kobako) that need a reproducible `libmruby.a` build wired
-  into their own Rakefile.
+- Rakefile-based projects that need a reproducible `libmruby.a` build wired
+  into their own build pipeline.
+
+## Impacts
+
+- A Rust project can depend on the `beni` crate and call mruby without
+  writing or maintaining FFI declarations by hand.
+- A Rust project can produce `libmruby.a` via `rake beni:build` without
+  vendoring mruby source or scripting tarball downloads.
+- The same `version`, `build_config`, and `toolchains` inputs always produce
+  the same staged archive and compile-flags sidecar.
+- A crate that depends on `beni` but does not opt into mruby still compiles
+  (placeholder mode), so `beni` is safe to take as a transitive dependency.
+
+## Success criteria
+
+- A fresh checkout running `rake beni:build` produces `libmruby.a` and its
+  compile-flags sidecar at the staged path for every declared target.
+- A Rust binary built with `BENI_VENDOR_DIR` pointing at that vendor tree
+  links the archive and runs an mruby interpreter through `Mrb::open`.
+- `cargo check` on the `beni` crate succeeds with no archive discovery
+  variable set, and `Mrb::open` returns an error.
+- A `wasm32-wasip1` cross-build succeeds when `toolchains` includes
+  `wasi-sdk` and the build config declares a `wasi` target.
 
 ## Non-goals
 
@@ -29,7 +51,7 @@ version number.
 | Package | Registry | Responsibility |
 |---|---|---|
 | `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build `libmruby.a` for the crates to consume |
-| `beni-sys` crate | crates.io | bindgen-generated FFI surface over the mruby C API, per supported mruby version |
+| `beni-sys` crate | crates.io | `-sys` style FFI surface over the mruby C API, generated against the staged archive per supported mruby version |
 | `beni` crate | crates.io | safe typed wrapper over `beni-sys`, aligned with magnus idioms |
 
 Responsibility boundary: the gem stages toolchains and archives; `beni-sys`
@@ -51,9 +73,9 @@ end
 
 | Setting | Type | Default |
 |---|---|---|
-| `vendor_dir` | directory path — where toolchains unpack and mruby builds | `vendor/` under the Rakefile's working directory; `BENI_VENDOR_DIR` env var overrides |
+| `vendor_dir` | directory path — where toolchains unpack and mruby builds | `vendor/` under the Rakefile's working directory. `BENI_VENDOR_DIR` env var overrides the default; an explicit DSL assignment overrides the env var. |
 | `version` | mruby release version to download | `"4.0.0"` |
-| `build_config` | mruby build-config file path, or `nil` for mruby's upstream default | `nil` |
+| `build_config` | mruby build-config file path (relative paths resolve against the Rakefile's working directory), or `nil` for mruby's upstream default | `nil` |
 | `targets` | array of build-target names, matching the `MRuby::Build.new(<name>)` names in the config | `["host"]` |
 | `toolchains` | array of toolchain names to vendor, from `mruby` and `wasi-sdk` | `["mruby"]` |
 
@@ -75,10 +97,17 @@ Behaviors:
   rebuilds its archives — a stale version never survives a version change.
 - `version` selects mruby only; each beni release pins the wasi-sdk version
   it vendors.
+- `toolchains` names what the consumer requests; beni resolves transitive
+  dependencies automatically (for example, selecting `wasi-sdk` implies
+  `mruby`).
 - `targets` declares which archives `beni:build` requests and verifies; the
   build config owns the target definitions, and beni never reads the config.
   The two lists align by verification. Targets the config defines beyond
   `targets` build as usual and are not verified.
+- The crates auto-discover archives by reserved build name: `host` serves
+  host cargo targets, `wasi` serves `wasm32` cross-builds. Build configs may
+  declare additional or differently named targets, but archives outside the
+  reserved names are reachable only via `MRUBY_LIB_DIR`.
 - Customization goes through `beni:config`, which writes to the path the
   `build_config` setting names. The generated file requires nothing from
   beni at build time, builds without edits, and belongs to the consumer —
@@ -88,16 +117,17 @@ Behaviors:
 
 ### beni-sys crate — FFI surface
 
-- bindgen runs against the staged archive and reads the compile-flags sidecar,
-  so the generated bindings always match how the archive was actually built.
+- FFI bindings are generated against the staged archive and aligned via the
+  compile-flags sidecar, so the bindings always match how the archive was
+  actually built. The crate follows the `-sys` crate convention.
 - One archive serves one cargo build target. Archive discovery is
   environment-driven, highest precedence first:
   1. `MRUBY_LIB_DIR` — the `-sys` crate `*_LIB_DIR` convention — names the
      directory containing the active target's archive and compile-flags
      sidecar.
   2. `BENI_VENDOR_DIR` names the vendor tree the gem populated; the crate
-     reads `mruby/build/<name>/lib/` under it, resolving the mruby build
-     name from the cargo target (`wasm32` → `wasi`, anything else →
+     reads `mruby/build/<name>/lib/` under it, using the reserved build name
+     for the active cargo target (`wasm32` → `wasi`, anything else →
      `host`).
   3. With neither variable set, no archive is linked: a host build compiles
      in placeholder mode, a wasm32 build fails.
@@ -114,9 +144,14 @@ Behaviors:
 
 - Owns every Rust-level abstraction over the C API: an RAII interpreter
   handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes with typed
-  conversions
-  (`IntoValue` / `FromValue`), class/module definition, and closure-based
-  exception protection.
+  conversions (`IntoValue` / `FromValue`), class and module definition, and
+  closure-based exception protection.
+- Class and module definition are methods on the live `Mrb` handle:
+  `define_class(name, superclass)` and `define_module(name)` return typed
+  `Class` and `Module` handles. Methods are registered on those handles
+  through the `Class` and `Module` traits (mirroring `magnus::Module` and
+  `magnus::Object`), accepting Rust closures whose arguments and return
+  values cross the boundary through `IntoValue` / `FromValue`.
 - Provides the `Gem` trait — the unit of Ruby surface a Rust crate ships:
 
   ```rust
@@ -128,8 +163,10 @@ Behaviors:
   The embedder invokes each gem's `init` with the live interpreter handle
   during interpreter setup; the gem defines its classes, modules, and methods
   there. An `Err` from `init` aborts setup and surfaces to the embedder.
-- The safe API cannot cause undefined behavior; anything not yet wrapped is
-  reachable through the re-exported `beni::sys` escape hatch.
+- The safe API cannot cause undefined behavior. Any C API the safe wrapper
+  does not expose is reachable through the re-exported `beni::sys` escape
+  hatch; using `beni::sys` directly is unsafe and outside the wrapper's
+  guarantees.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.
@@ -138,6 +175,7 @@ Behaviors:
 
 | Scenario | Behavior |
 |---|---|
+| Toolchain download fails (network failure, HTTP 4xx/5xx, disk write error) | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | Toolchain download fails checksum verification | build aborts, no partial unpack |
 | `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
 | `beni:config` with `build_config` unset | task fails, nothing generated |
@@ -147,6 +185,7 @@ Behaviors:
 | wasm32 build missing the staged archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
 | `Mrb::open` without a linked mruby | returns an error value, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
+| Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` when the caller is Rust, or as an mruby exception when the caller is mruby; never unwinds into mruby's C frames |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
 
 ## Terminology
