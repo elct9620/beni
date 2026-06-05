@@ -36,7 +36,7 @@
 //! treating the value as a live class handle; a future typed-error
 //! migration could move null handling into the return type.
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
 use beni_sys as sys;
 
@@ -50,7 +50,7 @@ use beni_sys as sys;
 /// Available on both targets to mirror `Value`'s cross-target shape:
 /// the newtype is `#[repr(transparent)]` and carries no mruby linkage,
 /// so its constructors compile for free on host. Methods that talk to
-/// mruby live behind `#[cfg(target_arch = "wasm32")]`.
+/// mruby live behind `#[cfg(mruby_linked)]`.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Class(pub(crate) *mut sys::RClass);
@@ -96,7 +96,7 @@ impl Class {
     ///
     /// `self` must be a live class handle produced by the same VM
     /// as `mrb` (and not yet freed).
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub unsafe fn as_value(self, _mrb: &Mrb) -> Value {
         // SAFETY: forwarded from caller; mrb_obj_value reads only
@@ -124,7 +124,7 @@ impl Class {
 
     /// `mrb_define_module_under(mrb, self, name)` — define or fetch a
     /// nested module under `self`.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub fn define_module_under(self, mrb: &Mrb, name: &core::ffi::CStr) -> Class {
         // SAFETY: `mrb` is alive; `self` was produced by the same VM;
@@ -136,7 +136,7 @@ impl Class {
 
     /// `mrb_define_class_under(mrb, self, name, super_)` — define a
     /// nested class under `self`, inheriting from `super_`.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub fn define_class_under(self, mrb: &Mrb, name: &core::ffi::CStr, super_: Class) -> Class {
         // SAFETY: as `define_module_under`; `super_` originates from
@@ -149,7 +149,7 @@ impl Class {
     /// `mrb_class_get_under(mrb, self, name)` — fetch a nested class
     /// by name. The returned `Class` may be null when no such class
     /// is registered.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub fn class_get_under(self, mrb: &Mrb, name: &core::ffi::CStr) -> Class {
         // SAFETY: as `define_module_under`.
@@ -162,7 +162,7 @@ impl Class {
     ///
     /// The returned slice points into mruby's interned class-name
     /// storage which lives for the duration of the VM.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub fn name(self, mrb: &Mrb) -> Option<&'static str> {
         // SAFETY: `mrb` is alive by the borrow; `self` originates
@@ -186,7 +186,7 @@ impl Class {
     /// `sys::mrb_func_t` (mrb_value-based) once. Both have identical
     /// C ABI because `Value` is `#[repr(transparent)]` over
     /// `mrb_value`.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub fn define_method(
         self,
@@ -211,7 +211,7 @@ impl Class {
     /// register a singleton-class method on this class object. The
     /// receiver here is treated as `RObject *` so the singleton-class
     /// shim attaches to the metaclass (matching mruby's own contract).
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub fn define_singleton_method(
         self,
@@ -241,7 +241,7 @@ impl Class {
 
     /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
     /// a new instance of this class, calling `initialize` with `args`.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub fn obj_new(self, mrb: &Mrb, args: &[Value]) -> Value {
         // Value is repr(transparent) over mrb_value; the slice
@@ -262,7 +262,7 @@ impl Class {
     /// bridges, `mrb_funcall` handlers, `mrb_protect_error` bodies).
     /// Calling from arbitrary Rust code would skip Rust drop frames
     /// the stack expects to run.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub unsafe fn raise(self, mrb: &Mrb, msg: &core::ffi::CStr) -> ! {
         // SAFETY: bridge frame — caller upholds the unwind contract.

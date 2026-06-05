@@ -41,12 +41,20 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "bindgen-driven mruby C API FFI bindings and layout-safe C shims; consumed by the typed `beni` wrapper crate."
+# Exactly one crate links libmruby; build.rs publishes `cargo:linked=1`
+# through this key so the `beni` wrapper's build script can mirror the
+# `mruby_linked` cfg via DEP_MRUBY_LINKED.
+links = "mruby"
 
 [lib]
 # `rlib` only — this crate produces no standalone artefact. It is
 # consumed as a path dependency by the `beni` wrapper crate, whose
 # downstream consumers carry the eventual symbol surface.
 crate-type = ["rlib"]
+# bindgen carries mruby's C header comments into the generated
+# bindings; rustdoc would try to compile their C examples as Rust
+# doctests. The generated surface has no runnable Rust examples.
+doctest = false
 
 [build-dependencies]
 # `cc` compiles the mruby header-driven C shims plus the bindgen-emitted

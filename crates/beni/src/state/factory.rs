@@ -7,12 +7,12 @@
 //! than on `Mrb` so the call shape mirrors Ruby (`arr.push(x)`,
 //! not `mrb.ary_push(arr, x)`).
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::{Array, Hash, Mrb, Value};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use beni_sys as sys;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Mrb {
     /// `mrb_str_new(mrb, p, len)` — construct an mruby `String` from
     /// `bytes`. The buffer is copied into the mruby heap; the slice

@@ -31,7 +31,8 @@ Gem::Specification.new do |spec|
     ls.readlines("\x0", chomp: true).reject do |f|
       (f == gemspec) ||
         f.start_with?(*%w[bin/ Gemfile .gitignore test/ .github/ .rubocop.yml
-                          crates/ Cargo.toml Cargo.lock rust-toolchain.toml])
+                          crates/ Cargo.toml Cargo.lock rust-toolchain.toml
+                          tasks/ build_config/])
     end
   end
   spec.bindir = "exe"

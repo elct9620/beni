@@ -47,33 +47,33 @@
 // their bodies call mruby functions that are only linked on wasm32;
 // including them on host targets would surface `unresolved import`
 // errors as soon as `cargo test` ran the crate on the host target.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub mod array;
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub mod ccontext;
 pub mod class;
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub mod convert;
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub mod hash;
 pub mod state;
 pub mod value;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub use state::{Mrb, MrbOpenError};
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub use state::args::{format, Format};
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub use ccontext::Ccontext;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub use array::Array;
 pub use class::{Class, Module};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub use convert::{FromValue, IntoValue};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub use hash::Hash;
 pub use value::cstr_ptr;
 pub use value::Value;

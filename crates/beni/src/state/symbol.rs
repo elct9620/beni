@@ -4,12 +4,12 @@
 //! arbitrary bytes via an `mrb_value` String) into an `mrb_sym`, or
 //! read the C-string name back from a symbol id.
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use beni_sys as sys;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Mrb {
     /// `mrb_intern_cstr(mrb, s)` — intern a NUL-terminated C string
     /// as a Symbol id.

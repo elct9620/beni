@@ -15,12 +15,12 @@
 //! `crate::Class` because they take an outer class/module receiver,
 //! not the VM root.
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::{Class, Mrb, Value};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use beni_sys as sys;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Mrb {
     /// `mrb_define_module(mrb, name)` — return the module named
     /// `name`, defining it at top level if not already present.

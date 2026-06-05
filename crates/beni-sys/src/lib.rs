@@ -57,7 +57,7 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 use core::ffi::c_void;
 
 // --------------------------------------------------------------------
@@ -76,7 +76,7 @@ use core::ffi::c_void;
 // re-exports every name at the crate root, keeping the consumer
 // import path unchanged.
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 #[allow(clippy::all)]
 #[allow(warnings)]
 mod bindings {
@@ -89,12 +89,12 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub use bindings::*;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl mrb_value {
-    /// All-zero `mrb_value`. On wasm32 with the kobako mruby
+    /// All-zero `mrb_value`. Under beni's pinned word-boxing mruby
     /// configuration this matches `mrb_nil_value()` (MRB_Qnil = 0).
     /// Out-parameter initialisers (`mrb_get_args` writes to it) use
     /// this; callers that need a guaranteed nil should prefer the
@@ -105,17 +105,19 @@ impl mrb_value {
     }
 }
 
-// Compile-time pin on the wasm32 mrb_value layout. Catches a future
-// bindgen / build_config drift before it silently breaks ABI.
-#[cfg(target_arch = "wasm32")]
+// Compile-time pin on the mrb_value layout. Under word boxing the
+// value is a single machine word on every target (4 bytes on wasm32,
+// 8 on 64-bit hosts). Catches a future bindgen / build_config drift
+// before it silently breaks ABI.
+#[cfg(mruby_linked)]
 const _: () = assert!(
-    core::mem::size_of::<mrb_value>() == 4,
-    "mrb_value size diverged from MRB_WORDBOX_NO_INLINE_FLOAT layout"
+    core::mem::size_of::<mrb_value>() == core::mem::size_of::<usize>(),
+    "mrb_value size diverged from the MRB_WORDBOX_NO_INLINE_FLOAT word-boxing layout"
 );
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 const _: () = assert!(
-    core::mem::align_of::<mrb_value>() == 4,
-    "mrb_value alignment diverged from MRB_WORDBOX_NO_INLINE_FLOAT layout"
+    core::mem::align_of::<mrb_value>() == core::mem::align_of::<usize>(),
+    "mrb_value alignment diverged from the MRB_WORDBOX_NO_INLINE_FLOAT word-boxing layout"
 );
 
 // `Mrb::pending_exc` and `Mrb::load_bytecode`'s exception
@@ -127,7 +129,7 @@ const _: () = assert!(
 // `globals` (four pointer-sized fields); `mrb_gc` (which carries
 // the bitfield workaround) lives further down the struct, so the
 // bitfield mis-pack does not affect this offset.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 const _: () = assert!(
     core::mem::offset_of!(mrb_state, exc) == 4 * core::mem::size_of::<*const core::ffi::c_void>(),
     "mrb_state.exc offset diverged from the vendored mruby layout — \
@@ -148,7 +150,7 @@ const _: () = assert!(
 /// `mrb` must be a live mruby state. The returned pointer aliases the
 /// state's interior `object_class` field; it remains valid for the
 /// state's lifetime and must not be passed to `mrb_close` or freed.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 #[inline]
 pub unsafe fn mrb_object_class(mrb: *mut mrb_state) -> *mut RClass {
     unsafe { (*mrb).object_class }
@@ -165,32 +167,32 @@ pub unsafe fn mrb_object_class(mrb: *mut mrb_state) -> *mut RClass {
 // signatures compile so `mrb_func_t` shape tests and similar fixtures
 // keep running on host CI.
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 pub type mrb_state = c_void;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 pub type RClass = c_void;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 pub type RObject = c_void;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 pub type mrb_sym = u32;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 pub type mrb_aspec = u32;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 pub type mrb_bool = bool;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 pub type mrb_int = i32;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 pub type mrb_float = f64;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 pub type mrb_ccontext = c_void;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct mrb_value {
     _payload: [u64; 2],
 }
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 impl mrb_value {
     /// All-zero `mrb_value`. On the host target this produces a
     /// zeroed 16-byte placeholder.
@@ -230,7 +232,7 @@ pub type mrb_func_t = unsafe extern "C" fn(mrb: *mut mrb_state, self_: mrb_value
 // could.
 
 /// `MRB_ARGS_NONE()` — no arguments.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 #[inline]
 pub fn mrb_args_none() -> mrb_aspec {
     // SAFETY: pure value computation; touches no mrb_state.
@@ -238,7 +240,7 @@ pub fn mrb_args_none() -> mrb_aspec {
 }
 
 /// `MRB_ARGS_ANY()` — accept any number of arguments.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 #[inline]
 pub fn mrb_args_any() -> mrb_aspec {
     // SAFETY: as `mrb_args_none`.
@@ -246,7 +248,7 @@ pub fn mrb_args_any() -> mrb_aspec {
 }
 
 /// `MRB_ARGS_REQ(n)` — `n` required positional arguments.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 #[inline]
 pub fn mrb_args_req(n: u32) -> mrb_aspec {
     // SAFETY: as `mrb_args_none`.

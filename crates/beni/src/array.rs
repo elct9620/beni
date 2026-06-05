@@ -9,9 +9,9 @@
 //! Mirrors magnus's `src/r_array.rs`: factories live on `Ruby` /
 //! `Mrb`, per-array ops (`push`, `entry`) live here.
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
@@ -21,12 +21,12 @@ use beni_sys as sys;
 /// `Array::from_value_unchecked` (assert that a `Value` you
 /// already hold is Array-tagged). Round-trip back to a generic
 /// `Value` via `Array::as_value` for APIs that take any value.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Array(Value);
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Array {
     /// Wrap a `Value` that the caller has already determined to be
     /// Array-tagged (e.g. via a `classname` check or because it came

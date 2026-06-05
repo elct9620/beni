@@ -51,11 +51,11 @@ pub mod load;
 pub mod protect;
 pub mod symbol;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::{Class, Value};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use beni_sys as sys;
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use core::ptr::NonNull;
 
 /// Owning handle to a live mruby VM. Closed automatically on drop.
@@ -71,7 +71,7 @@ use core::ptr::NonNull;
 /// frame. The two layouts are byte-identical there.
 #[cfg_attr(target_arch = "wasm32", repr(transparent))]
 pub struct Mrb {
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     state: NonNull<sys::mrb_state>,
 }
 
@@ -95,14 +95,14 @@ impl Mrb {
     /// on the host target — the mruby C API is not linked into the
     /// rlib).
     pub fn open() -> Result<Self, MrbOpenError> {
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(mruby_linked)]
         {
             let raw = unsafe { sys::mrb_open() };
             NonNull::new(raw)
                 .map(|state| Self { state })
                 .ok_or(MrbOpenError)
         }
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(mruby_linked))]
         {
             Err(MrbOpenError)
         }
@@ -114,7 +114,7 @@ impl Mrb {
     /// `mrb_close` on it (the `Mrb` Drop owns that). wasm32-only —
     /// host targets cannot construct an `Mrb`, so the raw-pointer
     /// escape hatch has no callers there.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub fn as_ptr(&self) -> *mut sys::mrb_state {
         self.state.as_ptr()
@@ -150,7 +150,7 @@ impl Mrb {
     /// `*mrb_ref` must be a live mruby state that remains open for
     /// the lifetime of the returned borrow. Passing storage holding
     /// NULL is undefined behaviour.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub unsafe fn borrow_raw(mrb_ref: &*mut sys::mrb_state) -> &Mrb {
         debug_assert!(!mrb_ref.is_null());
@@ -168,7 +168,7 @@ impl Mrb {
     /// directly through the bindgen-exposed struct field; does NOT
     /// clear the field — callers pair this with `Mrb::clear_exc`
     /// after they have captured class/message/backtrace.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     pub fn pending_exc(&self) -> Value {
         // SAFETY: `self.state` is alive by the `&self` borrow. The
         // `exc` field is exposed by bindgen as `*mut RObject`; when
@@ -194,7 +194,7 @@ impl Mrb {
     /// downstream machinery dereferences the slot as `RObject *`. Pass
     /// nil or a non-object value at your peril (segfault on the next
     /// exception check).
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     pub fn set_pending_exc(&self, exc: Value) {
         // SAFETY: `self.state` is alive by the `&self` borrow; `exc`
         // originates from the same VM. `mrb_obj_ptr_func` extracts the
@@ -209,7 +209,7 @@ impl Mrb {
     /// is pending. Used by the consumer crate's panic-recovery paths
     /// after the pending exception has been extracted, so subsequent
     /// mruby calls do not observe stale exception state.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     pub fn clear_exc(&self) {
         // SAFETY: `self.state` is alive by the `&self` borrow. The
         // return value (a `mrb_bool` snapshot of the prior
@@ -224,7 +224,7 @@ impl Mrb {
     /// `crate::mrb_object_class` remains for code paths that hold
     /// only a raw `*mut mrb_state` (currently the kobako-wasm
     /// install helpers).
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(mruby_linked)]
     #[inline]
     pub fn object_class(&self) -> Class {
         // SAFETY: `self.state` is alive by the `&self` borrow.
@@ -232,7 +232,7 @@ impl Mrb {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Drop for Mrb {
     fn drop(&mut self) {
         // SAFETY: `state` was produced by `mrb_open` in `Mrb::open`
@@ -242,7 +242,7 @@ impl Drop for Mrb {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(mruby_linked))]
 impl Drop for Mrb {
     fn drop(&mut self) {
         // Unreachable: `Mrb::open` always returns `Err` on host
@@ -256,16 +256,27 @@ impl Drop for Mrb {
 mod tests {
     use super::*;
 
+    #[cfg(mruby_linked)]
     #[test]
-    fn open_returns_error_on_host_target() {
-        // Host target: `mrb_open` is not linked, so `open` must
+    fn open_boots_and_closes_a_live_interpreter() {
+        // With a vendored libmruby.a linked, `open` boots a real
+        // interpreter through `mrb_open`; the drop runs `mrb_close`.
+        // This is the host-native smoke test of the whole link graph
+        // (bindings + trampolines + libmruby.a).
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        drop(mrb);
+    }
+
+    #[cfg(not(mruby_linked))]
+    #[test]
+    fn open_returns_error_without_mruby() {
+        // Placeholder mode: `mrb_open` is not linked, so `open` must
         // yield `Err` without attempting an FFI call. This is the
-        // documented host-side contract; wasm32 coverage runs
-        // through the E2E journeys.
+        // documented contract for builds without a staged libmruby.a.
         assert_eq!(
             Mrb::open().err(),
             Some(MrbOpenError),
-            "Mrb::open on a host target must return Err(MrbOpenError) without invoking FFI — mrb_open is not linked there"
+            "Mrb::open without libmruby.a must return Err(MrbOpenError) without invoking FFI"
         );
     }
 }

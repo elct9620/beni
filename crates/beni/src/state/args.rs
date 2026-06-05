@@ -57,9 +57,9 @@
 //! }
 //! ```
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 /// Type-level marker for a single `mrb_get_args` format string.
@@ -73,7 +73,7 @@ use beni_sys as sys;
 /// New implementors should monomorphise the `mrb_get_args` call inside
 /// `Format::read` against `Format::FMT` — see `format::O` for the
 /// minimal pattern.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub trait Format {
     /// Typed shape returned by `Format::read`. The `'a` lifetime is
     /// the borrow on the call-frame argv slot for rest-form formats;
@@ -91,7 +91,7 @@ pub trait Format {
     fn read(mrb: &Mrb) -> Self::Output<'_>;
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Mrb {
     /// Read the call-frame argv using a `Format` marker. The
     /// monomorphised call expands to a single `mrb_get_args` against
@@ -110,7 +110,7 @@ impl Mrb {
 
 /// Zero-sized marker types implementing `Format`. Each marker maps
 /// one mruby format string to a typed Rust return.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 pub mod format {
     use super::sys;
     use super::{slice_from_argv, Format, Mrb, Value};
@@ -255,7 +255,7 @@ pub mod format {
 ///
 /// The slice's lifetime is bound by the caller's `&self` borrow on
 /// `Mrb` (the call frame that produced argv).
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 #[inline]
 fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: core::ffi::c_int) -> &'a [Value] {
     if argc > 0 && !argv.is_null() {

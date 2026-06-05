@@ -3,12 +3,12 @@
 //! Inherent methods that drop a compiled blob into the live mruby VM
 //! and run its top-level Proc.
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use beni_sys as sys;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Mrb {
     /// `mrb_load_irep_buf(mrb, buf, size)` — load and evaluate a
     /// precompiled RITE bytecode blob. On a malformed blob mruby
@@ -124,7 +124,7 @@ impl Mrb {
 /// (each is a 5-byte slice with a trailing NUL — compare the first
 /// 4 bytes against the magic / version bytes the header actually
 /// carries).
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 fn classify_structural_failure(bytes: &[u8]) -> &'static str {
     if bytes.len() < core::mem::size_of::<sys::rite_binary_header>() {
         return "bytecode shorter than RITE binary header";

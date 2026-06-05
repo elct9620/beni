@@ -4,12 +4,12 @@
 //! Ruby exception the body raises is caught and surfaced as
 //! `Err(value)` instead of long-jumping past the Rust caller.
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use beni_sys as sys;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Mrb {
     /// `mrb_protect_error(mrb, body, userdata, &error)` — run `body`
     /// inside a protected frame so any Ruby exception it raises is

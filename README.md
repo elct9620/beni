@@ -32,8 +32,20 @@ After checking out the repo, run `bin/setup` to install dependencies. Then,
 run `rake test` to run the tests. You can also run `bin/console` for an
 interactive prompt that will allow you to experiment.
 
-The Rust crates live under `crates/` in a Cargo workspace at the repo root;
-`cargo check --workspace` covers both.
+The Rust crates live under `crates/` in a Cargo workspace at the repo root.
+A temporary rake chain (ported from kobako) verifies they compile against a
+real `libmruby.a` on both the host target and wasm32-wasip1:
+
+```bash
+bundle exec rake rust:verify   # vendor:setup + mruby:build + check/test (host) + check (wasm32)
+```
+
+`vendor:setup` downloads the pinned mruby + wasi-sdk tarballs into
+`vendor/`; `mruby:build` produces `vendor/mruby/build/{host,wasi}/lib/libmruby.a`
+from the shared `build_config/beni.rb` (both targets pin the same
+ABI-bearing defines — `MRB_INT32`, `MRB_WORDBOX_NO_INLINE_FLOAT`). Without
+the staged toolchain, plain `cargo check --workspace` still passes in a
+placeholder mode that exports no FFI surface.
 
 ## Contributing
 

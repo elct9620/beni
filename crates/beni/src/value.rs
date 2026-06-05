@@ -41,7 +41,7 @@
 
 use beni_sys as sys;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 use crate::Mrb;
 
 /// Compile-time NUL-terminated C-string literal pointer.
@@ -81,7 +81,7 @@ pub const fn cstr_ptr(b: &[u8]) -> *const core::ffi::c_char {
 // `false`. Previous home: `kobako::Immediates` in the consumer crate;
 // re-located here so the cache ships from the same crate as `Value`.
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 struct Immediates {
     qnil: sys::mrb_value,
     qtrue: sys::mrb_value,
@@ -92,13 +92,13 @@ struct Immediates {
 // plain old data with no interior mutability. `Immediates` therefore
 // shares only `Copy` snapshots and is trivially Sync across the
 // single-threaded wasm execution model.
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 unsafe impl Sync for Immediates {}
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 static IMMEDIATES: std::sync::OnceLock<Immediates> = std::sync::OnceLock::new();
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Immediates {
     /// Return the cached snapshot, capturing it on first call.
     fn get() -> &'static Immediates {
@@ -151,7 +151,7 @@ impl Immediates {
 /// at the crate root, pin the `#[repr(transparent)]` contract that
 /// `Class::define_method`'s `mem::transmute` depends on. Methods
 /// that talk to mruby (`classname` / `call` / numeric factories /
-/// predicates) live behind `#[cfg(target_arch = "wasm32")]` because
+/// predicates) live behind `#[cfg(mruby_linked)]` because
 /// they would link against unresolved mruby symbols on the host.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -196,7 +196,7 @@ impl Value {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(mruby_linked)]
 impl Value {
     /// Canonical mruby `nil`. Reads through the process-wide
     /// `Immediates` cache; capture is lazy and one-shot.
