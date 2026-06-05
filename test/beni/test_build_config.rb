@@ -35,7 +35,7 @@ module Beni
       repo_config = File.expand_path("../../build_config/mruby.rb", __dir__)
 
       assert FileUtils.identical?(BuildConfig::TEMPLATE, repo_config),
-             "build_config/mruby.rb drifted from templates/build_config.rb — " \
+             "build_config/mruby.rb drifted from lib/beni/templates/build_config.rb — " \
              "regenerate it with rake beni:config or fold the change into the template"
     end
   end
