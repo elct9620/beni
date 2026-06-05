@@ -4,7 +4,7 @@
 # =================================
 #
 # Repo-local compile-verification chain for the beni crates, ported
-# from kobako's Stage C tasks. `crates/beni-sys`'s build.rs auto-detects
+# from kobako. `crates/beni-sys`'s build.rs auto-detects
 # the vendored `libmruby.a` for the active target (host → build/host/lib,
 # wasm32 → build/wasi/lib), so these tasks only need the artifacts in
 # place — no env wiring beyond optional MRUBY_LIB_DIR / WASI_SDK_PATH
