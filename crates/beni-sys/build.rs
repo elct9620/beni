@@ -41,9 +41,10 @@
 //
 // Contract with the Rake driver
 // -----------------------------
-// `rake mruby:build` (tasks/mruby.rake) produces both archives in the
-// default vendor layout, which this script auto-detects. Two env vars
-// override the probing:
+// `rake beni:build` (the beni gem's Beni::Tasks, dogfooded by this
+// repo's Rakefile) produces both archives in the default vendor
+// layout, which this script auto-detects. Two env vars override the
+// probing:
 //
 //   * `MRUBY_LIB_DIR` — absolute path to the directory containing
 //     `libmruby.a` for the active target. Drives the link-search +
@@ -116,7 +117,7 @@ fn main() {
             // never link; fail loudly with the recovery command.
             panic!(
                 "beni-sys: vendor toolchain not staged for wasm32 build. \
-                 Run `bundle exec rake mruby:build` first."
+                 Run `bundle exec rake beni:build` first."
             );
         }
         // Host placeholder mode: no libmruby.a available (e.g. a
