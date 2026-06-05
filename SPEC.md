@@ -84,8 +84,16 @@ Behaviors:
 
 - bindgen runs against the staged archive and reads the compile-flags sidecar,
   so the generated bindings always match how the archive was actually built.
+- One archive serves one cargo build target. `MRUBY_LIB_DIR` — the `-sys`
+  crate `*_LIB_DIR` convention — names the directory containing the active
+  target's archive and compile-flags sidecar; when unset, the crate probes
+  the default vendor layout, resolving the mruby build name from the cargo
+  target (`wasm32` → `wasi`, anything else → `host`).
+- A wasm32 build generates bindings against the wasi sysroot and links
+  wasi-sdk's setjmp library; `WASI_SDK_PATH` names the unpacked wasi-sdk
+  root, defaulting to the staged toolchain.
 - Supports one FFI surface per mruby minor version; supported versions: 4.0.
-- Without a staged archive, the crate compiles in placeholder mode: `cargo
+- Without a staged archive, a host build compiles in placeholder mode: `cargo
   check` passes, no FFI surface is exported.
 - A `mruby_linked` cfg reflects whether a real archive is linked; downstream
   crates read it to gate their mruby-dependent code. It is capability-driven,
@@ -94,7 +102,8 @@ Behaviors:
 ### beni crate — typed wrapper
 
 - Owns every Rust-level abstraction over the C API: an RAII interpreter
-  handle (`Mrb`), `Value` newtypes with typed conversions
+  handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes with typed
+  conversions
   (`IntoValue` / `FromValue`), class/module definition, and closure-based
   exception protection.
 - Provides the `Gem` trait — the unit of Ruby surface a Rust crate ships:
@@ -121,6 +130,7 @@ Behaviors:
 | `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
 | Staged archive missing its compile-flags sidecar | `beni-sys` build fails and names the sidecar, never silently falls back to placeholder mode |
+| wasm32 build without the staged toolchain | `beni-sys` build fails, never falls back to placeholder mode |
 | `Mrb::open` without a linked mruby | returns an error value, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
