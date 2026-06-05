@@ -86,7 +86,7 @@ end
 | `beni:config` | self-contained, editable build config generated at the `build_config` path |
 | `beni:vendor:setup` | configured toolchains downloaded and unpacked |
 | `beni:vendor:clean` | unpacked toolchains removed, tarball cache kept |
-| `beni:vendor:clobber` | vendor tree removed entirely |
+| `beni:vendor:clobber` | vendor tree removed entirely, tarball cache included |
 
 Behaviors:
 
@@ -100,7 +100,7 @@ Behaviors:
 - `toolchains` names what the consumer requests; beni resolves transitive
   dependencies automatically (for example, selecting `wasi-sdk` implies
   `mruby`).
-- `targets` declares which archives `beni:build` requests and verifies; the
+- `targets` declares which archives `beni:build` verifies; the
   build config owns the target definitions, and beni never reads the config.
   The two lists align by verification. Targets the config defines beyond
   `targets` build as usual and are not verified.
@@ -108,7 +108,8 @@ Behaviors:
   host cargo targets, `wasi` serves `wasm32` cross-builds. Build configs may
   declare additional or differently named targets, but archives outside the
   reserved names are reachable only via `MRUBY_LIB_DIR`.
-- Customization goes through `beni:config`, which writes to the path the
+- Customization goes through `beni:config`, which writes a self-contained
+  equivalent of mruby's upstream default config to the path the
   `build_config` setting names. The generated file requires nothing from
   beni at build time, builds without edits, and belongs to the consumer —
   beni never rewrites it. Generation refuses to overwrite an existing file.
@@ -133,7 +134,8 @@ Behaviors:
      in placeholder mode, a wasm32 build fails.
 - wasm32 is the one supported cross target and requires the wasi-sdk
   toolchain: `WASI_SDK_PATH` names its unpacked root, defaulting to
-  `wasi-sdk/` under the vendor tree.
+  `wasi-sdk/` under the tree `BENI_VENDOR_DIR` names; when neither
+  variable is set, the toolchain is missing.
 - Supports one FFI surface per mruby minor version; supported versions: 4.0.
 - In placeholder mode `cargo check` passes and no FFI surface is exported.
 - A `mruby_linked` cfg reflects whether a real archive is linked; downstream
@@ -175,13 +177,15 @@ Behaviors:
 
 | Scenario | Behavior |
 |---|---|
+| `toolchains` naming anything other than `mruby` or `wasi-sdk` | `beni:vendor:setup` aborts before any download |
 | Toolchain download fails (network failure, HTTP 4xx/5xx, disk write error) | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
-| Toolchain download fails checksum verification | build aborts, no partial unpack |
+| Toolchain download fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
 | `beni:config` with `build_config` unset | task fails, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
 | Staged archive missing its compile-flags sidecar | `beni-sys` build fails and names the sidecar, never silently falls back to placeholder mode |
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
+| Staged mruby at a version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
 | wasm32 build missing the staged archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
 | `Mrb::open` without a linked mruby | returns an error value, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
@@ -193,6 +197,7 @@ Behaviors:
 | Term | Meaning |
 |---|---|
 | toolchain | a vendored build dependency (mruby source, wasi-sdk) |
+| tarball cache | downloaded toolchain tarballs, kept inside the vendor tree |
 | archive | the built `libmruby.a` for one target |
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | compile-flags sidecar | the per-archive record of defines/flags the crates align with |
