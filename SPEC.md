@@ -76,7 +76,7 @@ end
 | `vendor_dir` | directory path — where toolchains unpack and mruby builds | `vendor/` under the Rakefile's working directory. `BENI_VENDOR_DIR` env var overrides the default; an explicit DSL assignment overrides the env var. |
 | `version` | mruby release version to download | `"4.0.0"` |
 | `build_config` | mruby build-config file path (relative paths resolve against the Rakefile's working directory), or `nil` for mruby's upstream default | `nil` |
-| `targets` | array of build-target names, matching the `MRuby::Build.new(<name>)` names in the config | `["host"]` |
+| `targets` | array of build-target names, matching the `MRuby::Build.new(<name>)` names in the config; a build defined without a name is named `host` by mruby | `["host"]` |
 | `toolchains` | array of toolchain names to vendor, from `mruby` and `wasi-sdk` | `["mruby"]` |
 
 | Task | Outcome |
@@ -100,10 +100,10 @@ Behaviors:
 - `toolchains` names what the consumer requests; beni resolves transitive
   dependencies automatically (for example, selecting `wasi-sdk` implies
   `mruby`).
-- `targets` declares which archives `beni:build` verifies; the
-  build config owns the target definitions, and beni never reads the config.
-  The two lists align by verification. Targets the config defines beyond
-  `targets` build as usual and are not verified.
+- `beni:build` builds every target the build config defines, then verifies
+  that each name in `targets` produced an archive and its compile-flags
+  sidecar; targets beyond `targets` are not verified. The config owns the
+  target definitions, and beni never reads the config.
 - The crates auto-discover archives by reserved build name: `host` serves
   host cargo targets, `wasi` serves `wasm32` cross-builds. Build configs may
   declare additional or differently named targets, but archives outside the
@@ -180,14 +180,15 @@ Behaviors:
 | `toolchains` naming anything other than `mruby` or `wasi-sdk` | `beni:vendor:setup` aborts before any download |
 | Toolchain download fails (network failure, HTTP 4xx/5xx, disk write error) | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | Toolchain download fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
+| `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
 | `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
-| `beni:config` with `build_config` unset | task fails, nothing generated |
+| `beni:config` with `build_config` left at its `nil` default | task fails, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
 | Staged archive missing its compile-flags sidecar | `beni-sys` build fails and names the sidecar, never silently falls back to placeholder mode |
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
 | Staged mruby at a version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
 | wasm32 build missing the staged archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
-| `Mrb::open` without a linked mruby | returns an error value, never aborts |
+| `Mrb::open` without a linked mruby | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` when the caller is Rust, or as an mruby exception when the caller is mruby; never unwinds into mruby's C frames |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
