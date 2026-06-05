@@ -70,6 +70,11 @@ Behaviors:
 
 - A clean build with no `build_config` uses mruby's untouched upstream
   default config.
+- The vendor tree converges on the configured `version`: a staged mruby at
+  any other version is replaced by `beni:vendor:setup`, and `beni:build`
+  rebuilds its archives — a stale version never survives a version change.
+- `version` selects mruby only; each beni release pins the wasi-sdk version
+  it vendors.
 - `targets` declares which archives `beni:build` requests and verifies; the
   build config owns the target definitions, and beni never reads the config.
   The two lists align by verification. Targets the config defines beyond
@@ -96,9 +101,9 @@ Behaviors:
      `host`).
   3. With neither variable set, no archive is linked: a host build compiles
      in placeholder mode, a wasm32 build fails.
-- A wasm32 build generates bindings against the wasi sysroot and links
-  wasi-sdk's setjmp library; `WASI_SDK_PATH` names the unpacked wasi-sdk
-  root, defaulting to `wasi-sdk/` under the vendor tree.
+- wasm32 is the one supported cross target and requires the wasi-sdk
+  toolchain: `WASI_SDK_PATH` names its unpacked root, defaulting to
+  `wasi-sdk/` under the vendor tree.
 - Supports one FFI surface per mruby minor version; supported versions: 4.0.
 - In placeholder mode `cargo check` passes and no FFI surface is exported.
 - A `mruby_linked` cfg reflects whether a real archive is linked; downstream
