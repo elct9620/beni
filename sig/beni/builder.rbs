@@ -1,0 +1,33 @@
+module Beni
+  class Builder
+    DEFAULT_TARGETS: Array[String]
+
+    attr_reader vendor_dir: String
+    attr_reader build_config: String
+    attr_reader targets: Array[String]
+
+    def initialize: (vendor_dir: String, build_config: String, ?targets: Array[String]) -> void
+
+    def mruby_dir: () -> String
+
+    def libmruby_path: (String target) -> String
+
+    def libmruby_paths: () -> Array[String]
+
+    def built?: () -> bool
+
+    def ensure_built: () -> void
+
+    def build: () -> void
+
+    def clean: () -> void
+
+    private
+
+    def run_mruby_rake: (Array[String] cmd) -> void
+
+    def env: () -> Hash[String, String]
+
+    def verify_artifacts!: () -> void
+  end
+end

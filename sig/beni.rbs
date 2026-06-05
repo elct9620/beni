@@ -1,6 +1,8 @@
 module Beni
   VERSION: String
 
+  BUILD_CONFIG_DIR: String
+
   class Error < StandardError
   end
 end
