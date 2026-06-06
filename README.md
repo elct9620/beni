@@ -49,9 +49,60 @@ same ABI-bearing defines — `MRB_INT32`, `MRB_WORDBOX_NO_INLINE_FLOAT`). That
 config is the repo's own — `Beni::Tasks` defaults to no `MRUBY_CONFIG`, so a
 consumer's clean build uses mruby's untouched upstream
 `build_config/default.rb` (a single native `host` target). Consumers who need
-to tune the build run `rake beni:config` to generate a self-contained,
-editable config (the repo's own is the unmodified template output) and point
-the `build_config` declaration in their `Beni::Tasks.new` block at it.
+to tune the build run `rake beni:config` to generate that upstream default
+config — a self-contained, editable copy taken from the staged mruby source,
+written to the path the `build_config` declaration in their `Beni::Tasks.new`
+block names. The generated file is theirs to edit; the repo's own
+`build_config/mruby.rb` is that seed hand-tuned into a host + wasi validation
+harness.
+
+To cross-compile for wasm32-wasip1, declare a `wasi` target referencing the
+`wasi-sdk` toolchain:
+
+```ruby
+Beni::Tasks.new do
+  build_config "build_config/mruby.rb"
+
+  target :host
+  target :wasi do
+    toolchain "wasi-sdk"
+  end
+end
+```
+
+and append the cross build to the generated config — the same edit the
+`generated_config` scenario applies:
+
+```ruby
+MRuby::Toolchain.new(:wasi) do |conf, _params|
+  # `Beni::Builder` exports BENI_VENDOR_DIR on every build;
+  # WASI_SDK_PATH overrides the unpacked wasi-sdk root directly.
+  wasi_sdk = ENV["WASI_SDK_PATH"] || File.join(ENV.fetch("BENI_VENDOR_DIR"), "wasi-sdk")
+  bin = File.join(wasi_sdk, "bin")
+  target_flags = ["--target=wasm32-wasi", "--sysroot=#{File.join(wasi_sdk, "share", "wasi-sysroot")}"]
+  # setjmp/longjmp via the wasm exception-handling mechanism: all
+  # three flags must be present at both compile and link stages.
+  sjlj_flags = ["-mllvm", "-wasm-enable-sjlj", "-mllvm", "-wasm-use-legacy-eh=false"]
+
+  conf.toolchain :clang
+  conf.cc.command       = File.join(bin, "clang")
+  conf.cxx.command      = File.join(bin, "clang++")
+  conf.linker.command   = File.join(bin, "clang")
+  conf.archiver.command = File.join(bin, "llvm-ar")
+  # GNU archive format: llvm-ar defaults to the Darwin format on
+  # macOS hosts, which can overflow on many long wasm member paths.
+  conf.archiver.archive_options = "--format=gnu rs %<outfile>s %<objs>s"
+
+  [conf.cc, conf.cxx, conf.linker].each do |tool|
+    tool.flags << target_flags << sjlj_flags
+  end
+  conf.linker.libraries << "setjmp"
+end
+
+MRuby::CrossBuild.new("wasi") do |conf|
+  conf.toolchain :wasi
+end
+```
 
 The crates carry no hard-coded ABI defines: `beni-sys`'s build script parses
 the `libmruby.flags.mak` sidecar mruby writes next to each archive (requested

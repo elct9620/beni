@@ -16,7 +16,7 @@ Apply these in order — earlier principles override later ones on conflict.
 
 3. **Verify toolchain facts against vendored sources, not memory.** mruby behavior claims must be checked in `vendor/mruby` before being relied on or written into SPEC/comments. Worked example: `MRuby::Lockfile` is enabled at autoload (class body calls `enable`) — an earlier analysis assumed it was opt-in and was wrong.
 
-4. **The compile-flags sidecar is the only ABI alignment channel.** `beni-sys` parses `libmruby.flags.mak` next to each archive; never hard-code ABI defines in the crates, and never let a staged archive without its sidecar fall back to guessing. The repo's `build_config/mruby.rb` must stay byte-identical to the `beni:config` template (`test_build_config.rb` pins this) — edit `templates/build_config.rb` and regenerate, not the copy.
+4. **The compile-flags sidecar is the only ABI alignment channel.** `beni-sys` parses `libmruby.flags.mak` next to each archive; never hard-code ABI defines in the crates, and never let a staged archive without its sidecar fall back to guessing. The gem ships no config template — `beni:config` copies the configured version's upstream default config from the staged mruby source; `build_config/mruby.rb` is the repo's own validation config (the generate-then-edit consumer posture, kept committed).
 
 5. **Follow language community conventions via tooling.** Ruby: Rubocop + Steep; Rust: `cargo fmt` + `cargo clippy -D warnings` (also under `--target wasm32-wasip1` when the wasi archive is staged) + `cargo doc -D warnings --document-private-items`. All run via PostToolUse/Stop hooks and block on failure. When a cop or lint fires, shrink the code to fit the tool — don't widen `.rubocop.yml` exclusions or add `#[allow]`. Tool-vs-tool conflicts are the one justified widening: `Style/DataInheritance` is disabled because ruby/rbs documents `class X < Data.define(...)` as the Steep-friendly form.
 
@@ -68,7 +68,8 @@ Build      Beni::Builder (drives            │   state::args (Format dispatch)
   │          MRUBY_CONFIG; requests          L1  Mrb RAII · Value/Class/Array/Hash
   │          flags.mak file tasks)           │   newtypes · Ccontext
 Config     Beni::BuildConfig                 L0  pub use beni_sys as sys
-  │          (beni:config template)        ──────────────────────────────
+  │          (beni:config: copies the      ──────────────────────────────
+  │          staged upstream default)
 Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
              Vendor::{Toolchain,            build.rs: archive discovery ·
              Downloader, Checksum,          flags.mak parse · bindgen +
@@ -90,10 +91,10 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
 | Topic | Entry points | Notes |
 |-------|--------------|-------|
 | Behavior contracts | `SPEC.md` | Single file: Features per package, exhaustive error table, Terminology constants. Check here before reading code. |
-| Task surface / settings | `lib/beni/tasks.rb` | SPEC defines a declarative DSL this file does not yet implement — check SPEC before extending the current accessor form. |
+| Task surface / settings | `lib/beni/tasks.rb` | Consumes the resolved `Beni::Configuration`; the declarative DSL itself lives in `lib/beni/dsl/` (`DSL::Context` and friends). |
 | Vendor pipeline | `lib/beni/vendor.rb` (façade) | Pinned versions, platform detection, factory registry; pipeline stages in `lib/beni/vendor/`. |
 | mruby build driving | `lib/beni/builder.rb` | Spawns mruby's own rake; artifact = archive + sidecar per target. |
-| Config template | `templates/build_config.rb` | `build_config/mruby.rb` is its pinned unmodified copy (see Principle 4). |
+| Config generation | `lib/beni/build_config.rb` | Copies the staged upstream default (see Principle 4); `build_config/mruby.rb` is the repo's own validation config. |
 | Archive discovery / ABI alignment | `crates/beni-sys/build.rs` | The file-top comment is the authoritative mode/contract description. |
 | Typed wrapper | `crates/beni/src/lib.rs` | Module-level doc carries the L0–L2 tier map. |
 | Consumer scenarios | `test/scenarios/*/Rakefile` | Each documents the consumer path it pins; harness contract is `scenario:setup` → `beni:build` → `scenario:verify`. |
