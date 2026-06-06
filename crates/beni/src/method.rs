@@ -25,7 +25,7 @@
 //! Unlike CRuby, mruby does not split the argv by arity at the C
 //! signature — every bridge is `(mrb_state*, mrb_value) ->
 //! mrb_value` — so the arity cannot be recovered from the bridge's
-//! type. `method!` therefore yields a [`MethodDef`] carrying the
+//! type. `method!` therefore yields a `MethodDef` carrying the
 //! bridge pointer and the arity, and `Module::define_method` derives
 //! the mruby aspec from it.
 //!
@@ -40,8 +40,8 @@ use beni_sys as sys;
 #[cfg(mruby_linked)]
 use crate::error::panic_message;
 
-/// Bridge + arity pair produced by the [`method!`](crate::method!)
-/// macro and consumed by `Module::define_method` /
+/// Bridge + arity pair produced by the `method!` macro and
+/// consumed by `Module::define_method` /
 /// `Object::define_singleton_method`, which derives the mruby aspec
 /// from the arity (`-1` = any, `0..` = that many required
 /// positionals).

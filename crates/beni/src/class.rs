@@ -305,8 +305,8 @@ pub trait Module: private::ClassLike {
     }
 
     /// `mrb_define_method(mrb, self, name, func, aspec)` — register
-    /// an instance method from a [`method!`](crate::method!)-wrapped
-    /// Rust function. The aspec is derived from the wrapper's arity
+    /// an instance method from a `method!`-wrapped Rust function.
+    /// The aspec is derived from the wrapper's arity
     /// (`-1` = any arguments, `0..` = that many required
     /// positionals). mruby rejects registration on a frozen receiver.
     fn define_method(
@@ -381,8 +381,8 @@ impl Module for RModule {}
 pub trait Object: private::ClassLike {
     /// `mrb_define_singleton_method(mrb, self, name, func, aspec)` —
     /// register a singleton-class method on this handle from a
-    /// [`method!`](crate::method!)-wrapped Rust function. The
-    /// receiver is treated as `RObject *` so the singleton-class shim
+    /// `method!`-wrapped Rust function. The receiver is treated
+    /// as `RObject *` so the singleton-class shim
     /// attaches to the metaclass (matching mruby's own contract).
     /// mruby rejects receivers that cannot carry a singleton class.
     fn define_singleton_method(
