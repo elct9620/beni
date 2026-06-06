@@ -1,0 +1,122 @@
+# Release orchestration: one release-please PR bumps the gem and both
+# crates in lockstep (single v* tag), then the publish workflows chain
+# off the release event.
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      pr: ${{ steps.release.outputs.pr }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+
+  # release-please creates the GitHub Release with the default GITHUB_TOKEN,
+  # and Actions does not re-trigger workflows from GITHUB_TOKEN-authored
+  # events. So the publish workflows never fire on the release event;
+  # chain them explicitly as reusable workflows instead.
+  release-gem:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    uses: ./.github/workflows/release.yml
+    secrets: inherit
+
+  # All packages share one version and one tag, so the same release event
+  # publishes the crates.
+  release-crate:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    uses: ./.github/workflows/release-crate.yml
+    secrets: inherit
+
+  # release-please cannot rewrite Gemfile.lock (the gem's own version is
+  # embedded in its PATH section), so regenerate the lockfiles on the
+  # release PR branch and push them back. The Cargo.lock entries are
+  # already bumped via extra-files; the cargo step is a drift guard.
+  sync-lockfiles:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.pr }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        with:
+          ruby-version: '3.4'
+          bundler-cache: false
+      # dtolnay/rust-toolchain does not read rust-toolchain.toml, so source
+      # the channel from it here to keep a single version of truth.
+      - name: Read Rust channel from rust-toolchain.toml
+        id: rust
+        run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ steps.rust.outputs.channel }}
+      - name: Regenerate Gemfile.lock
+        run: bundle install
+      - name: Regenerate the workspace entries in Cargo.lock
+        run: cargo update --workspace --offline || cargo update --workspace
+      # Commit via the GraphQL createCommitOnBranch mutation rather than
+      # `git push`: commits that enter GitHub over the API with the bot
+      # GITHUB_TOKEN are signed by GitHub and marked Verified.
+      - name: Commit lockfile updates as a verified commit
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          # Passed via env, never interpolated into the script body, so the
+          # branch name stays data and can never be parsed as JS.
+          BRANCH_NAME: ${{ fromJSON(needs.release-please.outputs.pr).headBranchName }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+
+            const candidates = ['Gemfile.lock', 'Cargo.lock'];
+            const changed = candidates.filter((path) => {
+              try {
+                execSync(`git diff --quiet -- ${path}`);
+                return false; // exit 0 -> no drift
+              } catch {
+                return true; // exit 1 -> drifted
+              }
+            });
+            if (changed.length === 0) {
+              core.info('No lockfile drift; nothing to commit.');
+              return;
+            }
+
+            const additions = changed.map((path) => ({
+              path,
+              contents: fs.readFileSync(path).toString('base64'),
+            }));
+            const expectedHeadOid = execSync('git rev-parse HEAD').toString().trim();
+
+            await github.graphql(`
+              mutation($input: CreateCommitOnBranchInput!) {
+                createCommitOnBranch(input: $input) { commit { url } }
+              }`, {
+              input: {
+                branch: {
+                  repositoryNameWithOwner: context.payload.repository.full_name,
+                  branchName: process.env.BRANCH_NAME,
+                },
+                message: { headline: 'chore: sync lockfiles after release-please version bump' },
+                expectedHeadOid,
+                fileChanges: { additions },
+              },
+            });

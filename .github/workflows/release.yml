@@ -1,0 +1,52 @@
+# Publishes the beni gem to RubyGems via OIDC Trusted Publishing.
+# The gem is pure Ruby (a Rake task library), so the release is a plain
+# build + push — no native extension matrix. The manual-recovery shape:
+# `workflow_dispatch` defaults `push` to false, so a bare dispatch is a
+# build-only rehearsal; tick `push` to publish for real.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      push:
+        description: 'Push the built gem to RubyGems'
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      push:
+        description: 'Push the built gem to RubyGems'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-gem:
+    name: Publish beni to RubyGems
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        with:
+          ruby-version: '3.4'
+          bundler-cache: false
+      # The gemspec resolves its file list via `git ls-files`, so the gem
+      # must build from the checkout, not an exported tree.
+      - name: Build the gem
+        run: gem build beni.gemspec
+      # Trusted Publishing: exchange the workflow's OIDC token for a
+      # short-lived RubyGems token. Requires the beni gem's Trusted
+      # Publishing config on rubygems.org to name this repository and
+      # workflow file.
+      - uses: rubygems/configure-rubygems-credentials@762a4b77c3300434bb57c7ce80b20e36231927aa # v2.0.0
+        if: ${{ inputs.push }}
+      - name: Push the gem
+        if: ${{ inputs.push }}
+        run: gem push beni-*.gem
