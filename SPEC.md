@@ -122,12 +122,13 @@ Behaviors:
   cargo targets. Build configs may define additional or differently named
   targets, but every archive beyond `host` — every cross-compiled target's
   archive included — is reachable only via `MRUBY_LIB_DIR`.
-- Customization goes through `beni:config`, which writes a self-contained
-  equivalent of the configured `version`'s upstream default config to the
-  path the `build_config` setting names. The generated file requires nothing
-  from beni at build time, builds without edits, and belongs to the consumer
-  — beni never rewrites it. Generation creates the target path's missing
-  parent directories and refuses to overwrite an existing file.
+- `beni:config` seeds customization: it writes a self-contained equivalent
+  of the configured `version`'s upstream default config to the path the
+  `build_config` setting names. The generated file requires nothing from
+  beni at build time, builds without edits, and belongs to the consumer,
+  who edits it to define further targets — cross-compiled ones included;
+  beni never rewrites the file. Generation creates the target path's
+  missing parent directories and refuses to overwrite an existing file.
 - Every build writes each archive's compile-flags sidecar; the sidecar is
   the single alignment channel to the crates.
 
@@ -154,9 +155,12 @@ Behaviors:
   variable is set, the toolchain is missing.
 - Supports one FFI surface per mruby minor version; supported versions: 4.0.
 - In placeholder mode `cargo check` passes and no FFI surface is exported.
-- A `mruby_linked` cfg reflects whether a real archive is linked; downstream
-  crates read it to gate their mruby-dependent code. It is capability-driven,
-  never a cargo feature.
+- A `mruby_linked` cfg reflects whether a real archive is linked. The cfg
+  is derived, never a cargo feature: `beni-sys` publishes the linked
+  signal to its direct dependents' build scripts, the `beni` crate
+  re-derives its own cfg from the signal automatically, and any crate
+  gating mruby-dependent code does the same as a direct dependent of
+  `beni-sys`.
 
 ### beni crate — typed wrapper
 
@@ -225,5 +229,7 @@ Behaviors:
 | discovered archive | the archive located by archive discovery for the active cargo target |
 | archive discovery variable | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR`, the environment variables archive discovery consults |
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
+| staged path | `mruby/build/<name>/lib/` under the vendor tree, holding one target's archive and compile-flags sidecar |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of defines/flags the crates align with |
+| linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents |
 | placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set |
