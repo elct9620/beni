@@ -9,9 +9,7 @@
 //! Mirrors magnus's `src/r_array.rs`: factories live on `Ruby` /
 //! `Mrb`, per-array ops (`push`, `entry`) live here.
 
-#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
@@ -21,12 +19,10 @@ use beni_sys as sys;
 /// `Array::from_value_unchecked` (assert that a `Value` you
 /// already hold is Array-tagged). Round-trip back to a generic
 /// `Value` via `Array::as_value` for APIs that take any value.
-#[cfg(mruby_linked)]
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Array(Value);
 
-#[cfg(mruby_linked)]
 impl Array {
     /// Wrap a `Value` that the caller has already determined to be
     /// Array-tagged (e.g. via a `classname` check or because it came
@@ -59,10 +55,18 @@ impl Array {
     /// `mrb_ary_push(mrb, self, val)` — append `val` to this array.
     #[inline]
     pub fn push(self, mrb: &Mrb, val: Value) {
-        // SAFETY: `mrb` is alive; `self` is Array-tagged by the
-        // `from_value_unchecked` contract; `val` originates from the
-        // same VM by the single-VM contract.
-        unsafe { sys::mrb_ary_push(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive; `self` is Array-tagged by the
+            // `from_value_unchecked` contract; `val` originates from the
+            // same VM by the single-VM contract.
+            unsafe { sys::mrb_ary_push(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, val);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_ary_entry(self, idx)` — read the element at `idx`.
@@ -72,8 +76,16 @@ impl Array {
     /// integer `idx`.
     #[inline]
     pub fn entry(self, idx: sys::mrb_int) -> Value {
-        // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
-        // contract; `mrb_ary_entry` is bounds-tolerant.
-        Value::from_raw(unsafe { sys::mrb_ary_entry(self.0.as_raw(), idx) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
+            // contract; `mrb_ary_entry` is bounds-tolerant.
+            Value::from_raw(unsafe { sys::mrb_ary_entry(self.0.as_raw(), idx) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = idx;
+            crate::not_linked()
+        }
     }
 }

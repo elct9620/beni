@@ -51,9 +51,7 @@ pub mod load;
 pub mod protect;
 pub mod symbol;
 
-#[cfg(mruby_linked)]
 use crate::{Class, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 #[cfg(mruby_linked)]
 use core::ptr::NonNull;
@@ -112,10 +110,14 @@ impl Mrb {
     /// not yet migrated to safe methods. The returned pointer is
     /// valid for the lifetime of `&self`; callers must not call
     /// `mrb_close` on it (the `Mrb` Drop owns that).
-    #[cfg(mruby_linked)]
     #[inline]
     pub fn as_ptr(&self) -> *mut sys::mrb_state {
-        self.state.as_ptr()
+        #[cfg(mruby_linked)]
+        {
+            self.state.as_ptr()
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// Borrow a live `*mut mrb_state` as an `&Mrb` reference. Used
@@ -148,17 +150,24 @@ impl Mrb {
     /// `*mrb_ref` must be a live mruby state that remains open for
     /// the lifetime of the returned borrow. Passing storage holding
     /// NULL is undefined behaviour.
-    #[cfg(mruby_linked)]
     #[inline]
     pub unsafe fn borrow_raw(mrb_ref: &*mut sys::mrb_state) -> &Mrb {
-        debug_assert!(!mrb_ref.is_null());
-        // SAFETY: `Mrb` is `#[repr(transparent)]` over
-        // `NonNull<mrb_state>`, which is itself `#[repr(transparent)]`
-        // over `*mut mrb_state`. So a `*const *mut mrb_state` (the
-        // address of the caller's pointer variable) and a `*const Mrb`
-        // index into the same storage layout. The borrow lifetime is
-        // inherited from `mrb_ref` via lifetime elision.
-        unsafe { &*(mrb_ref as *const *mut sys::mrb_state as *const Mrb) }
+        #[cfg(mruby_linked)]
+        {
+            debug_assert!(!mrb_ref.is_null());
+            // SAFETY: `Mrb` is `#[repr(transparent)]` over
+            // `NonNull<mrb_state>`, which is itself `#[repr(transparent)]`
+            // over `*mut mrb_state`. So a `*const *mut mrb_state` (the
+            // address of the caller's pointer variable) and a `*const Mrb`
+            // index into the same storage layout. The borrow lifetime is
+            // inherited from `mrb_ref` via lifetime elision.
+            unsafe { &*(mrb_ref as *const *mut sys::mrb_state as *const Mrb) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb_ref;
+            crate::not_linked()
+        }
     }
 
     /// Return the currently pending mruby exception, or
@@ -166,18 +175,22 @@ impl Mrb {
     /// directly through the bindgen-exposed struct field; does NOT
     /// clear the field — callers pair this with `Mrb::clear_exc`
     /// after they have captured class/message/backtrace.
-    #[cfg(mruby_linked)]
     pub fn pending_exc(&self) -> Value {
-        // SAFETY: `self.state` is alive by the `&self` borrow. The
-        // `exc` field is exposed by bindgen as `*mut RObject`; when
-        // non-null it is the boxed exception's object pointer, which
-        // `mrb_obj_value` reifies into the matching `mrb_value`.
-        let exc = unsafe { (*self.state.as_ptr()).exc };
-        if exc.is_null() {
-            Value::from_raw(unsafe { sys::mrb_nil_value() })
-        } else {
-            Value::from_raw(unsafe { sys::mrb_obj_value(exc as *mut core::ffi::c_void) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.state` is alive by the `&self` borrow. The
+            // `exc` field is exposed by bindgen as `*mut RObject`; when
+            // non-null it is the boxed exception's object pointer, which
+            // `mrb_obj_value` reifies into the matching `mrb_value`.
+            let exc = unsafe { (*self.state.as_ptr()).exc };
+            if exc.is_null() {
+                Value::from_raw(unsafe { sys::mrb_nil_value() })
+            } else {
+                Value::from_raw(unsafe { sys::mrb_obj_value(exc as *mut core::ffi::c_void) })
+            }
         }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// Set `mrb->exc` to `exc`, replacing whatever was there. Used by
@@ -192,27 +205,38 @@ impl Mrb {
     /// downstream machinery dereferences the slot as `RObject *`. Pass
     /// nil or a non-object value at your peril (segfault on the next
     /// exception check).
-    #[cfg(mruby_linked)]
     pub fn set_pending_exc(&self, exc: Value) {
-        // SAFETY: `self.state` is alive by the `&self` borrow; `exc`
-        // originates from the same VM. `mrb_obj_ptr_func` extracts the
-        // RObject pointer carried by the value; the assignment installs
-        // it as the new pending exception, replacing whatever sat in
-        // the slot.
-        let obj_ptr = unsafe { sys::mrb_obj_ptr_func(exc.into_raw()) };
-        unsafe { (*self.state.as_ptr()).exc = obj_ptr };
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.state` is alive by the `&self` borrow; `exc`
+            // originates from the same VM. `mrb_obj_ptr_func` extracts the
+            // RObject pointer carried by the value; the assignment installs
+            // it as the new pending exception, replacing whatever sat in
+            // the slot.
+            let obj_ptr = unsafe { sys::mrb_obj_ptr_func(exc.into_raw()) };
+            unsafe { (*self.state.as_ptr()).exc = obj_ptr };
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = exc;
+            crate::not_linked()
+        }
     }
 
     /// Clear `mrb->exc`. Idempotent; safe to call when no exception
     /// is pending. Used by the consumer crate's panic-recovery paths
     /// after the pending exception has been extracted, so subsequent
     /// mruby calls do not observe stale exception state.
-    #[cfg(mruby_linked)]
     pub fn clear_exc(&self) {
-        // SAFETY: `self.state` is alive by the `&self` borrow. The
-        // return value (a `mrb_bool` snapshot of the prior
-        // `mrb->exc` state) is intentionally discarded.
-        let _ = unsafe { sys::mrb_check_error(self.as_ptr()) };
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.state` is alive by the `&self` borrow. The
+            // return value (a `mrb_bool` snapshot of the prior
+            // `mrb->exc` state) is intentionally discarded.
+            let _ = unsafe { sys::mrb_check_error(self.as_ptr()) };
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// Return `mrb->object_class` as a typed `Class` handle.
@@ -221,11 +245,15 @@ impl Mrb {
     /// accessor is the one external entry point. The free function
     /// `crate::mrb_object_class` remains for code paths that hold
     /// only a raw `*mut mrb_state`.
-    #[cfg(mruby_linked)]
     #[inline]
     pub fn object_class(&self) -> Class {
-        // SAFETY: `self.state` is alive by the `&self` borrow.
-        Class::from_raw(unsafe { sys::mrb_object_class(self.as_ptr()) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.state` is alive by the `&self` borrow.
+            Class::from_raw(unsafe { sys::mrb_object_class(self.as_ptr()) })
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 }
 

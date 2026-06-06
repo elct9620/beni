@@ -35,7 +35,6 @@
 //! treating the value as a live class handle; a future typed-error
 //! migration could move null handling into the return type.
 
-#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
 use beni_sys as sys;
 
@@ -49,8 +48,8 @@ use beni_sys as sys;
 /// Available in both linked and placeholder builds to mirror
 /// `Value`'s shape: the newtype is `#[repr(transparent)]` and carries
 /// no mruby linkage, so its constructors compile without a staged
-/// toolchain. Methods that talk to mruby live behind
-/// `#[cfg(mruby_linked)]`.
+/// toolchain. Methods that talk to mruby keep their signatures in
+/// placeholder builds and divert to `crate::not_linked`.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Class(pub(crate) *mut sys::RClass);
@@ -96,12 +95,16 @@ impl Class {
     ///
     /// `self` must be a live class handle produced by the same VM
     /// as `mrb` (and not yet freed).
-    #[cfg(mruby_linked)]
     #[inline]
     pub unsafe fn as_value(self, _mrb: &Mrb) -> Value {
-        // SAFETY: forwarded from caller; mrb_obj_value reads only
-        // the pointer payload and reuses mruby's own boxing logic.
-        Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: forwarded from caller; mrb_obj_value reads only
+            // the pointer payload and reuses mruby's own boxing logic.
+            Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     // ----------------------------------------------------------------
@@ -124,36 +127,59 @@ impl Class {
 
     /// `mrb_define_module_under(mrb, self, name)` — define or fetch a
     /// nested module under `self`.
-    #[cfg(mruby_linked)]
     #[inline]
     pub fn define_module_under(self, mrb: &Mrb, name: &core::ffi::CStr) -> Class {
-        // SAFETY: `mrb` is alive; `self` was produced by the same VM;
-        // `name` is NUL-terminated.
-        Class::from_raw(unsafe {
-            sys::mrb_define_module_under(mrb.as_ptr(), self.0, name.as_ptr())
-        })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive; `self` was produced by the same VM;
+            // `name` is NUL-terminated.
+            Class::from_raw(unsafe {
+                sys::mrb_define_module_under(mrb.as_ptr(), self.0, name.as_ptr())
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_define_class_under(mrb, self, name, super_)` — define a
     /// nested class under `self`, inheriting from `super_`.
-    #[cfg(mruby_linked)]
     #[inline]
     pub fn define_class_under(self, mrb: &Mrb, name: &core::ffi::CStr, super_: Class) -> Class {
-        // SAFETY: as `define_module_under`; `super_` originates from
-        // the same VM.
-        Class::from_raw(unsafe {
-            sys::mrb_define_class_under(mrb.as_ptr(), self.0, name.as_ptr(), super_.0)
-        })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `define_module_under`; `super_` originates from
+            // the same VM.
+            Class::from_raw(unsafe {
+                sys::mrb_define_class_under(mrb.as_ptr(), self.0, name.as_ptr(), super_.0)
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, super_);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_class_get_under(mrb, self, name)` — fetch a nested class
     /// by name. The returned `Class` may be null when no such class
     /// is registered.
-    #[cfg(mruby_linked)]
     #[inline]
     pub fn class_get_under(self, mrb: &Mrb, name: &core::ffi::CStr) -> Class {
-        // SAFETY: as `define_module_under`.
-        Class::from_raw(unsafe { sys::mrb_class_get_under(mrb.as_ptr(), self.0, name.as_ptr()) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `define_module_under`.
+            Class::from_raw(unsafe {
+                sys::mrb_class_get_under(mrb.as_ptr(), self.0, name.as_ptr())
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_class_name(mrb, self)` — return the class's full Ruby
@@ -162,22 +188,29 @@ impl Class {
     ///
     /// The returned slice points into mruby's interned class-name
     /// storage which lives for the duration of the VM.
-    #[cfg(mruby_linked)]
     #[inline]
     pub fn name(self, mrb: &Mrb) -> Option<&'static str> {
-        // SAFETY: `mrb` is alive by the borrow; `self` originates
-        // from the same VM by the single-VM contract.
-        let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.0) };
-        if ptr.is_null() {
-            return None;
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive by the borrow; `self` originates
+            // from the same VM by the single-VM contract.
+            let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.0) };
+            if ptr.is_null() {
+                return None;
+            }
+            // SAFETY: mruby's class-name storage lives for the duration
+            // of the VM.
+            Some(
+                unsafe { core::ffi::CStr::from_ptr(ptr) }
+                    .to_str()
+                    .unwrap_or(""),
+            )
         }
-        // SAFETY: mruby's class-name storage lives for the duration
-        // of the VM.
-        Some(
-            unsafe { core::ffi::CStr::from_ptr(ptr) }
-                .to_str()
-                .unwrap_or(""),
-        )
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
     }
 
     /// `mrb_define_method(mrb, self, name, func, aspec)` — register
@@ -186,7 +219,6 @@ impl Class {
     /// `sys::mrb_func_t` (mrb_value-based) once. Both have identical
     /// C ABI because `Value` is `#[repr(transparent)]` over
     /// `mrb_value`.
-    #[cfg(mruby_linked)]
     #[inline]
     pub fn define_method(
         self,
@@ -195,23 +227,30 @@ impl Class {
         func: crate::mrb_func_t,
         aspec: sys::mrb_aspec,
     ) {
-        // SAFETY (transmute): `Value` is `#[repr(transparent)]`
-        // over `sys::mrb_value` (pinned by
-        // `value::tests::value_shares_abi_with_mrb_value`), so
-        // `crate::mrb_func_t` and `sys::mrb_func_t` share C ABI and
-        // the transmute is a no-op at codegen.
-        // SAFETY (mrb_define_method): `mrb` is alive; `self` was
-        // produced by the same VM; `name` is NUL-terminated; `raw`
-        // has the C ABI mruby expects.
-        let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
-        unsafe { sys::mrb_define_method(mrb.as_ptr(), self.0, name.as_ptr(), raw, aspec) };
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY (transmute): `Value` is `#[repr(transparent)]`
+            // over `sys::mrb_value` (pinned by
+            // `value::tests::value_shares_abi_with_mrb_value`), so
+            // `crate::mrb_func_t` and `sys::mrb_func_t` share C ABI and
+            // the transmute is a no-op at codegen.
+            // SAFETY (mrb_define_method): `mrb` is alive; `self` was
+            // produced by the same VM; `name` is NUL-terminated; `raw`
+            // has the C ABI mruby expects.
+            let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
+            unsafe { sys::mrb_define_method(mrb.as_ptr(), self.0, name.as_ptr(), raw, aspec) };
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, func, aspec);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_define_singleton_method(mrb, self, name, func, aspec)` —
     /// register a singleton-class method on this class object. The
     /// receiver here is treated as `RObject *` so the singleton-class
     /// shim attaches to the metaclass (matching mruby's own contract).
-    #[cfg(mruby_linked)]
     #[inline]
     pub fn define_singleton_method(
         self,
@@ -220,38 +259,53 @@ impl Class {
         func: crate::mrb_func_t,
         aspec: sys::mrb_aspec,
     ) {
-        // SAFETY (transmute): as `define_method` — `Value` is
-        // `#[repr(transparent)]` over `sys::mrb_value`, so the typed
-        // and raw `mrb_func_t` aliases share C ABI.
-        // SAFETY (mrb_define_singleton_method): `RClass *` and
-        // `RObject *` are both `c_void *` aliases in this crate's
-        // binding; the cast matches what `mrbgems/mruby-singleton-
-        // class` does inline.
-        let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
-        unsafe {
-            sys::mrb_define_singleton_method(
-                mrb.as_ptr(),
-                self.0 as *mut sys::RObject,
-                name.as_ptr(),
-                raw,
-                aspec,
-            )
-        };
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY (transmute): as `define_method` — `Value` is
+            // `#[repr(transparent)]` over `sys::mrb_value`, so the typed
+            // and raw `mrb_func_t` aliases share C ABI.
+            // SAFETY (mrb_define_singleton_method): `RClass *` and
+            // `RObject *` are both `c_void *` aliases in this crate's
+            // binding; the cast matches what `mrbgems/mruby-singleton-
+            // class` does inline.
+            let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
+            unsafe {
+                sys::mrb_define_singleton_method(
+                    mrb.as_ptr(),
+                    self.0 as *mut sys::RObject,
+                    name.as_ptr(),
+                    raw,
+                    aspec,
+                )
+            };
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, func, aspec);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
     /// a new instance of this class, calling `initialize` with `args`.
-    #[cfg(mruby_linked)]
     #[inline]
     pub fn obj_new(self, mrb: &Mrb, args: &[Value]) -> Value {
-        // Value is repr(transparent) over mrb_value; the slice
-        // pointer reuses the same layout.
-        let argv = args.as_ptr() as *const sys::mrb_value;
-        // SAFETY: `mrb` is alive; `self` and every `args` entry
-        // originate from the same VM.
-        Value::from_raw(unsafe {
-            sys::mrb_obj_new(mrb.as_ptr(), self.0, args.len() as sys::mrb_int, argv)
-        })
+        #[cfg(mruby_linked)]
+        {
+            // Value is repr(transparent) over mrb_value; the slice
+            // pointer reuses the same layout.
+            let argv = args.as_ptr() as *const sys::mrb_value;
+            // SAFETY: `mrb` is alive; `self` and every `args` entry
+            // originate from the same VM.
+            Value::from_raw(unsafe {
+                sys::mrb_obj_new(mrb.as_ptr(), self.0, args.len() as sys::mrb_int, argv)
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, args);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_raise(mrb, self, msg)` — raise an exception of this class
@@ -264,16 +318,23 @@ impl Class {
     /// bridges, `mrb_funcall` handlers, `mrb_protect_error` bodies).
     /// Calling from arbitrary Rust code would skip Rust drop frames
     /// the stack expects to run.
-    #[cfg(mruby_linked)]
     #[inline]
     pub unsafe fn raise(self, mrb: &Mrb, msg: &core::ffi::CStr) -> ! {
-        // SAFETY: bridge frame — caller upholds the unwind contract.
-        // bindgen drops the `mrb_noreturn` attribute on its `mrb_raise`
-        // declaration, so the FFI return type is `()` rather than the
-        // diverging `!`. The `unreachable_unchecked` keeps the
-        // diverging Rust signature without an extra runtime branch —
-        // `mrb_raise` long-jumps before control can reach it.
-        unsafe { sys::mrb_raise(mrb.as_ptr(), self.0, msg.as_ptr()) };
-        unsafe { core::hint::unreachable_unchecked() }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: bridge frame — caller upholds the unwind contract.
+            // bindgen drops the `mrb_noreturn` attribute on its `mrb_raise`
+            // declaration, so the FFI return type is `()` rather than the
+            // diverging `!`. The `unreachable_unchecked` keeps the
+            // diverging Rust signature without an extra runtime branch —
+            // `mrb_raise` long-jumps before control can reach it.
+            unsafe { sys::mrb_raise(mrb.as_ptr(), self.0, msg.as_ptr()) };
+            unsafe { core::hint::unreachable_unchecked() }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, msg);
+            crate::not_linked()
+        }
     }
 }

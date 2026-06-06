@@ -41,7 +41,6 @@
 
 use beni_sys as sys;
 
-#[cfg(mruby_linked)]
 use crate::Mrb;
 
 /// Compile-time NUL-terminated C-string literal pointer.
@@ -141,17 +140,16 @@ impl Immediates {
 ///
 /// ## Cross-target availability
 ///
-/// `Value` itself, `Value::from_raw` / `Value::as_raw` /
-/// `Value::into_raw` / `Value::zeroed`, and the
-/// `sys::mrb_func_t` / `crate::mrb_func_t` typedefs are available
-/// on every target so the host-target ABI invariant checks keep
-/// compiling — `value::tests::value_shares_abi_with_mrb_value`
-/// here, and `tests::typed_mrb_func_t_coerces_from_value_bridge`
-/// at the crate root, pin the `#[repr(transparent)]` contract that
-/// `Class::define_method`'s `mem::transmute` depends on. Methods
-/// that talk to mruby (`classname` / `call` / numeric factories /
-/// predicates) live behind `#[cfg(mruby_linked)]` because
-/// they would link against unresolved mruby symbols on the host.
+/// The whole `Value` surface compiles on every target and in
+/// placeholder mode alike. Pure layout operations (`from_raw` /
+/// `as_raw` / `into_raw` / `zeroed`) work everywhere; methods that
+/// talk to mruby keep their signatures in placeholder mode but
+/// divert to `crate::not_linked` because the mruby symbols they
+/// wrap are not linked. The ABI invariant checks
+/// (`value::tests::value_shares_abi_with_mrb_value` here,
+/// `tests::typed_mrb_func_t_coerces_from_value_bridge` at the crate
+/// root) pin the `#[repr(transparent)]` contract that
+/// `Class::define_method`'s `mem::transmute` depends on.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Value(pub(crate) sys::mrb_value);
@@ -195,25 +193,39 @@ impl Value {
     }
 }
 
-#[cfg(mruby_linked)]
 impl Value {
     /// Canonical mruby `nil`. Reads through the process-wide
     /// `Immediates` cache; capture is lazy and one-shot.
     #[inline]
     pub fn nil() -> Self {
-        Self(Immediates::get().qnil)
+        #[cfg(mruby_linked)]
+        {
+            Self(Immediates::get().qnil)
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// Canonical mruby `true`. See `Value::nil`.
     #[inline]
     pub fn true_() -> Self {
-        Self(Immediates::get().qtrue)
+        #[cfg(mruby_linked)]
+        {
+            Self(Immediates::get().qtrue)
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// Canonical mruby `false`. See `Value::nil`.
     #[inline]
     pub fn false_() -> Self {
-        Self(Immediates::get().qfalse)
+        #[cfg(mruby_linked)]
+        {
+            Self(Immediates::get().qfalse)
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// `mrb_int_value(mrb, n)` — construct an mruby Integer from `n`,
@@ -224,8 +236,16 @@ impl Value {
     /// platform default, 32-bit under `MRB_INT32` or on wasm32.
     #[inline]
     pub fn from_int(mrb: &Mrb, n: sys::mrb_int) -> Self {
-        // SAFETY: `mrb` is alive by the `&Mrb` borrow.
-        Self(unsafe { sys::mrb_int_value(mrb.as_ptr(), n) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive by the `&Mrb` borrow.
+            Self(unsafe { sys::mrb_int_value(mrb.as_ptr(), n) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, n);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_float_value(mrb, f)` — construct an mruby Float from `f`,
@@ -233,8 +253,16 @@ impl Value {
     /// trampoline route as `Value::from_int`).
     #[inline]
     pub fn from_float(mrb: &Mrb, f: sys::mrb_float) -> Self {
-        // SAFETY: `mrb` is alive by the `&Mrb` borrow.
-        Self(unsafe { sys::mrb_float_value(mrb.as_ptr(), f) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive by the `&Mrb` borrow.
+            Self(unsafe { sys::mrb_float_value(mrb.as_ptr(), f) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, f);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_obj_as_string(mrb, self)` — coerce `self` to a String
@@ -246,9 +274,17 @@ impl Value {
     /// `mrb_protect_error` bodies).
     #[inline]
     pub fn obj_as_string(self, mrb: &Mrb) -> Value {
-        // SAFETY: `mrb` is alive by the borrow; `self` originates
-        // from the same VM.
-        Value::from_raw(unsafe { sys::mrb_obj_as_string(mrb.as_ptr(), self.0) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive by the borrow; `self` originates
+            // from the same VM.
+            Value::from_raw(unsafe { sys::mrb_obj_as_string(mrb.as_ptr(), self.0) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
     }
 
     /// Borrow the raw bytes of a String-tagged `self`. Routes through
@@ -271,14 +307,19 @@ impl Value {
     /// string's backing buffer before consuming the slice.
     #[inline]
     pub unsafe fn as_bytes(self, _mrb: &Mrb) -> &[u8] {
-        // SAFETY: forwarded from caller. The wrapper-h inline
-        // helpers expand the RSTRING_PTR / RSTRING_LEN macros
-        // against mruby's own headers.
-        let ptr = unsafe { sys::mrb_rstring_ptr(self.0) } as *const u8;
-        let len = unsafe { sys::mrb_rstring_len(self.0) } as usize;
-        // SAFETY: ptr / len pair describes a buffer owned by mruby
-        // and alive while the borrowed `&Mrb` outlives this slice.
-        unsafe { core::slice::from_raw_parts(ptr, len) }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: forwarded from caller. The wrapper-h inline
+            // helpers expand the RSTRING_PTR / RSTRING_LEN macros
+            // against mruby's own headers.
+            let ptr = unsafe { sys::mrb_rstring_ptr(self.0) } as *const u8;
+            let len = unsafe { sys::mrb_rstring_len(self.0) } as usize;
+            // SAFETY: ptr / len pair describes a buffer owned by mruby
+            // and alive while the borrowed `&Mrb` outlives this slice.
+            unsafe { core::slice::from_raw_parts(ptr, len) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// `mrb_obj_classname(mrb, self)` — return the Ruby class name of
@@ -291,18 +332,26 @@ impl Value {
     /// `.to_string()` it.
     #[inline]
     pub fn classname(self, mrb: &Mrb) -> &'static str {
-        // SAFETY: `mrb` is alive by the borrow; `self` originates
-        // from the same VM by the single-VM contract.
-        let ptr = unsafe { sys::mrb_obj_classname(mrb.as_ptr(), self.0) };
-        if ptr.is_null() {
-            return "";
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive by the borrow; `self` originates
+            // from the same VM by the single-VM contract.
+            let ptr = unsafe { sys::mrb_obj_classname(mrb.as_ptr(), self.0) };
+            if ptr.is_null() {
+                return "";
+            }
+            // SAFETY: mruby's class-name storage lives for the duration
+            // of the `mrb_state`; treating it as `'static` is sound for
+            // the lifetime of the VM.
+            unsafe { core::ffi::CStr::from_ptr(ptr) }
+                .to_str()
+                .unwrap_or("")
         }
-        // SAFETY: mruby's class-name storage lives for the duration
-        // of the `mrb_state`; treating it as `'static` is sound for
-        // the lifetime of the VM.
-        unsafe { core::ffi::CStr::from_ptr(ptr) }
-            .to_str()
-            .unwrap_or("")
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
     }
 
     /// Coerce to a Rust `String` by calling `Object#to_s` and copying
@@ -327,18 +376,26 @@ impl Value {
     /// same C bridge.
     #[inline]
     pub fn to_string(self, mrb: &Mrb) -> String {
-        let s_val = self.call(mrb, c"to_s", &[]);
-        if !mrb.pending_exc().is_nil() {
-            mrb.clear_exc();
-            return String::new();
+        #[cfg(mruby_linked)]
+        {
+            let s_val = self.call(mrb, c"to_s", &[]);
+            if !mrb.pending_exc().is_nil() {
+                mrb.clear_exc();
+                return String::new();
+            }
+            if s_val.classname(mrb) != "String" {
+                return String::new();
+            }
+            // SAFETY: the classname gate confirms `s_val` is String-tagged;
+            // the bytes are copied before any further mruby call.
+            let bytes = unsafe { s_val.as_bytes(mrb) };
+            core::str::from_utf8(bytes).unwrap_or("").to_string()
         }
-        if s_val.classname(mrb) != "String" {
-            return String::new();
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
         }
-        // SAFETY: the classname gate confirms `s_val` is String-tagged;
-        // the bytes are copied before any further mruby call.
-        let bytes = unsafe { s_val.as_bytes(mrb) };
-        core::str::from_utf8(bytes).unwrap_or("").to_string()
     }
 
     /// Recover the `*mut RClass` pointer from a class-tagged
@@ -352,8 +409,13 @@ impl Value {
     /// `self` must be a class-tagged `Value`.
     #[inline]
     pub unsafe fn as_class_ptr(self) -> *mut sys::RClass {
-        // SAFETY: forwarded from caller.
-        unsafe { sys::mrb_class_ptr_func(self.0) }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: forwarded from caller.
+            unsafe { sys::mrb_class_ptr_func(self.0) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// Invoke `self.<method>(args...)` via the non-variadic
@@ -364,8 +426,16 @@ impl Value {
     /// gate).
     #[inline]
     pub fn call(self, mrb: &Mrb, name: &core::ffi::CStr, args: &[Value]) -> Value {
-        let sym = mrb.intern_cstr(name);
-        self.call_argv(mrb, sym, args)
+        #[cfg(mruby_linked)]
+        {
+            let sym = mrb.intern_cstr(name);
+            self.call_argv(mrb, sym, args)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, args);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_funcall_argv(mrb, self, sym, argc, argv)` — invoke the
@@ -379,14 +449,22 @@ impl Value {
     /// at codegen level.
     #[inline]
     pub fn call_argv(self, mrb: &Mrb, sym: sys::mrb_sym, args: &[Value]) -> Value {
-        let argv = args.as_ptr() as *const sys::mrb_value;
-        // SAFETY: `mrb` is alive by the borrow; `self` and every
-        // `args` entry originate from the same VM by the single-VM
-        // contract; `sym` was interned against the same VM (caller
-        // contract).
-        Value(unsafe {
-            sys::mrb_funcall_argv(mrb.as_ptr(), self.0, sym, args.len() as sys::mrb_int, argv)
-        })
+        #[cfg(mruby_linked)]
+        {
+            let argv = args.as_ptr() as *const sys::mrb_value;
+            // SAFETY: `mrb` is alive by the borrow; `self` and every
+            // `args` entry originate from the same VM by the single-VM
+            // contract; `sym` was interned against the same VM (caller
+            // contract).
+            Value(unsafe {
+                sys::mrb_funcall_argv(mrb.as_ptr(), self.0, sym, args.len() as sys::mrb_int, argv)
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym, args);
+            crate::not_linked()
+        }
     }
 
     /// TRUE when `self` is `nil`. Pure tag predicate via mruby's
@@ -395,9 +473,14 @@ impl Value {
     /// the boxing-config layout libmruby.a was built with.
     #[inline]
     pub fn is_nil(self) -> bool {
-        // SAFETY: mrb_nil_p is a pure predicate over the value tag and
-        // does not touch `mrb_state`.
-        unsafe { sys::mrb_nil_p_func(self.0) }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: mrb_nil_p is a pure predicate over the value tag and
+            // does not touch `mrb_state`.
+            unsafe { sys::mrb_nil_p_func(self.0) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// TRUE when `self` carries `MRB_TT_INTEGER`. Pure tag predicate
@@ -406,17 +489,27 @@ impl Value {
     /// `Value::unbox_integer` for the direct-unbox path.
     #[inline]
     pub fn is_integer(self) -> bool {
-        // SAFETY: mrb_type is a pure predicate over the value tag and
-        // does not touch `mrb_state`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_INTEGER }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: mrb_type is a pure predicate over the value tag and
+            // does not touch `mrb_state`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_INTEGER }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// TRUE when `self` carries `MRB_TT_FLOAT`. See `Value::is_integer`.
     /// Pair with `Value::unbox_float`.
     #[inline]
     pub fn is_float(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_FLOAT }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_integer`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_FLOAT }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// Direct `mrb_integer(v)` unbox via mruby's own
@@ -430,8 +523,13 @@ impl Value {
     /// behaviour per mruby's macro contract.
     #[inline]
     pub unsafe fn unbox_integer(self) -> sys::mrb_int {
-        // SAFETY: forwarded from caller.
-        unsafe { sys::mrb_integer_func(self.0) }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: forwarded from caller.
+            unsafe { sys::mrb_integer_func(self.0) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// Direct `mrb_float(v)` unbox via the `mrb_float_func`
@@ -446,8 +544,13 @@ impl Value {
     /// As `Value::unbox_integer`: caller has confirmed Float-tagging.
     #[inline]
     pub unsafe fn unbox_float(self) -> sys::mrb_float {
-        // SAFETY: forwarded from caller.
-        unsafe { sys::mrb_float_func(self.0) }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: forwarded from caller.
+            unsafe { sys::mrb_float_func(self.0) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
     }
 
     /// `mrb_ary_entry(self, idx)` — read the element at `idx` from
@@ -461,8 +564,16 @@ impl Value {
     /// passing a non-Array yields an undefined `Value`.
     #[inline]
     pub unsafe fn ary_entry(self, idx: sys::mrb_int) -> Value {
-        // SAFETY: forwarded from caller.
-        Value(unsafe { sys::mrb_ary_entry(self.0, idx) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: forwarded from caller.
+            Value(unsafe { sys::mrb_ary_entry(self.0, idx) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = idx;
+            crate::not_linked()
+        }
     }
 
     // ----------------------------------------------------------------
@@ -480,25 +591,49 @@ impl Value {
     /// produced by `mrb`.
     #[inline]
     pub fn iv_set(self, mrb: &Mrb, sym: sys::mrb_sym, val: Value) {
-        // SAFETY: `mrb` is alive by the borrow; `self` and `val`
-        // originate from the same VM by the single-VM contract.
-        unsafe { sys::mrb_iv_set(mrb.as_ptr(), self.0, sym, val.0) };
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive by the borrow; `self` and `val`
+            // originate from the same VM by the single-VM contract.
+            unsafe { sys::mrb_iv_set(mrb.as_ptr(), self.0, sym, val.0) };
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym, val);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_iv_get(mrb, self, sym)` — return instance variable `sym`
     /// from `self`, or `nil` when unset.
     #[inline]
     pub fn iv_get(self, mrb: &Mrb, sym: sys::mrb_sym) -> Value {
-        // SAFETY: as `iv_set`.
-        Value(unsafe { sys::mrb_iv_get(mrb.as_ptr(), self.0, sym) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `iv_set`.
+            Value(unsafe { sys::mrb_iv_get(mrb.as_ptr(), self.0, sym) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_const_defined(mrb, self, sym)` — TRUE when constant `sym`
     /// is defined on `self` (the module or class value).
     #[inline]
     pub fn const_defined(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
-        // SAFETY: as `iv_set`.
-        unsafe { sys::mrb_const_defined(mrb.as_ptr(), self.0, sym) }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `iv_set`.
+            unsafe { sys::mrb_const_defined(mrb.as_ptr(), self.0, sym) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_const_get(mrb, self, sym)` — fetch the constant value at
@@ -506,16 +641,32 @@ impl Value {
     /// undefined; callers should gate with `Value::const_defined`.
     #[inline]
     pub fn const_get(self, mrb: &Mrb, sym: sys::mrb_sym) -> Value {
-        // SAFETY: as `iv_set`.
-        Value(unsafe { sys::mrb_const_get(mrb.as_ptr(), self.0, sym) })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `iv_set`.
+            Value(unsafe { sys::mrb_const_get(mrb.as_ptr(), self.0, sym) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym);
+            crate::not_linked()
+        }
     }
 
     /// `mrb_respond_to(mrb, self, mid)` — TRUE when `self` answers to
     /// the method named by `mid`.
     #[inline]
     pub fn respond_to(self, mrb: &Mrb, mid: sys::mrb_sym) -> bool {
-        // SAFETY: as `iv_set`.
-        unsafe { sys::mrb_respond_to(mrb.as_ptr(), self.0, mid) }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `iv_set`.
+            unsafe { sys::mrb_respond_to(mrb.as_ptr(), self.0, mid) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, mid);
+            crate::not_linked()
+        }
     }
 }
 

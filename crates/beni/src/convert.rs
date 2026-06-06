@@ -93,7 +93,7 @@ impl FromValue for f64 {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, mruby_linked))]
 mod tests {
     use super::*;
 

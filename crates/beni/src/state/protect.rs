@@ -4,12 +4,10 @@
 //! Ruby exception the body raises is caught and surfaced as
 //! `Err(value)` instead of long-jumping past the Rust caller.
 
-#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
 #[cfg(mruby_linked)]
 use beni_sys as sys;
 
-#[cfg(mruby_linked)]
 impl Mrb {
     /// `mrb_protect_error(mrb, body, userdata, &error)` — run `body`
     /// inside a protected frame so any Ruby exception it raises is
@@ -39,6 +37,25 @@ impl Mrb {
     /// per-call overhead allocation-free; only the closure's own
     /// captures are at risk.
     pub fn protect<F>(&self, body: F) -> Result<Value, Value>
+    where
+        F: FnOnce(&Mrb) -> Value,
+    {
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = body;
+            crate::not_linked()
+        }
+        #[cfg(mruby_linked)]
+        {
+            self.protect_linked(body)
+        }
+    }
+
+    /// Linked-mode body of `Mrb::protect`, split out because the
+    /// trampoline + closure-slot dance reads better without an extra
+    /// cfg indentation level.
+    #[cfg(mruby_linked)]
+    fn protect_linked<F>(&self, body: F) -> Result<Value, Value>
     where
         F: FnOnce(&Mrb) -> Value,
     {

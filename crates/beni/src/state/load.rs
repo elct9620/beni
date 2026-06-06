@@ -3,12 +3,10 @@
 //! Inherent methods that drop a compiled blob into the live mruby VM
 //! and run its top-level Proc.
 
-#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
 #[cfg(mruby_linked)]
 use beni_sys as sys;
 
-#[cfg(mruby_linked)]
 impl Mrb {
     /// `mrb_load_irep_buf(mrb, buf, size)` — load and evaluate a
     /// precompiled RITE bytecode blob. On a malformed blob mruby
@@ -16,15 +14,23 @@ impl Mrb {
     /// `Mrb::pending_exc` before continuing.
     #[inline]
     pub fn load_irep_buf(&self, bytes: &[u8]) -> Value {
-        // SAFETY: `self` is alive; `bytes` is borrowed for the
-        // synchronous call.
-        Value::from_raw(unsafe {
-            sys::mrb_load_irep_buf(
-                self.as_ptr(),
-                bytes.as_ptr() as *const core::ffi::c_void,
-                bytes.len(),
-            )
-        })
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive; `bytes` is borrowed for the
+            // synchronous call.
+            Value::from_raw(unsafe {
+                sys::mrb_load_irep_buf(
+                    self.as_ptr(),
+                    bytes.as_ptr() as *const core::ffi::c_void,
+                    bytes.len(),
+                )
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = bytes;
+            crate::not_linked()
+        }
     }
 
     /// Load + validate + execute a precompiled bytecode blob.
@@ -43,6 +49,22 @@ impl Mrb {
     /// header" / "wrong ident" / "version mismatch" / "corrupt
     /// body".
     pub fn load_bytecode(&self, bytes: &[u8]) -> core::ffi::c_int {
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = bytes;
+            crate::not_linked()
+        }
+        #[cfg(mruby_linked)]
+        {
+            self.load_bytecode_linked(bytes)
+        }
+    }
+
+    /// Linked-mode body of `Mrb::load_bytecode`, split out because the
+    /// multi-step arena/IREP dance reads better without an extra cfg
+    /// indentation level.
+    #[cfg(mruby_linked)]
+    fn load_bytecode_linked(&self, bytes: &[u8]) -> core::ffi::c_int {
         // mruby/irep.h documents that `mrb_load_irep*` calls retain
         // one RProc per invocation in the arena; bracketing with
         // save/restore keeps multi-snippet preload cost bounded.
@@ -97,6 +119,7 @@ impl Mrb {
     /// returning NULL without setting `mrb->exc`). The caller's
     /// existing pending-exception extraction picks the synthesised
     /// exception up uniformly with mruby-native raises.
+    #[cfg(mruby_linked)]
     fn set_bytecode_exc(&self, msg: &str) {
         // SAFETY: `self` is alive; `c"RuntimeError"` is a static
         // NUL-terminated literal.

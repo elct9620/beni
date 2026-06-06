@@ -43,41 +43,42 @@
 // `Class` / `Array` / `Hash` newtypes, and the `cstr!` / `cstr_ptr`
 // C-string helpers.
 //
-// `ccontext` / `array` / `hash` / `convert` exist only under
-// `mruby_linked` because their bodies call mruby functions that
-// resolve only when a vendored `libmruby.a` is linked; including
-// them in placeholder builds would surface `unresolved import`
-// errors as soon as `cargo check` ran without a staged toolchain.
-#[cfg(mruby_linked)]
+// Every module and re-export is unconditional: in placeholder mode
+// the full API surface still compiles (the spec's transitive-
+// dependency guarantee), with mruby-calling method bodies diverting
+// to `not_linked` — see that helper below.
 pub mod array;
-#[cfg(mruby_linked)]
 pub mod ccontext;
 pub mod class;
-#[cfg(mruby_linked)]
 pub mod convert;
-#[cfg(mruby_linked)]
 pub mod hash;
 pub mod state;
 pub mod value;
 
-#[cfg(mruby_linked)]
 pub use state::{Mrb, MrbOpenError};
 
-#[cfg(mruby_linked)]
 pub use state::args::{format, Format};
 
-#[cfg(mruby_linked)]
 pub use ccontext::Ccontext;
 
-#[cfg(mruby_linked)]
 pub use array::Array;
 pub use class::{Class, Module};
-#[cfg(mruby_linked)]
 pub use convert::{FromValue, IntoValue};
-#[cfg(mruby_linked)]
 pub use hash::Hash;
 pub use value::cstr_ptr;
 pub use value::Value;
+
+/// Placeholder-mode terminus for operations that need a linked
+/// mruby. Methods taking `&Mrb` can never reach it (`Mrb::open`
+/// returns `Err`, so no `Mrb` exists to borrow); pure value methods
+/// reach it only when called on a degenerate placeholder value.
+#[cfg(not(mruby_linked))]
+#[inline]
+pub(crate) fn not_linked() -> ! {
+    panic!(
+        "beni placeholder mode: mruby is not linked; this operation needs a discovered libmruby.a"
+    )
+}
 
 /// Raw FFI escape hatch. Use `beni::sys::mrb_*` when the typed API
 /// in this crate's root does not yet cover a needed symbol. Anything
@@ -105,6 +106,94 @@ pub type mrb_func_t = unsafe extern "C" fn(mrb: *mut sys::mrb_state, self_: Valu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_api_surface_compiles_in_both_modes() {
+        // Compile-surface regression net for the placeholder
+        // contract: the wrapper's full API surface compiles whether
+        // or not mruby is linked. Each binding references one public
+        // method path; a method that loses its placeholder branch
+        // breaks this test's compilation in the CI lint lane's
+        // placeholder build before any consumer sees it.
+        let _ = Mrb::open;
+        let _ = Mrb::as_ptr;
+        let _ = Mrb::borrow_raw;
+        let _ = Mrb::pending_exc;
+        let _ = Mrb::set_pending_exc;
+        let _ = Mrb::clear_exc;
+        let _ = Mrb::object_class;
+        let _ = Mrb::define_module;
+        let _ = Mrb::define_class;
+        let _ = Mrb::class_get;
+        let _ = Mrb::define_global_const;
+        let _ = Mrb::gv_set;
+        let _ = Mrb::str_new;
+        let _ = Mrb::str_new_cstr;
+        let _ = Mrb::ary_new;
+        let _ = Mrb::hash_new;
+        let _ = Mrb::intern_cstr;
+        let _ = Mrb::intern_str;
+        let _ = Mrb::sym_name;
+        let _ = Mrb::load_irep_buf;
+        let _ = Mrb::load_bytecode;
+        let _ = Mrb::protect::<fn(&Mrb) -> Value>;
+        let _ = Mrb::get_args::<format::O>;
+        let _ = <format::O as Format>::read;
+        let _ = <format::Rest as Format>::read;
+        let _ = <format::NRest as Format>::read;
+        let _ = <format::NRestBlock as Format>::read;
+        let _ = <format::Io as Format>::read;
+        let _ = Value::nil;
+        let _ = Value::true_;
+        let _ = Value::false_;
+        let _ = Value::from_int;
+        let _ = Value::from_float;
+        let _ = Value::obj_as_string;
+        let _ = Value::as_bytes;
+        let _ = Value::classname;
+        let _ = Value::to_string;
+        let _ = Value::as_class_ptr;
+        let _ = Value::call;
+        let _ = Value::call_argv;
+        let _ = Value::is_nil;
+        let _ = Value::is_integer;
+        let _ = Value::is_float;
+        let _ = Value::unbox_integer;
+        let _ = Value::unbox_float;
+        let _ = Value::ary_entry;
+        let _ = Value::iv_set;
+        let _ = Value::iv_get;
+        let _ = Value::const_defined;
+        let _ = Value::const_get;
+        let _ = Value::respond_to;
+        let _ = Class::as_value;
+        let _ = Class::define_module_under;
+        let _ = Class::define_class_under;
+        let _ = Class::class_get_under;
+        let _ = Class::name;
+        let _ = Class::define_method;
+        let _ = Class::define_singleton_method;
+        let _ = Class::obj_new;
+        let _ = Class::raise;
+        let _ = Array::from_value_unchecked;
+        let _ = Array::as_value;
+        let _ = Array::as_raw;
+        let _ = Array::push;
+        let _ = Array::entry;
+        let _ = Hash::from_value_unchecked;
+        let _ = Hash::as_value;
+        let _ = Hash::as_raw;
+        let _ = Hash::set;
+        let _ = Hash::get;
+        let _ = Hash::keys;
+        let _ = Ccontext::new;
+        let _ = Ccontext::load_nstring;
+        let _ = <i32 as IntoValue>::into_value;
+        let _ = <f64 as IntoValue>::into_value;
+        let _ = <bool as IntoValue>::into_value;
+        let _ = <i32 as FromValue>::from_value;
+        let _ = <f64 as FromValue>::from_value;
+    }
 
     #[test]
     fn typed_mrb_func_t_coerces_from_value_bridge() {

@@ -44,7 +44,7 @@
 //! Add a marker ZST under `format` and implement `Format`:
 //!
 //! ```ignore
-//! use beni_sys::{Format, Mrb, Value};
+//! use beni::{Format, Mrb, Value};
 //!
 //! pub struct S;
 //! impl Format for S {
@@ -57,9 +57,7 @@
 //! }
 //! ```
 
-#[cfg(mruby_linked)]
 use crate::{Mrb, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 /// Type-level marker for a single `mrb_get_args` format string.
@@ -73,7 +71,6 @@ use beni_sys as sys;
 /// New implementors should monomorphise the `mrb_get_args` call inside
 /// `Format::read` against `Format::FMT` — see `format::O` for the
 /// minimal pattern.
-#[cfg(mruby_linked)]
 pub trait Format {
     /// Typed shape returned by `Format::read`. The `'a` lifetime is
     /// the borrow on the call-frame argv slot for rest-form formats;
@@ -91,7 +88,6 @@ pub trait Format {
     fn read(mrb: &Mrb) -> Self::Output<'_>;
 }
 
-#[cfg(mruby_linked)]
 impl Mrb {
     /// Read the call-frame argv using a `Format` marker. The
     /// monomorphised call expands to a single `mrb_get_args` against
@@ -110,10 +106,11 @@ impl Mrb {
 
 /// Zero-sized marker types implementing `Format`. Each marker maps
 /// one mruby format string to a typed Rust return.
-#[cfg(mruby_linked)]
 pub mod format {
+    #[cfg(mruby_linked)]
+    use super::slice_from_argv;
     use super::sys;
-    use super::{slice_from_argv, Format, Mrb, Value};
+    use super::{Format, Mrb, Value};
 
     /// `mrb_get_args(mrb, "o", &val)` — read a single positional
     /// argument as a `Value`.
@@ -123,18 +120,26 @@ pub mod format {
         const FMT: &'static core::ffi::CStr = c"o";
 
         fn read(mrb: &Mrb) -> Value {
-            let mut raw = sys::mrb_value::zeroed();
-            // SAFETY: `mrb` is alive by the `&Mrb` borrow; `&mut raw`
-            // is a valid `*mut mrb_value`; the `"o"` format writes
-            // exactly one cell.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut raw as *mut sys::mrb_value,
-                );
+            #[cfg(mruby_linked)]
+            {
+                let mut raw = sys::mrb_value::zeroed();
+                // SAFETY: `mrb` is alive by the `&Mrb` borrow; `&mut raw`
+                // is a valid `*mut mrb_value`; the `"o"` format writes
+                // exactly one cell.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut raw as *mut sys::mrb_value,
+                    );
+                }
+                Value::from_raw(raw)
             }
-            Value::from_raw(raw)
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
         }
     }
 
@@ -146,19 +151,27 @@ pub mod format {
         const FMT: &'static core::ffi::CStr = c"*";
 
         fn read(mrb: &Mrb) -> &[Value] {
-            let mut argv: *const sys::mrb_value = core::ptr::null();
-            let mut argc: sys::mrb_int = 0;
-            // SAFETY: as `O::read`; the `"*"` format writes the argv
-            // pointer + length pair.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut argv as *mut *const sys::mrb_value,
-                    &mut argc as *mut sys::mrb_int,
-                );
+            #[cfg(mruby_linked)]
+            {
+                let mut argv: *const sys::mrb_value = core::ptr::null();
+                let mut argc: sys::mrb_int = 0;
+                // SAFETY: as `O::read`; the `"*"` format writes the argv
+                // pointer + length pair.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut argv as *mut *const sys::mrb_value,
+                        &mut argc as *mut sys::mrb_int,
+                    );
+                }
+                slice_from_argv(argv, argc)
             }
-            slice_from_argv(argv, argc)
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
         }
     }
 
@@ -170,20 +183,28 @@ pub mod format {
         const FMT: &'static core::ffi::CStr = c"n*";
 
         fn read(mrb: &Mrb) -> (sys::mrb_sym, &[Value]) {
-            let mut sym: sys::mrb_sym = 0;
-            let mut argv: *const sys::mrb_value = core::ptr::null();
-            let mut argc: sys::mrb_int = 0;
-            // SAFETY: as `O::read`.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut sym as *mut sys::mrb_sym,
-                    &mut argv as *mut *const sys::mrb_value,
-                    &mut argc as *mut sys::mrb_int,
-                );
+            #[cfg(mruby_linked)]
+            {
+                let mut sym: sys::mrb_sym = 0;
+                let mut argv: *const sys::mrb_value = core::ptr::null();
+                let mut argc: sys::mrb_int = 0;
+                // SAFETY: as `O::read`.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut sym as *mut sys::mrb_sym,
+                        &mut argv as *mut *const sys::mrb_value,
+                        &mut argc as *mut sys::mrb_int,
+                    );
+                }
+                (sym, slice_from_argv(argv, argc))
             }
-            (sym, slice_from_argv(argv, argc))
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
         }
     }
 
@@ -200,24 +221,32 @@ pub mod format {
         const FMT: &'static core::ffi::CStr = c"n*&";
 
         fn read(mrb: &Mrb) -> (sys::mrb_sym, &[Value], Value) {
-            let mut sym: sys::mrb_sym = 0;
-            let mut argv: *const sys::mrb_value = core::ptr::null();
-            let mut argc: sys::mrb_int = 0;
-            let mut block_raw = sys::mrb_value::zeroed();
-            // SAFETY: as `O::read`; the `"n*&"` format writes the
-            // leading symbol, the argv pointer + length pair, and a
-            // single block-slot value.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut sym as *mut sys::mrb_sym,
-                    &mut argv as *mut *const sys::mrb_value,
-                    &mut argc as *mut sys::mrb_int,
-                    &mut block_raw as *mut sys::mrb_value,
-                );
+            #[cfg(mruby_linked)]
+            {
+                let mut sym: sys::mrb_sym = 0;
+                let mut argv: *const sys::mrb_value = core::ptr::null();
+                let mut argc: sys::mrb_int = 0;
+                let mut block_raw = sys::mrb_value::zeroed();
+                // SAFETY: as `O::read`; the `"n*&"` format writes the
+                // leading symbol, the argv pointer + length pair, and a
+                // single block-slot value.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut sym as *mut sys::mrb_sym,
+                        &mut argv as *mut *const sys::mrb_value,
+                        &mut argc as *mut sys::mrb_int,
+                        &mut block_raw as *mut sys::mrb_value,
+                    );
+                }
+                (sym, slice_from_argv(argv, argc), Value::from_raw(block_raw))
             }
-            (sym, slice_from_argv(argv, argc), Value::from_raw(block_raw))
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
         }
     }
 
@@ -232,18 +261,26 @@ pub mod format {
         const FMT: &'static core::ffi::CStr = c"io";
 
         fn read(mrb: &Mrb) -> (sys::mrb_int, Value) {
-            let mut n: sys::mrb_int = 0;
-            let mut raw = sys::mrb_value::zeroed();
-            // SAFETY: as `O::read`.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut n as *mut sys::mrb_int,
-                    &mut raw as *mut sys::mrb_value,
-                );
+            #[cfg(mruby_linked)]
+            {
+                let mut n: sys::mrb_int = 0;
+                let mut raw = sys::mrb_value::zeroed();
+                // SAFETY: as `O::read`.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut n as *mut sys::mrb_int,
+                        &mut raw as *mut sys::mrb_value,
+                    );
+                }
+                (n, Value::from_raw(raw))
             }
-            (n, Value::from_raw(raw))
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
         }
     }
 }

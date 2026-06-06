@@ -65,6 +65,11 @@ jobs:
         run: cargo fmt --all -- --check
       - name: cargo clippy (host placeholder)
         run: cargo clippy --workspace -- -D warnings
+      # Placeholder-mode unit tests: the full-API-surface compile
+      # check and the `Mrb::open` → Err contract (success criterion 3)
+      # only execute without a staged archive, which is this lane.
+      - name: cargo test (host placeholder)
+        run: cargo test --workspace
       # Same doc gate as the local Stop hook — rustdoc warnings
       # (broken intra-doc links, bad code fences) fail the lane.
       - name: cargo doc
