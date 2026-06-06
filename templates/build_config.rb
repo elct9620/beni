@@ -12,14 +12,17 @@
 #
 # Wire it into your Rakefile:
 #
-#   Beni::Tasks.new do |tasks|
-#     tasks.build_config = File.expand_path("build_config/mruby.rb", __dir__)
-#     tasks.targets = %w[host wasi]
-#     tasks.toolchains = %w[mruby wasi-sdk]
+#   Beni::Tasks.new do
+#     build_config "build_config/mruby.rb"
+#
+#     target :host
+#     target :wasi do
+#       toolchain "wasi-sdk"
+#     end
 #   end
 #
-# (Drop +wasi+ from +targets+ and +wasi-sdk+ from +toolchains+ when the
-# cross build goes.) The file is `load`ed by mruby's rake when
+# (Drop the +wasi+ target declaration when the cross build goes — its
+# wasi-sdk reference goes with it.) The file is `load`ed by mruby's rake when
 # +Beni::Builder+ sets +MRUBY_CONFIG+ to its absolute path; vendor
 # paths resolve through the +BENI_VENDOR_DIR+ env var the builder
 # exports alongside it, and +WASI_SDK_PATH+ overrides the wasi-sdk

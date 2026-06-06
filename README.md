@@ -51,7 +51,7 @@ consumer's clean build uses mruby's untouched upstream
 `build_config/default.rb` (a single native `host` target). Consumers who need
 to tune the build run `rake beni:config` to generate a self-contained,
 editable config (the repo's own is the unmodified template output) and point
-`Beni::Tasks#build_config` at it.
+the `build_config` declaration in their `Beni::Tasks.new` block at it.
 
 The crates carry no hard-coded ABI defines: `beni-sys`'s build script parses
 the `libmruby.flags.mak` sidecar mruby writes next to each archive (requested
