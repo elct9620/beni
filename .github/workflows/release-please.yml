@@ -41,10 +41,10 @@ jobs:
     uses: ./.github/workflows/release-crate.yml
     secrets: inherit
 
-  # release-please cannot rewrite Gemfile.lock (the gem's own version is
-  # embedded in its PATH section), so regenerate the lockfiles on the
-  # release PR branch and push them back. The Cargo.lock entries are
-  # already bumped via extra-files; the cargo step is a drift guard.
+  # release-please cannot rewrite Cargo.lock (its TOML updater does not
+  # reach the [[package]] array entries), so regenerate it on the release
+  # PR branch and push it back. Gemfile.lock is bumped by the ruby
+  # strategy itself; regenerating it here just guards against drift.
   sync-lockfiles:
     needs: release-please
     if: ${{ needs.release-please.outputs.pr }}

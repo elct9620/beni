@@ -9,6 +9,7 @@
       "include-component-in-tag": false,
       "release-type": "ruby",
       "version-file": "lib/beni/version.rb",
+      "release-as": "0.1.0",
       "extra-files": [
         {
           "type": "toml",
@@ -19,16 +20,6 @@
           "type": "toml",
           "path": "crates/beni/Cargo.toml",
           "jsonpath": "$.dependencies['beni-sys'].version"
-        },
-        {
-          "type": "toml",
-          "path": "Cargo.lock",
-          "jsonpath": "$.package[?(@.name=='beni')].version"
-        },
-        {
-          "type": "toml",
-          "path": "Cargo.lock",
-          "jsonpath": "$.package[?(@.name=='beni-sys')].version"
         }
       ]
     }
