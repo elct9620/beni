@@ -24,6 +24,10 @@ module Beni
       def verify: () -> String
 
       def install: () -> void
+
+      private
+
+      def downloader: () -> Downloader
     end
   end
 end

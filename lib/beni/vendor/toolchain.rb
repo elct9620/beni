@@ -66,7 +66,7 @@ module Beni
       # task's mtime-based caching avoids re-downloading on a cache hit.
       def fetch
         puts "[beni] downloading #{name} #{version_label} from #{url}"
-        Downloader.new(url, tarball_path).download
+        downloader.download
         verify
       end
 
@@ -90,6 +90,14 @@ module Beni
           version: version_label
         ).prepare
         puts "[beni] #{name} ready at #{final_dir}"
+      end
+
+      private
+
+      # The network boundary — tests override this to script the
+      # download without opening a connection.
+      def downloader
+        Downloader.new(url, tarball_path)
       end
     end
   end
