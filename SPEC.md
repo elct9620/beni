@@ -230,6 +230,7 @@ Behaviors:
 | A toolchain definition naming `mruby` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | A toolchain definition missing its `version` or `sha256` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | A block-carrying `toolchain` declaration inside a target declaration's block | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
+| A block-less `toolchain` declaration at the top level | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | More than one toolchain definition naming the same toolchain | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | More than one `target` declaration naming the same target | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | More than one declaration of the same setting (`version`, `build_config`, or `vendor_dir`) | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
