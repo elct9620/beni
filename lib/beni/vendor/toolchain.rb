@@ -64,6 +64,9 @@ module Beni
       # Download the tarball into +tarball_path+ and verify its SHA256.
       # Intended as the body of the +file tarball_path+ rake task; the
       # task's mtime-based caching avoids re-downloading on a cache hit.
+      # A tarball failing verification deliberately stays cached: a
+      # checksum mismatch is an abort condition, never a re-download
+      # trigger, and the cache-hit path re-fails it the same way.
       def fetch
         puts "[beni] downloading #{name} #{version_label} from #{url}"
         downloader.download

@@ -383,7 +383,8 @@ impl Value {
     /// returns a non-String, the failure is **swallowed**: any pending
     /// `mrb->exc` is cleared and an empty `String` is returned, so the
     /// leaked exception does not corrupt subsequent mruby calls in the
-    /// same C bridge.
+    /// same C bridge. The clear is unconditional — an exception already
+    /// pending when `to_string` is entered is wiped with it.
     #[inline]
     pub fn to_string(self, mrb: &Mrb) -> String {
         #[cfg(mruby_linked)]
