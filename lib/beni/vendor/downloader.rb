@@ -39,11 +39,18 @@ module Beni
       def download
         FileUtils.mkdir_p(File.dirname(@dest))
         tmp = "#{@dest}.part"
-        with_retry { URI.parse(@url).open("rb") { |io| File.open(tmp, "wb") { |f| IO.copy_stream(io, f) } } }
+        with_retry { fetch(tmp) }
         File.rename(tmp, @dest)
       end
 
       private
+
+      # Stream the URL body into +tmp+ — the seam between the retry
+      # policy and the network; tests override this to script outcomes
+      # per attempt.
+      def fetch(tmp)
+        URI.parse(@url).open("rb") { |io| File.open(tmp, "wb") { |f| IO.copy_stream(io, f) } }
+      end
 
       def with_retry
         attempts = 0
