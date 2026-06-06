@@ -1,14 +1,11 @@
 module Beni
   class Tasks < Rake::TaskLib
-    attr_accessor vendor_dir: String
-    attr_accessor build_config: String?
-    attr_accessor targets: Array[String]
-    attr_accessor toolchains: Array[String]
-
     @builder: Builder?
     @vendor_toolchains: Array[Vendor::Toolchain]?
 
-    def initialize: () ?{ (Tasks) -> void } -> void
+    attr_reader configuration: Configuration
+
+    def initialize: () ?{ () [self: DSL::Context] -> void } -> void
 
     private
 

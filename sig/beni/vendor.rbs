@@ -7,8 +7,6 @@ module Beni
     WASI_SDK_PLATFORM: String
     TOOLCHAIN_FACTORIES: Hash[String, Symbol]
 
-    def self?.toolchains: (vendor_dir: String, ?names: Array[String]) -> Array[Toolchain]
-
     def self?.wasi_sdk: (vendor_dir: String, ?version: String?, ?sha256: String?) -> Toolchain
 
     def self?.mruby: (vendor_dir: String, ?version: String?, ?sha256: String?) -> Toolchain

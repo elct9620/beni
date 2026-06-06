@@ -55,7 +55,7 @@ module Beni
 
     def test_config_task_generates_a_build_config_at_the_given_path
       Dir.mktmpdir("beni-tasks-config") do |dir|
-        Tasks.new { |tasks| tasks.vendor_dir = dir }
+        Tasks.new { vendor_dir dir }
         dest = File.join(dir, "mruby.rb")
 
         capture_io { Rake::Task["beni:config"].invoke(dest) }

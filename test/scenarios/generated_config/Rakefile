@@ -17,10 +17,13 @@ require "beni/tasks"
 
 CONFIG = File.expand_path("build_config/mruby.rb", __dir__)
 
-Beni::Tasks.new do |tasks|
-  tasks.build_config = CONFIG
-  tasks.targets = %w[host wasi]
-  tasks.toolchains = %w[mruby wasi-sdk]
+Beni::Tasks.new do
+  build_config CONFIG
+
+  target :host
+  target :wasi do
+    toolchain "wasi-sdk"
+  end
 end
 
 namespace :scenario do

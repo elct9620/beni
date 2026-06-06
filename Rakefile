@@ -27,10 +27,13 @@ Steep::RakeTask.new
 # stays mruby's untouched upstream build_config/default.rb.
 require "beni/tasks"
 
-Beni::Tasks.new do |tasks|
-  tasks.build_config = File.expand_path("build_config/mruby.rb", __dir__)
-  tasks.targets = %w[host wasi]
-  tasks.toolchains = %w[mruby wasi-sdk]
+Beni::Tasks.new do
+  build_config "build_config/mruby.rb"
+
+  target :host
+  target :wasi do
+    toolchain "wasi-sdk"
+  end
 end
 
 Dir.glob(File.join(__dir__, "tasks", "*.rake")).each { |f| load f }

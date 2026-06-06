@@ -8,8 +8,9 @@ require_relative "vendor/toolchain"
 module Beni
   # Vendor toolchain façade. Owns the release-vendored toolchain pins and
   # the factory methods that build declarative +Toolchain+ values anchored
-  # on a caller-supplied +vendor_dir+; +Beni::Tasks+ iterates +toolchains+
-  # to wire +file+ / +task+ declarations. Network download lives in
+  # on a caller-supplied +vendor_dir+; +Beni::Tasks+ calls the factories
+  # with each selected toolchain's resolved +(version, sha256)+ to wire
+  # +file+ / +task+ declarations. Network download lives in
   # +Vendor::Downloader+, SHA256 verification in +Vendor::Checksum+,
   # tarball extraction in +Vendor::Tarball+, and the per-toolchain
   # pipeline composition in +Vendor::Toolchain+.
@@ -62,31 +63,14 @@ module Beni
       else "x86_64-linux"
       end
 
-    # Known toolchain names mapped to their factory methods. +Beni::Tasks+
-    # selects from this registry by name (mruby alone by default; wasi-sdk
-    # is opt-in for cross builds targeting wasm32-wasip1).
+    # Known toolchain names mapped to their factory methods — the name
+    # domain the DSL validates against and +Beni::Tasks+ dispatches on.
     TOOLCHAIN_FACTORIES = {
       "mruby" => :mruby,
       "wasi-sdk" => :wasi_sdk
     }.freeze
 
     module_function
-
-    # Tarball-based vendor toolchains selected by +names+ (defaults to
-    # every known toolchain), anchored on +vendor_dir+. Raises for a
-    # name outside +TOOLCHAIN_FACTORIES+ so a typo in a Rakefile fails
-    # at task-definition time, not mid-build.
-    def toolchains(vendor_dir:, names: TOOLCHAIN_FACTORIES.keys)
-      names.map do |name|
-        factory = TOOLCHAIN_FACTORIES[name]
-        unless factory
-          raise Error,
-                "unknown vendor toolchain #{name.inspect} (known: #{TOOLCHAIN_FACTORIES.keys.join(", ")})"
-        end
-
-        public_send(factory, vendor_dir: vendor_dir)
-      end
-    end
 
     def wasi_sdk(vendor_dir:, version: nil, sha256: nil)
       version ||= BUILT_IN_PAIRS.fetch("wasi-sdk").fetch(:version)

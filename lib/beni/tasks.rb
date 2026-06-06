@@ -12,59 +12,63 @@ module Beni
   #
   #   Beni::Tasks.new
   #
-  # or with overrides (a custom config cross-building to wasm32-wasip1):
+  # or with declarations (a custom config cross-building to wasm32-wasip1):
   #
-  #   Beni::Tasks.new do |tasks|
-  #     tasks.build_config = File.expand_path("build_config/custom.rb")
-  #     tasks.targets = %w[host wasi]
-  #     tasks.toolchains = %w[mruby wasi-sdk]
+  #   Beni::Tasks.new do
+  #     build_config "build_config/mruby.rb"
+  #
+  #     target :host
+  #     target :wasi do
+  #       toolchain "wasi-sdk"
+  #     end
   #   end
+  #
+  # The block is the declarative DSL from SPEC.md, run on +DSL::Context+:
+  # scalar settings (+version+ / +build_config+ / +vendor_dir+), target
+  # declarations carrying toolchain references, and top-level toolchain
+  # definitions overriding a built-in pair. Every malformed declaration
+  # raises here — no task defined, nothing downloaded.
   #
   # Defined tasks:
   #
   #   rake beni:build           — fetch toolchains + build libmruby.a per target
   #   rake beni:clean           — remove mruby build trees (keeps source)
   #   rake beni:config[path]    — generate a customizable build config
-  #   rake beni:vendor:setup    — download & unpack the configured toolchains
+  #   rake beni:vendor:setup    — download & unpack the selected toolchains
   #   rake beni:vendor:clean    — remove unpacked toolchains (keeps tarball cache)
   #   rake beni:vendor:clobber  — remove the vendor tree entirely
-  #
-  # Settings (set them in the block; they are read once when the tasks
-  # are defined, so later mutation has no effect):
-  #
-  #   * +vendor_dir+   — where toolchains unpack and mruby builds; defaults
-  #     to +vendor/+ under the Rakefile's working directory, or the
-  #     +BENI_VENDOR_DIR+ env var when set (test-fixture relocation).
-  #   * +build_config+ — mruby build config path; defaults to +nil+, which
-  #     lets mruby use its own +build_config/default.rb+ — the upstream
-  #     defaults, untouched.
-  #   * +targets+      — build-target names to verify after the build,
-  #     matching the +MRuby::Build.new(<name>)+ names in the config
-  #     (the upstream default config names its single target +host+).
-  #   * +toolchains+   — vendor toolchain names to download, from
-  #     +Vendor::TOOLCHAIN_FACTORIES+; defaults to mruby alone. Add
-  #     +wasi-sdk+ when the build config cross-compiles to wasm.
   class Tasks < Rake::TaskLib
-    attr_accessor :vendor_dir, :build_config, :targets, :toolchains
+    # The resolved declarations — exposed so consumers and tests can
+    # inspect what the task definitions were wired from.
+    attr_reader :configuration
 
-    def initialize
-      super
-      @vendor_dir = ENV["BENI_VENDOR_DIR"] || File.expand_path("vendor")
-      @build_config = nil
-      @targets = Builder::DEFAULT_TARGETS
-      @toolchains = %w[mruby]
-      yield self if block_given?
+    def initialize(&block)
+      super()
+      context = DSL::Context.new
+      context.instance_exec(&block) if block
+      @configuration = context.configuration
       define
     end
 
     private
 
     def builder
-      @builder ||= Builder.new(vendor_dir: vendor_dir, build_config: build_config, targets: targets)
+      @builder ||= Builder.new(
+        vendor_dir: configuration.vendor_dir,
+        build_config: configuration.build_config,
+        targets: configuration.targets
+      )
     end
 
+    # The selected toolchains as Vendor pipeline values, each carrying
+    # its resolved version and checksum.
     def vendor_toolchains
-      @vendor_toolchains ||= Vendor.toolchains(vendor_dir: vendor_dir, names: toolchains)
+      @vendor_toolchains ||= configuration.toolchains.map do |selected|
+        Vendor.public_send(
+          Vendor::TOOLCHAIN_FACTORIES.fetch(selected.name),
+          vendor_dir: configuration.vendor_dir, version: selected.version, sha256: selected.sha256
+        )
+      end
     end
 
     def define
@@ -85,7 +89,7 @@ module Beni
     end
 
     def define_vendor_setup_task
-      desc "Fetch and unpack the build-time vendor toolchains (#{vendor_toolchains.map(&:name).join(" + ")})"
+      desc "Fetch and unpack the selected vendor toolchains (#{vendor_toolchains.map(&:name).join(" + ")})"
       task setup: vendor_toolchains.map { |toolchain| "setup:#{toolchain.task_name}" }
     end
 
@@ -95,9 +99,9 @@ module Beni
         vendor_toolchains.each { |toolchain| FileUtils.rm_rf(toolchain.final_dir) }
       end
 
-      desc "Remove #{vendor_dir} entirely (unpacked trees and cached tarballs)"
+      desc "Remove #{configuration.vendor_dir} entirely (unpacked trees and cached tarballs)"
       task :clobber do
-        FileUtils.rm_rf(vendor_dir)
+        FileUtils.rm_rf(configuration.vendor_dir)
       end
     end
 
@@ -115,7 +119,8 @@ module Beni
     end
 
     def define_build_task
-      desc "Build vendored mruby for #{targets.join(" + ")} (produces #{builder.libmruby_paths.join(", ")})"
+      desc "Build vendored mruby for #{configuration.targets.join(" + ")} " \
+           "(produces #{builder.libmruby_paths.join(", ")})"
       task build: "vendor:setup" do
         builder.ensure_built
       end
@@ -133,7 +138,7 @@ module Beni
       task :config, [:path] do |_task, args|
         path = args[:path] || File.expand_path("build_config/mruby.rb")
         BuildConfig.generate(path)
-        puts "[beni] generated #{path} — point Beni::Tasks#build_config at it"
+        puts "[beni] generated #{path} — point the `build_config` declaration at it"
       end
     end
   end

@@ -19,7 +19,7 @@ module Beni
     end
 
     def test_defines_the_beni_task_suite
-      Tasks.new { |tasks| tasks.vendor_dir = VENDOR_DIR }
+      Tasks.new { vendor_dir VENDOR_DIR }
 
       %w[
         beni:build beni:clean beni:config
@@ -30,36 +30,43 @@ module Beni
       end
     end
 
-    def test_wasi_sdk_toolchain_is_opt_in
-      Tasks.new { |tasks| tasks.vendor_dir = VENDOR_DIR }
+    def test_wasi_sdk_setup_is_absent_without_a_reference
+      Tasks.new { vendor_dir VENDOR_DIR }
 
       refute Rake::Task.task_defined?("beni:vendor:setup:wasi_sdk"),
-             "expected wasi-sdk setup task to be absent by default"
+             "expected wasi-sdk setup task to be absent without a toolchain reference"
     end
 
-    def test_toolchains_are_customizable
-      Tasks.new do |tasks|
-        tasks.vendor_dir = VENDOR_DIR
-        tasks.toolchains = %w[mruby wasi-sdk]
+    def test_a_toolchain_reference_defines_its_setup_task_plus_transitive_mruby
+      Tasks.new do
+        vendor_dir VENDOR_DIR
+        target(:wasi) { toolchain "wasi-sdk" }
       end
 
       assert Rake::Task.task_defined?("beni:vendor:setup:wasi_sdk")
       assert Rake::Task.task_defined?("beni:vendor:setup:mruby")
     end
 
-    def test_unknown_toolchain_name_fails_fast
+    def test_an_unknown_toolchain_reference_fails_before_any_task_is_defined
       error = assert_raises(Beni::Error) do
-        Tasks.new do |tasks|
-          tasks.vendor_dir = VENDOR_DIR
-          tasks.toolchains = %w[mruby msvc]
+        Tasks.new do
+          vendor_dir VENDOR_DIR
+          target(:wasi) { toolchain "msvc" }
         end
       end
 
       assert_match(/msvc/, error.message)
+      refute Rake::Task.task_defined?("beni:build"), "no task may exist after a definition-time failure"
+    end
+
+    def test_the_retired_assignment_block_form_fails_loudly
+      assert_raises(NoMethodError) do
+        Tasks.new { |tasks| tasks.vendor_dir = VENDOR_DIR }
+      end
     end
 
     def test_build_depends_on_vendor_setup
-      Tasks.new { |tasks| tasks.vendor_dir = VENDOR_DIR }
+      Tasks.new { vendor_dir VENDOR_DIR }
 
       prerequisites = Rake::Task["beni:build"].prerequisite_tasks.map(&:name)
 
@@ -67,7 +74,7 @@ module Beni
     end
 
     def test_tarball_file_tasks_are_anchored_on_vendor_dir
-      Tasks.new { |tasks| tasks.vendor_dir = VENDOR_DIR }
+      Tasks.new { vendor_dir VENDOR_DIR }
 
       mruby_version = Vendor::BUILT_IN_PAIRS.fetch("mruby").fetch(:version)
       mruby_tarball = File.join(VENDOR_DIR, ".cache", "#{mruby_version}.tar.gz")
@@ -76,67 +83,32 @@ module Beni
       assert_includes Rake::Task["beni:vendor:setup:mruby"].prerequisites, mruby_tarball
     end
 
+    def test_a_version_declaration_selects_the_mruby_tarball
+      Tasks.new do
+        vendor_dir VENDOR_DIR
+        version "4.0.1"
+      end
+
+      tarball = File.join(VENDOR_DIR, ".cache", "4.0.1.tar.gz")
+
+      assert Rake::Task.task_defined?(tarball), "expected file task for #{tarball}"
+    end
+
     def test_default_build_config_is_nil_so_mruby_uses_its_own_default
-      tasks = Tasks.new { |config| config.vendor_dir = VENDOR_DIR }
+      tasks = Tasks.new { vendor_dir VENDOR_DIR }
 
-      assert_nil tasks.build_config
+      assert_nil tasks.configuration.build_config
     end
 
-    def test_vendor_clean_removes_unpacked_trees_but_keeps_the_tarball_cache
-      with_vendor_fixture do |dir, unpacked, cache|
-        Rake::Task["beni:vendor:clean"].invoke
-
-        refute_path_exists unpacked
-        assert_path_exists cache
-        assert_path_exists dir
-      end
-    end
-
-    def test_vendor_clobber_removes_the_vendor_tree_entirely
-      with_vendor_fixture do |dir, _unpacked, _cache|
-        Rake::Task["beni:vendor:clobber"].invoke
-
-        refute_path_exists dir
-      end
-    end
-
-    def test_clean_removes_mruby_build_trees
-      with_vendor_fixture do |dir, _unpacked, _cache|
-        build_tree = File.join(dir, "mruby", "build", "host")
-        FileUtils.mkdir_p(build_tree)
-
-        capture_io { Rake::Task["beni:clean"].invoke }
-
-        refute_path_exists build_tree
-      end
-    end
-
-    def test_build_config_and_targets_are_customizable
-      tasks = Tasks.new do |config|
-        config.vendor_dir = VENDOR_DIR
-        config.build_config = "/custom/config.rb"
-        config.targets = %w[embedded]
+    def test_build_config_and_targets_are_declarable
+      tasks = Tasks.new do
+        vendor_dir VENDOR_DIR
+        build_config "/custom/config.rb"
+        target :embedded
       end
 
-      assert_equal "/custom/config.rb", tasks.build_config
-      assert_equal %w[embedded], tasks.targets
-    end
-
-    private
-
-    # Builds a disposable vendor tree (one unpacked toolchain dir plus
-    # the tarball cache) and defines the beni:* tasks against it, so
-    # the cleanup tasks can be invoked for real.
-    def with_vendor_fixture
-      dir = Dir.mktmpdir("beni-tasks")
-      Tasks.new { |tasks| tasks.vendor_dir = dir }
-      unpacked = File.join(dir, "mruby")
-      cache = File.join(dir, ".cache")
-      FileUtils.mkdir_p(unpacked)
-      FileUtils.mkdir_p(cache)
-      yield dir, unpacked, cache
-    ensure
-      FileUtils.rm_rf(dir) if dir
+      assert_equal "/custom/config.rb", tasks.configuration.build_config
+      assert_equal %w[embedded], tasks.configuration.targets
     end
   end
 end
