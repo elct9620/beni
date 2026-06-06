@@ -17,6 +17,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.3.0"
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
+  spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
 
   # Require MFA for gem pushes, protecting the gem from supply chain
   # attacks by ensuring no one can publish a new version without
@@ -32,7 +33,9 @@ Gem::Specification.new do |spec|
       (f == gemspec) ||
         f.start_with?(*%w[bin/ Gemfile .gitignore test/ .github/ .rubocop.yml
                           crates/ Cargo.toml Cargo.lock rust-toolchain.toml
-                          tasks/ build_config/])
+                          tasks/ build_config/ .claude/ CLAUDE.md SPEC.md
+                          Steepfile rbs_collection Rakefile
+                          release-please-config.json .release-please-manifest.json])
     end
   end
   spec.bindir = "exe"
