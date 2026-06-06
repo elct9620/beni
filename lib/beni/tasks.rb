@@ -33,7 +33,7 @@ module Beni
   #
   #   rake beni:build           — fetch toolchains + build libmruby.a per target
   #   rake beni:clean           — remove mruby build trees (keeps source)
-  #   rake beni:config[path]    — generate a customizable build config
+  #   rake beni:config          — generate the upstream default build config
   #   rake beni:vendor:setup    — download & unpack the selected toolchains
   #   rake beni:vendor:clean    — remove unpacked toolchains (keeps tarball cache)
   #   rake beni:vendor:clobber  — remove the vendor tree entirely
