@@ -6,9 +6,9 @@ require_relative "vendor/tarball"
 require_relative "vendor/toolchain"
 
 module Beni
-  # Vendor toolchain façade. Owns the pinned toolchain versions and the
-  # factory methods that build declarative +Toolchain+ values anchored on
-  # a caller-supplied +vendor_dir+; +Beni::Tasks+ iterates +toolchains+
+  # Vendor toolchain façade. Owns the release-vendored toolchain pins and
+  # the factory methods that build declarative +Toolchain+ values anchored
+  # on a caller-supplied +vendor_dir+; +Beni::Tasks+ iterates +toolchains+
   # to wire +file+ / +task+ declarations. Network download lives in
   # +Vendor::Downloader+, SHA256 verification in +Vendor::Checksum+,
   # tarball extraction in +Vendor::Tarball+, and the per-toolchain
@@ -16,24 +16,38 @@ module Beni
   #
   # Honors +BENI_VENDOR_BASE_URL+ to point downloads at a local fixture
   # during tests.
-  #
-  # Extending: a new tarball-based vendor artifact is added with one
-  # factory method appended to +toolchains+ and (if its hash pinning is
-  # enforced via CI env var) a +BENI_VENDOR_<KEY>_SHA256+ entry in the
-  # deployment env.
   module Vendor
-    # ---- Pinned versions ---------------------------------------------------
-    # wasi-sdk: must be >= 26 for native wasm32-wasip1 setjmp/longjmp support.
-    # 33's +libc.a+ supplies +__wasi_init_tp+, which Rust's wasm32-wasip1
-    # +crt1-command.o+ references from 1.96 onward (wasi-sdk 26's libc lacks it,
-    # breaking the command-bin link). Keep in lockstep with the channel in
-    # +rust-toolchain.toml+ — in both this repo and kobako.
-    WASI_SDK_VERSION      = "33"
-    WASI_SDK_MINOR        = "0"
-    WASI_SDK_FULL_VERSION = "#{WASI_SDK_VERSION}.#{WASI_SDK_MINOR}".freeze
+    # ---- Built-in pairs ----------------------------------------------------
+    # The version and checksum pair this release vendors per toolchain.
+    # wasi-sdk ships one tarball per build platform, so its checksum is
+    # keyed by +WASI_SDK_PLATFORM+ (values from the GitHub release asset
+    # digests); mruby's source archive is host-agnostic with a single
+    # checksum.
+    #
+    # wasi-sdk: must be >= 26 for native wasm32-wasip1 setjmp/longjmp
+    # support. 33's +libc.a+ supplies +__wasi_init_tp+, which Rust's
+    # wasm32-wasip1 +crt1-command.o+ references from 1.96 onward. Keep in
+    # lockstep with the channel in +rust-toolchain.toml+ — in both this
+    # repo and kobako.
+    BUILT_IN_PAIRS = {
+      "mruby" => {
+        version: "4.0.0",
+        sha256: "e2ea271dbed14e9f2b33df773ae447b747dbc242ce2675022c0a57efea85a7b4"
+      },
+      "wasi-sdk" => {
+        version: "33.0",
+        sha256: {
+          "arm64-linux" => "4f98ee738c7abb45c81a94d1461fc53cc569d1cd01498951c8184d841a027844",
+          "arm64-macos" => "85c997a2665ead91673b5bb88b7d0df3fc8900df3bfa244f720d478187bbdc78",
+          "x86_64-linux" => "0ba8b5bfaeb2adf3f29bab5841d76cf5318ab8e1642ea195f88baba1abd47bce",
+          "x86_64-macos" => "18f3f201ba9734e6a4455b0b6410690395a55e9ffa9f6f5066f66083a94b93b3"
+        }
+      }
+    }.freeze
 
-    # mruby: pinned release tarball.
-    MRUBY_VERSION = "4.0.0"
+    # Transitive toolchain dependencies, folded into the selected set at
+    # task-definition time: referencing wasi-sdk implies mruby.
+    DEPENDENCIES = { "wasi-sdk" => %w[mruby] }.freeze
 
     # ---- Platform detection (wasi-sdk only; mruby tarball is host-agnostic).
     # +x86_64-linux+ is both the most common host triple and the safest
@@ -74,25 +88,31 @@ module Beni
       end
     end
 
-    def wasi_sdk(vendor_dir:)
+    def wasi_sdk(vendor_dir:, version: nil, sha256: nil)
+      version ||= BUILT_IN_PAIRS.fetch("wasi-sdk").fetch(:version)
+      # The release tag carries the major version only; tarballs carry the
+      # full version plus the platform.
       Toolchain.new(
         name: "wasi-sdk",
-        version_label: "#{WASI_SDK_FULL_VERSION} (#{WASI_SDK_PLATFORM})",
-        base_url: "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-#{WASI_SDK_VERSION}",
-        tarball_name: "wasi-sdk-#{WASI_SDK_FULL_VERSION}-#{WASI_SDK_PLATFORM}.tar.gz",
-        top_level_dir: "wasi-sdk-#{WASI_SDK_FULL_VERSION}-#{WASI_SDK_PLATFORM}",
-        vendor_dir: vendor_dir
+        version_label: "#{version} (#{WASI_SDK_PLATFORM})",
+        base_url: "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-#{version.split(".").first}",
+        tarball_name: "wasi-sdk-#{version}-#{WASI_SDK_PLATFORM}.tar.gz",
+        top_level_dir: "wasi-sdk-#{version}-#{WASI_SDK_PLATFORM}",
+        vendor_dir: vendor_dir,
+        expected_sha256: sha256 || built_in_sha256("wasi-sdk", version)
       )
     end
 
-    def mruby(vendor_dir:)
+    def mruby(vendor_dir:, version: nil, sha256: nil)
+      version ||= BUILT_IN_PAIRS.fetch("mruby").fetch(:version)
       Toolchain.new(
         name: "mruby",
-        version_label: MRUBY_VERSION,
+        version_label: version,
         base_url: "https://github.com/mruby/mruby/archive/refs/tags",
-        tarball_name: "#{MRUBY_VERSION}.tar.gz",
-        top_level_dir: "mruby-#{MRUBY_VERSION}",
-        vendor_dir: vendor_dir
+        tarball_name: "#{version}.tar.gz",
+        top_level_dir: "mruby-#{version}",
+        vendor_dir: vendor_dir,
+        expected_sha256: sha256 || built_in_sha256("mruby", version)
       )
     end
 
@@ -106,12 +126,15 @@ module Beni
       override.chomp("/")
     end
 
-    # Expected SHA256 for a vendored tarball, sourced from
-    # +BENI_VENDOR_<KEY>_SHA256+ env vars (empty string falls back to TOFU
-    # sidecar pinning in +Checksum#verify_or_pin+). +key+ is the artifact
-    # slug in upper snake case, e.g. +"WASI_SDK"+, +"MRUBY"+.
-    def expected_sha256(key)
-      ENV.fetch("BENI_VENDOR_#{key}_SHA256", "")
+    # The built-in checksum for +name+ at +version+: the build platform's
+    # entry when the toolchain's checksums are platform-keyed, +nil+ for
+    # any version other than the vendored one — mruby's TOFU pinning path.
+    def built_in_sha256(name, version)
+      pair = BUILT_IN_PAIRS.fetch(name)
+      return nil unless version == pair.fetch(:version)
+
+      checksum = pair.fetch(:sha256)
+      checksum.is_a?(Hash) ? checksum.fetch(WASI_SDK_PLATFORM) : checksum
     end
   end
 end

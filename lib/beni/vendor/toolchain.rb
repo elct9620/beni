@@ -30,19 +30,17 @@ module Beni
     #                       +Tarball#prepare+ under the same name.
     #   * +vendor_dir+    — root of the vendor tree; anchors +final_dir+
     #                       and +tarball_path+.
-    class Toolchain < Data.define(:name, :version_label, :base_url, :tarball_name, :top_level_dir, :vendor_dir)
+    #   * +expected_sha256+ — the toolchain's selected checksum (resolved
+    #                       by +Beni::Vendor+ from the built-in pair or a
+    #                       consumer override); +nil+ falls to TOFU
+    #                       sidecar pinning in +Checksum#verify_or_pin+.
+    class Toolchain <
+      Data.define(:name, :version_label, :base_url, :tarball_name, :top_level_dir, :vendor_dir, :expected_sha256)
       # Symbol used to identify the +setup:<task_name>+ rake task. Dashes
       # in +name+ are not valid in rake task identifiers, so we map them
       # to underscores at this single seam.
       def task_name
         name.tr("-", "_").to_sym
-      end
-
-      # Upper-snake-case artifact slug used by +Beni::Vendor.expected_sha256+
-      # to look up the +BENI_VENDOR_<KEY>_SHA256+ environment variable,
-      # e.g. +"WASI_SDK"+, +"MRUBY"+.
-      def sha_key
-        name.tr("-", "_").upcase
       end
 
       # Resolved download URL. Honours the +BENI_VENDOR_BASE_URL+ test
@@ -72,12 +70,12 @@ module Beni
         verify
       end
 
-      # Recompute the cached tarball's SHA256 and check it against the
-      # expected hash (or pin via TOFU sidecar). Idempotent — safe to
-      # call from both +file+ and +setup+ task bodies when the latter
+      # Recompute the cached tarball's SHA256 and check it against
+      # +expected_sha256+ (or pin via TOFU sidecar). Idempotent — safe
+      # to call from both +file+ and +setup+ task bodies when the latter
       # depends on the former.
       def verify
-        Checksum.new(tarball_path, Vendor.expected_sha256(sha_key)).verify_or_pin
+        Checksum.new(tarball_path, expected_sha256).verify_or_pin
       end
 
       # Verify the cached tarball, then unpack it into +final_dir+ via

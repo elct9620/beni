@@ -7,12 +7,11 @@ module Beni
       attr_reader tarball_name: String
       attr_reader top_level_dir: String
       attr_reader vendor_dir: String
+      attr_reader expected_sha256: String?
 
-      def initialize: (name: String, version_label: String, base_url: String, tarball_name: String, top_level_dir: String, vendor_dir: String) -> void
+      def initialize: (name: String, version_label: String, base_url: String, tarball_name: String, top_level_dir: String, vendor_dir: String, expected_sha256: String?) -> void
 
       def task_name: () -> Symbol
-
-      def sha_key: () -> String
 
       def url: () -> String
 

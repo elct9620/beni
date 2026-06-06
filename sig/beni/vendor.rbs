@@ -1,20 +1,20 @@
 module Beni
   module Vendor
-    WASI_SDK_VERSION: String
-    WASI_SDK_MINOR: String
-    WASI_SDK_FULL_VERSION: String
-    MRUBY_VERSION: String
+    type built_in_pair = { version: String, sha256: String | Hash[String, String] }
+
+    BUILT_IN_PAIRS: Hash[String, built_in_pair]
+    DEPENDENCIES: Hash[String, Array[String]]
     WASI_SDK_PLATFORM: String
     TOOLCHAIN_FACTORIES: Hash[String, Symbol]
 
     def self?.toolchains: (vendor_dir: String, ?names: Array[String]) -> Array[Toolchain]
 
-    def self?.wasi_sdk: (vendor_dir: String) -> Toolchain
+    def self?.wasi_sdk: (vendor_dir: String, ?version: String?, ?sha256: String?) -> Toolchain
 
-    def self?.mruby: (vendor_dir: String) -> Toolchain
+    def self?.mruby: (vendor_dir: String, ?version: String?, ?sha256: String?) -> Toolchain
 
     def self?.base_url_for: (String default) -> String
 
-    def self?.expected_sha256: (String key) -> String
+    def self?.built_in_sha256: (String name, String version) -> String?
   end
 end

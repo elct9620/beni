@@ -8,11 +8,12 @@ module Beni
     # expected_sha)+ pair; reuse is not supported and not needed by
     # +Beni::Tasks+. Operates in two modes:
     #
-    #   * Explicit expected hash (e.g. from CI env var) — must match exactly;
-    #     mismatch raises.
-    #   * Trust-on-first-use (TOFU) — when +expected_sha+ is empty, the actual
-    #     hash is pinned to a +.sha256+ sidecar next to the tarball. Subsequent
-    #     runs compare against the pinned value and raise on drift.
+    #   * Explicit expected hash (a built-in pair entry or a consumer
+    #     override) — must match exactly; mismatch raises.
+    #   * Trust-on-first-use (TOFU) — when +expected_sha+ is +nil+ or empty,
+    #     the actual hash is pinned to a +.sha256+ sidecar next to the
+    #     tarball. Subsequent runs compare against the pinned value and
+    #     raise on drift.
     #
     # Public contract is the single +#verify_or_pin+ entry point; the two
     # branches and the digest helper are internal.
@@ -37,7 +38,7 @@ module Beni
       private
 
       def expected?
-        @expected_sha && !@expected_sha.empty?
+        !@expected_sha.to_s.empty?
       end
 
       def sha256

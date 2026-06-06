@@ -69,7 +69,8 @@ module Beni
     def test_tarball_file_tasks_are_anchored_on_vendor_dir
       Tasks.new { |tasks| tasks.vendor_dir = VENDOR_DIR }
 
-      mruby_tarball = File.join(VENDOR_DIR, ".cache", "#{Vendor::MRUBY_VERSION}.tar.gz")
+      mruby_version = Vendor::BUILT_IN_PAIRS.fetch("mruby").fetch(:version)
+      mruby_tarball = File.join(VENDOR_DIR, ".cache", "#{mruby_version}.tar.gz")
 
       assert Rake::Task.task_defined?(mruby_tarball), "expected file task for #{mruby_tarball}"
       assert_includes Rake::Task["beni:vendor:setup:mruby"].prerequisites, mruby_tarball

@@ -10,14 +10,7 @@ module Beni
       def setup
         @dir = Dir.mktmpdir("beni-toolchain")
         @vendor_dir = File.join(@dir, "vendor")
-        @toolchain = Toolchain.new(
-          name: "demo-kit",
-          version_label: "1.0",
-          base_url: "https://example.invalid/releases",
-          tarball_name: "demo-kit-1.0.tar.gz",
-          top_level_dir: "demo-kit-1.0",
-          vendor_dir: @vendor_dir
-        )
+        @toolchain = build_toolchain(expected_sha256: nil)
       end
 
       def teardown
@@ -26,10 +19,6 @@ module Beni
 
       def test_task_name_maps_dashes_to_underscores
         assert_equal :demo_kit, @toolchain.task_name
-      end
-
-      def test_sha_key_is_upper_snake_case_slug
-        assert_equal "DEMO_KIT", @toolchain.sha_key
       end
 
       def test_url_joins_base_url_and_tarball_name
@@ -56,7 +45,38 @@ module Beni
         assert_path_exists "#{@toolchain.tarball_path}.sha256"
       end
 
+      def test_install_accepts_a_tarball_matching_expected_sha256
+        put_fixture_tarball_in_cache
+        toolchain = build_toolchain(expected_sha256: Digest::SHA256.file(@toolchain.tarball_path).hexdigest)
+
+        capture_io { toolchain.install }
+
+        assert_equal "hello", File.read(File.join(toolchain.final_dir, "README"))
+      end
+
+      def test_install_aborts_on_expected_sha256_mismatch_without_unpacking
+        put_fixture_tarball_in_cache
+        toolchain = build_toolchain(expected_sha256: "0" * 64)
+
+        error = assert_raises(Beni::Error) { toolchain.install }
+
+        assert_match(/checksum mismatch/, error.message)
+        refute_path_exists toolchain.final_dir
+      end
+
       private
+
+      def build_toolchain(expected_sha256:)
+        Toolchain.new(
+          name: "demo-kit",
+          version_label: "1.0",
+          base_url: "https://example.invalid/releases",
+          tarball_name: "demo-kit-1.0.tar.gz",
+          top_level_dir: "demo-kit-1.0",
+          vendor_dir: @vendor_dir,
+          expected_sha256: expected_sha256
+        )
+      end
 
       def with_env(overrides)
         saved = overrides.keys.to_h { |key| [key, ENV.fetch(key, nil)] }

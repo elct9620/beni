@@ -2,9 +2,9 @@ module Beni
   module Vendor
     class Checksum
       @path: String
-      @expected_sha: String
+      @expected_sha: String?
 
-      def initialize: (String path, String expected_sha) -> void
+      def initialize: (String path, String? expected_sha) -> void
 
       def verify_or_pin: () -> String
 
