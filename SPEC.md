@@ -106,10 +106,10 @@ Behaviors:
   default to the pair the installed beni release vendors; a
   `toolchains` version override replaces both. mruby's selected
   checksum is the one the installed release vendors for the default
-  `version`; for any other `version` it is the pin the first download
-  establishes. The pin persists alongside the tarball cache and shares
-  its lifecycle; once `beni:vendor:clobber` removes both, the next
-  download establishes a new pin.
+  `version`; for any other `version` it is the pin that `version`'s
+  first download establishes. The pin persists alongside the tarball
+  cache and shares its lifecycle; once `beni:vendor:clobber` removes
+  both, the next download establishes a new pin.
 - `beni:vendor:setup` unpacks toolchains from the tarball cache and
   downloads only the selected versions' tarballs the cache lacks; every
   tarball it unpacks — cached or freshly downloaded — must match its
@@ -126,8 +126,8 @@ Behaviors:
   path.
 - The crates auto-discover one archive: the `host` build's, serving host
   cargo targets. Build configs may define additional or differently named
-  targets, but every archive beyond `host` — every cross-compiled target's
-  archive included — is reachable only via `MRUBY_LIB_DIR`.
+  targets, but an archive beyond `host` is never auto-discovered and is
+  reachable only via `MRUBY_LIB_DIR`.
 - `beni:config` seeds customization: it writes a self-contained equivalent
   of the configured `version`'s upstream default config to the path the
   `build_config` setting names. The generated file requires nothing from
@@ -215,6 +215,7 @@ Behaviors:
 | `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
 | `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
 | `beni:config` with `build_config` left at its `nil` default | task fails, nothing generated |
+| `beni:config` with the configured `version`'s mruby source not staged | task fails and names the missing source, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
 | Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar, never silently falls back to placeholder mode |
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
