@@ -78,7 +78,7 @@ end
 
 | Setting | Type | Default |
 |---|---|---|
-| `vendor_dir` | directory path — where toolchains unpack and mruby builds | `vendor/` under the Rakefile's working directory. `BENI_VENDOR_DIR` env var overrides the default; an explicit DSL assignment overrides the env var. |
+| `vendor_dir` | directory path (relative paths resolve against the Rakefile's working directory) — where toolchains unpack and mruby builds | `vendor/` under the Rakefile's working directory. `BENI_VENDOR_DIR` env var overrides the default; an explicit DSL assignment overrides the env var. |
 | `version` | mruby release version to download | `"4.0.0"` |
 | `build_config` | mruby build-config file path (relative paths resolve against the Rakefile's working directory), or `nil` for mruby's upstream default | `nil` |
 | `targets` | array of build-target names, matching the `MRuby::Build.new(<name>)` names in the config; a build defined without a name is named `host` by mruby | `["host"]` |
