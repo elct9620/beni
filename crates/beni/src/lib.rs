@@ -15,6 +15,7 @@
 //! L2  trait seams      value::convert (IntoValue / FromValue)
 //!                      state::args    (Format trait + ZST + GAT dispatch)
 //!                      state::protect (closure-based mrb_protect_error)
+//!                      method         (method! bridges + MethodN crossing)
 //!
 //! L1  RAII / newtypes  state         (Mrb owning *mut mrb_state)
 //!                      value         (Value newtype + cstr! / cstr_ptr)
@@ -53,6 +54,7 @@ pub mod class;
 pub mod convert;
 pub mod error;
 pub mod hash;
+pub mod method;
 pub mod state;
 pub mod value;
 
@@ -67,6 +69,7 @@ pub use class::{Module, Object, RClass, RModule};
 pub use convert::{FromValue, IntoValue};
 pub use error::Error;
 pub use hash::Hash;
+pub use method::{MethodDef, MethodReturn};
 pub use value::cstr_ptr;
 pub use value::Value;
 
@@ -184,6 +187,15 @@ mod tests {
         let _ = <RClass as Object>::define_singleton_method;
         let _ = <RModule as Object>::define_singleton_method;
         let _ = Error::message;
+        let _ = MethodDef::new;
+        fn _surface_typed(_mrb: &Mrb, _self: Value, _a: i32) -> i32 {
+            0
+        }
+        fn _surface_any(_mrb: &Mrb, _self: Value) -> Value {
+            Value::zeroed()
+        }
+        let _ = crate::method!(_surface_typed, 1);
+        let _ = crate::method!(_surface_any, -1);
         let _ = Array::from_value_unchecked;
         let _ = Array::as_value;
         let _ = Array::as_raw;

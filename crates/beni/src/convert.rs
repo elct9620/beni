@@ -33,6 +33,16 @@ pub trait FromValue: Sized {
     fn from_value(value: Value) -> Option<Self>;
 }
 
+impl IntoValue for Value {
+    // Identity — a value is already in the value domain. Lets
+    // bridge-shaped functions that produce a raw `Value` satisfy the
+    // same return seam as the scalar conversions.
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self
+    }
+}
+
 impl IntoValue for i32 {
     // `sys::mrb_int` follows the archive's config: the conversion is
     // a lossless widening under 64-bit width and an identity under

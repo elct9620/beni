@@ -27,7 +27,7 @@
 //! receiver, missing constant, …) surfaces as `Err(Error::Exception)`
 //! instead of long-jumping across Rust frames.
 
-use crate::{Error, Mrb, Value};
+use crate::{Error, MethodDef, Mrb, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby class. `#[repr(transparent)]` over
@@ -74,6 +74,18 @@ mod private {
     }
 }
 
+/// Derive the mruby aspec from a `method!` wrapper's arity: `-1`
+/// accepts any arguments (the wrapped function reads the call frame
+/// itself), `0..` requires that many positionals.
+#[cfg(mruby_linked)]
+fn method_aspec(arity: i8) -> sys::mrb_aspec {
+    if arity < 0 {
+        sys::mrb_args_any()
+    } else {
+        sys::mrb_args_req(arity as u32)
+    }
+}
+
 /// Run `f` inside `Mrb::protect`, boxing the class/module pointer it
 /// produces as a `Value` to ride through the protect frame and
 /// unboxing it on the way out — the shared plumbing behind every
@@ -92,7 +104,6 @@ where
     })
     // SAFETY: the Ok value boxes the pointer produced above.
     .map(|v| unsafe { v.as_class_ptr() })
-    .map_err(Error::Exception)
 }
 
 impl RClass {
@@ -294,21 +305,20 @@ pub trait Module: private::ClassLike {
     }
 
     /// `mrb_define_method(mrb, self, name, func, aspec)` — register
-    /// an instance method. Takes the typed `crate::mrb_func_t`
-    /// (Value-based) and transmutes to the raw `sys::mrb_func_t`
-    /// (mrb_value-based) once; both have identical C ABI because
-    /// `Value` is `#[repr(transparent)]` over `mrb_value`. mruby
-    /// rejects registration on a frozen receiver.
+    /// an instance method from a [`method!`](crate::method!)-wrapped
+    /// Rust function. The aspec is derived from the wrapper's arity
+    /// (`-1` = any arguments, `0..` = that many required
+    /// positionals). mruby rejects registration on a frozen receiver.
     fn define_method(
         self,
         mrb: &Mrb,
         name: &core::ffi::CStr,
-        func: crate::mrb_func_t,
-        aspec: sys::mrb_aspec,
+        method: MethodDef,
     ) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
             mrb.protect(|mrb| {
+                let aspec = method_aspec(method.arity);
                 // SAFETY (transmute): `Value` is `#[repr(transparent)]`
                 // over `sys::mrb_value` (pinned by
                 // `value::tests::value_shares_abi_with_mrb_value`), so
@@ -318,18 +328,17 @@ pub trait Module: private::ClassLike {
                 // protect frame; `self` was produced by the same VM;
                 // `name` is NUL-terminated; `raw` has the C ABI mruby
                 // expects.
-                let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
+                let raw: sys::mrb_func_t = unsafe { core::mem::transmute(method.func) };
                 unsafe {
                     sys::mrb_define_method(mrb.as_ptr(), self.raw(), name.as_ptr(), raw, aspec)
                 };
                 Value::nil()
             })
             .map(|_| ())
-            .map_err(Error::Exception)
         }
         #[cfg(not(mruby_linked))]
         {
-            let _ = (mrb, name, func, aspec);
+            let _ = (mrb, name, method.func, method.arity);
             crate::not_linked()
         }
     }
@@ -371,26 +380,27 @@ impl Module for RModule {}
 /// registration on the two handle newtypes.
 pub trait Object: private::ClassLike {
     /// `mrb_define_singleton_method(mrb, self, name, func, aspec)` —
-    /// register a singleton-class method on this handle. The receiver
-    /// is treated as `RObject *` so the singleton-class shim attaches
-    /// to the metaclass (matching mruby's own contract). mruby rejects
-    /// receivers that cannot carry a singleton class.
+    /// register a singleton-class method on this handle from a
+    /// [`method!`](crate::method!)-wrapped Rust function. The
+    /// receiver is treated as `RObject *` so the singleton-class shim
+    /// attaches to the metaclass (matching mruby's own contract).
+    /// mruby rejects receivers that cannot carry a singleton class.
     fn define_singleton_method(
         self,
         mrb: &Mrb,
         name: &core::ffi::CStr,
-        func: crate::mrb_func_t,
-        aspec: sys::mrb_aspec,
+        method: MethodDef,
     ) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
             mrb.protect(|mrb| {
+                let aspec = method_aspec(method.arity);
                 // SAFETY (transmute): as `Module::define_method`.
                 // SAFETY (mrb_define_singleton_method): `RClass *` and
                 // `RObject *` are both `c_void *` aliases in this
                 // crate's binding; the cast matches what
                 // `mrbgems/mruby-singleton-class` does inline.
-                let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
+                let raw: sys::mrb_func_t = unsafe { core::mem::transmute(method.func) };
                 unsafe {
                     sys::mrb_define_singleton_method(
                         mrb.as_ptr(),
@@ -403,11 +413,10 @@ pub trait Object: private::ClassLike {
                 Value::nil()
             })
             .map(|_| ())
-            .map_err(Error::Exception)
         }
         #[cfg(not(mruby_linked))]
         {
-            let _ = (mrb, name, func, aspec);
+            let _ = (mrb, name, method.func, method.arity);
             crate::not_linked()
         }
     }
@@ -420,18 +429,14 @@ impl Object for RModule {}
 mod tests {
     use super::*;
 
-    /// Bridge body answering a fixed Integer — registration target
-    /// for the trait tests below.
-    unsafe extern "C" fn answer_seven(mrb: *mut sys::mrb_state, _self: Value) -> Value {
-        // SAFETY: mruby invokes the bridge with a live state pointer.
-        let mrb = unsafe { Mrb::borrow_raw(&mrb) };
-        Value::from_int(mrb, 7)
+    /// Registration target answering a fixed Integer for the trait
+    /// tests below.
+    fn answer_seven(_mrb: &Mrb, _self: Value) -> i32 {
+        7
     }
 
-    unsafe extern "C" fn answer_nine(mrb: *mut sys::mrb_state, _self: Value) -> Value {
-        // SAFETY: as `answer_seven`.
-        let mrb = unsafe { Mrb::borrow_raw(&mrb) };
-        Value::from_int(mrb, 9)
+    fn answer_nine(_mrb: &Mrb, _self: Value) -> i32 {
+        9
     }
 
     #[test]
@@ -451,7 +456,7 @@ mod tests {
         let err = mrb
             .define_class(c"BeniErrChild", object)
             .expect_err("superclass mismatch must surface as Err");
-        let Error::Exception(_) = err;
+        assert!(matches!(err, Error::Exception(_)));
         assert!(
             err.message(&mrb).contains("superclass mismatch"),
             "unexpected rejection message: {}",
@@ -492,7 +497,7 @@ mod tests {
         assert_eq!(class.name(&mrb), Some("BeniTrait::Widget"));
 
         class
-            .define_method(&mrb, c"answer", answer_seven, sys::mrb_args_none())
+            .define_method(&mrb, c"answer", crate::method!(answer_seven, 0))
             .expect("registering the instance method must succeed");
         let receiver = class.obj_new(&mrb, &[]);
         let got = receiver.call(&mrb, c"answer", &[]);
@@ -501,7 +506,7 @@ mod tests {
         // Object trait: singleton registration on the class handle,
         // invoked through the reified class value.
         class
-            .define_singleton_method(&mrb, c"class_answer", answer_nine, sys::mrb_args_none())
+            .define_singleton_method(&mrb, c"class_answer", crate::method!(answer_nine, 0))
             .expect("registering the singleton method must succeed");
         // SAFETY: `class` is a live handle from this VM.
         let class_value = unsafe { class.as_value(&mrb) };

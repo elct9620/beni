@@ -310,12 +310,10 @@ mod tests {
     use super::format::Rest;
     use super::*;
 
-    /// Bridge body for `rest_count`: reads the rest array via the
-    /// `"*"` format and returns its length as an mruby Integer.
-    unsafe extern "C" fn rest_count(mrb: *mut sys::mrb_state, _self: Value) -> Value {
-        // SAFETY: mruby invokes the bridge with a live state pointer
-        // that outlives the call frame.
-        let mrb = unsafe { Mrb::borrow_raw(&mrb) };
+    /// Registered through `method!(rest_count, -1)`: reads the rest
+    /// array via the `"*"` format and returns its length as an mruby
+    /// Integer.
+    fn rest_count(mrb: &Mrb, _self: Value) -> Value {
         let args = mrb.get_args::<Rest>();
         Value::from_int(mrb, args.len() as sys::mrb_int)
     }
@@ -334,11 +332,8 @@ mod tests {
 
         let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let class = mrb.object_class();
-        // SAFETY: mrb_args_any_func is a pure aspec-bit computation.
         class
-            .define_method(&mrb, c"rest_count", rest_count, unsafe {
-                sys::mrb_args_any_func()
-            })
+            .define_method(&mrb, c"rest_count", crate::method!(rest_count, -1))
             .expect("registering the bridge must succeed");
 
         let receiver = class.obj_new(&mrb, &[]);
