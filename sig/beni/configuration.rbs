@@ -1,0 +1,10 @@
+module Beni
+  class Configuration
+    attr_reader vendor_dir: String
+    attr_reader build_config: String?
+    attr_reader targets: Array[String]
+    attr_reader toolchains: Array[SelectedToolchain]
+
+    def initialize: (vendor_dir: String, build_config: String?, targets: Array[String], toolchains: Array[SelectedToolchain]) -> void
+  end
+end

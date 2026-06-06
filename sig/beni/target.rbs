@@ -1,0 +1,8 @@
+module Beni
+  class Target
+    attr_reader name: String
+    attr_reader references: Array[String]
+
+    def initialize: (name: String, references: Array[String]) -> void
+  end
+end

@@ -1,0 +1,19 @@
+module Beni
+  module DSL
+    class DefinitionContext
+      @name: String
+      @version: String?
+      @sha256: String?
+
+      def self.collect: (String name) { () [self: DefinitionContext] -> void } -> ToolchainDefinition
+
+      def initialize: (String name) -> void
+
+      def version: (String value) -> void
+
+      def sha256: (String value) -> void
+
+      def to_definition: () -> ToolchainDefinition
+    end
+  end
+end

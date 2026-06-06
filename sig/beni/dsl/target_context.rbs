@@ -1,0 +1,15 @@
+module Beni
+  module DSL
+    class TargetContext
+      @references: Array[String]
+
+      def self.collect: () { () [self: TargetContext] -> void } -> Array[String]
+
+      attr_reader references: Array[String]
+
+      def initialize: () -> void
+
+      def toolchain: (String name) ?{ () -> void } -> void
+    end
+  end
+end

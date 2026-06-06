@@ -1,0 +1,9 @@
+module Beni
+  class ToolchainDefinition
+    attr_reader name: String
+    attr_reader version: String
+    attr_reader sha256: String
+
+    def initialize: (name: String, version: String, sha256: String) -> void
+  end
+end
