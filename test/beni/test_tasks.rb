@@ -110,5 +110,32 @@ module Beni
       assert_equal "/custom/config.rb", tasks.configuration.build_config
       assert_equal %w[embedded], tasks.configuration.targets
     end
+
+    # `execute` runs only the setup task's own action — the toolchain
+    # prerequisites (downloads) stay out of the unit test.
+    def test_vendor_setup_stages_the_wasi_toolchain_file_when_wasi_sdk_is_selected
+      Dir.mktmpdir("beni-tasks-wasi") do |dir|
+        Tasks.new do
+          vendor_dir dir
+          target :wasi do
+            toolchain "wasi-sdk"
+          end
+        end
+
+        Rake::Task["beni:vendor:setup"].execute
+
+        assert_path_exists File.join(dir, "mruby", "tasks", "toolchains", "wasi.rake")
+      end
+    end
+
+    def test_vendor_setup_skips_the_wasi_toolchain_file_without_wasi_sdk
+      Dir.mktmpdir("beni-tasks-wasi") do |dir|
+        Tasks.new { vendor_dir dir }
+
+        Rake::Task["beni:vendor:setup"].execute
+
+        refute_path_exists File.join(dir, "mruby", "tasks", "toolchains", "wasi.rake")
+      end
+    end
   end
 end

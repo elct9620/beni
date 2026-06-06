@@ -14,5 +14,7 @@ module Beni
     def self?.base_url_for: (String default) -> String
 
     def self?.built_in_sha256: (String name, String version) -> String?
+
+    def self?.stage_wasi_toolchain_file: (vendor_dir: String) -> String
   end
 end

@@ -74,35 +74,16 @@ and append the cross build to the generated config — the same edit the
 `generated_config` scenario applies:
 
 ```ruby
-MRuby::Toolchain.new(:wasi) do |conf, _params|
-  # `Beni::Builder` exports BENI_VENDOR_DIR on every build;
-  # WASI_SDK_PATH overrides the unpacked wasi-sdk root directly.
-  wasi_sdk = ENV["WASI_SDK_PATH"] || File.join(ENV.fetch("BENI_VENDOR_DIR"), "wasi-sdk")
-  bin = File.join(wasi_sdk, "bin")
-  target_flags = ["--target=wasm32-wasi", "--sysroot=#{File.join(wasi_sdk, "share", "wasi-sysroot")}"]
-  # setjmp/longjmp via the wasm exception-handling mechanism: all
-  # three flags must be present at both compile and link stages.
-  sjlj_flags = ["-mllvm", "-wasm-enable-sjlj", "-mllvm", "-wasm-use-legacy-eh=false"]
-
-  conf.toolchain :clang
-  conf.cc.command       = File.join(bin, "clang")
-  conf.cxx.command      = File.join(bin, "clang++")
-  conf.linker.command   = File.join(bin, "clang")
-  conf.archiver.command = File.join(bin, "llvm-ar")
-  # GNU archive format: llvm-ar defaults to the Darwin format on
-  # macOS hosts, which can overflow on many long wasm member paths.
-  conf.archiver.archive_options = "--format=gnu rs %<outfile>s %<objs>s"
-
-  [conf.cc, conf.cxx, conf.linker].each do |tool|
-    tool.flags << target_flags << sjlj_flags
-  end
-  conf.linker.libraries << "setjmp"
-end
-
 MRuby::CrossBuild.new("wasi") do |conf|
   conf.toolchain :wasi
 end
 ```
+
+`conf.toolchain :wasi` resolves to the wasi toolchain file
+`beni:vendor:setup` stages into the mruby tree whenever `wasi-sdk` is
+selected — the cross-compile settings (wasi-sdk tool paths, sysroot,
+setjmp/longjmp flags) ship with beni and update with it. `WASI_SDK_PATH`
+overrides the wasi-sdk root the staged settings point at.
 
 The crates carry no hard-coded ABI defines: `beni-sys`'s build script parses
 the `libmruby.flags.mak` sidecar mruby writes next to each archive (requested

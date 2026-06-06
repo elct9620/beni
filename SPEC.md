@@ -104,7 +104,7 @@ end
 | `beni:build` | toolchains staged, `libmruby.a` built per target |
 | `beni:clean` | mruby build trees removed, vendored source kept |
 | `beni:config` | self-contained, editable build config generated at the `build_config` path |
-| `beni:vendor:setup` | selected toolchains downloaded and unpacked |
+| `beni:vendor:setup` | selected toolchains downloaded and unpacked; the wasi toolchain file staged when `wasi-sdk` is selected |
 | `beni:vendor:clean` | unpacked toolchains removed, tarball cache kept |
 | `beni:vendor:clobber` | vendor tree removed entirely, tarball cache included |
 

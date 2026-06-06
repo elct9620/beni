@@ -120,5 +120,20 @@ module Beni
       checksum = pair.fetch(:sha256)
       checksum.is_a?(Hash) ? checksum.fetch(WASI_SDK_PLATFORM) : checksum
     end
+
+    # Write the gem-shipped wasi toolchain file into the staged mruby
+    # source, where mruby's +conf.toolchain :wasi+ resolves it from.
+    # Idempotent and always overwriting, so a re-extracted tree or an
+    # older beni's copy converges on this release's definition. Returns
+    # the staged path.
+    def stage_wasi_toolchain_file(vendor_dir:)
+      # `__dir__ || "."`: __dir__ is only nil under eval, which never
+      # loads this file; the fallback satisfies steep's String? typing.
+      source = File.expand_path("vendor/toolchains/wasi.rake", __dir__ || ".")
+      target = File.join(vendor_dir, "mruby", "tasks", "toolchains", "wasi.rake")
+      FileUtils.mkdir_p(File.dirname(target))
+      FileUtils.cp(source, target)
+      target
+    end
   end
 end

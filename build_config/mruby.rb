@@ -10,9 +10,10 @@
 # crates verify against both targets.
 #
 # The file is `load`ed by mruby's rake when +Beni::Builder+ sets
-# +MRUBY_CONFIG+ to its absolute path; vendor paths resolve through
-# the +BENI_VENDOR_DIR+ env var the builder exports alongside it, and
-# +WASI_SDK_PATH+ overrides the wasi-sdk location directly.
+# +MRUBY_CONFIG+ to its absolute path. The wasi cross build's
+# +conf.toolchain :wasi+ resolves to the wasi toolchain file beni
+# stages into the mruby tree; +WASI_SDK_PATH+ overrides the wasi-sdk
+# location it points at.
 
 # mruby auto-enables its mrbgems lockfile (MRuby::Lockfile's class body
 # calls +enable+ on load) and writes it next to MRUBY_CONFIG. Dependency
@@ -59,75 +60,6 @@ unless defined?(BeniBuildConfig)
       mruby-metaprog
     ].freeze
   end
-end
-
-# Config-time constants for the +:wasi+ toolchain definition below.
-# Same first-load guard as above.
-unless defined?(BeniWasiToolchain)
-  # Config-time constants for the +:wasi+ toolchain definition below.
-  module BeniWasiToolchain
-    # +Beni::Builder+ always exports +BENI_VENDOR_DIR+; the bare
-    # +vendor/+ fallback only suits running mruby's rake by hand from a
-    # project root (under the builder, pwd is the mruby tree itself).
-    VENDOR_DIR = (ENV["BENI_VENDOR_DIR"] || File.expand_path("vendor")).freeze
-    WASI_SDK   = (ENV["WASI_SDK_PATH"] || File.join(VENDOR_DIR, "wasi-sdk")).freeze
-    WASI_SYSROOT = File.join(WASI_SDK, "share", "wasi-sysroot").freeze
-
-    # The three setjmp/longjmp flags. All three must be present at *both*
-    # compile and link stages; missing any one trips wasi-libc's
-    # `<setjmp.h>` build-time `#error`.
-    SJLJ_FLAGS = [
-      "-mllvm", "-wasm-enable-sjlj",
-      "-mllvm", "-wasm-use-legacy-eh=false"
-    ].freeze
-
-    # Cross-compile target. `wasm32-wasi` is the LLVM triple (same ABI
-    # as Rust's `wasm32-wasip1` target); the LLVM-triple form is what
-    # clang accepts on the command line.
-    WASI_TARGET = "wasm32-wasi"
-
-    # Target / sysroot flags applied to every translation unit AND the
-    # link step. Frozen so a stray `<<` in a build block raises instead
-    # of silently mutating the shared reference.
-    TARGET_FLAGS = [
-      "--target=#{WASI_TARGET}",
-      "--sysroot=#{WASI_SYSROOT}"
-    ].freeze
-  end
-end
-
-# +:wasi+ toolchain — wasi-sdk absolute tool paths, wasm32-wasi target /
-# sysroot flags, the setjmp/longjmp three-flag set, and the GNU archive
-# format. (Registration is outside the constant guard but idempotent —
-# a second load merely overwrites the registry entry with an identical
-# definition.)
-MRuby::Toolchain.new(:wasi) do |conf, _params|
-  wasi_sdk_bin = File.join(BeniWasiToolchain::WASI_SDK, "bin")
-
-  conf.toolchain :clang
-
-  # ---- Tool commands pinned to wasi-sdk absolute paths -----------------
-  conf.cc.command       = File.join(wasi_sdk_bin, "clang")
-  conf.cxx.command      = File.join(wasi_sdk_bin, "clang++")
-  conf.linker.command   = File.join(wasi_sdk_bin, "clang")
-  conf.archiver.command = File.join(wasi_sdk_bin, "llvm-ar")
-  # llvm-ar on macOS hosts defaults to Darwin (BSD) archive format,
-  # which can fail with "section too large" when the archive contains
-  # many wasm objects with long member paths. GNU format uses an
-  # extended string table.
-  conf.archiver.archive_options = "--format=gnu rs %<outfile>s %<objs>s"
-
-  # ---- Cross-compile target / sysroot ----------------------------------
-  conf.cc.flags     << BeniWasiToolchain::TARGET_FLAGS
-  conf.cxx.flags    << BeniWasiToolchain::TARGET_FLAGS
-  conf.linker.flags << BeniWasiToolchain::TARGET_FLAGS
-
-  # ---- setjmp/longjmp ----------------------------------------------------
-  # Apply at compile AND link stages — the three-flag set is non-negotiable.
-  conf.cc.flags     << BeniWasiToolchain::SJLJ_FLAGS
-  conf.cxx.flags    << BeniWasiToolchain::SJLJ_FLAGS
-  conf.linker.flags << BeniWasiToolchain::SJLJ_FLAGS
-  conf.linker.libraries << "setjmp" # expands to `-lsetjmp` (wasi-libc libsetjmp.a)
 end
 
 # Native host build — full libmruby.a plus the host mrbc the cross build

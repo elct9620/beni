@@ -19,6 +19,8 @@ module Beni
 
     def define_vendor_setup_task: () -> void
 
+    def wasi_sdk_selected?: () -> bool
+
     def define_vendor_clean_tasks: () -> void
 
     def define_toolchain_tasks: (Vendor::Toolchain toolchain) -> void

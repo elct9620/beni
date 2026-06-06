@@ -90,7 +90,13 @@ module Beni
 
     def define_vendor_setup_task
       desc "Fetch and unpack the selected vendor toolchains (#{vendor_toolchains.map(&:name).join(" + ")})"
-      task setup: vendor_toolchains.map { |toolchain| "setup:#{toolchain.task_name}" }
+      task setup: vendor_toolchains.map { |toolchain| "setup:#{toolchain.task_name}" } do
+        Vendor.stage_wasi_toolchain_file(vendor_dir: configuration.vendor_dir) if wasi_sdk_selected?
+      end
+    end
+
+    def wasi_sdk_selected?
+      configuration.toolchains.any? { |toolchain| toolchain.name == "wasi-sdk" }
     end
 
     def define_vendor_clean_tasks

@@ -28,36 +28,12 @@ Beni::Tasks.new do
 end
 
 # The consumer's hand-edit, appended below the generated upstream
-# default config: a wasm32-wasip1 cross target on the wasi-sdk
-# toolchain. Mirrors the README's cross-target example.
-WASI_CROSS_TARGET = <<~'CONFIG_SNIPPET'
+# default config: a wasm32-wasip1 cross target. `conf.toolchain :wasi`
+# resolves to the wasi toolchain file `beni:vendor:setup` stages into
+# the mruby tree. Mirrors the README's cross-target example.
+WASI_CROSS_TARGET = <<~CONFIG_SNIPPET
 
   # ---- consumer-added wasm32-wasip1 cross target ------------------------
-  MRuby::Toolchain.new(:wasi) do |conf, _params|
-    # `Beni::Builder` exports BENI_VENDOR_DIR on every build;
-    # WASI_SDK_PATH overrides the unpacked wasi-sdk root directly.
-    wasi_sdk = ENV["WASI_SDK_PATH"] || File.join(ENV.fetch("BENI_VENDOR_DIR"), "wasi-sdk")
-    bin = File.join(wasi_sdk, "bin")
-    target_flags = ["--target=wasm32-wasi", "--sysroot=#{File.join(wasi_sdk, "share", "wasi-sysroot")}"]
-    # setjmp/longjmp via the wasm exception-handling mechanism: all
-    # three flags must be present at both compile and link stages.
-    sjlj_flags = ["-mllvm", "-wasm-enable-sjlj", "-mllvm", "-wasm-use-legacy-eh=false"]
-
-    conf.toolchain :clang
-    conf.cc.command       = File.join(bin, "clang")
-    conf.cxx.command      = File.join(bin, "clang++")
-    conf.linker.command   = File.join(bin, "clang")
-    conf.archiver.command = File.join(bin, "llvm-ar")
-    # GNU archive format: llvm-ar defaults to the Darwin format on
-    # macOS hosts, which can overflow on many long wasm member paths.
-    conf.archiver.archive_options = "--format=gnu rs %<outfile>s %<objs>s"
-
-    [conf.cc, conf.cxx, conf.linker].each do |tool|
-      tool.flags << target_flags << sjlj_flags
-    end
-    conf.linker.libraries << "setjmp"
-  end
-
   MRuby::CrossBuild.new("wasi") do |conf|
     conf.toolchain :wasi
   end
