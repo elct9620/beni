@@ -1,21 +1,131 @@
 # Beni
 
-mruby toolchain monorepo — a Ruby gem that manages the mruby build chain and
-Rust crates that bind the mruby C API, extracted from the
-[kobako](https://github.com/elct9620/kobako) project.
-
-> **Status**: early stage. The gem ships the vendor + build chain
-> (`Beni::Tasks`, `rake beni:config`) and the crates link and wrap the
-> resulting `libmruby.a`. Published versions remain `0.0.0` until the first
-> release cut; APIs may still change without notice.
+beni gives Rust developers a magnus-like experience for mruby: a Ruby gem
+manages the mruby build chain, and Rust crates expose a safe, typed API over
+the resulting `libmruby.a`. Extracted from the
+[kobako](https://github.com/elct9620/kobako) project; APIs follow 0.x semver
+semantics and may still evolve between minor versions.
 
 ## Packages
 
+All three packages release in lockstep under a single version.
+
 | Package | Registry | Role |
 |---|---|---|
-| `beni` gem | rubygems.org | mruby dependency manager — vendors mruby source, builds `libmruby.a`, future mrbgem management |
+| `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build `libmruby.a` |
 | `beni-sys` crate | crates.io | bindgen FFI surface over the mruby C API |
-| `beni` crate | crates.io | typed Rust wrapper over `beni-sys` (magnus analog) |
+| `beni` crate | crates.io | safe typed wrapper over `beni-sys`, aligned with magnus idioms |
+
+## Getting started
+
+### Build `libmruby.a` with the gem
+
+Add `beni` to your Gemfile and install the task library in your Rakefile:
+
+```ruby
+require "beni/tasks"
+
+Beni::Tasks.new
+```
+
+```bash
+rake beni:build
+```
+
+This downloads the pinned mruby release, builds it with mruby's untouched
+upstream default config, and stages `vendor/mruby/build/host/lib/` with
+`libmruby.a` and its `libmruby.flags.mak` compile-flags sidecar — everything
+the crates need.
+
+To tune the build, declare a config path and generate the seed:
+
+```ruby
+Beni::Tasks.new do
+  build_config "build_config/mruby.rb"
+end
+```
+
+`rake beni:config` writes a self-contained copy of the upstream default
+config to that path. The file is yours to edit — add targets, gems, or
+defines; beni never rewrites it.
+
+### Embed mruby from Rust
+
+Add the `beni` crate to your Cargo.toml, then point archive discovery at
+the vendor tree the gem staged:
+
+```bash
+BENI_VENDOR_DIR=$PWD/vendor cargo build
+```
+
+A crate ships its Ruby surface as a `Gem` and installs it during
+interpreter setup:
+
+```rust
+use beni::{method, Error, Gem, Module, Mrb, Value};
+
+fn answer(_mrb: &Mrb, _self: Value) -> i32 {
+    42
+}
+
+struct WidgetGem;
+
+impl Gem for WidgetGem {
+    fn init(mrb: &Mrb) -> Result<(), Error> {
+        let widget = mrb.define_class(c"Widget", mrb.object_class())?;
+        widget.define_method(mrb, c"answer", method!(answer, 0))?;
+        Ok(())
+    }
+}
+
+fn main() {
+    let mrb = Mrb::open().expect("mruby interpreter");
+    mrb.init_gem::<WidgetGem>().expect("Widget surface");
+    // Widget#answer now returns 42 to any Ruby code the interpreter runs.
+}
+```
+
+With no archive discovery variable set, a host build compiles in
+placeholder mode: `cargo check` passes, no FFI surface is exported, and
+`Mrb::open` returns an error — so `beni` is safe to take as a transitive
+dependency. Any C API the typed wrapper does not cover stays reachable
+through the unsafe `beni::sys` escape hatch.
+
+### Cross-compile for wasm32-wasip1
+
+Declare a `wasi` target referencing the `wasi-sdk` toolchain:
+
+```ruby
+Beni::Tasks.new do
+  build_config "build_config/mruby.rb"
+
+  target :host
+  target :wasi do
+    toolchain "wasi-sdk"
+  end
+end
+```
+
+and append the cross build to the generated config:
+
+```ruby
+MRuby::CrossBuild.new("wasi") do |conf|
+  conf.toolchain :wasi
+end
+```
+
+`conf.toolchain :wasi` resolves to the wasi toolchain file
+`beni:vendor:setup` stages into the mruby tree whenever `wasi-sdk` is
+selected — the cross-compile settings ship with beni and update with it.
+After `rake beni:build`, name the staged archive and the wasi-sdk root
+explicitly for the cargo side (a cross-compiled cargo target never reads
+the vendor tree on its own):
+
+```bash
+MRUBY_LIB_DIR=$PWD/vendor/mruby/build/wasi/lib \
+WASI_SDK_PATH=$PWD/vendor/wasi-sdk \
+cargo build --target wasm32-wasip1
+```
 
 ## Toolchain
 
@@ -29,68 +139,19 @@ are unaffected by the pairing.
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then,
-run `rake test` to run the tests. You can also run `bin/console` for an
-interactive prompt that will allow you to experiment.
-
-The Rust crates live under `crates/` in a Cargo workspace at the repo root.
-The gem's own task library (`Beni::Tasks`, dogfooded by the Rakefile) stages
-the toolchain, and a repo-local rake chain verifies the crates compile
-against a real `libmruby.a` on both the host target and wasm32-wasip1:
+After checking out the repo, run `bin/setup` to install dependencies, then
+`bundle exec rake` for the default gate (tests + RuboCop + Steep). The repo
+dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validation
+config `build_config/mruby.rb` (host + wasi targets), and a repo-local rake
+chain verifies the crates compile against a real `libmruby.a` on both the
+host target and wasm32-wasip1:
 
 ```bash
 bundle exec rake rust:verify   # beni:build + check/test (host) + check (wasm32)
 ```
 
-`beni:vendor:setup` downloads the pinned mruby + wasi-sdk tarballs into
-`vendor/`; `beni:build` produces `vendor/mruby/build/{host,wasi}/lib/libmruby.a`
-from the repo's validation config `build_config/mruby.rb` (both targets pin the
-same ABI-bearing defines — `MRB_INT32`, `MRB_WORDBOX_NO_INLINE_FLOAT`). That
-config is the repo's own — `Beni::Tasks` defaults to no `MRUBY_CONFIG`, so a
-consumer's clean build uses mruby's untouched upstream
-`build_config/default.rb` (a single native `host` target). Consumers who need
-to tune the build run `rake beni:config` to generate that upstream default
-config — a self-contained, editable copy taken from the staged mruby source,
-written to the path the `build_config` declaration in their `Beni::Tasks.new`
-block names. The generated file is theirs to edit; the repo's own
-`build_config/mruby.rb` is that seed hand-tuned into a host + wasi validation
-harness.
-
-To cross-compile for wasm32-wasip1, declare a `wasi` target referencing the
-`wasi-sdk` toolchain:
-
-```ruby
-Beni::Tasks.new do
-  build_config "build_config/mruby.rb"
-
-  target :host
-  target :wasi do
-    toolchain "wasi-sdk"
-  end
-end
-```
-
-and append the cross build to the generated config — the same edit the
-`generated_config` scenario applies:
-
-```ruby
-MRuby::CrossBuild.new("wasi") do |conf|
-  conf.toolchain :wasi
-end
-```
-
-`conf.toolchain :wasi` resolves to the wasi toolchain file
-`beni:vendor:setup` stages into the mruby tree whenever `wasi-sdk` is
-selected — the cross-compile settings (wasi-sdk tool paths, sysroot,
-setjmp/longjmp flags) ship with beni and update with it. `WASI_SDK_PATH`
-overrides the wasi-sdk root the staged settings point at.
-
-The crates carry no hard-coded ABI defines: `beni-sys`'s build script parses
-the `libmruby.flags.mak` sidecar mruby writes next to each archive (requested
-by `Beni::Builder` on every build), so bindgen and the trampoline compile
-always match what the archive was actually built with — whatever the config.
-Without the staged toolchain, plain `cargo check --workspace` still passes in
-a placeholder mode that exports no FFI surface.
+Behavior contracts live in `SPEC.md` — the source of truth the
+implementation follows.
 
 ## Contributing
 
