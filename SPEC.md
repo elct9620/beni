@@ -22,9 +22,9 @@ the resulting `libmruby.a`.
 - The same `version`, `build_config`, and `toolchains` inputs always build
   the same way: the same toolchain versions, compile flags, and staged
   layout.
-- A crate that depends on `beni` but does not opt into mruby still compiles
-  for host targets (placeholder mode), so `beni` is safe to take as a
-  transitive dependency in host builds.
+- In a host build with no archive discovery variable set, a crate that
+  depends on `beni` compiles in placeholder mode, so `beni` is safe to
+  take as a transitive dependency in builds that do not opt into mruby.
 
 ## Success criteria
 
@@ -35,7 +35,8 @@ the resulting `libmruby.a`.
 - `cargo check` on the `beni` crate succeeds with no archive discovery
   variable set, and `Mrb::open` returns an error.
 - A `wasm32-wasip1` cross-build succeeds when `toolchains` includes
-  `wasi-sdk` and the build config declares a `wasi` target.
+  `wasi-sdk`, the build config declares a target cross-compiled for
+  wasm32, and `MRUBY_LIB_DIR` names that target's staged path.
 
 ## Non-goals
 
@@ -94,11 +95,15 @@ Behaviors:
 
 - A clean build with no `build_config` uses mruby's untouched upstream
   default config.
-- The vendor tree converges on the configured `version`: a staged mruby at
-  any other version is replaced by `beni:vendor:setup`, and `beni:build`
-  rebuilds its archives — a stale version never survives a version change.
+- The vendor tree converges on each toolchain's selected version: a staged
+  toolchain at any other version is replaced by `beni:vendor:setup`, and
+  `beni:build` rebuilds the archives — a stale toolchain never survives a
+  version change.
 - `version` selects mruby only; every other toolchain has no version
-  setting — each beni release vendors one fixed version of it.
+  setting — its selected version is the one the installed beni release
+  vendors.
+- `beni:vendor:setup` unpacks toolchains from the tarball cache and
+  downloads only the tarballs the cache lacks.
 - `toolchains` names what the consumer requests; beni resolves transitive
   dependencies automatically (selecting `wasi-sdk` implies `mruby`).
 - `beni:build` builds every target the build config defines, then verifies
@@ -109,15 +114,16 @@ Behaviors:
   source at `mruby/`); each target's archive and its compile-flags sidecar
   stage at `mruby/build/<name>/lib/` under the vendor tree — the staged
   path.
-- The crates auto-discover archives by reserved build name: `host` serves
-  host cargo targets, `wasi` serves `wasm32` cross-builds. Build configs may
-  declare additional or differently named targets, but archives outside the
-  reserved names are reachable only via `MRUBY_LIB_DIR`.
+- The crates auto-discover one archive: the `host` build's, serving host
+  cargo targets. Build configs may declare additional or differently named
+  targets, but every archive beyond `host` — every cross-compiled target's
+  archive included — is reachable only via `MRUBY_LIB_DIR`.
 - Customization goes through `beni:config`, which writes a self-contained
-  equivalent of mruby's upstream default config to the path the
-  `build_config` setting names. The generated file requires nothing from
-  beni at build time, builds without edits, and belongs to the consumer —
-  beni never rewrites it. Generation refuses to overwrite an existing file.
+  equivalent of the configured `version`'s upstream default config to the
+  path the `build_config` setting names. The generated file requires nothing
+  from beni at build time, builds without edits, and belongs to the consumer
+  — beni never rewrites it. Generation creates the target path's missing
+  parent directories and refuses to overwrite an existing file.
 - Every build writes each archive's compile-flags sidecar; the sidecar is
   the single alignment channel to the crates.
 
@@ -133,10 +139,11 @@ Behaviors:
      directory containing the active target's archive and compile-flags
      sidecar.
   2. `BENI_VENDOR_DIR` names the vendor tree the gem populated; the crate
-     reads the staged path of the reserved build name for the active cargo
-     target (`wasm32` → `wasi`, anything else → `host`).
+     reads the `host` build's staged path and serves host cargo targets
+     only — a cross-compiled cargo target never reads the vendor tree and
+     requires `MRUBY_LIB_DIR`.
   3. With neither variable set, no archive is linked: a host build compiles
-     in placeholder mode, a wasm32 build fails.
+     in placeholder mode, a cross-compiled build fails.
 - wasm32 is the one supported cross target and requires the wasi-sdk
   toolchain: `WASI_SDK_PATH` names its unpacked root, defaulting to
   `wasi-sdk/` under the tree `BENI_VENDOR_DIR` names; when neither
@@ -192,10 +199,12 @@ Behaviors:
 | Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar, never silently falls back to placeholder mode |
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
 | Discovered archive at an mruby version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
+| Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails, never falls back to placeholder mode |
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
 | `Mrb::open` without a linked mruby | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` when the caller is Rust, or as an mruby exception when the caller is mruby; never unwinds into mruby's C frames |
+| Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
 
 ## Terminology
@@ -207,6 +216,7 @@ Behaviors:
 | tarball cache | downloaded toolchain tarballs, kept inside the vendor tree |
 | archive | the built `libmruby.a` for one target |
 | discovered archive | the archive located by archive discovery for the active cargo target |
+| archive discovery variable | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR`, the environment variables archive discovery consults |
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of defines/flags the crates align with |
 | placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set |
