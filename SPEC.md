@@ -24,7 +24,7 @@ the resulting `libmruby.a`.
   versions, compile flags, and staged layout.
 - In a host build with no archive discovery variable set, a crate that
   depends on `beni` compiles in placeholder mode, so `beni` is safe to
-  take as a transitive dependency in builds that do not opt into mruby.
+  take as a transitive dependency in such builds.
 
 ## Success criteria
 
@@ -116,7 +116,8 @@ Behaviors:
   dependencies automatically (selecting `wasi-sdk` implies `mruby`).
 - `beni:build` builds every target the build config defines, then verifies
   that each name in `targets` produced an archive and its compile-flags
-  sidecar; targets beyond `targets` are not verified. The config owns the
+  sidecar; a target the `targets` setting does not name is not
+  verified. The config owns the
   target definitions, and beni never reads the config.
 - Toolchains unpack at their own names under the vendor tree (the mruby
   source at `mruby/`); each target's archive and its compile-flags sidecar
@@ -169,8 +170,9 @@ Behaviors:
 
 - Owns every Rust-level abstraction over the C API: an RAII interpreter
   handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes with typed
-  conversions (`IntoValue` / `FromValue`), class and module definition, and
-  closure-based exception protection.
+  conversions (`IntoValue`, a total conversion that cannot fail;
+  `FromValue`, a checked conversion that can reject), class and module
+  definition, and closure-based exception protection.
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
   `Class` and `Module` handles. Methods are registered on those handles
@@ -217,7 +219,7 @@ Behaviors:
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
-| Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` when the caller is Rust, or as an mruby exception when the caller is mruby; never unwinds into mruby's C frames |
+| Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
 
