@@ -109,9 +109,9 @@ Behaviors:
   other `version`'s tarball is pinned at first download and verified
   against the pin thereafter.
 - `beni:vendor:setup` unpacks toolchains from the tarball cache and
-  downloads only the tarballs the cache lacks; every tarball it
-  unpacks — cached or freshly downloaded — must match its toolchain's
-  selected checksum.
+  downloads only the selected versions' tarballs the cache lacks; every
+  tarball it unpacks — cached or freshly downloaded — must match its
+  toolchain's selected checksum.
 - `toolchains` names what the consumer requests; beni resolves transitive
   dependencies automatically (selecting `wasi-sdk` implies `mruby`).
 - `beni:build` builds every target the build config defines, then verifies
