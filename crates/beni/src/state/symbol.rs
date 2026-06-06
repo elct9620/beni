@@ -73,3 +73,26 @@ impl Mrb {
         }
     }
 }
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use crate::Mrb;
+
+    #[test]
+    fn intern_cstr_roundtrips_through_sym_name() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let sym = mrb.intern_cstr(c"beni_sym");
+
+        assert_eq!(mrb.sym_name(sym), Some("beni_sym"));
+    }
+
+    #[test]
+    fn intern_str_yields_the_same_id_as_intern_cstr() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let via_str = mrb.intern_str(mrb.str_new(b"beni_sym"));
+
+        assert_eq!(via_str, mrb.intern_cstr(c"beni_sym"));
+    }
+}

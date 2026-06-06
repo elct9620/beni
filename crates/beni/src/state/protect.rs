@@ -144,3 +144,48 @@ impl Mrb {
         }
     }
 }
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protect_returns_the_body_value_on_success() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let got = mrb
+            .protect(|m| m.str_new(b"ok"))
+            .expect("a non-raising body must come back Ok");
+
+        assert_eq!(got.to_string(&mrb), "ok");
+    }
+
+    #[test]
+    fn protect_surfaces_a_raised_ruby_exception_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let err = mrb
+            .protect(|m| {
+                // SAFETY: `m` is the live VM inside the protected frame;
+                // `RuntimeError` is a core class so the lookup cannot
+                // fail; `mrb_raise` long-jumps to the protect frame and
+                // never returns here.
+                unsafe {
+                    let runtime_error = sys::mrb_class_get(m.as_ptr(), c"RuntimeError".as_ptr());
+                    sys::mrb_raise(m.as_ptr(), runtime_error, c"boom from ruby".as_ptr());
+                }
+                Value::zeroed()
+            })
+            .expect_err("a raise inside the body must surface as Err");
+
+        match err {
+            Error::Exception(_) => assert!(err.message(&mrb).contains("boom from ruby")),
+            Error::Panic(_) => panic!("a Ruby raise must surface as Error::Exception"),
+        }
+        // The VM stays usable after the protected raise.
+        let again = mrb
+            .protect(|m| m.str_new(b"alive"))
+            .expect("the VM must survive the protected raise");
+        assert_eq!(again.to_string(&mrb), "alive");
+    }
+}

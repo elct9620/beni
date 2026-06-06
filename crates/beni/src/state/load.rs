@@ -160,3 +160,59 @@ fn classify_structural_failure(bytes: &[u8]) -> &'static str {
     }
     "bytecode body failed structural validation"
 }
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use crate::Mrb;
+    use beni_sys as sys;
+
+    const HEADER_LEN: usize = core::mem::size_of::<sys::rite_binary_header>();
+
+    /// The synthesised `RuntimeError` parked under `mrb->exc`, rendered.
+    fn exc_message(mrb: &Mrb) -> String {
+        let exc = mrb.pending_exc();
+        assert!(
+            !exc.is_nil(),
+            "a structural failure must synthesise mrb->exc"
+        );
+        exc.to_string(mrb)
+    }
+
+    #[test]
+    fn load_bytecode_classifies_a_blob_shorter_than_the_header() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        assert_eq!(mrb.load_bytecode(b"RITE"), 1);
+        assert!(exc_message(&mrb).contains("shorter than RITE binary header"));
+    }
+
+    #[test]
+    fn load_bytecode_classifies_a_non_rite_ident() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        assert_eq!(mrb.load_bytecode(&[b'X'; HEADER_LEN]), 1);
+        assert!(exc_message(&mrb).contains("not RITE format"));
+    }
+
+    #[test]
+    fn load_bytecode_classifies_a_rite_version_mismatch() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let mut blob = [0u8; HEADER_LEN];
+        blob[..4].copy_from_slice(&sys::RITE_BINARY_IDENT[..4]);
+        blob[4..8].copy_from_slice(b"0000");
+
+        assert_eq!(mrb.load_bytecode(&blob), 1);
+        assert!(exc_message(&mrb).contains("RITE version mismatch"));
+    }
+
+    #[test]
+    fn load_bytecode_classifies_a_corrupt_body() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let mut blob = [0u8; HEADER_LEN + 8];
+        blob[..4].copy_from_slice(&sys::RITE_BINARY_IDENT[..4]);
+        blob[4..8].copy_from_slice(&sys::RITE_BINARY_FORMAT_VER[..4]);
+
+        assert_eq!(mrb.load_bytecode(&blob), 1);
+        assert!(exc_message(&mrb).contains("failed structural validation"));
+    }
+}

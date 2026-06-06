@@ -88,3 +88,16 @@ impl Mrb {
         crate::not_linked()
     }
 }
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use crate::Mrb;
+
+    #[test]
+    fn str_factories_roundtrip_their_bytes() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        assert_eq!(mrb.str_new(b"from bytes").to_string(&mrb), "from bytes");
+        assert_eq!(mrb.str_new_cstr(c"from cstr").to_string(&mrb), "from cstr");
+    }
+}

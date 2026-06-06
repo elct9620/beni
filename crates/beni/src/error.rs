@@ -63,3 +63,21 @@ pub(crate) fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
         },
     }
 }
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn panic_message_renders_every_payload_shape() {
+        assert_eq!(panic_message(Box::new("str payload")), "str payload");
+        assert_eq!(
+            panic_message(Box::new(String::from("string payload"))),
+            "string payload"
+        );
+        assert_eq!(
+            panic_message(Box::new(42_i32)),
+            "panic with a non-string payload"
+        );
+    }
+}

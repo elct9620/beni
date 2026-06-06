@@ -107,3 +107,31 @@ impl Hash {
         }
     }
 }
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use crate::Mrb;
+
+    #[test]
+    fn set_and_get_roundtrip_with_nil_for_an_absent_key() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let hash = mrb.hash_new();
+
+        hash.set(&mrb, mrb.str_new(b"k"), mrb.str_new(b"v"));
+
+        assert_eq!(hash.get(&mrb, mrb.str_new(b"k")).to_string(&mrb), "v");
+        assert!(hash.get(&mrb, mrb.str_new(b"absent")).is_nil());
+    }
+
+    #[test]
+    fn keys_returns_the_typed_key_array() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let hash = mrb.hash_new();
+
+        hash.set(&mrb, mrb.str_new(b"k"), mrb.str_new(b"v"));
+        let keys = hash.keys(&mrb);
+
+        assert_eq!(keys.entry(0).to_string(&mrb), "k");
+        assert!(keys.entry(1).is_nil());
+    }
+}

@@ -89,3 +89,31 @@ impl Array {
         }
     }
 }
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use crate::Mrb;
+
+    #[test]
+    fn push_and_entry_roundtrip_through_a_live_array() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+
+        ary.push(&mrb, mrb.str_new(b"first"));
+        ary.push(&mrb, mrb.str_new(b"second"));
+
+        assert_eq!(ary.entry(0).to_string(&mrb), "first");
+        assert_eq!(ary.entry(-1).to_string(&mrb), "second");
+    }
+
+    #[test]
+    fn entry_is_nil_out_of_range_in_both_directions() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+
+        ary.push(&mrb, mrb.str_new(b"only"));
+
+        assert!(ary.entry(1).is_nil());
+        assert!(ary.entry(-2).is_nil());
+    }
+}

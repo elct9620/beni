@@ -11,10 +11,7 @@
 //!   3. `mrb_load_nstring_cxt(mrb, ptr, len, cxt)` — compile + run.
 //!   4. `mrb_ccontext_free(mrb, cxt)` — release the context.
 //!
-//! Before this module the four calls sat inline at every site
-//! (`abi::boot::replay_snippets`, `abi::eval::eval_body`,
-//! `abi::run::run_body`), each guarded by its own `unsafe { ... }`
-//! block and a manual NULL check. The wrapper collapses that to one
+//! The wrapper collapses that lifecycle to one
 //! `Ccontext::new(&mrb, c"...")` + `cxt.load_nstring(bytes)` pair;
 //! `Drop` runs the free unconditionally.
 
@@ -42,8 +39,7 @@ pub struct Ccontext<'mrb> {
 
 impl<'mrb> Ccontext<'mrb> {
     /// Allocate a fresh compile context and stamp it with `filename`.
-    /// Returns `None` when `mrb_ccontext_new` returns NULL — callers
-    /// map that to a `Kobako::BootError` Panic.
+    /// Returns `None` when `mrb_ccontext_new` returns NULL.
     ///
     /// `mrb_ccontext_filename` interns the bytes, so the `&CStr`
     /// borrow only has to outlive this call.
@@ -106,5 +102,38 @@ impl Drop for Ccontext<'_> {
         unsafe {
             sys::mrb_ccontext_free(self.mrb.as_ptr(), self.raw)
         };
+    }
+}
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use super::*;
+    use crate::{FromValue, Mrb};
+
+    #[test]
+    fn load_nstring_evaluates_source_under_the_stamped_filename() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        let got = cxt.load_nstring(b"1 + 1");
+
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "evaluating plain arithmetic must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(i32::from_value(got), Some(2));
+    }
+
+    #[test]
+    fn load_nstring_parks_a_raise_in_pending_exc() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        cxt.load_nstring(b"raise 'kaboom'");
+
+        assert!(mrb.pending_exc().to_string(&mrb).contains("kaboom"));
     }
 }
