@@ -19,9 +19,9 @@ the resulting `libmruby.a`.
   writing or maintaining FFI declarations by hand.
 - A Rust project can produce `libmruby.a` via `rake beni:build` without
   vendoring mruby source or scripting tarball downloads.
-- Under one installed beni release, the same `version`, `build_config`, and
-  `toolchains` inputs always build the same way: the same toolchain
-  versions, compile flags, and staged layout.
+- Under one installed beni release, the same `version`, `build_config`,
+  `target`, and `toolchain` declarations always build the same way: the
+  same toolchain versions, compile flags, and staged layout.
 - In a host build with no archive discovery variable set, a crate that
   depends on `beni` compiles in placeholder mode, so `beni` is safe to
   take as a transitive dependency in such builds.
@@ -35,10 +35,10 @@ the resulting `libmruby.a`.
   links the archive and runs an mruby interpreter through `Mrb::open`.
 - `cargo check` on the `beni` crate succeeds with no archive discovery
   variable set, and `Mrb::open` returns an error.
-- A `wasm32-wasip1` cross-build succeeds when `toolchains` includes
-  `wasi-sdk`, the build config defines a target cross-compiled for wasm32,
-  `MRUBY_LIB_DIR` names that target's staged path, and `WASI_SDK_PATH`
-  names the unpacked wasi-sdk root.
+- A `wasm32-wasip1` cross-build succeeds when a target declaration
+  references `wasi-sdk`, the build config defines a target cross-compiled
+  for wasm32, `MRUBY_LIB_DIR` names that target's staged path, and
+  `WASI_SDK_PATH` names the unpacked wasi-sdk root.
 
 ## Non-goals
 
@@ -71,40 +71,50 @@ Consumers install the task library in their Rakefile:
 ```ruby
 require "beni/tasks"
 
-Beni::Tasks.new do |t|
-  # override settings here; defaults below
+Beni::Tasks.new do
+  version "4.0.0"
+  build_config "build_config/mruby.rb"
+
+  target :host
+  target :wasi do
+    toolchain "wasi-sdk"
+  end
+
+  toolchain "wasi-sdk" do
+    version "29"
+    sha256 "…"
+  end
 end
 ```
 
-| Setting | Type | Default |
+| Setting | Declared as | Default |
 |---|---|---|
-| `vendor_dir` | directory path (relative paths resolve against the Rakefile's working directory) — where toolchains unpack and mruby builds | `vendor/` under the Rakefile's working directory. `BENI_VENDOR_DIR` env var overrides the default; an explicit DSL assignment overrides the env var. |
-| `version` | mruby release version to download | `"4.0.0"` |
-| `build_config` | mruby build-config file path (relative paths resolve against the Rakefile's working directory), or `nil` for mruby's upstream default | `nil` |
-| `targets` | array of build-target names, matching the `MRuby::Build.new(<name>)` names in the config; a build defined without a name is named `host` by mruby | `["host"]` |
-| `toolchains` | array of toolchains to vendor, from `mruby` and `wasi-sdk`; an entry is a toolchain name, or a name mapped to a version override carrying the `version` and the tarball's `sha256` checksum | `["mruby"]` |
+| `vendor_dir` | `vendor_dir <path>` — where toolchains unpack and mruby builds; relative paths resolve against the Rakefile's working directory | `vendor/` under the Rakefile's working directory. `BENI_VENDOR_DIR` env var overrides the default; an explicit declaration overrides the env var. |
+| `version` | `version <string>` — the mruby release version to download | `"4.0.0"` |
+| `build_config` | `build_config <path>` — mruby build-config file path; relative paths resolve against the Rakefile's working directory | undeclared — mruby's untouched upstream default config |
+| targets | `target <name>`, optionally with a block of toolchain references — each declaration names one build target to verify, matching the `MRuby::Build.new(<name>)` names in the config; a build defined without a name is named `host` by mruby | `host` when no `target` declaration appears; any `target` declaration replaces the default — the declared set is the whole set |
+| toolchains | `toolchain <name>` inside a target block — a toolchain reference; `toolchain <name> do … end` at the top level carrying `version` and `sha256` — a toolchain definition | selection is reference-driven; definitions default to each toolchain's built-in pair |
 
 | Task | Outcome |
 |---|---|
 | `beni:build` | toolchains staged, `libmruby.a` built per target |
 | `beni:clean` | mruby build trees removed, vendored source kept |
 | `beni:config` | self-contained, editable build config generated at the `build_config` path |
-| `beni:vendor:setup` | configured toolchains downloaded and unpacked |
+| `beni:vendor:setup` | selected toolchains downloaded and unpacked |
 | `beni:vendor:clean` | unpacked toolchains removed, tarball cache kept |
 | `beni:vendor:clobber` | vendor tree removed entirely, tarball cache included |
 
 Behaviors:
 
-- A build with no `build_config` uses mruby's untouched upstream default
-  config.
+- A build with no `build_config` declaration uses mruby's untouched
+  upstream default config.
 - The vendor tree converges on each toolchain's selected version: a staged
   toolchain at any other version is replaced by `beni:vendor:setup`, and
   `beni:build` rebuilds the archives — a stale toolchain never survives a
   version change.
-- `version` selects mruby; a `toolchains` version override never names
-  `mruby`. Every other toolchain's selected version and checksum
-  default to the pair the installed beni release vendors; a
-  `toolchains` version override replaces both. mruby's selected
+- `version` selects mruby; a toolchain definition never names `mruby`.
+  Every other toolchain's selected version and checksum default to its
+  built-in pair; a toolchain definition replaces both. mruby's selected
   checksum is the one the installed release vendors for the default
   `version`; for any other `version` it is the pin that `version`'s
   first download establishes. The pin persists alongside the tarball
@@ -114,12 +124,16 @@ Behaviors:
   downloads only the selected versions' tarballs the cache lacks; every
   tarball it unpacks — cached or freshly downloaded — must match its
   toolchain's selected checksum.
-- `toolchains` names what the consumer requests; beni resolves transitive
-  dependencies automatically (selecting `wasi-sdk` implies `mruby`).
+- Toolchain selection is reference-driven: the selected set is every
+  target declaration's toolchain references plus the transitive
+  dependencies beni resolves automatically (referencing `wasi-sdk`
+  implies `mruby`); `mruby` is always selected. A toolchain definition
+  selects nothing by itself — a definition for a toolchain nothing
+  references is inert.
 - `beni:build` builds every target the build config defines, then verifies
-  that each name in `targets` produced an archive and its compile-flags
-  sidecar; a target the `targets` setting does not name is not verified.
-  The config owns the target definitions, and beni never reads the config.
+  that each declared target produced an archive and its compile-flags
+  sidecar; a target no `target` declaration names is not verified. The
+  config owns the target definitions, and beni never reads the config.
 - Toolchains unpack at their own names under the vendor tree (the mruby
   source at `mruby/`); each target's archive and its compile-flags sidecar
   stage at `mruby/build/<name>/lib/` under the vendor tree — the staged
@@ -130,7 +144,7 @@ Behaviors:
   reachable only via `MRUBY_LIB_DIR`.
 - `beni:config` seeds customization: it writes a self-contained equivalent
   of the configured `version`'s upstream default config to the path the
-  `build_config` setting names. The generated file requires nothing from
+  `build_config` declaration names. The generated file requires nothing from
   beni at build time, builds without edits, and belongs to the consumer,
   who edits it to define further targets — cross-compiled ones included;
   beni never rewrites the file. Generation creates the target path's
@@ -206,15 +220,16 @@ Behaviors:
 
 | Scenario | Behavior |
 |---|---|
-| `toolchains` naming anything other than `mruby` or `wasi-sdk` | `beni:vendor:setup` aborts before any download |
-| `toolchains` version override naming `mruby` | `beni:vendor:setup` aborts before any download |
-| `toolchains` version override missing its version or checksum | `beni:vendor:setup` aborts before any download |
-| `toolchains` naming the same toolchain in more than one entry | `beni:vendor:setup` aborts before any download |
+| A toolchain reference or definition naming anything other than `mruby` or `wasi-sdk` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
+| A toolchain definition naming `mruby` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
+| A toolchain definition missing its `version` or `sha256` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
+| More than one toolchain definition naming the same toolchain | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
+| More than one `target` declaration naming the same target | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | Toolchain download fails (network failure, HTTP 4xx/5xx, disk write error) | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | A downloaded or cached tarball fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
-| `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
-| `beni:config` with `build_config` left at its `nil` default | task fails, nothing generated |
+| `beni:build` with a `target` declaration naming a target the build config does not define | verification fails, each missing archive reported |
+| `beni:config` with no `build_config` declaration | task fails, nothing generated |
 | `beni:config` with the configured `version`'s mruby source not staged | task fails and names the missing source, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
 | Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar, never silently falls back to placeholder mode |
@@ -236,6 +251,10 @@ Behaviors:
 | Term | Meaning |
 |---|---|
 | toolchain | a vendored build dependency (mruby source, wasi-sdk) |
+| target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
+| toolchain reference | `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
+| toolchain definition | a top-level `toolchain <name>` block carrying `version` and `sha256` — replaces the named toolchain's built-in pair |
+| built-in pair | the version and checksum pair the installed beni release vendors for a toolchain |
 | vendor tree | the directory tree the `vendor_dir` setting names |
 | tarball cache | downloaded toolchain tarballs, kept inside the vendor tree |
 | archive | the built `libmruby.a` for one target |
