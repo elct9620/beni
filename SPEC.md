@@ -201,6 +201,7 @@ Behaviors:
 | Discovered archive at an mruby version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
 | Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails, never falls back to placeholder mode |
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
+| `WASI_SDK_PATH` set but the named root lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
 | `Mrb::open` without a linked mruby | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` when the caller is Rust, or as an mruby exception when the caller is mruby; never unwinds into mruby's C frames |
