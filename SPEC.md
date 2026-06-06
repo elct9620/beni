@@ -93,7 +93,7 @@ end
 | `version` | `version <string>` — the mruby release version to download | `"4.0.0"` |
 | `build_config` | `build_config <path>` — mruby build-config file path; relative paths resolve against the Rakefile's working directory | undeclared — mruby's untouched upstream default config |
 | targets | `target <name>`, optionally with a block of toolchain references — each declaration names one build target to verify, matching the `MRuby::Build.new(<name>)` names in the config; a build defined without a name is named `host` by mruby | `host` when no `target` declaration appears; any `target` declaration replaces the default — the declared set is the whole set |
-| toolchains | `toolchain <name>` inside a target block — a toolchain reference; `toolchain <name> do … end` at the top level carrying `version` and `sha256` — a toolchain definition | selection is reference-driven; definitions default to each toolchain's built-in pair |
+| toolchains | a block-less `toolchain <name>` inside a target block — a toolchain reference; `toolchain <name> do … end` at the top level carrying `version` and `sha256` — a toolchain definition | selection is reference-driven; every toolchain other than `mruby` defaults to its built-in pair |
 
 | Task | Outcome |
 |---|---|
@@ -223,8 +223,10 @@ Behaviors:
 | A toolchain reference or definition naming anything other than `mruby` or `wasi-sdk` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | A toolchain definition naming `mruby` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | A toolchain definition missing its `version` or `sha256` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
+| A block-carrying `toolchain` declaration inside a target declaration's block | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | More than one toolchain definition naming the same toolchain | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | More than one `target` declaration naming the same target | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
+| More than one declaration of the same setting (`version`, `build_config`, or `vendor_dir`) | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | Toolchain download fails (network failure, HTTP 4xx/5xx, disk write error) | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | A downloaded or cached tarball fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
@@ -252,7 +254,7 @@ Behaviors:
 |---|---|
 | toolchain | a vendored build dependency (mruby source, wasi-sdk) |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
-| toolchain reference | `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
+| toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
 | toolchain definition | a top-level `toolchain <name>` block carrying `version` and `sha256` — replaces the named toolchain's built-in pair |
 | built-in pair | the version and checksum pair the installed beni release vendors for a toolchain |
 | vendor tree | the directory tree the `vendor_dir` setting names |
