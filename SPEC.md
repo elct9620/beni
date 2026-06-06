@@ -19,6 +19,10 @@ the resulting `libmruby.a`.
   writing or maintaining FFI declarations by hand.
 - A Rust project can produce `libmruby.a` via `rake beni:build` without
   vendoring mruby source or scripting tarball downloads.
+- Once a target declaration references `wasi-sdk`, a build config
+  cross-compiles for wasm32-wasip1 with `conf.toolchain :wasi` — the
+  cross-compile settings ship with beni and update with it, instead of
+  living hand-maintained inside the consumer's config.
 - Under one installed beni release, the same `version`, `build_config`,
   `target`, and `toolchain` declarations always build the same way: the
   same toolchain versions, compile flags, and staged layout.
@@ -144,6 +148,13 @@ Behaviors:
   source at `mruby/`); each target's archive and its compile-flags sidecar
   stage at `mruby/build/<name>/lib/` under the vendor tree — the staged
   path.
+- Every `beni:vendor:setup` run with `wasi-sdk` selected writes the wasi
+  toolchain file into the staged mruby source, so a re-extracted tree
+  never lacks it. The file carries beni's wasm32-wasip1 cross-compile
+  settings; a build config activates them with `conf.toolchain :wasi`
+  inside its cross-build definition and needs no toolchain setup of its
+  own. The settings resolve the wasi-sdk root from `WASI_SDK_PATH` when
+  set, the vendor tree's unpacked `wasi-sdk` otherwise.
 - The crates auto-discover one archive: the `host` build's, serving host
   cargo targets. Build configs may define additional or differently named
   targets, but an archive beyond `host` is never auto-discovered and is
@@ -238,6 +249,7 @@ Behaviors:
 | A downloaded or cached tarball fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
 | `beni:build` with a `target` declaration naming a target the build config does not define | verification fails, each missing archive reported |
+| A build config selecting the `wasi` toolchain with no wasi toolchain file staged | `beni:build` aborts, mruby naming the unknown toolchain |
 | `beni:config` with no `build_config` declaration | task fails, nothing generated |
 | `beni:config` with the configured `version`'s mruby source not staged | task fails and names the missing source, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
@@ -272,6 +284,7 @@ Behaviors:
 | archive discovery variable | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR`, the environment variables archive discovery consults |
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | staged path | `mruby/build/<name>/lib/` under the vendor tree, holding one target's archive and compile-flags sidecar |
+| wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — beni's wasm32-wasip1 cross-compile settings, staged whenever `wasi-sdk` is selected and activated by a build config via `conf.toolchain :wasi` |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of defines/flags the crates align with |
 | linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents in every build — `1` with a real archive linked, `0` in placeholder mode |
 | placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set |
