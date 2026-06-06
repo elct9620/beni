@@ -8,6 +8,12 @@ on:
     branches:
       - main
 
+# Rapid pushes to main must not run overlapping release-please jobs —
+# queue them instead of cancelling so a release in flight finishes.
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
