@@ -104,10 +104,10 @@ Behaviors:
 - `version` selects mruby; a `toolchains` version override never names
   `mruby`. Every other toolchain's selected version and checksum
   default to the pair the installed beni release vendors; a
-  `toolchains` version override replaces both. mruby's checksum is the
-  one the installed release vendors for the default `version`; any
-  other `version`'s tarball is pinned at first download and verified
-  against the pin thereafter.
+  `toolchains` version override replaces both. mruby's selected
+  checksum is the one the installed release vendors for the default
+  `version`; for any other `version` it is the pin the first download
+  establishes.
 - `beni:vendor:setup` unpacks toolchains from the tarball cache and
   downloads only the selected versions' tarballs the cache lacks; every
   tarball it unpacks — cached or freshly downloaded — must match its
@@ -116,9 +116,8 @@ Behaviors:
   dependencies automatically (selecting `wasi-sdk` implies `mruby`).
 - `beni:build` builds every target the build config defines, then verifies
   that each name in `targets` produced an archive and its compile-flags
-  sidecar; a target the `targets` setting does not name is not
-  verified. The config owns the
-  target definitions, and beni never reads the config.
+  sidecar; a target the `targets` setting does not name is not verified.
+  The config owns the target definitions, and beni never reads the config.
 - Toolchains unpack at their own names under the vendor tree (the mruby
   source at `mruby/`); each target's archive and its compile-flags sidecar
   stage at `mruby/build/<name>/lib/` under the vendor tree — the staged
