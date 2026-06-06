@@ -25,6 +25,23 @@ module BeniRust
     system("which cargo > /dev/null 2>&1")
   end
 
+  # Archive discovery env for host-target cargo runs: the vendor tree
+  # `beni:build` populates, named explicitly because beni-sys's
+  # discovery is environment-driven with no fallback.
+  def self.host_env
+    { "BENI_VENDOR_DIR" => File.join(ROOT, "vendor") }
+  end
+
+  # Archive discovery env for wasm32 cargo runs: cross targets never
+  # read the vendor tree, so the wasi staged path and the unpacked
+  # wasi-sdk root are named directly.
+  def self.wasm_env
+    {
+      "MRUBY_LIB_DIR" => File.join(ROOT, "vendor", "mruby", "build", "wasi", "lib"),
+      "WASI_SDK_PATH" => File.join(ROOT, "vendor", "wasi-sdk")
+    }
+  end
+
   # The default-ABI leg: build the vendored mruby with NO MRUBY_CONFIG
   # (mruby falls back to its own build_config/default.rb — what a
   # clean consumer build gets), then run the wrapper tests against
