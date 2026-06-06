@@ -153,6 +153,15 @@ bundle exec rake rust:verify   # beni:build + check/test (host) + check (wasm32)
 Behavior contracts live in `SPEC.md` — the source of truth the
 implementation follows.
 
+## Releasing
+
+Releases are cut by release-please: merging the release PR tags the
+version and publishes the gem and both crates in lockstep through OIDC
+trusted publishing. One-time cleanup: after 0.1.0 ships, remove the
+`release-as` line (and the then-stale `last-release-sha`) from
+`release-please-config.json` — left in place it pins every subsequent
+release to 0.1.0.
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at
