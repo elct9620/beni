@@ -42,9 +42,9 @@ jobs:
       - name: Build the gem
         run: gem build beni.gemspec
       # Trusted Publishing: exchange the workflow's OIDC token for a
-      # short-lived RubyGems token. Requires the beni gem's Trusted
-      # Publishing config on rubygems.org to name this repository and
-      # workflow file.
+      # short-lived RubyGems token. The beni gem's publisher on
+      # rubygems.org names this file, matching both the chained
+      # release and manual dispatch.
       - uses: rubygems/configure-rubygems-credentials@762a4b77c3300434bb57c7ce80b20e36231927aa # v2.0.0
         if: ${{ inputs.push }}
       - name: Push the gem

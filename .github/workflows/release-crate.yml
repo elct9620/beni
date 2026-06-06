@@ -47,9 +47,9 @@ jobs:
         if: ${{ !inputs.push }}
         run: cargo publish --workspace --dry-run
       # Trusted Publishing: exchange the workflow's OIDC token for a
-      # short-lived crates.io token. The token covers every crate whose
-      # Trusted Publishing config on crates.io names this repository and
-      # workflow file — both beni-sys and beni must carry that config.
+      # short-lived crates.io token. beni-sys and beni each name two
+      # publishers on crates.io: release-please.yml for the chained
+      # release and this file for manual dispatch.
       - uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
         if: ${{ inputs.push }}
         id: auth

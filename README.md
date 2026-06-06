@@ -153,15 +153,6 @@ bundle exec rake rust:verify   # beni:build + check/test (host) + check (wasm32)
 Behavior contracts live in `SPEC.md` — the source of truth the
 implementation follows.
 
-## Releasing
-
-Releases are cut by release-please: merging the release PR tags the
-version and publishes the gem and both crates in lockstep through OIDC
-trusted publishing. The two registries validate opposite ends of the
-reusable-workflow chain — rubygems.org matches the called workflow
-(`release.yml`), crates.io the calling one (`release-please.yml`) — so
-their trusted-publishing configs deliberately name different files.
-
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at
