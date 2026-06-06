@@ -114,12 +114,18 @@ Behaviors:
   version change.
 - `version` selects mruby; a toolchain definition never names `mruby`.
   Every other toolchain's selected version and checksum default to its
-  built-in pair; a toolchain definition replaces both. mruby's selected
-  checksum is the one the installed release vendors for the default
-  `version`; for any other `version` it is the pin that `version`'s
-  first download establishes. The pin persists alongside the tarball
-  cache and shares its lifecycle; once `beni:vendor:clobber` removes
-  both, the next download establishes a new pin.
+  built-in pair; a toolchain definition replaces both. A toolchain
+  released as one tarball per build platform downloads the build
+  platform's tarball: its built-in pair vendors one checksum per
+  tarball and the selected checksum is the downloaded tarball's; a
+  toolchain definition's single `sha256` becomes the selected checksum
+  on every build platform — it verifies only the tarball it names.
+  mruby's selected checksum is the one the installed release vendors
+  for the default `version`; for any other `version` it is the pin
+  that `version`'s first download establishes. The pin persists
+  alongside the tarball cache and shares its lifecycle; once
+  `beni:vendor:clobber` removes both, the next download establishes a
+  new pin.
 - `beni:vendor:setup` unpacks toolchains from the tarball cache and
   downloads only the selected versions' tarballs the cache lacks; every
   tarball it unpacks — cached or freshly downloaded — must match its
@@ -256,7 +262,8 @@ Behaviors:
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
 | toolchain definition | a top-level `toolchain <name>` block carrying `version` and `sha256` — replaces the named toolchain's built-in pair |
-| built-in pair | the version and checksum pair the installed beni release vendors for a toolchain |
+| built-in pair | the version and checksum pair the installed beni release vendors for a toolchain; a toolchain released as one tarball per build platform vendors one checksum per tarball, the pair carrying the build platform's |
+| build platform | the platform the Rake tasks run on; it selects which of a toolchain's per-platform tarballs is downloaded |
 | vendor tree | the directory tree the `vendor_dir` setting names |
 | tarball cache | downloaded toolchain tarballs, kept inside the vendor tree |
 | archive | the built `libmruby.a` for one target |
