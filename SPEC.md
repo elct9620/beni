@@ -102,12 +102,16 @@ Behaviors:
   `beni:build` rebuilds the archives — a stale toolchain never survives a
   version change.
 - `version` selects mruby; a `toolchains` version override never names
-  `mruby`. Every other toolchain's selected version defaults to the one
-  the installed beni release vendors; a `toolchains` version override
-  replaces it, and the downloaded tarball must match the override's
-  checksum.
+  `mruby`. Every other toolchain's selected version and checksum
+  default to the pair the installed beni release vendors; a
+  `toolchains` version override replaces both. mruby's checksum is the
+  one the installed release vendors for the default `version`; any
+  other `version`'s tarball is pinned at first download and verified
+  against the pin thereafter.
 - `beni:vendor:setup` unpacks toolchains from the tarball cache and
-  downloads only the tarballs the cache lacks.
+  downloads only the tarballs the cache lacks; every tarball it
+  unpacks — cached or freshly downloaded — must match its toolchain's
+  selected checksum.
 - `toolchains` names what the consumer requests; beni resolves transitive
   dependencies automatically (selecting `wasi-sdk` implies `mruby`).
 - `beni:build` builds every target the build config defines, then verifies
@@ -151,8 +155,7 @@ Behaviors:
      in placeholder mode, a cross-compiled build fails.
 - wasm32 is the one supported cross target and requires the wasi-sdk
   toolchain: `WASI_SDK_PATH` names its unpacked root, defaulting to
-  `wasi-sdk/` under the tree `BENI_VENDOR_DIR` names; when neither
-  variable is set, the toolchain is missing.
+  `/opt/wasi-sdk` when the variable is unset.
 - Supports one FFI surface per mruby minor version; supported versions: 4.0.
 - In placeholder mode `cargo check` passes and no FFI surface is exported.
 - A `mruby_linked` cfg reflects whether a real archive is linked. The cfg
@@ -201,7 +204,7 @@ Behaviors:
 | `toolchains` version override naming `mruby` | `beni:vendor:setup` aborts before any download |
 | `toolchains` version override missing its version or checksum | `beni:vendor:setup` aborts before any download |
 | Toolchain download fails (network failure, HTTP 4xx/5xx, disk write error) | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
-| Toolchain download fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
+| A downloaded or cached tarball fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
 | `beni:build` with `targets` naming a target the build config does not define | verification fails, each missing archive reported |
 | `beni:config` with `build_config` left at its `nil` default | task fails, nothing generated |
@@ -211,8 +214,8 @@ Behaviors:
 | Discovered archive at an mruby version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
 | Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails, never falls back to placeholder mode |
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
-| `WASI_SDK_PATH` set but the named root lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
-| `Mrb::open` without a linked mruby | returns an error, never aborts |
+| The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
+| `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` when the caller is Rust, or as an mruby exception when the caller is mruby; never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
