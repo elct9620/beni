@@ -143,7 +143,7 @@ module Beni
       desc "Generate mruby's upstream default build config at the `build_config` declaration's path"
       task :config do
         dest = configuration.build_config
-        raise Error, "beni:config requires a `build_config` declaration naming the file to generate" unless dest
+        raise Error, "[beni] beni:config requires a `build_config` declaration naming the file to generate" unless dest
 
         BuildConfig.generate(dest, mruby_dir: builder.mruby_dir, version: mruby_version)
         puts "[beni] generated #{dest} — edit it to define further targets"

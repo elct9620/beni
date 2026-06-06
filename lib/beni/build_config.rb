@@ -16,7 +16,7 @@ module Beni
     # staged under +mruby_dir+ and refuses to clobber an existing
     # (likely hand-tuned) config. Returns +dest+.
     def generate(dest, mruby_dir:, version:)
-      raise Error, "#{dest} already exists — delete it first to regenerate" if File.exist?(dest)
+      raise Error, "[beni] #{dest} already exists — delete it first to regenerate" if File.exist?(dest)
 
       source = staged_default_config(mruby_dir, version)
       FileUtils.mkdir_p(File.dirname(dest))
@@ -33,7 +33,7 @@ module Beni
       return source if staged_version(mruby_dir) == version && File.exist?(source)
 
       raise Error,
-            "mruby #{version}'s source is not staged at #{mruby_dir} — " \
+            "[beni] mruby #{version}'s source is not staged at #{mruby_dir} — " \
             "run `rake beni:vendor:setup` first"
     end
 
