@@ -107,7 +107,9 @@ Behaviors:
   `toolchains` version override replaces both. mruby's selected
   checksum is the one the installed release vendors for the default
   `version`; for any other `version` it is the pin the first download
-  establishes.
+  establishes. The pin persists alongside the tarball cache and shares
+  its lifecycle; once `beni:vendor:clobber` removes both, the next
+  download establishes a new pin.
 - `beni:vendor:setup` unpacks toolchains from the tarball cache and
   downloads only the selected versions' tarballs the cache lacks; every
   tarball it unpacks — cached or freshly downloaded — must match its
@@ -153,17 +155,19 @@ Behaviors:
      requires `MRUBY_LIB_DIR`.
   3. With neither variable set, no archive is linked: a host build compiles
      in placeholder mode, a cross-compiled build fails.
-- wasm32 is the one supported cross target and requires the wasi-sdk
-  toolchain: `WASI_SDK_PATH` names its unpacked root, defaulting to
-  `/opt/wasi-sdk` when the variable is unset.
+- wasm32 is the one supported cross target; a build for any other
+  cross-compiled cargo target fails and names the unsupported target.
+  wasm32 requires the wasi-sdk toolchain: `WASI_SDK_PATH` names its
+  unpacked root, defaulting to `/opt/wasi-sdk` when the variable is
+  unset.
 - Supports one FFI surface per mruby minor version; supported versions: 4.0.
 - In placeholder mode `cargo check` passes and no FFI surface is exported.
 - A `mruby_linked` cfg reflects whether a real archive is linked. The cfg
   is derived, never a cargo feature: `beni-sys` publishes the linked
-  signal to its direct dependents' build scripts, the `beni` crate
-  re-derives its own cfg from the signal automatically, and any crate
-  gating mruby-dependent code does the same as a direct dependent of
-  `beni-sys`.
+  signal to its direct dependents' build scripts in every build, the
+  `beni` crate re-derives its own cfg from the signal's value
+  automatically, and any crate gating mruby-dependent code does the same
+  as a direct dependent of `beni-sys`.
 
 ### beni crate — typed wrapper
 
@@ -177,7 +181,8 @@ Behaviors:
   `Class` and `Module` handles. Methods are registered on those handles
   through the `Class` and `Module` traits (mirroring `magnus::Module` and
   `magnus::Object`), accepting Rust closures whose arguments and return
-  values cross the boundary through `IntoValue` / `FromValue`.
+  values cross the boundary through `IntoValue` / `FromValue`. A
+  definition or registration mruby rejects surfaces as a Rust `Err`.
 - Provides the `Gem` trait — the unit of Ruby surface a Rust crate ships:
 
   ```rust
@@ -204,6 +209,7 @@ Behaviors:
 | `toolchains` naming anything other than `mruby` or `wasi-sdk` | `beni:vendor:setup` aborts before any download |
 | `toolchains` version override naming `mruby` | `beni:vendor:setup` aborts before any download |
 | `toolchains` version override missing its version or checksum | `beni:vendor:setup` aborts before any download |
+| `toolchains` naming the same toolchain in more than one entry | `beni:vendor:setup` aborts before any download |
 | Toolchain download fails (network failure, HTTP 4xx/5xx, disk write error) | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | A downloaded or cached tarball fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
@@ -213,11 +219,13 @@ Behaviors:
 | Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar, never silently falls back to placeholder mode |
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
 | Discovered archive at an mruby version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
+| Cross-compiled build for a cargo target other than wasm32 | `beni-sys` build fails and names the unsupported target, never falls back to placeholder mode |
 | Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails, never falls back to placeholder mode |
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
+| mruby raising during class or module definition or method registration | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
@@ -235,5 +243,5 @@ Behaviors:
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | staged path | `mruby/build/<name>/lib/` under the vendor tree, holding one target's archive and compile-flags sidecar |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of defines/flags the crates align with |
-| linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents |
+| linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents in every build — `1` with a real archive linked, `0` in placeholder mode |
 | placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set |
