@@ -134,12 +134,20 @@ module Beni
     end
 
     def define_config_task
-      desc "Generate a customizable mruby build config (default: build_config/mruby.rb)"
-      task :config, [:path] do |_task, args|
-        path = args[:path] || File.expand_path("build_config/mruby.rb")
-        BuildConfig.generate(path)
-        puts "[beni] generated #{path} — point the `build_config` declaration at it"
+      desc "Generate mruby's upstream default build config at the `build_config` declaration's path"
+      task :config do
+        dest = configuration.build_config
+        raise Error, "beni:config requires a `build_config` declaration naming the file to generate" unless dest
+
+        BuildConfig.generate(dest, mruby_dir: builder.mruby_dir, version: mruby_version)
+        puts "[beni] generated #{dest} — edit it to define further targets"
       end
+    end
+
+    # mruby's selected version — always present, `mruby` is selected in
+    # every resolution.
+    def mruby_version
+      configuration.toolchains.to_h { |toolchain| [toolchain.name, toolchain.version] }.fetch("mruby")
     end
   end
 end

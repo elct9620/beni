@@ -3,12 +3,13 @@
 # Consumer scenario: the gem's customization path, end to end.
 #
 # A consumer who needs more than the upstream defaults runs
-# `rake beni:config` to materialize the gem-shipped template, then
-# points Beni::Tasks at the generated file — here host + wasm32-wasip1,
-# which also pulls in the wasi-sdk toolchain. Unlike the repo-root
-# Rakefile (whose config is committed and only pinned to the template
-# by an identity test), this drives the generate → build chain through
-# the gem's task interface alone. Run from this directory:
+# `rake beni:config` to materialize the configured version's upstream
+# default config, edits the generated file — here appending a
+# wasm32-wasip1 cross target, which also pulls in the wasi-sdk
+# toolchain — and points Beni::Tasks at it. Unlike the repo-root
+# Rakefile (whose config is committed), this drives the generate →
+# edit → build chain through the gem's task interface alone. Run from
+# this directory:
 #
 #   $ cd test/scenarios/generated_config && rake scenario:setup beni:build scenario:verify
 $LOAD_PATH.unshift File.expand_path("../../../lib", __dir__)
@@ -26,12 +27,50 @@ Beni::Tasks.new do
   end
 end
 
+# The consumer's hand-edit, appended below the generated upstream
+# default config: a wasm32-wasip1 cross target on the wasi-sdk
+# toolchain. Mirrors the README's cross-target example.
+WASI_CROSS_TARGET = <<~'CONFIG_SNIPPET'
+
+  # ---- consumer-added wasm32-wasip1 cross target ------------------------
+  MRuby::Toolchain.new(:wasi) do |conf, _params|
+    # `Beni::Builder` exports BENI_VENDOR_DIR on every build;
+    # WASI_SDK_PATH overrides the unpacked wasi-sdk root directly.
+    wasi_sdk = ENV["WASI_SDK_PATH"] || File.join(ENV.fetch("BENI_VENDOR_DIR"), "wasi-sdk")
+    bin = File.join(wasi_sdk, "bin")
+    target_flags = ["--target=wasm32-wasi", "--sysroot=#{File.join(wasi_sdk, "share", "wasi-sysroot")}"]
+    # setjmp/longjmp via the wasm exception-handling mechanism: all
+    # three flags must be present at both compile and link stages.
+    sjlj_flags = ["-mllvm", "-wasm-enable-sjlj", "-mllvm", "-wasm-use-legacy-eh=false"]
+
+    conf.toolchain :clang
+    conf.cc.command       = File.join(bin, "clang")
+    conf.cxx.command      = File.join(bin, "clang++")
+    conf.linker.command   = File.join(bin, "clang")
+    conf.archiver.command = File.join(bin, "llvm-ar")
+    # GNU archive format: llvm-ar defaults to the Darwin format on
+    # macOS hosts, which can overflow on many long wasm member paths.
+    conf.archiver.archive_options = "--format=gnu rs %<outfile>s %<objs>s"
+
+    [conf.cc, conf.cxx, conf.linker].each do |tool|
+      tool.flags << target_flags << sjlj_flags
+    end
+    conf.linker.libraries << "setjmp"
+  end
+
+  MRuby::CrossBuild.new("wasi") do |conf|
+    conf.toolchain :wasi
+  end
+CONFIG_SNIPPET
+
 namespace :scenario do
-  desc "Generate the build config via the gem's beni:config task"
+  desc "Generate the build config and append the consumer's wasi cross target"
   task :setup do
     next if File.exist?(CONFIG)
 
-    Rake::Task["beni:config"].invoke(CONFIG)
+    Rake::Task["beni:vendor:setup"].invoke
+    Rake::Task["beni:config"].invoke
+    File.write(CONFIG, WASI_CROSS_TARGET, mode: "a")
   end
 
   desc "Assert the artifacts beni:build must leave behind"

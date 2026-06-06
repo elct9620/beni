@@ -10,10 +10,12 @@ AllCops:
   TargetRubyVersion: 3.3
   NewCops: enable
   SuggestExtensions: false
-  # The consumer-scenario harnesses vendor a full mruby tree each;
-  # only the harness Rakefiles themselves are ours to lint.
+  # The consumer-scenario harnesses vendor a full mruby tree and
+  # generate their build configs (scenario:setup output, upstream
+  # content); only the harness Rakefiles themselves are ours to lint.
   Exclude:
     - "test/scenarios/*/vendor/**/*"
+    - "test/scenarios/*/build_config/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

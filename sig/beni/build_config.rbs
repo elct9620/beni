@@ -1,7 +1,9 @@
 module Beni
   module BuildConfig
-    TEMPLATE: String
+    def self?.generate: (String dest, mruby_dir: String, version: String) -> String
 
-    def self?.generate: (String dest) -> String
+    def self?.staged_default_config: (String mruby_dir, String version) -> String
+
+    def self?.staged_version: (String mruby_dir) -> String?
   end
 end
