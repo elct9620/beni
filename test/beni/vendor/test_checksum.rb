@@ -46,6 +46,14 @@ module Beni
         assert_equal @digest, Checksum.new(@path, "").verify_or_pin
       end
 
+      def test_explicit_sha_ignores_and_rewrites_a_stale_pinned_sidecar
+        File.write("#{@path}.sha256", "#{"0" * 64}\n")
+
+        Checksum.new(@path, @digest).verify_or_pin
+
+        assert_equal "#{@digest}\n", File.read("#{@path}.sha256")
+      end
+
       def test_raises_on_drift_from_pinned_sidecar
         File.write("#{@path}.sha256", "#{"0" * 64}\n")
 

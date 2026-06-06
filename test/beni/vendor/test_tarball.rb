@@ -45,6 +45,20 @@ module Beni
         assert_equal "2.0\n", File.read(File.join(@final_dir, Tarball::VERSION_MARKER))
       end
 
+      def test_prepare_on_a_corrupt_tarball_leaves_no_tree_behind
+        corrupt = File.join(@dir, "corrupt.tar.gz")
+        File.write(corrupt, "not a gzip stream")
+        tarball = Tarball.new(
+          tarball: corrupt, top_level_dir: "toolchain-1.0",
+          final_dir: @final_dir, version: "1.0"
+        )
+
+        assert_raises(StandardError) { capture_subprocess_io { tarball.prepare } }
+
+        refute_path_exists @final_dir
+        refute_path_exists "#{@final_dir}.staging"
+      end
+
       def test_prepare_raises_when_top_level_dir_is_missing
         error = assert_raises(Beni::Error) do
           Tarball.new(

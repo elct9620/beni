@@ -54,6 +54,19 @@ module Beni
         assert_equal "hello", File.read(File.join(toolchain.final_dir, "README"))
       end
 
+      def test_install_establishes_a_fresh_pin_after_the_vendor_tree_is_clobbered
+        put_fixture_tarball_in_cache
+        capture_io { @toolchain.install }
+        first_pin = File.read("#{@toolchain.tarball_path}.sha256")
+
+        FileUtils.rm_rf(@vendor_dir)
+        put_fixture_tarball_in_cache(content: "hello v2")
+        capture_io { @toolchain.install }
+
+        refute_equal first_pin, File.read("#{@toolchain.tarball_path}.sha256")
+        assert_equal "hello v2", File.read(File.join(@toolchain.final_dir, "README"))
+      end
+
       def test_install_aborts_on_expected_sha256_mismatch_without_unpacking
         put_fixture_tarball_in_cache
         toolchain = build_toolchain(expected_sha256: "0" * 64)
@@ -86,10 +99,10 @@ module Beni
         saved.each { |key, value| ENV[key] = value }
       end
 
-      def put_fixture_tarball_in_cache
+      def put_fixture_tarball_in_cache(content: "hello")
         src = File.join(@dir, "src", "demo-kit-1.0")
         FileUtils.mkdir_p(src)
-        File.write(File.join(src, "README"), "hello")
+        File.write(File.join(src, "README"), content)
         FileUtils.mkdir_p(File.dirname(@toolchain.tarball_path))
         system("tar", "-czf", @toolchain.tarball_path, "-C", File.join(@dir, "src"), "demo-kit-1.0",
                exception: true)

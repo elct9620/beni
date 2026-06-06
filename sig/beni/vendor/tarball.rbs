@@ -16,7 +16,9 @@ module Beni
 
       def installed_version: () -> String?
 
-      def extract_to_staging: () -> String
+      def extract_to_staging: (String staging) -> void
+
+      def promote: (String staging) -> void
     end
   end
 end

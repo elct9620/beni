@@ -27,19 +27,18 @@ module Beni
       # Extract the tarball into a staging sibling of +final_dir+, then
       # atomically move the +top_level_dir+ subtree into place and stamp the
       # version marker. A no-op when the stamped version already matches.
-      # Raises if the tarball does not contain the expected +top_level_dir+ root.
+      # Raises if the tarball does not contain the expected +top_level_dir+
+      # root. The staging tree is removed whether or not extraction succeeds.
       def prepare
         return if installed_version == @version
 
-        staging = extract_to_staging
-        src = File.join(staging, @top_level_dir)
-        raise Error, "[beni] expected #{src} after extracting #{@tarball}, missing" unless File.directory?(src)
-
-        FileUtils.rm_rf(@final_dir)
-        FileUtils.mkdir_p(File.dirname(@final_dir))
-        FileUtils.mv(src, @final_dir)
-        File.write(File.join(@final_dir, VERSION_MARKER), "#{@version}\n")
-        FileUtils.rm_rf(staging)
+        staging = "#{@final_dir}.staging"
+        begin
+          extract_to_staging(staging)
+          promote(staging)
+        ensure
+          FileUtils.rm_rf(staging)
+        end
       end
 
       private
@@ -51,12 +50,22 @@ module Beni
         File.read(marker).strip if File.exist?(marker)
       end
 
-      def extract_to_staging
-        staging = "#{@final_dir}.staging"
+      def extract_to_staging(staging)
         FileUtils.rm_rf(staging)
         FileUtils.mkdir_p(staging)
         system("tar", "-xzf", @tarball, "-C", staging, exception: true)
-        staging
+      end
+
+      # Move the expected +top_level_dir+ subtree out of +staging+ into
+      # +final_dir+ and stamp the version marker.
+      def promote(staging)
+        src = File.join(staging, @top_level_dir)
+        raise Error, "[beni] expected #{src} after extracting #{@tarball}, missing" unless File.directory?(src)
+
+        FileUtils.rm_rf(@final_dir)
+        FileUtils.mkdir_p(File.dirname(@final_dir))
+        FileUtils.mv(src, @final_dir)
+        File.write(File.join(@final_dir, VERSION_MARKER), "#{@version}\n")
       end
     end
   end
