@@ -41,6 +41,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "bindgen-driven mruby C API FFI bindings and layout-safe C shims; consumed by the typed `beni` wrapper crate."
+readme = "README.md"
+keywords = ["mruby", "ruby", "ffi", "bindings"]
+categories = ["external-ffi-bindings"]
 # Exactly one crate links libmruby; build.rs publishes `cargo:linked=1`
 # through this key so the `beni` wrapper's build script can mirror the
 # `mruby_linked` cfg via DEP_MRUBY_LINKED.

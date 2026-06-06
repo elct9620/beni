@@ -17,6 +17,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Typed Rust wrapper over the mruby C API, sitting on the `beni-sys` bindgen surface."
+readme = "README.md"
+keywords = ["mruby", "ruby", "bindings", "embedding"]
+categories = ["api-bindings"]
 
 [lib]
 # `rlib` only — consumers link this crate as a path / registry
