@@ -73,32 +73,43 @@ pub struct Mrb {
     state: NonNull<sys::mrb_state>,
 }
 
-/// Returned by `Mrb::open` when `mrb_open` returns NULL (allocation
-/// failure inside mruby) or in placeholder builds where `mrb_open`
-/// is not linked.
+/// Returned by `Mrb::open` when mruby could not produce a usable
+/// interpreter: `mrb_open` returned NULL (allocation failure),
+/// returned a state with a pending exception (core or gem init
+/// failure), or — in placeholder builds — was not linked at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MrbOpenError;
 
 impl std::fmt::Display for MrbOpenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("mrb_open returned NULL")
+        f.write_str("mruby could not produce a usable interpreter")
     }
 }
 
 impl std::error::Error for MrbOpenError {}
 
 impl Mrb {
-    /// Open a fresh mruby state. Returns `MrbOpenError` when
-    /// mruby's allocator cannot produce a state (or unconditionally
-    /// in placeholder builds — no mruby C API is linked into the
-    /// rlib).
+    /// Open a fresh mruby state. Returns `MrbOpenError` when mruby
+    /// cannot produce a usable interpreter (or unconditionally in
+    /// placeholder builds — no mruby C API is linked into the rlib).
     pub fn open() -> Result<Self, MrbOpenError> {
         #[cfg(mruby_linked)]
         {
+            // SAFETY: `mrb_open` takes no arguments and returns an
+            // owned state or NULL.
             let raw = unsafe { sys::mrb_open() };
-            NonNull::new(raw)
-                .map(|state| Self { state })
-                .ok_or(MrbOpenError)
+            let Some(state) = NonNull::new(raw) else {
+                return Err(MrbOpenError);
+            };
+            let mrb = Self { state };
+            // `mrb_open` also signals failure by returning a state
+            // with `mrb->exc` set — core or gem init failed (vendored
+            // `src/state.c`). That state is not a usable interpreter;
+            // dropping `mrb` here closes it.
+            if !mrb.pending_exc().is_nil() {
+                return Err(MrbOpenError);
+            }
+            Ok(mrb)
         }
         #[cfg(not(mruby_linked))]
         {

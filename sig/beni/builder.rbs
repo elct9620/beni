@@ -30,6 +30,8 @@ module Beni
 
     def env: () -> Hash[String, String]
 
+    def check_build_config!: () -> void
+
     def flags_mak_paths: () -> Array[String]
 
     def verify_artifacts!: () -> void

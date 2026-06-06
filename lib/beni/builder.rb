@@ -49,8 +49,10 @@ module Beni
 
     # Idempotent build entry point for +rake beni:build+: skip with a
     # note when every artifact is already present, otherwise build and
-    # report readiness.
+    # report readiness. A declared config that does not exist aborts
+    # before the skip check — stale artifacts must not mask it.
     def ensure_built
+      check_build_config!
       if built?
         puts "[beni] libmruby.a already present for #{targets.join(" + ")} — skipping"
         return
@@ -70,6 +72,7 @@ module Beni
     # build is make-style incremental, so re-running on a partially
     # built tree only compiles what is missing.
     def build
+      check_build_config!
       cmd = [RbConfig.ruby, "-S", "rake", "default", *flags_mak_paths]
       puts "[beni] cd #{mruby_dir} && #{env.map { |k, v| "#{k}=#{v}" }.join(" ")} #{cmd.join(" ")}"
       run_mruby_rake(env, cmd)
@@ -118,10 +121,21 @@ module Beni
       targets.map { |target| File.join(mruby_dir, "build", target, "lib", "libmruby.flags.mak") }
     end
 
+    # The declared config belongs to the consumer; a path that does
+    # not exist is a configuration error named before anything spawns.
+    def check_build_config!
+      return if build_config.nil? || File.exist?(build_config)
+
+      raise Error, "[beni] build config #{build_config} does not exist"
+    end
+
+    # Report every missing artifact at once, so a multi-target build
+    # failure shows the whole gap instead of one path per run.
     def verify_artifacts!
-      artifact_paths.each do |path|
-        raise Error, "[beni] build completed but #{path} is missing" unless File.exist?(path)
-      end
+      missing = artifact_paths.reject { |path| File.exist?(path) }
+      return if missing.empty?
+
+      raise Error, "[beni] build completed but artifacts are missing:\n  #{missing.join("\n  ")}"
     end
   end
 end
