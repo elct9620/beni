@@ -65,7 +65,7 @@ Tasks      Beni::Tasks (Rake::TaskLib    beni      typed wrapper (magnus idioms)
   │          — beni:* task surface)        L2  convert::{IntoValue, FromValue}
 Build      Beni::Builder (drives            │   state::args (Format dispatch)
   │          mruby's own rake via            │   state::protect (mrb_protect_error)
-  │          MRUBY_CONFIG; requests          L1  Mrb RAII · Value/Class/Array/Hash
+  │          MRUBY_CONFIG; requests          L1  Mrb RAII · Value/RClass/Array/Hash
   │          flags.mak file tasks)           │   newtypes · Ccontext
 Config     Beni::BuildConfig                 L0  pub use beni_sys as sys
   │          (beni:config: copies the      ──────────────────────────────

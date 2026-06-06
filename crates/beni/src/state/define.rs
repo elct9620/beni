@@ -10,23 +10,29 @@
 //!   * `mrb_define_global_const` — bind a top-level constant.
 //!   * `mrb_gv_set` — assign a Ruby `$global`.
 //!
-//! Nested-namespace counterparts (`mrb_define_module_under`,
-//! `mrb_define_class_under`, `mrb_class_get_under`) live on
-//! `crate::Class` because they take an outer class/module receiver,
-//! not the VM root.
+//! Definitions and lookups run inside `Mrb::protect` so an mruby
+//! raise surfaces as `Err(Error::Exception)` — the same contract as
+//! the `Module` trait, whose nested-namespace counterparts
+//! (`define_class` / `define_module` / `class_get` on a handle) live
+//! on `crate::RClass` / `crate::RModule`.
 
-use crate::{Class, Mrb, Value};
+use crate::{Error, Mrb, RClass, RModule, Value};
 use beni_sys as sys;
 
 impl Mrb {
     /// `mrb_define_module(mrb, name)` — return the module named
     /// `name`, defining it at top level if not already present.
+    /// mruby rejects a same-named constant that is not a module.
     #[inline]
-    pub fn define_module(&self, name: &core::ffi::CStr) -> Class {
+    pub fn define_module(&self, name: &core::ffi::CStr) -> Result<RModule, Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: `self` is alive; `name` is NUL-terminated.
-            Class::from_raw(unsafe { sys::mrb_define_module(self.as_ptr(), name.as_ptr()) })
+            crate::class::protect_class_ptr(self, |mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `name` is NUL-terminated.
+                unsafe { sys::mrb_define_module(mrb.as_ptr(), name.as_ptr()) }
+            })
+            .map(RModule::from_raw)
         }
         #[cfg(not(mruby_linked))]
         {
@@ -36,16 +42,19 @@ impl Mrb {
     }
 
     /// `mrb_define_class(mrb, name, super_)` — define a top-level
-    /// class named `name` inheriting from `super_`.
+    /// class named `name` inheriting from `super_`. mruby rejects a
+    /// superclass mismatch with an existing definition, or a
+    /// same-named constant that is not a class.
     #[inline]
-    pub fn define_class(&self, name: &core::ffi::CStr, super_: Class) -> Class {
+    pub fn define_class(&self, name: &core::ffi::CStr, super_: RClass) -> Result<RClass, Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: `self` is alive; `name` is NUL-terminated; `super_`
-            // was produced by the same VM.
-            Class::from_raw(unsafe {
-                sys::mrb_define_class(self.as_ptr(), name.as_ptr(), super_.as_raw())
+            crate::class::protect_class_ptr(self, |mrb| {
+                // SAFETY: as `define_module`; `super_` was produced by
+                // the same VM.
+                unsafe { sys::mrb_define_class(mrb.as_ptr(), name.as_ptr(), super_.as_raw()) }
             })
+            .map(RClass::from_raw)
         }
         #[cfg(not(mruby_linked))]
         {
@@ -55,14 +64,19 @@ impl Mrb {
     }
 
     /// `mrb_class_get(mrb, name)` — fetch the top-level class named
-    /// `name`. The returned `Class` may be null when no such class
-    /// is registered.
+    /// `name`. mruby raises `NameError` when the constant is missing
+    /// and `TypeError` when it is not a class (vendored
+    /// `src/class.c` documents both), so the lookup is fallible by
+    /// contract.
     #[inline]
-    pub fn class_get(&self, name: &core::ffi::CStr) -> Class {
+    pub fn class_get(&self, name: &core::ffi::CStr) -> Result<RClass, Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: `self` is alive; `name` is NUL-terminated.
-            Class::from_raw(unsafe { sys::mrb_class_get(self.as_ptr(), name.as_ptr()) })
+            crate::class::protect_class_ptr(self, |mrb| {
+                // SAFETY: as `define_module`.
+                unsafe { sys::mrb_class_get(mrb.as_ptr(), name.as_ptr()) }
+            })
+            .map(RClass::from_raw)
         }
         #[cfg(not(mruby_linked))]
         {

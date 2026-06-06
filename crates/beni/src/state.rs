@@ -51,7 +51,7 @@ pub mod load;
 pub mod protect;
 pub mod symbol;
 
-use crate::{Class, Value};
+use crate::{RClass, Value};
 use beni_sys as sys;
 #[cfg(mruby_linked)]
 use core::ptr::NonNull;
@@ -239,18 +239,18 @@ impl Mrb {
         crate::not_linked()
     }
 
-    /// Return `mrb->object_class` as a typed `Class` handle.
+    /// Return `mrb->object_class` as a typed `RClass` handle.
     /// Replaces direct field access — the `object_class` field on
     /// the `crate::mrb_state` struct is `pub(crate)` so this
     /// accessor is the one external entry point. The free function
     /// `crate::mrb_object_class` remains for code paths that hold
     /// only a raw `*mut mrb_state`.
     #[inline]
-    pub fn object_class(&self) -> Class {
+    pub fn object_class(&self) -> RClass {
         #[cfg(mruby_linked)]
         {
             // SAFETY: `self.state` is alive by the `&self` borrow.
-            Class::from_raw(unsafe { sys::mrb_object_class(self.as_ptr()) })
+            RClass::from_raw(unsafe { sys::mrb_object_class(self.as_ptr()) })
         }
         #[cfg(not(mruby_linked))]
         crate::not_linked()

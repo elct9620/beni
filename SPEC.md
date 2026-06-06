@@ -209,8 +209,8 @@ Behaviors:
   definition, and closure-based exception protection.
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
-  `Class` and `Module` handles. Methods are registered on those handles
-  through the `Class` and `Module` traits (mirroring `magnus::Module` and
+  `RClass` and `RModule` handles. Methods are registered on those handles
+  through the `Module` and `Object` traits (mirroring `magnus::Module` and
   `magnus::Object`), accepting Rust closures whose arguments and return
   values cross the boundary through `IntoValue` / `FromValue`. A
   definition or registration mruby rejects surfaces as a Rust `Err`.

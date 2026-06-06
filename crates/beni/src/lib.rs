@@ -1,7 +1,7 @@
 //! beni — typed Rust wrapper over the `beni-sys` FFI surface.
 //!
 //! This crate owns every Rust-level abstraction above the mruby C
-//! API: the `Mrb` / `Ccontext` RAII types, the `Value` / `Class` /
+//! API: the `Mrb` / `Ccontext` RAII types, the `Value` / `RClass` /
 //! `Array` / `Hash` newtypes, the `IntoValue` / `FromValue` trait
 //! seam, the `Format`-based `mrb_get_args` dispatch, and the
 //! `protect` closure wrapper. The sibling `beni-sys` crate keeps
@@ -18,7 +18,7 @@
 //!
 //! L1  RAII / newtypes  state         (Mrb owning *mut mrb_state)
 //!                      value         (Value newtype + cstr! / cstr_ptr)
-//!                      class         (Class / Module handles)
+//!                      class         (RClass / RModule handles + traits)
 //!                      array / hash  (typed factories on top of Value)
 //!                      ccontext      (Ccontext RAII)
 //!
@@ -40,7 +40,7 @@
 
 // Safe-layer modules. These hold the typed abstractions over the
 // bindgen FFI surface: `Mrb` / `Ccontext` RAII, typed `Value` /
-// `Class` / `Array` / `Hash` newtypes, and the `cstr!` / `cstr_ptr`
+// `RClass` / `RModule` / `Array` / `Hash` newtypes, and the `cstr!` / `cstr_ptr`
 // C-string helpers.
 //
 // Every module and re-export is unconditional: in placeholder mode
@@ -51,6 +51,7 @@ pub mod array;
 pub mod ccontext;
 pub mod class;
 pub mod convert;
+pub mod error;
 pub mod hash;
 pub mod state;
 pub mod value;
@@ -62,8 +63,9 @@ pub use state::args::{format, Format};
 pub use ccontext::Ccontext;
 
 pub use array::Array;
-pub use class::{Class, Module};
+pub use class::{Module, Object, RClass, RModule};
 pub use convert::{FromValue, IntoValue};
+pub use error::Error;
 pub use hash::Hash;
 pub use value::cstr_ptr;
 pub use value::Value;
@@ -90,11 +92,11 @@ pub use beni_sys as sys;
 /// for the receiver and return slots. `Value` is
 /// `#[repr(transparent)]` over `mrb_value`, so this alias has the
 /// same C ABI as `sys::mrb_func_t` — but Rust nominal typing keeps
-/// the two distinct, which lets `Class::define_method` accept
+/// the two distinct, which lets `Module::define_method` accept
 /// bridges declared with the ergonomic typed signature without an
 /// `as`-cast at every call site. The `transmute` from this typed
 /// alias to `sys::mrb_func_t` happens once inside
-/// `Class::define_method` / `define_singleton_method`.
+/// `Module::define_method` / `Object::define_singleton_method`.
 ///
 /// Unconditional (not `mruby_linked`-gated) so the sanity test
 /// `typed_mrb_func_t_coerces_from_value_bridge` (in `tests` below)
@@ -166,15 +168,22 @@ mod tests {
         let _ = Value::const_defined;
         let _ = Value::const_get;
         let _ = Value::respond_to;
-        let _ = Class::as_value;
-        let _ = Class::define_module_under;
-        let _ = Class::define_class_under;
-        let _ = Class::class_get_under;
-        let _ = Class::name;
-        let _ = Class::define_method;
-        let _ = Class::define_singleton_method;
-        let _ = Class::obj_new;
-        let _ = Class::raise;
+        let _ = RClass::as_value;
+        let _ = RClass::obj_new;
+        let _ = RClass::raise;
+        let _ = RClass::is_null;
+        let _ = RModule::from_raw;
+        let _ = RModule::as_raw;
+        let _ = <RClass as Module>::define_class;
+        let _ = <RClass as Module>::define_module;
+        let _ = <RClass as Module>::class_get;
+        let _ = <RClass as Module>::define_method;
+        let _ = <RClass as Module>::name;
+        let _ = <RModule as Module>::define_class;
+        let _ = <RModule as Module>::define_method;
+        let _ = <RClass as Object>::define_singleton_method;
+        let _ = <RModule as Object>::define_singleton_method;
+        let _ = Error::message;
         let _ = Array::from_value_unchecked;
         let _ = Array::as_value;
         let _ = Array::as_raw;
@@ -203,7 +212,7 @@ mod tests {
         // coerce to `crate::mrb_func_t` without an explicit cast.
         // If `Value`'s `#[repr(transparent)]` over `mrb_value` ever
         // drifts (or someone removes the repr attribute), the
-        // `transmute` inside `Class::define_method` becomes UB —
+        // `transmute` inside `Module::define_method` becomes UB —
         // this test together with `value::tests::value_shares_abi_
         // with_mrb_value` is the guard rail.
         unsafe extern "C" fn _stub(_mrb: *mut sys::mrb_state, _self_: Value) -> Value {

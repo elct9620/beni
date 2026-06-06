@@ -1,84 +1,119 @@
-//! Typed `Class` newtype around `*mut RClass`.
+//! Typed `RClass` / `RModule` handles and the `Module` / `Object`
+//! registration traits — beni's mirror of `magnus::RClass` /
+//! `magnus::RModule` with `magnus::Module` / `magnus::Object`.
 //!
-//! ## Why a newtype
+//! ## Why newtypes
 //!
-//! Same rationale as `Value`: the raw pointer crosses
+//! Same rationale as `Value`: the raw `*mut RClass` pointer crosses
 //! the crate boundary, and consumers historically had to pass it
-//! around as `*mut sys::RClass` — easy to leak, easy to confuse with
-//! other opaque pointers, and impossible to attach inherent methods
-//! to from a sibling crate without an extension trait. Wrapping the
-//! pointer in this crate gives every consumer a typed handle plus a
-//! single place to grow method surface (class lookup, method
-//! definition, class-name resolution).
+//! around untyped — easy to leak, easy to confuse with other opaque
+//! pointers, and impossible to attach inherent methods to from a
+//! sibling crate. mruby represents classes and modules with the same
+//! C `struct RClass`; the two Rust newtypes keep "this handle is a
+//! class" / "this handle is a module" distinct at the type level
+//! while sharing the registration surface through the traits.
 //!
 //! ## ABI guarantee
 //!
-//! `Class` is `#[repr(transparent)]` over `*mut RClass`, so it is
-//! pointer-sized and shares the C ABI on every target. This matters
-//! at the FFI boundary — a struct field of type `Class` round-trips
-//! into mruby's own `RClass *` slot without any conversion.
+//! Both handles are `#[repr(transparent)]` over `*mut RClass`, so
+//! they are pointer-sized and share the C ABI on every target — a
+//! struct field of either type round-trips into mruby's own
+//! `RClass *` slot without conversion.
 //!
-//! ## Module alias
+//! ## Error contract
 //!
-//! mruby represents both Modules and Classes with the same
-//! `struct RClass` type at the C level. `Module` is a transparent
-//! type alias for `Class` so install paths can read
-//! `let helpers_mod: Module = …` for a module handle and
-//! `let handle_class: Class = …` for a class handle without changing
-//! the underlying representation.
-//!
-//! ## Null representation
-//!
-//! `Class` may carry a null pointer because several mruby APIs
-//! (`mrb_class_get_under`, `mrb_class_get`) signal "not found" by
-//! returning NULL. Consumers gate on `Class::is_null` before
-//! treating the value as a live class handle; a future typed-error
-//! migration could move null handling into the return type.
+//! Every definition, registration, and lookup runs inside
+//! `Mrb::protect`, so an mruby raise (superclass mismatch, frozen
+//! receiver, missing constant, …) surfaces as `Err(Error::Exception)`
+//! instead of long-jumping across Rust frames.
 
-use crate::{Mrb, Value};
+use crate::{Error, Mrb, Value};
 use beni_sys as sys;
 
-/// Typed handle on an mruby class / module. `#[repr(transparent)]`
-/// over `*mut RClass` so the C ABI is preserved.
+/// Typed handle on an mruby class. `#[repr(transparent)]` over
+/// `*mut RClass` so the C ABI is preserved.
 ///
-/// Construct via `Class::from_raw` at FFI boundaries. Round-trip
-/// back to the raw pointer via `Class::as_raw` when calling raw
-/// mruby APIs (`mrb_define_method`, `mrb_define_class_under`, …).
-///
-/// Available in both linked and placeholder builds to mirror
-/// `Value`'s shape: the newtype is `#[repr(transparent)]` and carries
-/// no mruby linkage, so its constructors compile without a staged
-/// toolchain. Methods that talk to mruby keep their signatures in
-/// placeholder builds and divert to `crate::not_linked`.
+/// Construct via `Mrb::define_class` / `Mrb::class_get` (top level),
+/// the `Module` trait's `define_class` / `class_get` (nested), or
+/// `RClass::from_raw` at FFI boundaries.
 #[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct Class(pub(crate) *mut sys::RClass);
+#[derive(Copy, Clone, Debug)]
+pub struct RClass(pub(crate) *mut sys::RClass);
 
-/// Alias for `Class` used by install paths to express "this handle
-/// refers to a module" without changing the runtime type.
-pub type Module = Class;
+/// Typed handle on an mruby module. `#[repr(transparent)]` over
+/// `*mut RClass` — mruby models modules with the same C struct as
+/// classes; the newtype keeps the distinction at the Rust type level.
+///
+/// Construct via `Mrb::define_module` (top level), the `Module`
+/// trait's `define_module` (nested), or `RModule::from_raw` at FFI
+/// boundaries.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug)]
+pub struct RModule(pub(crate) *mut sys::RClass);
 
-impl Class {
+mod private {
+    use beni_sys as sys;
+
+    /// Plumbing supertrait sealing `Module` / `Object` to the two
+    /// handle newtypes and giving their shared default bodies one
+    /// raw-pointer accessor.
+    pub trait ClassLike: Copy {
+        fn raw(self) -> *mut sys::RClass;
+    }
+
+    impl ClassLike for super::RClass {
+        fn raw(self) -> *mut sys::RClass {
+            self.0
+        }
+    }
+
+    impl ClassLike for super::RModule {
+        fn raw(self) -> *mut sys::RClass {
+            self.0
+        }
+    }
+}
+
+/// Run `f` inside `Mrb::protect`, boxing the class/module pointer it
+/// produces as a `Value` to ride through the protect frame and
+/// unboxing it on the way out — the shared plumbing behind every
+/// definition and lookup that yields a handle. An mruby raise inside
+/// `f` surfaces as `Err(Error::Exception)`.
+#[cfg(mruby_linked)]
+pub(crate) fn protect_class_ptr<F>(mrb: &Mrb, f: F) -> Result<*mut sys::RClass, Error>
+where
+    F: FnOnce(&Mrb) -> *mut sys::RClass,
+{
+    mrb.protect(|mrb| {
+        let raw = f(mrb);
+        // SAFETY: `raw` was just produced against the live VM by the
+        // closure's definition/lookup call.
+        Value::from_raw(unsafe { sys::mrb_obj_value(raw as *mut core::ffi::c_void) })
+    })
+    // SAFETY: the Ok value boxes the pointer produced above.
+    .map(|v| unsafe { v.as_class_ptr() })
+    .map_err(Error::Exception)
+}
+
+impl RClass {
     /// Wrap a raw `*mut RClass` produced by FFI. Most call sites get
-    /// the pointer from `mrb_define_class_under`,
-    /// `mrb_class_get_under`, `mrb_class_get`, or
-    /// `crate::mrb_object_class`.
+    /// the pointer from the typed definition methods; `from_raw`
+    /// serves bridges that receive one from mruby directly.
     #[inline]
     pub const fn from_raw(p: *mut sys::RClass) -> Self {
         Self(p)
     }
 
     /// Borrow the inner `*mut RClass` for raw FFI calls. The wrapper
-    /// itself stays usable after the borrow (`Class: Copy`).
+    /// itself stays usable after the borrow (`RClass: Copy`).
     #[inline]
     pub const fn as_raw(self) -> *mut sys::RClass {
         self.0
     }
 
-    /// TRUE when the underlying pointer is null. The mruby class
-    /// lookup APIs (`mrb_class_get_under`, `mrb_class_get`) return
-    /// NULL for "not found"; consumers can gate on this before
-    /// dereferencing.
+    /// TRUE when the underlying pointer is null. Only reachable via
+    /// `RClass::from_raw` on a NULL pointer — the typed lookup paths
+    /// surface missing classes as `Err` instead.
     #[inline]
     pub fn is_null(self) -> bool {
         self.0.is_null()
@@ -107,187 +142,10 @@ impl Class {
         crate::not_linked()
     }
 
-    // ----------------------------------------------------------------
-    // Nested module / class registration, method definition,
-    // instantiation, and raise. Each method mirrors the mruby C API:
-    //
-    //   - mrb_define_module_under(mrb, outer, name)
-    //   - mrb_define_class_under(mrb, outer, name, super_)
-    //   - mrb_class_get_under(mrb, outer, name)
-    //   - mrb_class_name(mrb, c)
-    //   - mrb_define_method(mrb, c, name, func, aspec)
-    //   - mrb_define_singleton_method(mrb, obj, name, func, aspec)
-    //   - mrb_obj_new(mrb, c, argc, argv)
-    //   - mrb_raise(mrb, c, msg)  [diverges]
-    //
-    // `Module` is a type alias for `Class`, so the `module_under` /
-    // `class_under` pair is reachable from either spelling without
-    // changing the runtime type.
-    // ----------------------------------------------------------------
-
-    /// `mrb_define_module_under(mrb, self, name)` — define or fetch a
-    /// nested module under `self`.
-    #[inline]
-    pub fn define_module_under(self, mrb: &Mrb, name: &core::ffi::CStr) -> Class {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive; `self` was produced by the same VM;
-            // `name` is NUL-terminated.
-            Class::from_raw(unsafe {
-                sys::mrb_define_module_under(mrb.as_ptr(), self.0, name.as_ptr())
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
-    }
-
-    /// `mrb_define_class_under(mrb, self, name, super_)` — define a
-    /// nested class under `self`, inheriting from `super_`.
-    #[inline]
-    pub fn define_class_under(self, mrb: &Mrb, name: &core::ffi::CStr, super_: Class) -> Class {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `define_module_under`; `super_` originates from
-            // the same VM.
-            Class::from_raw(unsafe {
-                sys::mrb_define_class_under(mrb.as_ptr(), self.0, name.as_ptr(), super_.0)
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name, super_);
-            crate::not_linked()
-        }
-    }
-
-    /// `mrb_class_get_under(mrb, self, name)` — fetch a nested class
-    /// by name. The returned `Class` may be null when no such class
-    /// is registered.
-    #[inline]
-    pub fn class_get_under(self, mrb: &Mrb, name: &core::ffi::CStr) -> Class {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `define_module_under`.
-            Class::from_raw(unsafe {
-                sys::mrb_class_get_under(mrb.as_ptr(), self.0, name.as_ptr())
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
-    }
-
-    /// `mrb_class_name(mrb, self)` — return the class's full Ruby
-    /// name (e.g. `"MyService::KV"`). Returns `None` when mruby
-    /// yields NULL.
-    ///
-    /// The returned slice points into mruby's interned class-name
-    /// storage which lives for the duration of the VM.
-    #[inline]
-    pub fn name(self, mrb: &Mrb) -> Option<&'static str> {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive by the borrow; `self` originates
-            // from the same VM by the single-VM contract.
-            let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.0) };
-            if ptr.is_null() {
-                return None;
-            }
-            // SAFETY: mruby's class-name storage lives for the duration
-            // of the VM.
-            Some(
-                unsafe { core::ffi::CStr::from_ptr(ptr) }
-                    .to_str()
-                    .unwrap_or(""),
-            )
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
-    }
-
-    /// `mrb_define_method(mrb, self, name, func, aspec)` — register
-    /// an instance method on this class. Takes the typed
-    /// `crate::mrb_func_t` (Value-based) and transmutes to the raw
-    /// `sys::mrb_func_t` (mrb_value-based) once. Both have identical
-    /// C ABI because `Value` is `#[repr(transparent)]` over
-    /// `mrb_value`.
-    #[inline]
-    pub fn define_method(
-        self,
-        mrb: &Mrb,
-        name: &core::ffi::CStr,
-        func: crate::mrb_func_t,
-        aspec: sys::mrb_aspec,
-    ) {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY (transmute): `Value` is `#[repr(transparent)]`
-            // over `sys::mrb_value` (pinned by
-            // `value::tests::value_shares_abi_with_mrb_value`), so
-            // `crate::mrb_func_t` and `sys::mrb_func_t` share C ABI and
-            // the transmute is a no-op at codegen.
-            // SAFETY (mrb_define_method): `mrb` is alive; `self` was
-            // produced by the same VM; `name` is NUL-terminated; `raw`
-            // has the C ABI mruby expects.
-            let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
-            unsafe { sys::mrb_define_method(mrb.as_ptr(), self.0, name.as_ptr(), raw, aspec) };
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name, func, aspec);
-            crate::not_linked()
-        }
-    }
-
-    /// `mrb_define_singleton_method(mrb, self, name, func, aspec)` —
-    /// register a singleton-class method on this class object. The
-    /// receiver here is treated as `RObject *` so the singleton-class
-    /// shim attaches to the metaclass (matching mruby's own contract).
-    #[inline]
-    pub fn define_singleton_method(
-        self,
-        mrb: &Mrb,
-        name: &core::ffi::CStr,
-        func: crate::mrb_func_t,
-        aspec: sys::mrb_aspec,
-    ) {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY (transmute): as `define_method` — `Value` is
-            // `#[repr(transparent)]` over `sys::mrb_value`, so the typed
-            // and raw `mrb_func_t` aliases share C ABI.
-            // SAFETY (mrb_define_singleton_method): `RClass *` and
-            // `RObject *` are both `c_void *` aliases in this crate's
-            // binding; the cast matches what `mrbgems/mruby-singleton-
-            // class` does inline.
-            let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
-            unsafe {
-                sys::mrb_define_singleton_method(
-                    mrb.as_ptr(),
-                    self.0 as *mut sys::RObject,
-                    name.as_ptr(),
-                    raw,
-                    aspec,
-                )
-            };
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name, func, aspec);
-            crate::not_linked()
-        }
-    }
-
     /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
     /// a new instance of this class, calling `initialize` with `args`.
+    /// A raising `initialize` long-jumps — only call from contexts
+    /// that can absorb one (C bridges, `Mrb::protect` bodies).
     #[inline]
     pub fn obj_new(self, mrb: &Mrb, args: &[Value]) -> Value {
         #[cfg(mruby_linked)]
@@ -336,5 +194,324 @@ impl Class {
             let _ = (mrb, msg);
             crate::not_linked()
         }
+    }
+}
+
+impl RModule {
+    /// Wrap a raw `*mut RClass` known to be a module. Counterpart of
+    /// `RClass::from_raw` for FFI boundaries.
+    #[inline]
+    pub const fn from_raw(p: *mut sys::RClass) -> Self {
+        Self(p)
+    }
+
+    /// Borrow the inner `*mut RClass` for raw FFI calls. The wrapper
+    /// itself stays usable after the borrow (`RModule: Copy`).
+    #[inline]
+    pub const fn as_raw(self) -> *mut sys::RClass {
+        self.0
+    }
+}
+
+/// Registration surface shared by classes and modules — beni's
+/// mirror of `magnus::Module`. Every method runs inside
+/// `Mrb::protect`, so an mruby raise surfaces as
+/// `Err(Error::Exception)` and never unwinds across FFI.
+pub trait Module: private::ClassLike {
+    /// `mrb_define_class_under(mrb, self, name, superclass)` — define
+    /// (or fetch) the nested class `self::name` inheriting from
+    /// `superclass`. mruby rejects a superclass mismatch with an
+    /// existing definition, or a same-named constant that is not a
+    /// class.
+    fn define_class(
+        self,
+        mrb: &Mrb,
+        name: &core::ffi::CStr,
+        superclass: RClass,
+    ) -> Result<RClass, Error> {
+        #[cfg(mruby_linked)]
+        {
+            protect_class_ptr(mrb, |mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` and `superclass` originate from the same VM;
+                // `name` is NUL-terminated.
+                unsafe {
+                    sys::mrb_define_class_under(
+                        mrb.as_ptr(),
+                        self.raw(),
+                        name.as_ptr(),
+                        superclass.as_raw(),
+                    )
+                }
+            })
+            .map(RClass::from_raw)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, superclass);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_define_module_under(mrb, self, name)` — define (or fetch)
+    /// the nested module `self::name`. mruby rejects a same-named
+    /// constant that is not a module.
+    fn define_module(self, mrb: &Mrb, name: &core::ffi::CStr) -> Result<RModule, Error> {
+        #[cfg(mruby_linked)]
+        {
+            protect_class_ptr(mrb, |mrb| {
+                // SAFETY: as `define_class`.
+                unsafe { sys::mrb_define_module_under(mrb.as_ptr(), self.raw(), name.as_ptr()) }
+            })
+            .map(RModule::from_raw)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_class_get_under(mrb, self, name)` — fetch the nested
+    /// class `self::name`. mruby raises `NameError` when the constant
+    /// is missing and `TypeError` when it is not a class
+    /// (vendored `src/class.c` documents both), so the lookup is
+    /// fallible by contract.
+    fn class_get(self, mrb: &Mrb, name: &core::ffi::CStr) -> Result<RClass, Error> {
+        #[cfg(mruby_linked)]
+        {
+            protect_class_ptr(mrb, |mrb| {
+                // SAFETY: as `define_class`.
+                unsafe { sys::mrb_class_get_under(mrb.as_ptr(), self.raw(), name.as_ptr()) }
+            })
+            .map(RClass::from_raw)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_define_method(mrb, self, name, func, aspec)` — register
+    /// an instance method. Takes the typed `crate::mrb_func_t`
+    /// (Value-based) and transmutes to the raw `sys::mrb_func_t`
+    /// (mrb_value-based) once; both have identical C ABI because
+    /// `Value` is `#[repr(transparent)]` over `mrb_value`. mruby
+    /// rejects registration on a frozen receiver.
+    fn define_method(
+        self,
+        mrb: &Mrb,
+        name: &core::ffi::CStr,
+        func: crate::mrb_func_t,
+        aspec: sys::mrb_aspec,
+    ) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY (transmute): `Value` is `#[repr(transparent)]`
+                // over `sys::mrb_value` (pinned by
+                // `value::tests::value_shares_abi_with_mrb_value`), so
+                // `crate::mrb_func_t` and `sys::mrb_func_t` share C ABI
+                // and the transmute is a no-op at codegen.
+                // SAFETY (mrb_define_method): `mrb` is alive inside the
+                // protect frame; `self` was produced by the same VM;
+                // `name` is NUL-terminated; `raw` has the C ABI mruby
+                // expects.
+                let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
+                unsafe {
+                    sys::mrb_define_method(mrb.as_ptr(), self.raw(), name.as_ptr(), raw, aspec)
+                };
+                Value::nil()
+            })
+            .map(|_| ())
+            .map_err(Error::Exception)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, func, aspec);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_class_name(mrb, self)` — the handle's full Ruby name
+    /// (e.g. `"MyService::KV"`). Returns `None` when mruby yields
+    /// NULL. The returned slice points into mruby's interned
+    /// class-name storage which lives for the duration of the VM.
+    fn name(self, mrb: &Mrb) -> Option<&'static str> {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive by the borrow; `self` originates
+            // from the same VM by the single-VM contract.
+            let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.raw()) };
+            if ptr.is_null() {
+                return None;
+            }
+            // SAFETY: mruby's class-name storage lives for the duration
+            // of the VM.
+            Some(
+                unsafe { core::ffi::CStr::from_ptr(ptr) }
+                    .to_str()
+                    .unwrap_or(""),
+            )
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+}
+
+impl Module for RClass {}
+impl Module for RModule {}
+
+/// Per-object registration surface — beni's mirror of
+/// `magnus::Object`, currently covering singleton-method
+/// registration on the two handle newtypes.
+pub trait Object: private::ClassLike {
+    /// `mrb_define_singleton_method(mrb, self, name, func, aspec)` —
+    /// register a singleton-class method on this handle. The receiver
+    /// is treated as `RObject *` so the singleton-class shim attaches
+    /// to the metaclass (matching mruby's own contract). mruby rejects
+    /// receivers that cannot carry a singleton class.
+    fn define_singleton_method(
+        self,
+        mrb: &Mrb,
+        name: &core::ffi::CStr,
+        func: crate::mrb_func_t,
+        aspec: sys::mrb_aspec,
+    ) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY (transmute): as `Module::define_method`.
+                // SAFETY (mrb_define_singleton_method): `RClass *` and
+                // `RObject *` are both `c_void *` aliases in this
+                // crate's binding; the cast matches what
+                // `mrbgems/mruby-singleton-class` does inline.
+                let raw: sys::mrb_func_t = unsafe { core::mem::transmute(func) };
+                unsafe {
+                    sys::mrb_define_singleton_method(
+                        mrb.as_ptr(),
+                        self.raw() as *mut sys::RObject,
+                        name.as_ptr(),
+                        raw,
+                        aspec,
+                    )
+                };
+                Value::nil()
+            })
+            .map(|_| ())
+            .map_err(Error::Exception)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, func, aspec);
+            crate::not_linked()
+        }
+    }
+}
+
+impl Object for RClass {}
+impl Object for RModule {}
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use super::*;
+
+    /// Bridge body answering a fixed Integer — registration target
+    /// for the trait tests below.
+    unsafe extern "C" fn answer_seven(mrb: *mut sys::mrb_state, _self: Value) -> Value {
+        // SAFETY: mruby invokes the bridge with a live state pointer.
+        let mrb = unsafe { Mrb::borrow_raw(&mrb) };
+        Value::from_int(mrb, 7)
+    }
+
+    unsafe extern "C" fn answer_nine(mrb: *mut sys::mrb_state, _self: Value) -> Value {
+        // SAFETY: as `answer_seven`.
+        let mrb = unsafe { Mrb::borrow_raw(&mrb) };
+        Value::from_int(mrb, 9)
+    }
+
+    #[test]
+    fn define_class_surfaces_mruby_rejection_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let base = mrb
+            .define_class(c"BeniErrBase", object)
+            .expect("defining the base class must succeed");
+        mrb.define_class(c"BeniErrChild", base)
+            .expect("defining the child class must succeed");
+
+        // Redefining with a different superclass is the documented
+        // E_TYPE_ERROR rejection (vendored src/class.c superclass
+        // mismatch) — it must surface as Err, not a longjmp.
+        let err = mrb
+            .define_class(c"BeniErrChild", object)
+            .expect_err("superclass mismatch must surface as Err");
+        let Error::Exception(_) = err;
+        assert!(
+            err.message(&mrb).contains("superclass mismatch"),
+            "unexpected rejection message: {}",
+            err.message(&mrb)
+        );
+    }
+
+    #[test]
+    fn class_get_surfaces_name_error_for_missing_class() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // mruby raises NameError for a missing constant (vendored
+        // src/class.c documents the lookup contract) — the typed
+        // lookup must catch it instead of long-jumping.
+        let err = mrb
+            .class_get(c"BeniNoSuchClass")
+            .expect_err("missing class must surface as Err");
+        assert!(
+            err.message(&mrb).contains("BeniNoSuchClass"),
+            "the NameError must name the missing constant: {}",
+            err.message(&mrb)
+        );
+    }
+
+    #[test]
+    fn module_and_object_traits_register_methods() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        // Module trait: nested definition + instance-method
+        // registration, exercised end-to-end through a Ruby call.
+        let outer = mrb
+            .define_module(c"BeniTrait")
+            .expect("defining the module must succeed");
+        let class = outer
+            .define_class(&mrb, c"Widget", object)
+            .expect("defining the nested class must succeed");
+        assert_eq!(class.name(&mrb), Some("BeniTrait::Widget"));
+
+        class
+            .define_method(&mrb, c"answer", answer_seven, sys::mrb_args_none())
+            .expect("registering the instance method must succeed");
+        let receiver = class.obj_new(&mrb, &[]);
+        let got = receiver.call(&mrb, c"answer", &[]);
+        assert_eq!(unsafe { got.unbox_integer() }, 7);
+
+        // Object trait: singleton registration on the class handle,
+        // invoked through the reified class value.
+        class
+            .define_singleton_method(&mrb, c"class_answer", answer_nine, sys::mrb_args_none())
+            .expect("registering the singleton method must succeed");
+        // SAFETY: `class` is a live handle from this VM.
+        let class_value = unsafe { class.as_value(&mrb) };
+        let got = class_value.call(&mrb, c"class_answer", &[]);
+        assert_eq!(unsafe { got.unbox_integer() }, 9);
+
+        // Lookup round-trip through the trait.
+        let fetched = outer
+            .class_get(&mrb, c"Widget")
+            .expect("fetching the nested class must succeed");
+        assert_eq!(fetched.name(&mrb), Some("BeniTrait::Widget"));
     }
 }

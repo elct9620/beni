@@ -154,6 +154,16 @@ impl Immediates {
 #[derive(Copy, Clone)]
 pub struct Value(pub(crate) sys::mrb_value);
 
+// Manual and deliberately opaque: the boxed payload is meaningless
+// without the VM that produced it (and its layout varies by boxing
+// config), so the debug form identifies the type without pretending
+// to render the value. Lets containers like `Error` derive `Debug`.
+impl core::fmt::Debug for Value {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Value").finish_non_exhaustive()
+    }
+}
+
 impl Value {
     /// Wrap a raw `mrb_value` produced by FFI. The most common
     /// caller is a bridge function pointer receiving the receiver

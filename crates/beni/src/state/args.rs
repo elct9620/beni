@@ -330,12 +330,16 @@ mod tests {
     // runs this against an upstream-default 64-bit-mrb_int archive).
     #[test]
     fn rest_format_reads_the_argc_mruby_writes() {
+        use crate::Module;
+
         let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let class = mrb.object_class();
         // SAFETY: mrb_args_any_func is a pure aspec-bit computation.
-        class.define_method(&mrb, c"rest_count", rest_count, unsafe {
-            sys::mrb_args_any_func()
-        });
+        class
+            .define_method(&mrb, c"rest_count", rest_count, unsafe {
+                sys::mrb_args_any_func()
+            })
+            .expect("registering the bridge must succeed");
 
         let receiver = class.obj_new(&mrb, &[]);
         let args = [
