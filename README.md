@@ -6,6 +6,11 @@ the resulting `libmruby.a`. Extracted from the
 [kobako](https://github.com/elct9620/kobako) project; APIs follow 0.x semver
 semantics and may still evolve between minor versions.
 
+> [!WARNING]
+> The `beni` crate does not yet cover the full mruby C API. Anything missing
+> stays reachable through the unsafe `beni::sys` escape hatch — issue reports
+> for the gaps you hit are welcome.
+
 ## Packages
 
 All three packages release in lockstep under a single version.
