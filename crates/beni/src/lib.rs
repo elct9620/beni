@@ -171,6 +171,8 @@ mod tests {
         let _ = Value::is_nil;
         let _ = Value::is_integer;
         let _ = Value::is_float;
+        let _ = Value::is_array;
+        let _ = Value::is_hash;
         let _ = Value::unbox_integer;
         let _ = Value::unbox_float;
         let _ = Value::ary_entry;
@@ -232,6 +234,8 @@ mod tests {
         let _ = <bool as IntoValue>::into_value;
         let _ = <i32 as FromValue>::from_value;
         let _ = <f64 as FromValue>::from_value;
+        let _ = <Array as FromValue>::from_value;
+        let _ = <Hash as FromValue>::from_value;
     }
 
     #[test]

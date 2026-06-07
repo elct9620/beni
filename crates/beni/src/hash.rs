@@ -15,7 +15,8 @@ use beni_sys as sys;
 /// Typed handle on an mruby `Hash`. `#[repr(transparent)]` over
 /// `Value` so the C ABI is preserved.
 ///
-/// Construct via `Mrb::hash_new` (fresh hash) or
+/// Construct via `Mrb::hash_new` (fresh hash), the checked
+/// `FromValue` downcast (`Hash::from_value`, tag-discriminated), or
 /// `Hash::from_value_unchecked` (assert that a `Value` you
 /// already hold is Hash-tagged). Round-trip back to a generic
 /// `Value` via `Hash::as_value` for APIs that take any value.

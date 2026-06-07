@@ -523,6 +523,32 @@ impl Value {
         crate::not_linked()
     }
 
+    /// TRUE when `self` carries `MRB_TT_ARRAY`. See `Value::is_integer`.
+    /// Pair with `Array::from_value_unchecked` for the direct-wrap path.
+    #[inline]
+    pub fn is_array(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_integer`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_ARRAY }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// TRUE when `self` carries `MRB_TT_HASH`. See `Value::is_integer`.
+    /// Pair with `Hash::from_value_unchecked` for the direct-wrap path.
+    #[inline]
+    pub fn is_hash(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_integer`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_HASH }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// Direct `mrb_integer(v)` unbox via mruby's own
     /// `mrb_integer_func` helper (a `MRB_INLINE` reached through
     /// bindgen's static-fn trampoline).

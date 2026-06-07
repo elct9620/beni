@@ -15,7 +15,8 @@ use beni_sys as sys;
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
 /// `Value` so the C ABI is preserved.
 ///
-/// Construct via `Mrb::ary_new` (fresh array) or
+/// Construct via `Mrb::ary_new` (fresh array), the checked
+/// `FromValue` downcast (`Array::from_value`, tag-discriminated), or
 /// `Array::from_value_unchecked` (assert that a `Value` you
 /// already hold is Array-tagged). Round-trip back to a generic
 /// `Value` via `Array::as_value` for APIs that take any value.
