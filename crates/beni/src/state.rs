@@ -44,6 +44,7 @@
 //! Splitting per concern keeps each file's surface small and the
 //! rustdoc on each cluster focused.
 
+pub mod arena;
 pub mod args;
 pub mod define;
 pub mod factory;

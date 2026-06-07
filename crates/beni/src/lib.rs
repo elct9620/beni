@@ -18,7 +18,8 @@
 //!                      method         (method! bridges + MethodN crossing)
 //!                      gem            (Gem trait + Mrb::init_gem)
 //!
-//! L1  RAII / newtypes  state         (Mrb owning *mut mrb_state)
+//! L1  RAII / newtypes  state         (Mrb owning *mut mrb_state,
+//!                                     ArenaScope arena bracketing)
 //!                      value         (Value newtype + cstr! / cstr_ptr)
 //!                      class         (RClass / RModule handles + traits)
 //!                      array / hash  (typed factories on top of Value)
@@ -60,6 +61,7 @@ pub mod method;
 pub mod state;
 pub mod value;
 
+pub use state::arena::ArenaScope;
 pub use state::{Mrb, MrbOpenError};
 
 pub use state::args::{format, Format};
@@ -136,6 +138,8 @@ mod tests {
         let _ = Mrb::define_global_const;
         let _ = Mrb::gv_set;
         let _ = Mrb::gv_get;
+        let _ = Mrb::arena_scope;
+        let _ = ArenaScope::keep;
         let _ = Mrb::str_new;
         let _ = Mrb::str_new_cstr;
         let _ = Mrb::ary_new;
