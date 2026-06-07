@@ -70,15 +70,20 @@ impl Array {
         }
     }
 
-    /// `mrb_ary_entry(self, idx)` — read the element at `idx`.
-    /// Returns `mrb_nil_value()` when `idx` is out of range — mruby's
-    /// own bounds-tolerant behaviour. The type guarantee from the
-    /// constructor makes this safe for any in-range or out-of-range
-    /// integer `idx`.
+    /// `mrb_ary_entry(self, idx)` — read the element at `idx`
+    /// (negative counts from the tail). Returns `mrb_nil_value()`
+    /// when `idx` is out of range — mruby's own bounds-tolerant
+    /// behaviour; an `idx` beyond the archive's `mrb_int` width
+    /// cannot address an element, so it is out of range by
+    /// definition. The type guarantee from the constructor makes
+    /// this safe for any `idx`.
     #[inline]
-    pub fn entry(self, idx: sys::mrb_int) -> Value {
+    pub fn entry(self, idx: isize) -> Value {
         #[cfg(mruby_linked)]
         {
+            let Ok(idx) = sys::mrb_int::try_from(idx) else {
+                return Value::nil();
+            };
             // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
             // contract; `mrb_ary_entry` is bounds-tolerant.
             Value::from_raw(unsafe { sys::mrb_ary_entry(self.0.as_raw(), idx) })
@@ -116,5 +121,9 @@ mod tests {
 
         assert!(ary.entry(1).is_nil());
         assert!(ary.entry(-2).is_nil());
+        // An index beyond the archive's `mrb_int` width is out of
+        // range by definition — same nil contract, no truncation.
+        assert!(ary.entry(isize::MAX).is_nil());
+        assert!(ary.entry(isize::MIN).is_nil());
     }
 }
