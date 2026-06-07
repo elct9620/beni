@@ -86,6 +86,29 @@ fn method_aspec(arity: i8) -> sys::mrb_aspec {
     }
 }
 
+/// Run a registration call inside `Mrb::protect` with the aspec
+/// derived from `method.arity` and the typed bridge transmuted to
+/// the raw `sys::mrb_func_t` — the single seam where that transmute
+/// happens for every `Module` / `Object` registration.
+#[cfg(mruby_linked)]
+fn protect_register<F>(mrb: &Mrb, method: MethodDef, register: F) -> Result<(), Error>
+where
+    F: FnOnce(&Mrb, sys::mrb_func_t, sys::mrb_aspec),
+{
+    mrb.protect(|mrb| {
+        let aspec = method_aspec(method.arity);
+        // SAFETY: `Value` is `#[repr(transparent)]` over
+        // `sys::mrb_value` (pinned by
+        // `value::tests::value_shares_abi_with_mrb_value`), so
+        // `crate::mrb_func_t` and `sys::mrb_func_t` share C ABI and
+        // the transmute is a no-op at codegen.
+        let raw: sys::mrb_func_t = unsafe { core::mem::transmute(method.func) };
+        register(mrb, raw, aspec);
+        Value::nil()
+    })
+    .map(|_| ())
+}
+
 /// Run `f` inside `Mrb::protect`, boxing the class/module pointer it
 /// produces as a `Value` to ride through the protect frame and
 /// unboxing it on the way out — the shared plumbing behind every
@@ -317,24 +340,48 @@ pub trait Module: private::ClassLike {
     ) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
-            mrb.protect(|mrb| {
-                let aspec = method_aspec(method.arity);
-                // SAFETY (transmute): `Value` is `#[repr(transparent)]`
-                // over `sys::mrb_value` (pinned by
-                // `value::tests::value_shares_abi_with_mrb_value`), so
-                // `crate::mrb_func_t` and `sys::mrb_func_t` share C ABI
-                // and the transmute is a no-op at codegen.
-                // SAFETY (mrb_define_method): `mrb` is alive inside the
-                // protect frame; `self` was produced by the same VM;
-                // `name` is NUL-terminated; `raw` has the C ABI mruby
-                // expects.
-                let raw: sys::mrb_func_t = unsafe { core::mem::transmute(method.func) };
+            protect_register(mrb, method, |mrb, raw, aspec| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` was produced by the same VM; `name` is
+                // NUL-terminated; `raw` has the C ABI mruby expects.
                 unsafe {
                     sys::mrb_define_method(mrb.as_ptr(), self.raw(), name.as_ptr(), raw, aspec)
                 };
-                Value::nil()
             })
-            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, method.func, method.arity);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_define_private_method(mrb, self, name, func, aspec)` —
+    /// like `define_method`, with private visibility: Ruby-level
+    /// dispatch with an explicit receiver raises `NoMethodError`.
+    /// The aspec derivation and rejection contract match
+    /// `define_method`.
+    fn define_private_method(
+        self,
+        mrb: &Mrb,
+        name: &core::ffi::CStr,
+        method: MethodDef,
+    ) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            protect_register(mrb, method, |mrb, raw, aspec| {
+                // SAFETY: as `define_method` — same signature, same
+                // contract.
+                unsafe {
+                    sys::mrb_define_private_method(
+                        mrb.as_ptr(),
+                        self.raw(),
+                        name.as_ptr(),
+                        raw,
+                        aspec,
+                    )
+                };
+            })
         }
         #[cfg(not(mruby_linked))]
         {
@@ -393,14 +440,11 @@ pub trait Object: private::ClassLike {
     ) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
-            mrb.protect(|mrb| {
-                let aspec = method_aspec(method.arity);
-                // SAFETY (transmute): as `Module::define_method`.
-                // SAFETY (mrb_define_singleton_method): `RClass *` and
+            protect_register(mrb, method, |mrb, raw, aspec| {
+                // SAFETY: as `Module::define_method`; `RClass *` and
                 // `RObject *` are both `c_void *` aliases in this
-                // crate's binding; the cast matches what
+                // crate's binding, and the cast matches what
                 // `mrbgems/mruby-singleton-class` does inline.
-                let raw: sys::mrb_func_t = unsafe { core::mem::transmute(method.func) };
                 unsafe {
                     sys::mrb_define_singleton_method(
                         mrb.as_ptr(),
@@ -410,9 +454,7 @@ pub trait Object: private::ClassLike {
                         aspec,
                     )
                 };
-                Value::nil()
             })
-            .map(|_| ())
         }
         #[cfg(not(mruby_linked))]
         {
@@ -479,6 +521,45 @@ mod tests {
             "the NameError must name the missing constant: {}",
             err.message(&mrb)
         );
+    }
+
+    #[test]
+    fn private_method_rejects_public_dispatch_but_is_attached() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let class = mrb
+            .define_class(c"BeniPrivate", object)
+            .expect("defining the class must succeed");
+        class
+            .define_private_method(&mrb, c"secret", crate::method!(answer_seven, 0))
+            .expect("registering the private method must succeed");
+        let receiver = class.obj_new(&mrb, &[]);
+
+        // VM-dispatched code with an explicit receiver must observe
+        // the visibility (the funcall path bypasses it by design):
+        // OP_SEND raises NoMethodError for a private method.
+        // SAFETY: `mrb` is alive; the code literal is NUL-terminated.
+        // `mrb_load_string` absorbs the raise into `mrb->exc`.
+        let _ = unsafe { sys::mrb_load_string(mrb.as_ptr(), c"BeniPrivate.new.secret".as_ptr()) };
+        let exc = mrb.pending_exc();
+        assert!(
+            !exc.is_nil(),
+            "public dispatch of a private method must raise"
+        );
+        let message = Error::Exception(exc).message(&mrb);
+        assert!(
+            message.contains("private"),
+            "the NoMethodError must name the visibility: {message}"
+        );
+        mrb.clear_exc();
+
+        // mrb_funcall bypasses visibility, confirming the body is
+        // attached and runs.
+        let got = mrb
+            .protect(|mrb| receiver.call(mrb, c"secret", &[]))
+            .expect("funcall dispatch must reach the private body");
+        assert_eq!(unsafe { got.unbox_integer() }, 7);
     }
 
     #[test]

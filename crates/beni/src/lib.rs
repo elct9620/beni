@@ -101,8 +101,8 @@ pub use beni_sys as sys;
 /// the two distinct, which lets `Module::define_method` accept
 /// bridges declared with the ergonomic typed signature without an
 /// `as`-cast at every call site. The `transmute` from this typed
-/// alias to `sys::mrb_func_t` happens once inside
-/// `Module::define_method` / `Object::define_singleton_method`.
+/// alias to `sys::mrb_func_t` happens once, inside the registration
+/// plumbing the `Module` / `Object` traits share.
 ///
 /// Unconditional (not `mruby_linked`-gated) so the sanity test
 /// `typed_mrb_func_t_coerces_from_value_bridge` (in `tests` below)
@@ -185,9 +185,11 @@ mod tests {
         let _ = <RClass as Module>::define_module;
         let _ = <RClass as Module>::class_get;
         let _ = <RClass as Module>::define_method;
+        let _ = <RClass as Module>::define_private_method;
         let _ = <RClass as Module>::name;
         let _ = <RModule as Module>::define_class;
         let _ = <RModule as Module>::define_method;
+        let _ = <RModule as Module>::define_private_method;
         let _ = <RClass as Object>::define_singleton_method;
         let _ = <RModule as Object>::define_singleton_method;
         let _ = Error::message;
