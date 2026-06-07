@@ -10,11 +10,12 @@
 //! typed seam consumers call.
 //!
 //! Scope covers the scalar leaf types (`i32` / `f64` / `bool`) and
-//! checked downcasts to the container newtypes (`Array` / `Hash`),
-//! discriminated by the value's type tag — subclass instances
-//! convert. No owned/borrowed split — every conversion is by value.
+//! checked downcasts to the typed handles (`Array` / `Hash` /
+//! `RClass`), discriminated by the value's type tag — container
+//! subclass instances convert. No owned/borrowed split — every
+//! conversion is by value.
 
-use crate::{Array, Hash, Mrb, Value};
+use crate::{Array, Hash, Mrb, RClass, Value};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
@@ -124,6 +125,17 @@ impl FromValue for Hash {
     }
 }
 
+impl FromValue for RClass {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the unbox precondition (class tagging) is
+        // established by the `is_class` guard immediately before it.
+        value
+            .is_class()
+            .then(|| RClass::from_raw(unsafe { value.as_class_ptr() }))
+    }
+}
+
 #[cfg(all(test, mruby_linked))]
 mod tests {
     use super::*;
@@ -187,5 +199,30 @@ mod tests {
         let ary = Array::from_value(sub).expect("subclass instance carries MRB_TT_ARRAY");
         ary.push(&mrb, mrb.str_new(b"x"));
         assert_eq!(ary.entry(0).to_string(&mrb), "x");
+    }
+
+    #[test]
+    fn class_downcast_admits_only_the_class_tag() {
+        use crate::Module;
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = crate::Ccontext::new(&mrb, c"convert_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        let class_val = cxt.load_nstring(b"String");
+        let module_val = cxt.load_nstring(b"Kernel");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "looking up the constants must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        let class = RClass::from_value(class_val).expect("a Class value carries MRB_TT_CLASS");
+        assert_eq!(class.name(&mrb), Some("String"));
+
+        // Modules and non-class values reject — MRB_TT_MODULE is not
+        // the class tag.
+        assert!(RClass::from_value(module_val).is_none());
+        assert!(RClass::from_value(42i32.into_value(&mrb)).is_none());
     }
 }

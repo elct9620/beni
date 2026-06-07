@@ -173,6 +173,7 @@ mod tests {
         let _ = Value::is_float;
         let _ = Value::is_array;
         let _ = Value::is_hash;
+        let _ = Value::is_class;
         let _ = Value::unbox_integer;
         let _ = Value::unbox_float;
         let _ = Value::ary_entry;
@@ -236,6 +237,7 @@ mod tests {
         let _ = <f64 as FromValue>::from_value;
         let _ = <Array as FromValue>::from_value;
         let _ = <Hash as FromValue>::from_value;
+        let _ = <RClass as FromValue>::from_value;
     }
 
     #[test]

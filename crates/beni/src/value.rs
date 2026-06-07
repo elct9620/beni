@@ -549,6 +549,22 @@ impl Value {
         crate::not_linked()
     }
 
+    /// TRUE when `self` carries `MRB_TT_CLASS` — the class tag only;
+    /// modules (`MRB_TT_MODULE`) and singleton classes
+    /// (`MRB_TT_SCLASS`) are excluded per SPEC's downcast rule. See
+    /// `Value::is_integer`. Pair with `Value::as_class_ptr` for the
+    /// direct-unbox path.
+    #[inline]
+    pub fn is_class(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_integer`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CLASS }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// Direct `mrb_integer(v)` unbox via mruby's own
     /// `mrb_integer_func` helper (a `MRB_INLINE` reached through
     /// bindgen's static-fn trampoline).
