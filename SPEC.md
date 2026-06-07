@@ -225,10 +225,18 @@ Behaviors:
   The embedder invokes each gem's `init` with the live interpreter handle
   during interpreter setup; the gem defines its classes, modules, and methods
   there. An `Err` from `init` aborts setup and surfaces to the embedder.
-- The safe API cannot cause undefined behavior. Any C API the safe wrapper
-  does not expose is reachable through the re-exported `beni::sys` escape
-  hatch; using `beni::sys` directly is unsafe and outside the wrapper's
-  guarantees.
+- `Mrb::arena_scope` bounds GC arena growth across a region of Rust code:
+  values created inside the scope hold arena protection until the scope
+  ends, and the scope's end releases it. `keep` ends the scope and
+  re-protects the one value it names; dropping the scope ends it with no
+  survivor.
+- The safe API cannot cause undefined behavior while the GC validity rule
+  holds: a value created inside an arena scope is not used after that
+  scope ends, and a survivor carried out through `keep` counts as created
+  where its scope was opened. The type system does not enforce the rule;
+  the consumer upholds it. Any C API the safe wrapper does not expose is
+  reachable through the re-exported `beni::sys` escape hatch; using
+  `beni::sys` directly is unsafe and outside the wrapper's guarantees.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.
