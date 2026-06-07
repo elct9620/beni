@@ -108,16 +108,49 @@ module Beni
       end
     end
 
+    def test_config_task_resolves_a_declared_version_through_the_dsl
+      Dir.mktmpdir("beni-tasks-config") do |dir|
+        stage_mruby_source(dir, version: "9.9.9")
+        dest = declare_config_tasks(dir, declared_version: "9.9.9")
+
+        capture_io { Rake::Task["beni:config"].invoke }
+
+        assert FileUtils.identical?(File.join(dir, "mruby", "build_config", "default.rb"), dest)
+      end
+    end
+
+    def test_config_task_fails_when_the_configured_source_is_not_staged
+      Dir.mktmpdir("beni-tasks-config") do |dir|
+        dest = declare_config_tasks(dir)
+
+        error = assert_raises(Beni::Error) { Rake::Task["beni:config"].invoke }
+
+        assert_match(/is not staged/, error.message)
+        refute_path_exists dest
+      end
+    end
+
     private
 
-    # The marker must carry the DSL's default mruby version — the task
-    # resolves it from the same `Vendor::BUILT_IN_PAIRS` entry.
-    def stage_mruby_source(vendor_dir)
+    # Declare a `Tasks` instance whose `build_config` points inside
+    # +dir+, returning that destination path.
+    def declare_config_tasks(dir, declared_version: nil)
+      dest = File.join(dir, "build_config", "mruby.rb")
+      Tasks.new do
+        vendor_dir dir
+        build_config dest
+        version declared_version if declared_version
+      end
+      dest
+    end
+
+    # The marker must carry the version the task resolves — the DSL's
+    # default mruby version unless the test declares one.
+    def stage_mruby_source(vendor_dir, version: Vendor::BUILT_IN_PAIRS.fetch("mruby").fetch(:version))
       mruby_dir = File.join(vendor_dir, "mruby")
-      default_version = Vendor::BUILT_IN_PAIRS.fetch("mruby").fetch(:version)
       FileUtils.mkdir_p(File.join(mruby_dir, "build_config"))
       File.write(File.join(mruby_dir, "build_config", "default.rb"), "# upstream default config\n")
-      File.write(File.join(mruby_dir, Vendor::Tarball::VERSION_MARKER), "#{default_version}\n")
+      File.write(File.join(mruby_dir, Vendor::Tarball::VERSION_MARKER), "#{version}\n")
     end
   end
 end

@@ -40,9 +40,8 @@ module Beni
     # True when every target's artifacts — +libmruby.a+ plus the
     # +libmruby.flags.mak+ sidecar +beni-sys+ parses for ABI alignment
     # — are already present, letting callers skip the build without
-    # spawning a subprocess. An archive without its sidecar (e.g. a
-    # tree built before flags.mak joined the contract) triggers a
-    # rebuild, which is incremental and only emits the missing file.
+    # spawning a subprocess. An archive without its sidecar triggers
+    # a rebuild, which is incremental and only emits the missing file.
     def built?
       artifact_paths.all? { |path| File.exist?(path) }
     end
