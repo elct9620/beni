@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/elct9620/beni/compare/v0.2.0...v0.3.0) (2026-06-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** take Array::entry's index as isize
+
+### Features
+
+* **beni:** add checked FromValue downcast for RClass ([b21db5b](https://github.com/elct9620/beni/commit/b21db5b553f584ddd460733a2db37bb7e2fec8e2))
+* **beni:** add checked FromValue downcasts for Array and Hash ([eb30b0a](https://github.com/elct9620/beni/commit/eb30b0ace3e821d0cf1a6071360958c76dbf616e))
+* **beni:** take Array::entry's index as isize ([0c43f9c](https://github.com/elct9620/beni/commit/0c43f9c0282ec22b4646e20485a6f7f3fd7c76b1))
+
 ## [0.2.0](https://github.com/elct9620/beni/compare/v0.1.0...v0.2.0) (2026-06-07)
 
 
