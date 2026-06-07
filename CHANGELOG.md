@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0](https://github.com/elct9620/beni/compare/v0.1.0...v0.2.0) (2026-06-07)
+
+
+### Features
+
+* **beni:** add ArenaScope for GC arena bracketing ([ec8e1e4](https://github.com/elct9620/beni/commit/ec8e1e416e3a4dc2433281dfe9945916fcf98081))
+* **beni:** add Module::define_private_method ([86c5d24](https://github.com/elct9620/beni/commit/86c5d241aea6ecd27d73bcdcf37678d07fa054fc))
+* **beni:** add Mrb::gv_get as the read counterpart of gv_set ([55f1bf0](https://github.com/elct9620/beni/commit/55f1bf024f1ab761450f602f9aa2f2f29932d25d))
+
 ## 0.1.0 (2026-06-06)
 
 
