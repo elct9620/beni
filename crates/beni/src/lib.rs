@@ -135,6 +135,7 @@ mod tests {
         let _ = Mrb::class_get;
         let _ = Mrb::define_global_const;
         let _ = Mrb::gv_set;
+        let _ = Mrb::gv_get;
         let _ = Mrb::str_new;
         let _ = Mrb::str_new_cstr;
         let _ = Mrb::ary_new;

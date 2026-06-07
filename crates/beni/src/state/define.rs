@@ -1,20 +1,22 @@
-//! Top-level module / class registration and global-state mutation
+//! Top-level module / class registration and global-state access
 //! on `Mrb`.
 //!
-//! Inherent methods that register names against the Object root or
-//! the global variable table:
+//! Inherent methods that work against the Object root or the global
+//! variable table:
 //!
 //!   * `mrb_define_module` / `mrb_define_class` — register a new
 //!     module or class at top level.
 //!   * `mrb_class_get` — look one up by name.
 //!   * `mrb_define_global_const` — bind a top-level constant.
-//!   * `mrb_gv_set` — assign a Ruby `$global`.
+//!   * `mrb_gv_set` / `mrb_gv_get` — assign or read a Ruby `$global`.
 //!
-//! Definitions and lookups run inside `Mrb::protect` so an mruby
-//! raise surfaces as `Err(Error::Exception)` — the same contract as
-//! the `Module` trait, whose nested-namespace counterparts
-//! (`define_class` / `define_module` / `class_get` on a handle) live
-//! on `crate::RClass` / `crate::RModule`.
+//! Class and module definitions and lookups run inside
+//! `Mrb::protect` so an mruby raise surfaces as
+//! `Err(Error::Exception)` — the same contract as the `Module`
+//! trait, whose nested-namespace counterparts (`define_class` /
+//! `define_module` / `class_get` on a handle) live on
+//! `crate::RClass` / `crate::RModule`. Global variable access is a
+//! plain table operation that cannot raise.
 
 use crate::{Error, Mrb, RClass, RModule, Value};
 use beni_sys as sys;
@@ -115,5 +117,52 @@ impl Mrb {
             let _ = (sym, val);
             crate::not_linked()
         }
+    }
+
+    /// `mrb_gv_get(mrb, sym)` — read a global variable; an unset
+    /// global reads as nil. The read happens at call time, so a
+    /// reassigned global yields its current value.
+    #[inline]
+    pub fn gv_get(&self, sym: sys::mrb_sym) -> Value {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive; `sym` was interned against the
+            // same VM (caller contract).
+            Value::from_raw(unsafe { sys::mrb_gv_get(self.as_ptr(), sym) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = sym;
+            crate::not_linked()
+        }
+    }
+}
+
+#[cfg(all(test, mruby_linked))]
+mod tests {
+    use crate::{FromValue, Mrb, Value};
+
+    #[test]
+    fn gv_get_reads_nil_for_unset_global() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let sym = mrb.intern_cstr(c"$beni_gv_unset");
+
+        assert!(mrb.gv_get(sym).is_nil());
+    }
+
+    #[test]
+    fn gv_get_observes_reassignment() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let sym = mrb.intern_cstr(c"$beni_gv");
+
+        // Globals are read at call time: each assignment must be
+        // visible to the next read, the contract redirection-style
+        // consumers (`$stdout = $stderr`) rely on.
+        mrb.gv_set(sym, Value::from_int(&mrb, 1));
+        assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(1));
+
+        mrb.gv_set(sym, Value::from_int(&mrb, 2));
+        assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(2));
     }
 }
