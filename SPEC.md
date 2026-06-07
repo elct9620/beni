@@ -207,6 +207,10 @@ Behaviors:
   conversions (`IntoValue`, a total conversion that cannot fail;
   `FromValue`, a checked conversion that can reject), class and module
   definition, and closure-based exception protection.
+- `FromValue` downcasts to the typed handles (`Array`, `Hash`, `RClass`)
+  discriminate by mruby's type tag alone: a value carrying the target's
+  tag converts (for the containers, subclass instances included), any
+  other tag rejects.
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
   `RClass` and `RModule` handles. Methods are registered on those handles
