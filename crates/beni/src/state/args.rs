@@ -319,11 +319,18 @@ mod tests {
     }
 
     /// Registered through `method!(io_first, -1)`: reads the leading
-    /// `"i"` integer (discarding the trailing object) and returns it
-    /// back as an mruby Integer.
+    /// `"i"` integer and the trailing `"o"` object, returning the
+    /// integer only when the object slot survived as `99` — so a read
+    /// that overruns the integer slot into the adjacent object fails
+    /// the assertion instead of passing.
     fn io_first(mrb: &Mrb, _self: Value) -> Value {
-        let (n, _val) = mrb.get_args::<Io>();
-        Value::from_int(mrb, n)
+        use crate::FromValue;
+        let (n, val) = mrb.get_args::<Io>();
+        if i32::from_value(val) == Some(99) {
+            Value::from_int(mrb, n)
+        } else {
+            Value::from_int(mrb, -1)
+        }
     }
 
     /// Registered through `method!(nrest_after_sym, -1)`: reads the
@@ -372,9 +379,10 @@ mod tests {
 
     // The `"i"` out-param is written by mruby as an `mrb_int` (8 bytes
     // under the default 64-bit-mrb_int archive). A narrower out-param
-    // would smash the stack — the same width coincidence the rest test
-    // guards, reached through `"i"` rather than the `"*"` count.
-    // Round-tripping the integer under `rake rust:test:default` keeps
+    // would write past its slot into the adjacent object value — the
+    // same width coincidence the rest test guards, reached through
+    // `"i"` rather than the `"*"` count. Asserting both the integer and
+    // the trailing object survive under `rake rust:test:default` keeps
     // the `sys::mrb_int` out-param honest.
     #[test]
     fn io_format_reads_the_int_mruby_writes() {
@@ -387,11 +395,15 @@ mod tests {
             .expect("registering the bridge must succeed");
 
         let receiver = class.obj_new(&mrb, &[]);
-        let args = [Value::from_int(&mrb, 7), mrb.str_new(b"obj")];
+        let args = [Value::from_int(&mrb, 7), Value::from_int(&mrb, 99)];
         let got = receiver.call(&mrb, c"io_first", &args);
 
         assert!(got.is_integer(), "bridge must return an Integer");
-        assert_eq!(unsafe { got.unbox_integer() }, 7);
+        assert_eq!(
+            unsafe { got.unbox_integer() },
+            7,
+            "a -1 means the trailing object slot did not survive the `\"i\"` read"
+        );
     }
 
     // The `"n*"` read splits a leading symbol off before the rest
@@ -399,7 +411,7 @@ mod tests {
     // surface has no symbol-value constructor — so the call is driven
     // through a compiled fragment, as the break test does.
     #[test]
-    fn n_rest_format_splits_the_leading_symbol() {
+    fn nrest_format_splits_the_leading_symbol() {
         use crate::{Ccontext, FromValue, Module};
 
         let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
