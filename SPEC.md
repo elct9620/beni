@@ -110,12 +110,18 @@ end
 
 Behaviors:
 
-- A build with no `build_config` declaration uses mruby's untouched
-  upstream default config.
-- The vendor tree converges on each toolchain's selected version: a staged
-  toolchain at any other version is replaced by `beni:vendor:setup`, and
-  `beni:build` rebuilds the archives — a stale toolchain never survives a
-  version change.
+| Behavior | Contract |
+|---|---|
+| Version convergence | The vendor tree converges on each toolchain's selected version: a staged toolchain at any other version is replaced by `beni:vendor:setup`, and `beni:build` rebuilds the archives — a stale toolchain never survives a version change. |
+| Toolchain unpack | `beni:vendor:setup` unpacks toolchains from the tarball cache and downloads only the selected versions' tarballs the cache lacks; every tarball it unpacks — cached or freshly downloaded — must match its toolchain's selected checksum. |
+| Toolchain selection | Reference-driven: the selected set is every target declaration's toolchain references plus the transitive dependencies beni resolves automatically (referencing `wasi-sdk` implies `mruby`); `mruby` is always selected. A toolchain definition selects nothing by itself — a definition for a toolchain nothing references is inert. |
+| Build & verify | `beni:build` builds every target the build config defines, then verifies that each declared target produced an archive and its compile-flags sidecar; a target no `target` declaration names is not verified. The config owns the target definitions, and beni never reads it. |
+| Staged path | Toolchains unpack at their own names under the vendor tree (the mruby source at `mruby/`); each target's archive and its compile-flags sidecar stage at `mruby/build/<name>/lib/` — the staged path. |
+| Archive auto-discovery | The crates auto-discover one archive: the `host` build's, serving host cargo targets. An archive beyond `host` is never auto-discovered and is reachable only via `MRUBY_LIB_DIR`. |
+| Compile-flags sidecar | Every build writes each archive's sidecar; it is the single ABI-alignment channel to the crates. |
+
+Selection, checksums, and cross-compile activation:
+
 - `version` selects mruby; a toolchain definition never names `mruby`.
   Every other toolchain's selected version and checksum default to its
   built-in pair; a toolchain definition replaces both. A toolchain
@@ -130,24 +136,6 @@ Behaviors:
   alongside the tarball cache and shares its lifecycle; once
   `beni:vendor:clobber` removes both, the next download establishes a
   new pin.
-- `beni:vendor:setup` unpacks toolchains from the tarball cache and
-  downloads only the selected versions' tarballs the cache lacks; every
-  tarball it unpacks — cached or freshly downloaded — must match its
-  toolchain's selected checksum.
-- Toolchain selection is reference-driven: the selected set is every
-  target declaration's toolchain references plus the transitive
-  dependencies beni resolves automatically (referencing `wasi-sdk`
-  implies `mruby`); `mruby` is always selected. A toolchain definition
-  selects nothing by itself — a definition for a toolchain nothing
-  references is inert.
-- `beni:build` builds every target the build config defines, then verifies
-  that each declared target produced an archive and its compile-flags
-  sidecar; a target no `target` declaration names is not verified. The
-  config owns the target definitions, and beni never reads the config.
-- Toolchains unpack at their own names under the vendor tree (the mruby
-  source at `mruby/`); each target's archive and its compile-flags sidecar
-  stage at `mruby/build/<name>/lib/` under the vendor tree — the staged
-  path.
 - Every `beni:vendor:setup` run with `wasi-sdk` selected writes the wasi
   toolchain file into the staged mruby source, so a re-extracted tree
   never lacks it. The file carries beni's wasm32-wasip1 cross-compile
@@ -155,10 +143,6 @@ Behaviors:
   inside its cross-build definition and needs no toolchain setup of its
   own. The settings resolve the wasi-sdk root from `WASI_SDK_PATH` when
   set, the vendor tree's unpacked `wasi-sdk` otherwise.
-- The crates auto-discover one archive: the `host` build's, serving host
-  cargo targets. Build configs may define additional or differently named
-  targets, but an archive beyond `host` is never auto-discovered and is
-  reachable only via `MRUBY_LIB_DIR`.
 - `beni:config` seeds customization: it writes a self-contained equivalent
   of the configured `version`'s upstream default config to the path the
   `build_config` declaration names. The generated file requires nothing from
@@ -166,8 +150,6 @@ Behaviors:
   who edits it to define further targets — cross-compiled ones included;
   beni never rewrites the file. Generation creates the target path's
   missing parent directories and refuses to overwrite an existing file.
-- Every build writes each archive's compile-flags sidecar; the sidecar is
-  the single alignment channel to the crates.
 
 ### beni-sys crate — FFI surface
 
