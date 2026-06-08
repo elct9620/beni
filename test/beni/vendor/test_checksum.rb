@@ -40,6 +40,15 @@ module Beni
         assert_equal "#{@digest}\n", File.read("#{@path}.sha256")
       end
 
+      # A nil checksum reaches +Checksum+ whenever a toolchain resolves
+      # no built-in or override hash; it must take the same TOFU path as
+      # an empty string.
+      def test_pins_sidecar_on_first_use_when_expected_sha_is_nil
+        Checksum.new(@path, nil).verify_or_pin
+
+        assert_equal "#{@digest}\n", File.read("#{@path}.sha256")
+      end
+
       def test_passes_when_sidecar_matches_on_second_run
         Checksum.new(@path, "").verify_or_pin
 
