@@ -10,7 +10,7 @@ module Beni
     VERSION = "4.0.0"
 
     def test_generate_copies_the_staged_default_config_verbatim
-      with_staged_source do |dir, mruby_dir|
+      with_staged_mruby_source do |dir, mruby_dir|
         dest = File.join(dir, "build_config", "mruby.rb")
 
         assert_equal dest, BuildConfig.generate(dest, mruby_dir: mruby_dir, version: VERSION)
@@ -20,7 +20,7 @@ module Beni
     end
 
     def test_generate_refuses_to_overwrite_an_existing_config
-      with_staged_source do |dir, mruby_dir|
+      with_staged_mruby_source do |dir, mruby_dir|
         dest = File.join(dir, "mruby.rb")
         File.write(dest, "# hand-tuned")
 
@@ -44,7 +44,7 @@ module Beni
     end
 
     def test_generate_fails_when_the_staged_source_is_at_another_version
-      with_staged_source(staged_version: "3.9.0") do |dir, mruby_dir|
+      with_staged_mruby_source(staged_version: "3.9.0") do |dir, mruby_dir|
         dest = File.join(dir, "mruby.rb")
 
         error = assert_raises(Beni::Error) { BuildConfig.generate(dest, mruby_dir: mruby_dir, version: VERSION) }
@@ -59,7 +59,7 @@ module Beni
 
     # Lay out a fake staged mruby source: the upstream default config
     # plus the +.beni-version+ marker +Vendor::Tarball#prepare+ stamps.
-    def with_staged_source(staged_version: VERSION)
+    def with_staged_mruby_source(staged_version: VERSION)
       Dir.mktmpdir("beni-build-config") do |dir|
         mruby_dir = File.join(dir, "vendor", "mruby")
         FileUtils.mkdir_p(File.join(mruby_dir, "build_config"))
