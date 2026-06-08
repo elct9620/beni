@@ -160,12 +160,17 @@ impl RClass {
     /// (e.g. `mrb_const_defined` / `mrb_const_get` /
     /// `Object#constants`).
     ///
+    /// Named `to_value`, not `as_value`: `RClass` wraps a `*mut RClass`
+    /// pointer, so reification is an `mrb_obj_value` call against the
+    /// live VM, not the free field read the `Value`-newtype handles
+    /// (`Array` / `Symbol` / `Proc`) expose as `as_value`.
+    ///
     /// # Safety
     ///
     /// `self` must be a live class handle produced by the same VM
     /// as `mrb` (and not yet freed).
     #[inline]
-    pub unsafe fn as_value(self, _mrb: &Mrb) -> Value {
+    pub unsafe fn to_value(self, _mrb: &Mrb) -> Value {
         #[cfg(mruby_linked)]
         {
             // SAFETY: forwarded from caller; mrb_obj_value reads only
@@ -646,7 +651,7 @@ mod tests {
             .define_singleton_method(&mrb, c"class_answer", crate::method!(answer_nine, 0))
             .expect("registering the singleton method must succeed");
         // SAFETY: `class` is a live handle from this VM.
-        let class_value = unsafe { class.as_value(&mrb) };
+        let class_value = unsafe { class.to_value(&mrb) };
         let got = class_value.call(&mrb, c"class_answer", &[]);
         assert_eq!(unsafe { got.unbox_integer() }, 9);
 
