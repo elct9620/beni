@@ -307,7 +307,7 @@ fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: sys::mrb_int) -> &'a [
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use super::format::Rest;
+    use super::format::{Io, NRest, Rest};
     use super::*;
 
     /// Registered through `method!(rest_count, -1)`: reads the rest
@@ -316,6 +316,28 @@ mod tests {
     fn rest_count(mrb: &Mrb, _self: Value) -> Value {
         let args = mrb.get_args::<Rest>();
         Value::from_int(mrb, args.len() as sys::mrb_int)
+    }
+
+    /// Registered through `method!(io_first, -1)`: reads the leading
+    /// `"i"` integer (discarding the trailing object) and returns it
+    /// back as an mruby Integer.
+    fn io_first(mrb: &Mrb, _self: Value) -> Value {
+        let (n, _val) = mrb.get_args::<Io>();
+        Value::from_int(mrb, n)
+    }
+
+    /// Registered through `method!(nrest_after_sym, -1)`: reads the
+    /// `"n"` leading symbol and the `"*"` rest array, returning the
+    /// rest length only when the symbol decoded as `:tag` — so a read
+    /// that folds the symbol into the rest array (or shifts the count)
+    /// fails the assertion instead of passing.
+    fn nrest_after_sym(mrb: &Mrb, _self: Value) -> Value {
+        let (sym, rest) = mrb.get_args::<NRest>();
+        if sym == mrb.intern_cstr(c"tag") {
+            Value::from_int(mrb, rest.len() as sys::mrb_int)
+        } else {
+            Value::from_int(mrb, -1)
+        }
     }
 
     // The `"*"` count out-param is written by mruby through `mrb_int*`
@@ -346,5 +368,63 @@ mod tests {
 
         assert!(count.is_integer(), "bridge must return an Integer");
         assert_eq!(unsafe { count.unbox_integer() }, 3);
+    }
+
+    // The `"i"` out-param is written by mruby as an `mrb_int` (8 bytes
+    // under the default 64-bit-mrb_int archive). A narrower out-param
+    // would smash the stack — the same width coincidence the rest test
+    // guards, reached through `"i"` rather than the `"*"` count.
+    // Round-tripping the integer under `rake rust:test:default` keeps
+    // the `sys::mrb_int` out-param honest.
+    #[test]
+    fn io_format_reads_the_int_mruby_writes() {
+        use crate::Module;
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(&mrb, c"io_first", crate::method!(io_first, -1))
+            .expect("registering the bridge must succeed");
+
+        let receiver = class.obj_new(&mrb, &[]);
+        let args = [Value::from_int(&mrb, 7), mrb.str_new(b"obj")];
+        let got = receiver.call(&mrb, c"io_first", &args);
+
+        assert!(got.is_integer(), "bridge must return an Integer");
+        assert_eq!(unsafe { got.unbox_integer() }, 7);
+    }
+
+    // The `"n*"` read splits a leading symbol off before the rest
+    // array. The symbol argument is supplied from Ruby — the typed
+    // surface has no symbol-value constructor — so the call is driven
+    // through a compiled fragment, as the break test does.
+    #[test]
+    fn n_rest_format_splits_the_leading_symbol() {
+        use crate::{Ccontext, FromValue, Module};
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(
+                &mrb,
+                c"nrest_after_sym",
+                crate::method!(nrest_after_sym, -1),
+            )
+            .expect("registering the bridge must succeed");
+
+        let recv = class.obj_new(&mrb, &[]);
+        let slot = mrb.intern_cstr(c"$beni_nrest_recv");
+        mrb.gv_set(slot, recv);
+
+        let cxt = Ccontext::new(&mrb, c"nrest_test.rb")
+            .expect("allocating the compile context must succeed");
+        let got = cxt.load_nstring(b"$beni_nrest_recv.nrest_after_sym(:tag, 1, 2, 3)");
+
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the n* read must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(i32::from_value(got), Some(3));
     }
 }
