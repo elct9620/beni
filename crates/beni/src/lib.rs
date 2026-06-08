@@ -23,6 +23,7 @@
 //!                      value         (Value newtype + cstr! / cstr_ptr)
 //!                      class         (RClass / RModule handles + traits)
 //!                      array / hash  (typed factories on top of Value)
+//!                      data          (DataType<T> + CDATA wrap / get)
 //!                      ccontext      (Ccontext RAII)
 //!
 //! L0  raw FFI          beni-sys::*  (bindgen output + ABI constants)
@@ -54,6 +55,7 @@ pub mod array;
 pub mod ccontext;
 pub mod class;
 pub mod convert;
+pub mod data;
 pub mod error;
 pub mod gem;
 pub mod hash;
@@ -72,6 +74,7 @@ pub use ccontext::Ccontext;
 pub use array::Array;
 pub use class::{Module, Object, RClass, RModule};
 pub use convert::{FromValue, IntoValue};
+pub use data::DataType;
 pub use error::Error;
 pub use gem::Gem;
 pub use hash::Hash;
@@ -177,6 +180,8 @@ mod tests {
         let _ = Value::is_hash;
         let _ = Value::is_class;
         let _ = Value::is_proc;
+        let _ = Value::is_data;
+        let _ = Value::data_get::<i32>;
         let _ = Value::unbox_integer;
         let _ = Value::unbox_float;
         let _ = Value::ary_entry;
@@ -191,6 +196,9 @@ mod tests {
         let _ = RClass::obj_new;
         let _ = RClass::raise;
         let _ = RClass::is_null;
+        let _ = RClass::set_instance_data_tt;
+        let _ = RClass::data_wrap::<i32>;
+        let _ = DataType::<i32>::new;
         let _ = RModule::from_raw;
         let _ = RModule::as_raw;
         let _ = <RClass as Module>::define_class;

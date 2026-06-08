@@ -25,6 +25,7 @@
 #include <mruby.h>
 #include <mruby/array.h>
 #include <mruby/class.h>
+#include <mruby/data.h>
 #include <mruby/dump.h>
 #include <mruby/error.h>
 #include <mruby/hash.h>
@@ -203,4 +204,17 @@ static inline mrb_aspec
 mrb_args_req_func(uint32_t n)
 {
   return MRB_ARGS_REQ(n);
+}
+
+/* Mark a class so its instances allocate as the given vtype.
+ * Counterpart to the `MRB_SET_INSTANCE_TT(c, tt)` macro in
+ * <mruby/class.h>, which rewrites the instance-type bits of the
+ * class's `flags` word. bindgen cannot expand the macro, so the C
+ * compiler packs the flags from mruby's own header rather than a
+ * Rust-side mirror of the bit layout. A CDATA-backed class calls this
+ * with `MRB_TT_CDATA` so instances allocate as data carriers. */
+static inline void
+mrb_set_instance_tt_func(struct RClass *c, enum mrb_vtype tt)
+{
+  MRB_SET_INSTANCE_TT(c, tt);
 }
