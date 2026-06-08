@@ -207,10 +207,10 @@ Behaviors:
   conversions (`IntoValue`, a total conversion that cannot fail;
   `FromValue`, a checked conversion that can reject), class and module
   definition, and closure-based exception protection.
-- `FromValue` downcasts to the typed handles (`Array`, `Hash`, `RClass`)
-  discriminate by mruby's type tag alone: a value carrying the target's
-  tag converts (for the containers, subclass instances included), any
-  other tag rejects.
+- `FromValue` downcasts to the typed handles (`Array`, `Hash`, `RClass`,
+  `Proc`) discriminate by mruby's type tag alone: a value carrying the
+  target's tag converts (for the containers, subclass instances included),
+  any other tag rejects.
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
   `RClass` and `RModule` handles. Methods are registered on those handles
@@ -234,6 +234,20 @@ Behaviors:
   ends, and the scope's end releases it. `keep` ends the scope and
   re-protects the one value it names; dropping the scope ends it with no
   survivor.
+- A typed `Proc` handle wraps an mruby block. `Proc::call` invokes it with
+  an argument slice under the same exception protection as closure-based
+  `protect`: the block's normal return is the `Ok` value, and any non-local
+  exit — a raised exception, or a `break` / `return` object the block throws
+  — surfaces as a Rust `Err` instead of unwinding across FFI. `Value::as_break`
+  views an escaped value as a typed `Break` when it carries mruby's break tag
+  and yields no view for any other tag, exposing the break's target call-info
+  index and its carried value; `Mrb::current_ci_index` reports the live frame's
+  call-info index, the baseline a consumer snapshots before a protected call to
+  locate a break's destination relative to that frame. Interpreting a non-local exit —
+  distinguishing a `break` from a `return` aimed past a frame, or from a plain
+  raise — is the consumer's responsibility: beni exposes the mechanism (the
+  protected call, the break view, the frame index) and does not classify the
+  exit into an outcome.
 - The safe API cannot cause undefined behavior while the GC validity rule
   holds: a value created inside an arena scope is not used after that
   scope ends, and a survivor carried out through `keep` counts as created
@@ -274,6 +288,7 @@ Behaviors:
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
+| A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
 | mruby raising during class or module definition or method registration | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
