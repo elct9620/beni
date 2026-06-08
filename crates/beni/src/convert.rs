@@ -11,11 +11,11 @@
 //!
 //! Scope covers the scalar leaf types (`i32` / `f64` / `bool`) and
 //! checked downcasts to the typed handles (`Array` / `Hash` /
-//! `RClass`), discriminated by the value's type tag — container
-//! subclass instances convert. No owned/borrowed split — every
-//! conversion is by value.
+//! `RClass` / `Proc`), discriminated by the value's type tag —
+//! container subclass instances convert. No owned/borrowed split —
+//! every conversion is by value.
 
-use crate::{Array, Hash, Mrb, RClass, Value};
+use crate::{Array, Hash, Mrb, Proc, RClass, Value};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
@@ -133,6 +133,17 @@ impl FromValue for RClass {
         value
             .is_class()
             .then(|| RClass::from_raw(unsafe { value.as_class_ptr() }))
+    }
+}
+
+impl FromValue for Proc {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the wrap precondition (MRB_TT_PROC tagging) is
+        // established by the `is_proc` guard immediately before it.
+        value
+            .is_proc()
+            .then(|| unsafe { Proc::from_value_unchecked(value) })
     }
 }
 
