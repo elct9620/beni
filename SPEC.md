@@ -240,14 +240,12 @@ Behaviors:
   exit — a raised exception, or a `break` / `return` object the block throws
   — surfaces as a Rust `Err` instead of unwinding across FFI. `Value::as_break`
   views an escaped value as a typed `Break` when it carries mruby's break tag
-  and yields no view for any other tag, exposing the break's target call-info
-  index and its carried value; `Mrb::current_ci_index` reports the live frame's
-  call-info index, the baseline a consumer snapshots before a protected call to
-  locate a break's destination relative to that frame. Interpreting a non-local exit —
-  distinguishing a `break` from a `return` aimed past a frame, or from a plain
-  raise — is the consumer's responsibility: beni exposes the mechanism (the
-  protected call, the break view, the frame index) and does not classify the
-  exit into an outcome.
+  and yields no view for any other tag; `Break` exposes the value the break
+  carries. Whether a break is a real `break`, a `return` aimed past a frame, or
+  a plain raise is the consumer's classification. The call-info frame indices
+  that distinguish those cases are mruby VM internals with no stable public
+  accessor; the typed surface does not expose them, so a consumer that must
+  classify reaches them through the `beni::sys` escape hatch.
 - The safe API cannot cause undefined behavior while the GC validity rule
   holds: a value created inside an arena scope is not used after that
   scope ends, and a survivor carried out through `keep` counts as created
