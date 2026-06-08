@@ -190,16 +190,27 @@ Selection, checksums, and cross-compile activation:
   `FromValue`, a checked conversion that can reject), class and module
   definition, and closure-based exception protection.
 - `FromValue` downcasts to the typed handles (`Array`, `Hash`, `RClass`,
-  `Proc`) discriminate by mruby's type tag alone: a value carrying the
-  target's tag converts (for the containers, subclass instances included),
+  `Proc`, `Symbol`) discriminate by mruby's type tag alone: a value carrying
+  the target's tag converts (for the containers, subclass instances included),
   any other tag rejects.
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
   `RClass` and `RModule` handles. Methods are registered on those handles
   through the `Module` and `Object` traits (mirroring `magnus::Module` and
   `magnus::Object`), accepting Rust closures whose arguments and return
-  values cross the boundary through `IntoValue` / `FromValue`. A
-  definition or registration mruby rejects surfaces as a Rust `Err`.
+  values cross the boundary through `IntoValue` / `FromValue`; the `Module`
+  trait also binds constants on the handle. A definition or registration
+  mruby rejects surfaces as a Rust `Err`.
+- A Rust-owned value backs an mruby object through the data-carrier
+  mechanism (`CDATA`): a class is marked so its instances carry Rust data,
+  a Rust value is wrapped as an instance of that class, and it is extracted
+  back type-checked against the data type it was registered under — a value
+  carrying a different data type, or none, does not extract. The mruby
+  garbage collector owns the wrapped value's lifetime, releasing it when
+  its carrier is collected. Mirrors `magnus`'s typed-data wrapping, and
+  meets the graduation bar — correct use needs no reasoning about VM
+  internals — so it lives on the typed surface rather than behind
+  `beni::sys`.
 - Provides the `Gem` trait — the unit of Ruby surface a Rust crate ships:
 
   ```rust
