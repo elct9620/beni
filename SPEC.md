@@ -199,8 +199,8 @@ Selection, checksums, and cross-compile activation:
   through the `Module` and `Object` traits (mirroring `magnus::Module` and
   `magnus::Object`), accepting Rust closures whose arguments and return
   values cross the boundary through `IntoValue` / `FromValue`; the `Module`
-  trait also binds constants on the handle. A definition or registration
-  mruby rejects surfaces as a Rust `Err`.
+  trait also binds constants and aliases existing methods on the handle. A
+  definition, registration, or alias mruby rejects surfaces as a Rust `Err`.
 - A Rust-owned value backs an mruby object through the data-carrier
   mechanism (`CDATA`): a class is marked so its instances carry Rust data,
   a Rust value is wrapped as an instance of that class, and it is extracted
@@ -289,7 +289,7 @@ Selection, checksums, and cross-compile activation:
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
-| mruby raising during class or module definition or method registration | surfaced as a Rust `Err`, never unwinds across FFI |
+| mruby raising during class or module definition, method registration, or method aliasing | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
