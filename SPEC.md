@@ -250,9 +250,18 @@ Behaviors:
   holds: a value created inside an arena scope is not used after that
   scope ends, and a survivor carried out through `keep` counts as created
   where its scope was opened. The type system does not enforce the rule;
-  the consumer upholds it. Any C API the safe wrapper does not expose is
-  reachable through the re-exported `beni::sys` escape hatch; using
-  `beni::sys` directly is unsafe and outside the wrapper's guarantees.
+  the consumer upholds it.
+- The typed surface graduates a capability out of the `beni::sys` escape
+  hatch only when a caller can use it correctly without reasoning about
+  mruby's VM internals — a stronger bar than freedom from undefined
+  behavior. An operation whose correct use depends on internal VM structure
+  (raw call-info frame indices, VM-object internals) stays behind
+  `beni::sys`: a safe-looking typed wrapper would misrepresent its
+  sharpness, so it stays where `unsafe` marks the caller's responsibility
+  for the invariants the type system cannot check. Any C API the typed
+  surface does not expose remains reachable there, unsafe and outside the
+  wrapper's guarantees; closing a consumer's `beni::sys` use to zero is not
+  a goal.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.
