@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/elct9620/beni/compare/v0.4.0...v0.5.0) (2026-06-08)
+
+
+### Features
+
+* **beni:** add a typed Symbol newtype ([d38d44c](https://github.com/elct9620/beni/commit/d38d44cc70e39046be87eec8ca3ced8b09da81af))
+* **beni:** add Array::len and is_empty ([ad43e0b](https://github.com/elct9620/beni/commit/ad43e0bbaf346fbcad1af0ee6d7a7338ee2cf3a4))
+* **beni:** add Module::alias_method ([8f0e176](https://github.com/elct9620/beni/commit/8f0e17693b7cb87f93dd21d5274dbcc360e3763a))
+* **beni:** add String and block-rest get_args formats ([ac3272d](https://github.com/elct9620/beni/commit/ac3272da4ba76b12681b1de42648bc96349a881c))
+* **beni:** expose string, constant, and exception seams ([a8b702f](https://github.com/elct9620/beni/commit/a8b702ff92549308c2f22d698d7976d85976cd85))
+* **beni:** wrap Rust state behind a Ruby class via CDATA ([964fedf](https://github.com/elct9620/beni/commit/964fedf92880cef96a8f61b651b9a189fdccf69f))
+
 ## [0.4.0](https://github.com/elct9620/beni/compare/v0.3.0...v0.4.0) (2026-06-08)
 
 
