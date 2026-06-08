@@ -97,7 +97,7 @@ impl Mrb {
     /// `F::FMT` and returns the typed tuple from `F::Output`.
     ///
     /// ```ignore
-    /// use beni_sys::format::{Io, Rest};
+    /// use beni::format::{Io, Rest};
     /// let (fd, mode_val) = mrb.get_args::<Io>();
     /// let argv = mrb.get_args::<Rest>();
     /// ```
