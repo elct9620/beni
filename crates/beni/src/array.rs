@@ -6,8 +6,10 @@
 //! an mruby `Array`. Construction is by explicit unchecked cast from
 //! `Value`; element operations cluster on the resulting newtype.
 //!
-//! Mirrors magnus's `src/r_array.rs`: factories live on `Ruby` /
-//! `Mrb`, per-array ops (`push`, `entry`) live here.
+//! Mirrors magnus's `src/r_array.rs`: container factories live on
+//! `Ruby` / `Mrb` (`ary_new`, `hash_new`), per-array ops (`push`,
+//! `entry`) live here. Named-value constructors that magnus places on
+//! the type itself stay there too (`Symbol::new`).
 
 use crate::{Mrb, Value};
 use beni_sys as sys;
