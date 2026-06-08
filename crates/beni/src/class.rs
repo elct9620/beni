@@ -451,6 +451,38 @@ pub trait Module: private::ClassLike {
         }
     }
 
+    /// `mrb_define_alias(mrb, self, new, old)` — bind `new` as a second
+    /// name for the existing method `old` on this class or module, so a
+    /// core method can be preserved before it is overridden. Runs inside
+    /// `Mrb::protect`, so aliasing a method that does not exist surfaces
+    /// as `Err(Error::Exception)` (mruby's `NameError`) rather than
+    /// long-jumping — the same contract as the definition methods above.
+    fn alias_method(
+        self,
+        mrb: &Mrb,
+        new: &core::ffi::CStr,
+        old: &core::ffi::CStr,
+    ) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` originates from the same VM; `new` and `old`
+                // are NUL-terminated.
+                unsafe {
+                    sys::mrb_define_alias(mrb.as_ptr(), self.raw(), new.as_ptr(), old.as_ptr())
+                };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, new, old);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_class_name(mrb, self)` — the handle's full Ruby name
     /// (e.g. `"MyService::KV"`). Returns `None` when mruby yields
     /// NULL. The returned slice points into mruby's interned
@@ -685,6 +717,52 @@ mod tests {
         );
         assert!(got.is_integer(), "the bound constant reads back as Integer");
         assert_eq!(unsafe { got.unbox_integer() }, 42);
+    }
+
+    #[test]
+    fn alias_method_binds_a_second_name_for_an_existing_method() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let class = mrb
+            .define_class(c"BeniAlias", object)
+            .expect("defining the class must succeed");
+        class
+            .define_method(&mrb, c"answer", crate::method!(answer_seven, 0))
+            .expect("registering the original method must succeed");
+
+        class
+            .alias_method(&mrb, c"original_answer", c"answer")
+            .expect("aliasing an existing method must succeed");
+
+        // The alias resolves to the same body as the original — the
+        // consumer-visible point of preserving a method before override.
+        let receiver = class.obj_new(&mrb, &[]);
+        let got = receiver.call(&mrb, c"original_answer", &[]);
+        assert_eq!(unsafe { got.unbox_integer() }, 7);
+    }
+
+    #[test]
+    fn alias_method_surfaces_name_error_for_missing_original() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let class = mrb
+            .define_class(c"BeniAliasMissing", object)
+            .expect("defining the class must succeed");
+
+        // mruby raises NameError when the aliased method does not exist
+        // (vendored src/class.c mrb_method_search) — it must surface as
+        // Err, not a longjmp.
+        let err = class
+            .alias_method(&mrb, c"shadow", c"no_such_method")
+            .expect_err("aliasing a missing method must surface as Err");
+        assert!(matches!(err, Error::Exception(_)));
+        assert!(
+            err.message(&mrb).contains("no_such_method"),
+            "the NameError must name the missing method: {}",
+            err.message(&mrb)
+        );
     }
 
     #[test]
