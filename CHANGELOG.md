@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/elct9620/beni/compare/v0.3.0...v0.4.0) (2026-06-08)
+
+
+### Features
+
+* **beni:** add a typed Proc handle with a protected yield ([e69aee7](https://github.com/elct9620/beni/commit/e69aee7ca572c2aac1e8ec9c24912f854934f5ee))
+* **beni:** expose the break view and current call-info index ([30161c6](https://github.com/elct9620/beni/commit/30161c6bf58d6bc277546ae8f39aa3dc299d8425))
+
 ## [0.3.0](https://github.com/elct9620/beni/compare/v0.2.0...v0.3.0) (2026-06-07)
 
 
