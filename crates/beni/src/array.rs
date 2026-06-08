@@ -94,6 +94,29 @@ impl Array {
             crate::not_linked()
         }
     }
+
+    /// `RARRAY_LEN(self)` — the number of elements, via the
+    /// `mrb_rarray_len_func` shim (the macro expanded in the C compiler
+    /// so the embed-vs-heap length read matches the linked archive's
+    /// layout). An mruby array length is never negative, so the result
+    /// is returned as `usize`.
+    #[inline]
+    pub fn len(self) -> usize {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
+            // contract; `RARRAY_LEN` reads only the array header.
+            (unsafe { sys::mrb_rarray_len_func(self.0.as_raw()) }) as usize
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// TRUE when the array holds no elements.
+    #[inline]
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -125,5 +148,20 @@ mod tests {
         // range by definition — same nil contract, no truncation.
         assert!(ary.entry(isize::MAX).is_nil());
         assert!(ary.entry(isize::MIN).is_nil());
+    }
+
+    #[test]
+    fn len_and_is_empty_track_the_element_count() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+
+        assert_eq!(ary.len(), 0);
+        assert!(ary.is_empty());
+
+        ary.push(&mrb, mrb.str_new(b"a"));
+        ary.push(&mrb, mrb.str_new(b"b"));
+
+        assert_eq!(ary.len(), 2);
+        assert!(!ary.is_empty());
     }
 }

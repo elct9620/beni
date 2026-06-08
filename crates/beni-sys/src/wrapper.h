@@ -62,6 +62,17 @@ mrb_rstring_len(mrb_value s)
   return RSTRING_LEN(s);
 }
 
+/* Element count of an Array-tagged mrb_value. Counterpart to the
+ * `RARRAY_LEN(a)` macro from <mruby/array.h>, which branches between
+ * the embedded-buffer length and the heap length on the RArray header
+ * flags — the same embed-vs-heap branch as `mrb_rstring_len`, which
+ * bindgen cannot read directly. */
+static inline mrb_int
+mrb_rarray_len_func(mrb_value a)
+{
+  return RARRAY_LEN(a);
+}
+
 /* Object pointer extractor from an object-tagged mrb_value.
  * Counterpart to the `mrb_obj_ptr(v)` macro in <mruby/value.h>,
  * which expands via `mrb_val_union(v).p`. Folding the union read

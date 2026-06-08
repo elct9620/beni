@@ -246,6 +246,8 @@ mod tests {
         let _ = Array::as_raw;
         let _ = Array::push;
         let _ = Array::entry;
+        let _ = Array::len;
+        let _ = Array::is_empty;
         let _ = Proc::from_value_unchecked;
         let _ = Proc::as_value;
         let _ = Proc::as_raw;
