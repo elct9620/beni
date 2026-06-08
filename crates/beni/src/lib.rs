@@ -78,7 +78,7 @@ pub use hash::Hash;
 pub use method::{MethodDef, MethodReturn};
 pub use proc::Proc;
 pub use value::cstr_ptr;
-pub use value::Value;
+pub use value::{Break, Value};
 
 /// Placeholder-mode terminus for operations that need a linked
 /// mruby. Methods taking `&Mrb` can never reach it (`Mrb::open`
@@ -140,6 +140,7 @@ mod tests {
         let _ = Mrb::define_global_const;
         let _ = Mrb::gv_set;
         let _ = Mrb::gv_get;
+        let _ = Mrb::current_ci_index;
         let _ = Mrb::arena_scope;
         let _ = ArenaScope::keep;
         let _ = Mrb::str_new;
@@ -185,6 +186,9 @@ mod tests {
         let _ = Value::const_defined;
         let _ = Value::const_get;
         let _ = Value::respond_to;
+        let _ = Value::as_break;
+        let _ = Break::target_ci_index;
+        let _ = Break::value;
         let _ = RClass::as_value;
         let _ = RClass::obj_new;
         let _ = RClass::raise;

@@ -578,6 +578,24 @@ impl Value {
         crate::not_linked()
     }
 
+    /// View `self` as a typed `Break` when it carries mruby's break
+    /// tag (`MRB_TT_BREAK`), or `None` for any other tag. A break
+    /// surfaces as the value inside the `Err` of a protected
+    /// `Proc::call` when the block exits via a non-local `break` or
+    /// `return`; classifying that exit is the caller's policy.
+    #[inline]
+    pub fn as_break(self) -> Option<Break> {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: mrb_break_p_func is a pure predicate over the
+            // value tag and does not touch mrb_state. The tag check
+            // establishes the `Break` newtype's invariant.
+            unsafe { sys::mrb_break_p_func(self.0) }.then_some(Break(self))
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// Direct `mrb_integer(v)` unbox via mruby's own
     /// `mrb_integer_func` helper (a `MRB_INLINE` reached through
     /// bindgen's static-fn trampoline).
@@ -736,6 +754,50 @@ impl Value {
     }
 }
 
+/// A non-local `break` / `return` captured as the value inside a
+/// protected `Proc::call`'s `Err`. `#[repr(transparent)]` over the
+/// break-tagged `Value` it wraps; obtained only through
+/// `Value::as_break`.
+///
+/// Reading its fields is the mechanism; deciding what the break means
+/// — a real `break` versus a `return` aimed past a frame — is the
+/// caller's policy, by comparing `target_ci_index` against an
+/// `Mrb::current_ci_index` baseline snapshotted before the call.
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct Break(Value);
+
+impl Break {
+    /// The call-info index this break unwinds to, via
+    /// `mrb_break_ci_index_func`. Place it relative to the yielder's
+    /// frame with a pre-call `Mrb::current_ci_index` snapshot.
+    #[inline]
+    pub fn target_ci_index(&self) -> usize {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.0` is break-tagged by the `Value::as_break`
+            // gate that is this newtype's only constructor.
+            unsafe { sys::mrb_break_ci_index_func(self.0.as_raw()) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// The value carried by `break val` / `return val`, via
+    /// `mrb_break_value_func`.
+    #[inline]
+    pub fn value(&self) -> Value {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.0` is break-tagged by the `Value::as_break`
+            // gate that is this newtype's only constructor.
+            Value::from_raw(unsafe { sys::mrb_break_value_func(self.0.as_raw()) })
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -780,5 +842,105 @@ mod tests {
             core::mem::align_of::<Value>(),
             core::mem::align_of::<sys::mrb_value>(),
         );
+    }
+}
+
+#[cfg(all(test, mruby_linked))]
+mod linked_tests {
+    use super::*;
+    use crate::state::args::format;
+    use crate::{Ccontext, Error, FromValue, IntoValue, Module, Proc};
+
+    /// Method body that reports the live call-info index back to Ruby,
+    /// so a test can observe that the index deepens inside a call.
+    fn ci_depth(mrb: &Mrb, _self: Value) -> Value {
+        Value::from_int(mrb, mrb.current_ci_index() as sys::mrb_int)
+    }
+
+    /// Yielder method in the boundary-terminating shape kobako uses:
+    /// read the captured (non-orphan) block, yield it, and on a real
+    /// `break` report its carried value back as the method's result.
+    /// `current_ci_index` / `Break::target_ci_index` are exercised here
+    /// but their comparison is the consumer's policy, not asserted.
+    fn report_break(mrb: &Mrb, _self: Value) -> Value {
+        let (_sym, _rest, block_val) = mrb.get_args::<format::NRestBlock>();
+        let block = Proc::from_value(block_val).expect("the captured block is a Proc");
+        let _enter = mrb.current_ci_index();
+        match block.call(mrb, &[]) {
+            Ok(_) => Value::from_int(mrb, -1),
+            Err(Error::Exception(exc)) => match exc.as_break() {
+                Some(brk) => {
+                    let _ = brk.target_ci_index();
+                    brk.value()
+                }
+                None => Value::from_int(mrb, -2),
+            },
+            Err(Error::Panic(_)) => Value::from_int(mrb, -3),
+        }
+    }
+
+    #[test]
+    fn current_ci_index_deepens_inside_a_method() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let baseline = mrb.current_ci_index();
+
+        let class = mrb
+            .define_class(c"BeniCiProbe", mrb.object_class())
+            .expect("defining the probe class must succeed");
+        class
+            .define_method(&mrb, c"depth", crate::method!(ci_depth, 0))
+            .expect("registering the probe method must succeed");
+
+        let recv = class.obj_new(&mrb, &[]);
+        let inside = mrb
+            .protect(|m| recv.call(m, c"depth", &[]))
+            .expect("the probe call must not raise");
+        let inside = i32::from_value(inside).expect("depth returns an Integer");
+
+        assert!(
+            inside as usize > baseline,
+            "a call frame ({inside}) must be deeper than the top-level baseline ({baseline})"
+        );
+    }
+
+    #[test]
+    fn as_break_rejects_non_break_values() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // No ordinary value carries the break tag — including a real
+        // exception object (a raise is not a break).
+        assert!(42i32.into_value(&mrb).as_break().is_none());
+        assert!(mrb.str_new(b"x").as_break().is_none());
+        assert!(Value::nil().as_break().is_none());
+    }
+
+    #[test]
+    fn as_break_views_a_real_escaping_break() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let class = mrb
+            .define_class(c"BeniBreakYielder", mrb.object_class())
+            .expect("defining the yielder class must succeed");
+        class
+            .define_method(&mrb, c"run", crate::method!(report_break, -1))
+            .expect("registering the yielder method must succeed");
+
+        let recv = class.obj_new(&mrb, &[]);
+        let slot = mrb.intern_cstr(c"$beni_break_recv");
+        mrb.gv_set(slot, recv);
+
+        // The block is captured via `&` so it stays non-orphan: `break
+        // 88` surfaces as an RBreak the yielder catches, and `as_break`
+        // reads its carried value back out.
+        let cxt = Ccontext::new(&mrb, c"break_test.rb")
+            .expect("allocating the compile context must succeed");
+        let got = cxt.load_nstring(b"$beni_break_recv.run(:tag) { break 88 }");
+
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the protected yield must not leave a pending exception: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(i32::from_value(got), Some(88));
     }
 }

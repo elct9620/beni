@@ -251,6 +251,23 @@ impl Mrb {
         crate::not_linked()
     }
 
+    /// Call-info index of the live frame (`mrb->c->ci - mrb->c->cibase`)
+    /// via the `mrb_current_ci_index_func` shim. Snapshot before a
+    /// protected `Proc::call` so an escaping break's destination
+    /// (`Break::target_ci_index`) can be placed relative to this frame;
+    /// the comparison itself is the caller's classification policy.
+    pub fn current_ci_index(&self) -> usize {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.state` is alive by the `&self` borrow; the
+            // shim reads only the public `mrb_context.ci` / `cibase`
+            // fields.
+            unsafe { sys::mrb_current_ci_index_func(self.as_ptr()) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// Return `mrb->object_class` as a typed `RClass` handle.
     /// Replaces direct field access — the `object_class` field on
     /// the `crate::mrb_state` struct is `pub(crate)` so this
