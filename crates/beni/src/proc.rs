@@ -58,9 +58,10 @@ impl Proc {
     ///
     /// Interpreting a non-local exit (a real `break` versus a `return`
     /// aimed past a frame versus a plain raise) is the caller's
-    /// concern: inspect the `Err`'s value through `Value::as_break`
-    /// against an `Mrb::current_ci_index` baseline snapshotted before
-    /// the call.
+    /// concern: `Value::as_break` discriminates a break and reads its
+    /// carried value, while the call-info frame indices that separate a
+    /// break from a return-past-frame are VM internals reached through
+    /// the unsafe `beni::sys` escape hatch.
     #[inline]
     pub fn call(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
         #[cfg(mruby_linked)]

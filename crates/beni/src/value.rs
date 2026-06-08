@@ -759,30 +759,15 @@ impl Value {
 /// break-tagged `Value` it wraps; obtained only through
 /// `Value::as_break`.
 ///
-/// Reading its fields is the mechanism; deciding what the break means
-/// — a real `break` versus a `return` aimed past a frame — is the
-/// caller's policy, by comparing `target_ci_index` against an
-/// `Mrb::current_ci_index` baseline snapshotted before the call.
+/// Exposes the value the break carries. Classifying the break — a real
+/// `break` versus a `return` aimed past a frame — needs mruby's
+/// call-info frame indices, which are VM internals reached through the
+/// unsafe `beni::sys` escape hatch, not this typed surface.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Break(Value);
 
 impl Break {
-    /// The call-info index this break unwinds to, via
-    /// `mrb_break_ci_index_func`. Place it relative to the yielder's
-    /// frame with a pre-call `Mrb::current_ci_index` snapshot.
-    #[inline]
-    pub fn target_ci_index(&self) -> usize {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self.0` is break-tagged by the `Value::as_break`
-            // gate that is this newtype's only constructor.
-            unsafe { sys::mrb_break_ci_index_func(self.0.as_raw()) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
-    }
-
     /// The value carried by `break val` / `return val`, via
     /// `mrb_break_value_func`.
     #[inline]
@@ -851,56 +836,20 @@ mod linked_tests {
     use crate::state::args::format;
     use crate::{Ccontext, Error, FromValue, IntoValue, Module, Proc};
 
-    /// Method body that reports the live call-info index back to Ruby,
-    /// so a test can observe that the index deepens inside a call.
-    fn ci_depth(mrb: &Mrb, _self: Value) -> Value {
-        Value::from_int(mrb, mrb.current_ci_index() as sys::mrb_int)
-    }
-
     /// Yielder method in the boundary-terminating shape kobako uses:
     /// read the captured (non-orphan) block, yield it, and on a real
     /// `break` report its carried value back as the method's result.
-    /// `current_ci_index` / `Break::target_ci_index` are exercised here
-    /// but their comparison is the consumer's policy, not asserted.
     fn report_break(mrb: &Mrb, _self: Value) -> Value {
         let (_sym, _rest, block_val) = mrb.get_args::<format::NRestBlock>();
         let block = Proc::from_value(block_val).expect("the captured block is a Proc");
-        let _enter = mrb.current_ci_index();
         match block.call(mrb, &[]) {
             Ok(_) => Value::from_int(mrb, -1),
             Err(Error::Exception(exc)) => match exc.as_break() {
-                Some(brk) => {
-                    let _ = brk.target_ci_index();
-                    brk.value()
-                }
+                Some(brk) => brk.value(),
                 None => Value::from_int(mrb, -2),
             },
             Err(Error::Panic(_)) => Value::from_int(mrb, -3),
         }
-    }
-
-    #[test]
-    fn current_ci_index_deepens_inside_a_method() {
-        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
-        let baseline = mrb.current_ci_index();
-
-        let class = mrb
-            .define_class(c"BeniCiProbe", mrb.object_class())
-            .expect("defining the probe class must succeed");
-        class
-            .define_method(&mrb, c"depth", crate::method!(ci_depth, 0))
-            .expect("registering the probe method must succeed");
-
-        let recv = class.obj_new(&mrb, &[]);
-        let inside = mrb
-            .protect(|m| recv.call(m, c"depth", &[]))
-            .expect("the probe call must not raise");
-        let inside = i32::from_value(inside).expect("depth returns an Integer");
-
-        assert!(
-            inside as usize > baseline,
-            "a call frame ({inside}) must be deeper than the top-level baseline ({baseline})"
-        );
     }
 
     #[test]
