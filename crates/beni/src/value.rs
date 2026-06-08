@@ -592,6 +592,19 @@ impl Value {
         crate::not_linked()
     }
 
+    /// TRUE when `self` carries `MRB_TT_STRING`. See `Value::is_integer`.
+    /// Pair with `Value::as_bytes` for the byte-borrow path.
+    #[inline]
+    pub fn is_string(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_integer`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_STRING }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// View `self` as a typed `Break` when it carries mruby's break
     /// tag (`MRB_TT_BREAK`), or `None` for any other tag. A break
     /// surfaces as the value inside the `Err` of a protected
@@ -875,6 +888,16 @@ mod linked_tests {
         assert!(42i32.into_value(&mrb).as_break().is_none());
         assert!(mrb.str_new(b"x").as_break().is_none());
         assert!(Value::nil().as_break().is_none());
+    }
+
+    #[test]
+    fn is_string_discriminates_the_string_tag() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        assert!(mrb.str_new(b"x").is_string());
+        // A non-String tag — and an immediate — both reject.
+        assert!(!42i32.into_value(&mrb).is_string());
+        assert!(!Value::nil().is_string());
     }
 
     #[test]

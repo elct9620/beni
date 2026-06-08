@@ -229,6 +229,36 @@ impl RClass {
             crate::not_linked()
         }
     }
+
+    /// `mrb_exc_new(mrb, self, msg, len)` — build an exception of this
+    /// class carrying `msg`, without raising it. The bytes are copied
+    /// into the new object before the call returns. Counterpart to
+    /// `RClass::raise` for the path that returns the exception as a
+    /// `Value` — a bridge body wraps it in `Error::Exception` to raise
+    /// it to the Ruby caller at the boundary instead of long-jumping
+    /// mid-body.
+    #[inline]
+    pub fn exc_new(self, mrb: &Mrb, msg: &str) -> Value {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive; `self` originates from the same
+            // VM; `msg`'s bytes are copied into the new exception
+            // object before the call returns.
+            Value::from_raw(unsafe {
+                sys::mrb_exc_new(
+                    mrb.as_ptr(),
+                    self.0,
+                    msg.as_ptr() as *const core::ffi::c_char,
+                    msg.len() as sys::mrb_int,
+                )
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, msg);
+            crate::not_linked()
+        }
+    }
 }
 
 impl RModule {
@@ -386,6 +416,32 @@ pub trait Module: private::ClassLike {
         #[cfg(not(mruby_linked))]
         {
             let _ = (mrb, name, method.func, method.arity);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_define_const(mrb, self, name, val)` — bind the constant
+    /// `name` to `val` on this class or module. Runs inside
+    /// `Mrb::protect`, so a frozen-receiver rejection surfaces as
+    /// `Err(Error::Exception)` rather than long-jumping — the same
+    /// contract as the definition methods above.
+    fn define_const(self, mrb: &Mrb, name: &core::ffi::CStr, val: Value) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` and `val` originate from the same VM; `name`
+                // is NUL-terminated.
+                unsafe {
+                    sys::mrb_define_const(mrb.as_ptr(), self.raw(), name.as_ptr(), val.as_raw())
+                };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, val);
             crate::not_linked()
         }
     }
@@ -599,5 +655,46 @@ mod tests {
             .class_get(&mrb, c"Widget")
             .expect("fetching the nested class must succeed");
         assert_eq!(fetched.name(&mrb), Some("BeniTrait::Widget"));
+    }
+
+    #[test]
+    fn define_const_binds_a_constant_readable_from_ruby() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let module = mrb
+            .define_module(c"BeniConstHost")
+            .expect("defining the host module must succeed");
+
+        module
+            .define_const(&mrb, c"ANSWER", Value::from_int(&mrb, 42))
+            .expect("binding the constant must succeed");
+
+        // The constant must resolve from plain Ruby source — the
+        // consumer-visible end of the binding.
+        let cxt = crate::Ccontext::new(&mrb, c"const_test.rb")
+            .expect("allocating the compile context must succeed");
+        let got = cxt.load_nstring(b"BeniConstHost::ANSWER");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "reading the constant must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert!(got.is_integer(), "the bound constant reads back as Integer");
+        assert_eq!(unsafe { got.unbox_integer() }, 42);
+    }
+
+    #[test]
+    fn exc_new_builds_an_exception_of_the_class_without_raising() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let runtime_error = mrb
+            .class_get(c"RuntimeError")
+            .expect("RuntimeError is present in every VM");
+
+        let exc = runtime_error.exc_new(&mrb, "something failed");
+
+        // Building does not raise; the object carries the class and the
+        // message verbatim, ready to ride out as Error::Exception.
+        assert!(mrb.pending_exc().is_nil(), "exc_new must not raise");
+        assert_eq!(exc.classname(&mrb), "RuntimeError");
+        assert_eq!(Error::Exception(exc).message(&mrb), "something failed");
     }
 }

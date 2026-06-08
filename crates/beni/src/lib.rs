@@ -181,6 +181,7 @@ mod tests {
         let _ = Value::is_class;
         let _ = Value::is_proc;
         let _ = Value::is_data;
+        let _ = Value::is_string;
         let _ = Value::data_get::<i32>;
         let _ = Value::unbox_integer;
         let _ = Value::unbox_float;
@@ -195,6 +196,7 @@ mod tests {
         let _ = RClass::as_value;
         let _ = RClass::obj_new;
         let _ = RClass::raise;
+        let _ = RClass::exc_new;
         let _ = RClass::is_null;
         let _ = RClass::set_instance_data_tt;
         let _ = RClass::data_wrap::<i32>;
@@ -206,10 +208,12 @@ mod tests {
         let _ = <RClass as Module>::class_get;
         let _ = <RClass as Module>::define_method;
         let _ = <RClass as Module>::define_private_method;
+        let _ = <RClass as Module>::define_const;
         let _ = <RClass as Module>::name;
         let _ = <RModule as Module>::define_class;
         let _ = <RModule as Module>::define_method;
         let _ = <RModule as Module>::define_private_method;
+        let _ = <RModule as Module>::define_const;
         let _ = <RClass as Object>::define_singleton_method;
         let _ = <RModule as Object>::define_singleton_method;
         let _ = Error::message;

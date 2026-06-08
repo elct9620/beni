@@ -98,17 +98,9 @@ where
 fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str) -> Value {
     // SAFETY: `mrb` is alive; `class_name` is NUL-terminated and
     // names a core class present in every VM.
-    let class = unsafe { sys::mrb_class_get(mrb.as_ptr(), class_name.as_ptr()) };
-    // SAFETY: `msg`'s bytes are copied into the new exception object
-    // before the call returns.
-    Value::from_raw(unsafe {
-        sys::mrb_exc_new(
-            mrb.as_ptr(),
-            class,
-            msg.as_ptr() as *const core::ffi::c_char,
-            msg.len() as sys::mrb_int,
-        )
-    })
+    let class =
+        crate::RClass::from_raw(unsafe { sys::mrb_class_get(mrb.as_ptr(), class_name.as_ptr()) });
+    class.exc_new(mrb, msg)
 }
 
 /// The `TypeError` a bridge raises when an argument fails its
