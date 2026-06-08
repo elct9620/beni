@@ -11,11 +11,11 @@
 //!
 //! Scope covers the scalar leaf types (`i32` / `f64` / `bool`) and
 //! checked downcasts to the typed handles (`Array` / `Hash` /
-//! `RClass` / `Proc`), discriminated by the value's type tag —
-//! container subclass instances convert. No owned/borrowed split —
-//! every conversion is by value.
+//! `RClass` / `Proc` / `Symbol`), discriminated by the value's type
+//! tag — container subclass instances convert. No owned/borrowed split
+//! — every conversion is by value.
 
-use crate::{Array, Hash, Mrb, Proc, RClass, Value};
+use crate::{Array, Hash, Mrb, Proc, RClass, Symbol, Value};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
@@ -70,6 +70,15 @@ impl IntoValue for bool {
         } else {
             Value::false_()
         }
+    }
+}
+
+impl IntoValue for Symbol {
+    // A `Symbol` already wraps its Symbol-tagged `Value`; boxing is the
+    // identity unwrap, like `IntoValue for Value`.
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self.as_value()
     }
 }
 
@@ -144,6 +153,17 @@ impl FromValue for Proc {
         value
             .is_proc()
             .then(|| unsafe { Proc::from_value_unchecked(value) })
+    }
+}
+
+impl FromValue for Symbol {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the wrap precondition (MRB_TT_SYMBOL tagging) is
+        // established by the `is_symbol` guard immediately before it.
+        value
+            .is_symbol()
+            .then(|| unsafe { Symbol::from_value_unchecked(value) })
     }
 }
 

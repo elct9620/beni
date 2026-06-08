@@ -94,6 +94,17 @@ mrb_float_func(mrb_value v)
   return mrb_float(v);
 }
 
+/* Symbol unbox. Counterpart to the `mrb_symbol(o)` macro, whose
+ * expansion differs per boxing mode (word-shifted payload vs. union
+ * field). Routing through the C compiler keeps the unbox correct for
+ * whatever config libmruby.a was built with. Pair with the
+ * `mrb_symbol_value` MRB_INLINE (box direction), which needs no shim. */
+static inline mrb_sym
+mrb_symbol_func(mrb_value v)
+{
+  return mrb_symbol(v);
+}
+
 /* GC arena bracketing helpers. mruby exposes these as macros that
  * read / write `mrb->gc.arena_idx`; bindgen treats `mrb_gc` as
  * opaque (workaround for the bitfield mis-pack on wasm32, see

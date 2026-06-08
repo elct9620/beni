@@ -605,6 +605,19 @@ impl Value {
         crate::not_linked()
     }
 
+    /// TRUE when `self` carries `MRB_TT_SYMBOL`. See `Value::is_integer`.
+    /// Pair with `Symbol::from_value` for the checked downcast path.
+    #[inline]
+    pub fn is_symbol(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_integer`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_SYMBOL }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// View `self` as a typed `Break` when it carries mruby's break
     /// tag (`MRB_TT_BREAK`), or `None` for any other tag. A break
     /// surfaces as the value inside the `Err` of a protected

@@ -23,6 +23,7 @@
 //!                      value         (Value newtype + cstr! / cstr_ptr)
 //!                      class         (RClass / RModule handles + traits)
 //!                      array / hash  (typed factories on top of Value)
+//!                      symbol        (Symbol newtype + intern / name)
 //!                      data          (DataType<T> + CDATA wrap / get)
 //!                      ccontext      (Ccontext RAII)
 //!
@@ -62,6 +63,7 @@ pub mod hash;
 pub mod method;
 pub mod proc;
 pub mod state;
+pub mod symbol;
 pub mod value;
 
 pub use state::arena::ArenaScope;
@@ -80,6 +82,7 @@ pub use gem::Gem;
 pub use hash::Hash;
 pub use method::{MethodDef, MethodReturn};
 pub use proc::Proc;
+pub use symbol::Symbol;
 pub use value::cstr_ptr;
 pub use value::{Break, Value};
 
@@ -182,6 +185,7 @@ mod tests {
         let _ = Value::is_proc;
         let _ = Value::is_data;
         let _ = Value::is_string;
+        let _ = Value::is_symbol;
         let _ = Value::data_get::<i32>;
         let _ = Value::unbox_integer;
         let _ = Value::unbox_float;
@@ -249,6 +253,13 @@ mod tests {
         let _ = Hash::set;
         let _ = Hash::get;
         let _ = Hash::keys;
+        let _ = Symbol::from_value_unchecked;
+        let _ = Symbol::as_value;
+        let _ = Symbol::as_raw;
+        let _ = Symbol::new;
+        let _ = Symbol::from_sym;
+        let _ = Symbol::to_sym;
+        let _ = Symbol::name;
         let _ = Ccontext::new;
         let _ = Ccontext::load_nstring;
         let _ = <i32 as IntoValue>::into_value;
@@ -260,6 +271,8 @@ mod tests {
         let _ = <Hash as FromValue>::from_value;
         let _ = <RClass as FromValue>::from_value;
         let _ = <Proc as FromValue>::from_value;
+        let _ = <Symbol as FromValue>::from_value;
+        let _ = <Symbol as IntoValue>::into_value;
     }
 
     #[test]
