@@ -164,6 +164,9 @@ mod tests {
         let _ = <format::NRest as Format>::read;
         let _ = <format::NRestBlock as Format>::read;
         let _ = <format::Io as Format>::read;
+        let _ = <format::S as Format>::read;
+        let _ = <format::Str as Format>::read;
+        let _ = <format::RestBlock as Format>::read;
         let _ = Value::nil;
         let _ = Value::true_;
         let _ = Value::false_;

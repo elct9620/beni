@@ -19,6 +19,9 @@
 //!   - `format::NRestBlock` — `"n*&"` → symbol + rest array + block
 //!     slot
 //!   - `format::Io`         — `"io"`  → integer + object
+//!   - `format::S`          — `"S"`   → single String argument
+//!   - `format::Str`        — `"s"`   → String as a borrowed byte slice
+//!   - `format::RestBlock`  — `"*&"`  → rest array + block slot
 //!
 //! Rest-form variants borrow the call frame's argv buffer; the
 //! lifetime is tied to `&self`, which the bridge body holds for the
@@ -46,12 +49,12 @@
 //! ```ignore
 //! use beni::{Format, Mrb, Value};
 //!
-//! pub struct S;
-//! impl Format for S {
+//! pub struct Bool; // a not-yet-implemented `"b"` boolean reader
+//! impl Format for Bool {
 //!     type Output<'a> = Value;
-//!     const FMT: &'static core::ffi::CStr = c"S";
+//!     const FMT: &'static core::ffi::CStr = c"b";
 //!     fn read(mrb: &Mrb) -> Self::Output<'_> {
-//!         // mrb_get_args(mrb, "S", &out) — see `format::O` for the pattern
+//!         // mrb_get_args(mrb, "b", &out) — see `format::O` for the pattern
 //!         # unimplemented!()
 //!     }
 //! }
@@ -283,6 +286,120 @@ pub mod format {
             }
         }
     }
+
+    /// `mrb_get_args(mrb, "S", &val)` — read a single String argument.
+    /// mruby checks the argument is a String (raising `TypeError`
+    /// otherwise) before writing, so the result is always a
+    /// String-tagged `Value` — the strict counterpart to `O`.
+    pub struct S;
+    impl Format for S {
+        type Output<'a> = Value;
+        const FMT: &'static core::ffi::CStr = c"S";
+
+        fn read(mrb: &Mrb) -> Value {
+            #[cfg(mruby_linked)]
+            {
+                let mut raw = sys::mrb_value::zeroed();
+                // SAFETY: as `O::read`; the `"S"` format writes exactly
+                // one String-checked cell.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut raw as *mut sys::mrb_value,
+                    );
+                }
+                Value::from_raw(raw)
+            }
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
+        }
+    }
+
+    /// `mrb_get_args(mrb, "s", &ptr, &len)` — read a String argument as
+    /// a borrowed byte slice into the call frame. mruby checks the
+    /// argument is a String before writing; the slice points at the
+    /// string's buffer, valid for the duration of the call (the same
+    /// borrow contract as the rest-form variants). A zero-length string
+    /// folds to an empty slice.
+    pub struct Str;
+    impl Format for Str {
+        type Output<'a> = &'a [u8];
+        const FMT: &'static core::ffi::CStr = c"s";
+
+        fn read(mrb: &Mrb) -> &[u8] {
+            #[cfg(mruby_linked)]
+            {
+                let mut ptr: *const core::ffi::c_char = core::ptr::null();
+                let mut len: sys::mrb_int = 0;
+                // SAFETY: as `O::read`; the `"s"` format writes the
+                // string's byte pointer + length pair.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut ptr as *mut *const core::ffi::c_char,
+                        &mut len as *mut sys::mrb_int,
+                    );
+                }
+                if len > 0 && !ptr.is_null() {
+                    // SAFETY: mruby owns the string buffer for the
+                    // duration of the call frame, which outlives this
+                    // borrow; `len` is its byte length.
+                    unsafe { core::slice::from_raw_parts(ptr as *const u8, len as usize) }
+                } else {
+                    &[]
+                }
+            }
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
+        }
+    }
+
+    /// `mrb_get_args(mrb, "*&", &argv, &argc, &block)` — read the rest
+    /// array followed by the block slot, with no leading symbol. The
+    /// cleaner shape for a block-taking method (`gsub` / `scan` with a
+    /// block) than `NRestBlock`, which prepends a symbol. The `&`
+    /// specifier copies the block value without `mrb_proc_copy`, so the
+    /// captured block stays non-orphan; an absent block decodes as nil.
+    pub struct RestBlock;
+    impl Format for RestBlock {
+        type Output<'a> = (&'a [Value], Value);
+        const FMT: &'static core::ffi::CStr = c"*&";
+
+        fn read(mrb: &Mrb) -> (&[Value], Value) {
+            #[cfg(mruby_linked)]
+            {
+                let mut argv: *const sys::mrb_value = core::ptr::null();
+                let mut argc: sys::mrb_int = 0;
+                let mut block_raw = sys::mrb_value::zeroed();
+                // SAFETY: as `O::read`; the `"*&"` format writes the
+                // argv pointer + length pair and a single block-slot
+                // value.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut argv as *mut *const sys::mrb_value,
+                        &mut argc as *mut sys::mrb_int,
+                        &mut block_raw as *mut sys::mrb_value,
+                    );
+                }
+                (slice_from_argv(argv, argc), Value::from_raw(block_raw))
+            }
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
+        }
+    }
 }
 
 /// Cast a `mrb_get_args` rest-form `(*const mrb_value, mrb_int)` pair
@@ -307,7 +424,7 @@ fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: sys::mrb_int) -> &'a [
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use super::format::{Io, NRest, Rest};
+    use super::format::{Io, NRest, Rest, RestBlock, Str, S};
     use super::*;
 
     /// Registered through `method!(rest_count, -1)`: reads the rest
@@ -438,5 +555,103 @@ mod tests {
             mrb.pending_exc().to_string(&mrb)
         );
         assert_eq!(i32::from_value(got), Some(3));
+    }
+
+    /// Registered through `method!(s_echo, -1)`: reads the `"S"` String
+    /// argument and returns it unchanged.
+    fn s_echo(mrb: &Mrb, _self: Value) -> Value {
+        mrb.get_args::<S>()
+    }
+
+    /// Registered through `method!(str_echo, -1)`: reads the `"s"`
+    /// byte slice and copies it back into a fresh String, so the test
+    /// verifies both the pointer and the length survived the read.
+    fn str_echo(mrb: &Mrb, _self: Value) -> Value {
+        let bytes = mrb.get_args::<Str>();
+        mrb.str_new(bytes)
+    }
+
+    /// Registered through `method!(rest_block_report, -1)`: reads the
+    /// `"*&"` rest array and block slot, returning the rest length when
+    /// a block was given and `-1` otherwise — so a read that folds the
+    /// block into the rest (or misplaces it) fails the assertion.
+    fn rest_block_report(mrb: &Mrb, _self: Value) -> Value {
+        let (rest, block) = mrb.get_args::<RestBlock>();
+        if block.is_nil() {
+            Value::from_int(mrb, -1)
+        } else {
+            Value::from_int(mrb, rest.len() as sys::mrb_int)
+        }
+    }
+
+    #[test]
+    fn s_format_reads_a_string_argument() {
+        use crate::Module;
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(&mrb, c"s_echo", crate::method!(s_echo, -1))
+            .expect("registering the bridge must succeed");
+
+        let receiver = class.obj_new(&mrb, &[]);
+        let got = receiver.call(&mrb, c"s_echo", &[mrb.str_new(b"hello")]);
+
+        assert!(got.is_string(), "the `\"S\"` read yields a String value");
+        assert_eq!(got.to_string(&mrb), "hello");
+    }
+
+    #[test]
+    fn str_format_reads_a_string_as_bytes() {
+        use crate::Module;
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(&mrb, c"str_echo", crate::method!(str_echo, -1))
+            .expect("registering the bridge must succeed");
+
+        let receiver = class.obj_new(&mrb, &[]);
+        let got = receiver.call(&mrb, c"str_echo", &[mrb.str_new(b"hello")]);
+
+        // The echoed String equals the input only if both the byte
+        // pointer and the length were read correctly.
+        assert_eq!(got.to_string(&mrb), "hello");
+    }
+
+    #[test]
+    fn rest_block_format_splits_rest_from_block() {
+        use crate::{Ccontext, FromValue, Module};
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(
+                &mrb,
+                c"rest_block_report",
+                crate::method!(rest_block_report, -1),
+            )
+            .expect("registering the bridge must succeed");
+
+        let recv = class.obj_new(&mrb, &[]);
+        let slot = mrb.intern_cstr(c"$beni_rest_block_recv");
+        mrb.gv_set(slot, recv);
+
+        let cxt = Ccontext::new(&mrb, c"rest_block_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        // A block is given: the three positionals land in the rest
+        // array, the block in its own slot — rest length 3.
+        let with_block = cxt.load_nstring(b"$beni_rest_block_recv.rest_block_report(1, 2, 3) { }");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the *& read must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(i32::from_value(with_block), Some(3));
+
+        // No block: the slot decodes as nil.
+        let without_block = cxt.load_nstring(b"$beni_rest_block_recv.rest_block_report(1, 2)");
+        assert_eq!(i32::from_value(without_block), Some(-1));
     }
 }
