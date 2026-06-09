@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 64 (19%) |
+| function | 342 | 329 (96%) | 66 (19%) |
 | macro | 133 | 20 (15%) | 13 (10%) |
-| total | 475 | 349 (73%) | 77 (16%) |
+| total | 475 | 349 (73%) | 79 (17%) |
 
 ## mruby.h
 
@@ -158,8 +158,8 @@ Legend: ✅ covered · — missing
 | `mrb_obj_alloc` | fn | ✅ | — |  |
 | `mrb_obj_class` | fn | ✅ | — |  |
 | `mrb_obj_classname` | fn | ✅ | ✅ | `Value::classname` |
-| `mrb_obj_clone` | fn | ✅ | — |  |
-| `mrb_obj_dup` | fn | ✅ | — |  |
+| `mrb_obj_clone` | fn | ✅ | ✅ | `Value::obj_clone` |
+| `mrb_obj_dup` | fn | ✅ | ✅ | `Value::obj_dup` |
 | `mrb_obj_eq` | fn | ✅ | — |  |
 | `mrb_obj_equal` | fn | ✅ | — |  |
 | `mrb_obj_freeze` | fn | ✅ | — |  |

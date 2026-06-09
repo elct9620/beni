@@ -297,6 +297,49 @@ impl Value {
         }
     }
 
+    /// `obj.dup` — a shallow copy of `self`: its instance variables are
+    /// copied (not the objects they reference), the copy is unfrozen and
+    /// carries no singleton class, and the class's `initialize_copy`
+    /// runs on it. An immediate returns itself. Mirrors mruby's
+    /// `mrb_obj_dup`; raises `TypeError` on a singleton class, so call it
+    /// only where a longjmp can be absorbed (a C bridge or an
+    /// `mrb_protect_error` body), as with `Value::obj_as_string`.
+    #[inline]
+    pub fn obj_dup(self, mrb: &Mrb) -> Value {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive by the borrow; `self` originates
+            // from the same VM.
+            Value::from_raw(unsafe { sys::mrb_obj_dup(mrb.as_ptr(), self.0) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// `obj.clone` — like `dup` but also copies the singleton class and
+    /// the frozen state, the deeper of the two duplications; the class's
+    /// `initialize_copy` runs on the copy. An immediate returns itself.
+    /// Mirrors mruby's `mrb_obj_clone`; raises `TypeError` on a singleton
+    /// class, so call it only where a longjmp can be absorbed, as with
+    /// `Value::obj_as_string`.
+    #[inline]
+    pub fn obj_clone(self, mrb: &Mrb) -> Value {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive by the borrow; `self` originates
+            // from the same VM.
+            Value::from_raw(unsafe { sys::mrb_obj_clone(mrb.as_ptr(), self.0) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// Borrow the raw bytes of a String-tagged `self`. Routes through
     /// the `mrb_rstring_ptr` / `mrb_rstring_len` static-inline
     /// wrappers in `wrapper.h`, which expand the `RSTRING_PTR(s)` /
@@ -988,6 +1031,40 @@ mod linked_tests {
         assert!(!Value::nil().to_bool());
         assert!(0i32.into_value(&mrb).to_bool());
         assert!(mrb.str_new(b"").to_bool());
+    }
+
+    #[test]
+    fn obj_dup_copies_state_into_an_independent_object() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"dup_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        let orig = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        let dup = orig.obj_dup(&mrb);
+        let x = mrb.intern_cstr(c"@x");
+        // The dup carries the copied ivar...
+        assert_eq!(i32::from_value(dup.iv_get(&mrb, x)), Some(1));
+        // ...and is a distinct object: mutating it leaves the original.
+        dup.iv_set(&mrb, x, 2i32.into_value(&mrb));
+        assert_eq!(i32::from_value(dup.iv_get(&mrb, x)), Some(2));
+        assert_eq!(i32::from_value(orig.iv_get(&mrb, x)), Some(1));
+    }
+
+    #[test]
+    fn obj_clone_carries_frozen_state_where_dup_drops_it() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"clone_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        let frozen = cxt.load_nstring(b"Object.new.freeze");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // clone is the deeper copy — it preserves the frozen state;
+        // dup always yields an unfrozen object.
+        assert!(frozen.obj_clone(&mrb).call(&mrb, c"frozen?", &[]).to_bool());
+        assert!(!frozen.obj_dup(&mrb).call(&mrb, c"frozen?", &[]).to_bool());
     }
 
     #[test]
