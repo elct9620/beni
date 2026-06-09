@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    beni (0.5.0)
+    beni (0.6.0)
       rake (~> 13.0)
 
 GEM
