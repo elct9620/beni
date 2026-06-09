@@ -192,7 +192,9 @@ Selection, checksums, and cross-compile activation:
 - `FromValue` downcasts to the typed handles (`Array`, `Hash`, `RClass`,
   `Proc`, `Symbol`) discriminate by mruby's type tag alone: a value carrying
   the target's tag converts (for the containers, subclass instances included),
-  any other tag rejects.
+  any other tag rejects. Conversion to `bool` instead follows Ruby truthiness
+  — `nil` and `false` convert to `false`, every other value to `true` — so it
+  is total and never rejects.
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
   `RClass` and `RModule` handles. Methods are registered on those handles
@@ -205,12 +207,16 @@ Selection, checksums, and cross-compile activation:
   mechanism (`CDATA`): a class is marked so its instances carry Rust data,
   a Rust value is wrapped as an instance of that class, and it is extracted
   back type-checked against the data type it was registered under — a value
-  carrying a different data type, or none, does not extract. The mruby
-  garbage collector owns the wrapped value's lifetime, releasing it when
-  its carrier is collected. Mirrors `magnus`'s typed-data wrapping, and
-  meets the graduation bar — correct use needs no reasoning about VM
-  internals — so it lives on the typed surface rather than behind
-  `beni::sys`.
+  carrying a different data type, or none, does not extract. A bare carrier
+  that holds no payload yet — the instance an mruby `dup` or `clone`
+  allocates before `initialize_copy` runs — can have a Rust value installed
+  into it. The install does not release any payload the carrier already
+  holds, so it targets empty carriers; it is the seam through which a typed
+  object copies its Rust state. The mruby garbage collector owns the wrapped
+  value's lifetime, releasing it when its carrier is collected. Mirrors
+  `magnus`'s typed-data wrapping, and meets the graduation bar — correct use
+  needs no reasoning about VM internals — so it lives on the typed surface
+  rather than behind `beni::sys`.
 - Provides the `Gem` trait — the unit of Ruby surface a Rust crate ships:
 
   ```rust
