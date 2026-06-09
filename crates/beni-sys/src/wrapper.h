@@ -154,6 +154,31 @@ mrb_nil_p_func(mrb_value v)
   return mrb_nil_p(v);
 }
 
+/* `mrb_true_p(v)` / `mrb_false_p(v)` expand per boxing config: under
+ * word-boxing they compare the immediate word against MRB_Qtrue /
+ * MRB_Qfalse, while other boxings tag both `nil` and `false` as
+ * MRB_TT_FALSE — so a Rust-side tag test would misread `nil` as
+ * `false`. Route through the C compiler to match libmruby.a's layout. */
+static inline mrb_bool
+mrb_true_p_func(mrb_value v)
+{
+  return mrb_true_p(v);
+}
+
+static inline mrb_bool
+mrb_false_p_func(mrb_value v)
+{
+  return mrb_false_p(v);
+}
+
+/* `mrb_test(v)` — Ruby truthiness: false only for `nil` and `false`.
+ * Same boxing-config dependence as the predicates above. */
+static inline mrb_bool
+mrb_test_func(mrb_value v)
+{
+  return mrb_test(v);
+}
+
 /* RBreak predicate. Counterpart to `mrb_break_p(o)` in
  * <mruby/value.h>, which expands via `mrb_type(o) == MRB_TT_BREAK`.
  * Safe on any `mrb_value`; only reads the type tag. Yield helpers

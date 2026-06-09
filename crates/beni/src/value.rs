@@ -494,6 +494,53 @@ impl Value {
         crate::not_linked()
     }
 
+    /// Ruby truthiness: TRUE for every value except `nil` and `false`.
+    /// This is the `if` test, not a type check — routes through mruby's
+    /// `mrb_test` shim so the boxing-config layout matches the linked
+    /// archive, like `Value::is_nil`. Pair with `FromValue for bool`,
+    /// which reads a value through this rule.
+    #[inline]
+    pub fn to_bool(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: mrb_test is a pure predicate over the value tag and
+            // does not touch `mrb_state`.
+            unsafe { sys::mrb_test_func(self.0) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// TRUE when `self` is exactly Ruby `true`. See `Value::is_nil` for
+    /// the boxing-config routing.
+    #[inline]
+    pub fn is_true(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: mrb_true_p is a pure predicate over the value tag and
+            // does not touch `mrb_state`.
+            unsafe { sys::mrb_true_p_func(self.0) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// TRUE when `self` is exactly Ruby `false` — `nil` is excluded.
+    /// `nil` and `false` share the `MRB_TT_FALSE` tag under some boxing
+    /// modes, so this must route through mruby's `mrb_false_p` shim
+    /// rather than a tag test, which would misread `nil`.
+    #[inline]
+    pub fn is_false(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: mrb_false_p is a pure predicate over the value tag and
+            // does not touch `mrb_state`.
+            unsafe { sys::mrb_false_p_func(self.0) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// TRUE when `self` carries `MRB_TT_INTEGER`. Pure tag predicate
     /// via mruby's `mrb_type` (`MRB_INLINE`), reached through
     /// bindgen's static-fn trampoline. Pair with
@@ -911,6 +958,36 @@ mod linked_tests {
         // A non-String tag — and an immediate — both reject.
         assert!(!42i32.into_value(&mrb).is_string());
         assert!(!Value::nil().is_string());
+    }
+
+    #[test]
+    fn bool_predicates_separate_true_false_and_nil() {
+        // The immediate singletons need a live VM to have been captured,
+        // even though the predicates themselves take no `Mrb`.
+        let _mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // `is_true` / `is_false` are exact: each admits only its own
+        // singleton. The load-bearing case is that `nil` — which shares
+        // the false tag under some boxing modes — is neither.
+        assert!(Value::true_().is_true());
+        assert!(!Value::true_().is_false());
+        assert!(Value::false_().is_false());
+        assert!(!Value::false_().is_true());
+        assert!(!Value::nil().is_true());
+        assert!(!Value::nil().is_false());
+    }
+
+    #[test]
+    fn to_bool_follows_ruby_truthiness() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Only `nil` and `false` are falsy; every other value — zero
+        // and the empty string included — is truthy.
+        assert!(Value::true_().to_bool());
+        assert!(!Value::false_().to_bool());
+        assert!(!Value::nil().to_bool());
+        assert!(0i32.into_value(&mrb).to_bool());
+        assert!(mrb.str_new(b"").to_bool());
     }
 
     #[test]

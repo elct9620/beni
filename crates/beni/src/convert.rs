@@ -112,6 +112,16 @@ impl FromValue for f64 {
     }
 }
 
+impl FromValue for bool {
+    // Ruby truthiness, not a tag check: `nil` and `false` read as
+    // `false`, every other value as `true`. Total — always `Some` —
+    // mirroring magnus's `TryConvert for bool` (`Ok(val.to_bool())`).
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        Some(value.to_bool())
+    }
+}
+
 impl FromValue for Array {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
@@ -190,6 +200,19 @@ mod tests {
         // payload.
         assert_eq!(i32::from_value(float_val), None);
         assert_eq!(f64::from_value(int_val), None);
+    }
+
+    #[test]
+    fn bool_round_trips_and_converts_totally() {
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // The two canonical booleans round-trip through IntoValue.
+        assert_eq!(bool::from_value(true.into_value(&mrb)), Some(true));
+        assert_eq!(bool::from_value(false.into_value(&mrb)), Some(false));
+        // The conversion is total — it never returns None — and reads a
+        // non-boolean through Ruby truthiness (`nil` is falsy). The full
+        // truthiness boundary lives with `Value::to_bool` in value.rs.
+        assert_eq!(bool::from_value(Value::nil()), Some(false));
     }
 
     #[test]

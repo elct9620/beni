@@ -60,6 +60,7 @@ typed:
   mrb_define_singleton_method: RModule::define_singleton_method
   mrb_exc_new: RClass::exc_new
   mrb_exc_raise: raised from `Err` by the dispatch bridge (see Error extension)
+  mrb_false_p: Value::is_false
   mrb_false_value: Value::false_
   mrb_float_value: Value::from_float
   mrb_funcall_argv: Value::call_argv
@@ -95,8 +96,10 @@ typed:
   mrb_str_new_cstr: Mrb::str_new_cstr
   mrb_sym_name: Mrb::sym_name
   mrb_symbol_value: Symbol::from_sym
+  mrb_test: Value::to_bool
   mrb_top_run: Mrb::load_bytecode
   mrb_top_self: Mrb::load_bytecode
+  mrb_true_p: Value::is_true
   mrb_true_value: Value::true_
   mrb_yield_argv: Proc::call
 

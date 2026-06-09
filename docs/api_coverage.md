@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 329 (96%) | 63 (18%) |
-| macro | 133 | 17 (13%) | 10 (8%) |
-| total | 475 | 346 (73%) | 73 (15%) |
+| macro | 133 | 20 (15%) | 13 (10%) |
+| total | 475 | 349 (73%) | 76 (16%) |
 
 ## mruby.h
 
@@ -488,7 +488,7 @@ Legend: ✅ covered · — missing
 | `mrb_data_p` | macro | — | — |  |
 | `mrb_env_p` | macro | — | — |  |
 | `mrb_exception_p` | macro | — | — |  |
-| `mrb_false_p` | macro | — | — |  |
+| `mrb_false_p` | macro | ✅ | ✅ | `Value::is_false` |
 | `mrb_false_value` | fn | ✅ | ✅ | `Value::false_` |
 | `mrb_fiber_p` | macro | — | — |  |
 | `mrb_fixnum_p` | macro | — | — |  |
@@ -520,8 +520,8 @@ Legend: ✅ covered · — missing
 | `mrb_string_p` | macro | — | — |  |
 | `mrb_symbol_p` | macro | — | — |  |
 | `mrb_symbol_value` | fn | ✅ | ✅ | `Symbol::from_sym` |
-| `mrb_test` | macro | — | — |  |
-| `mrb_true_p` | macro | — | — |  |
+| `mrb_test` | macro | ✅ | ✅ | `Value::to_bool` |
+| `mrb_true_p` | macro | ✅ | ✅ | `Value::is_true` |
 | `mrb_true_value` | fn | ✅ | ✅ | `Value::true_` |
 | `mrb_undef_p` | macro | — | — |  |
 | `mrb_undef_value` | fn | ✅ | — |  |
