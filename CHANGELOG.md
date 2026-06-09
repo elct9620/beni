@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0](https://github.com/elct9620/beni/compare/v0.5.0...v0.6.0) (2026-06-09)
+
+
+### Features
+
+* **beni:** graduate object dup and clone onto Value ([fd5c9c7](https://github.com/elct9620/beni/commit/fd5c9c704af3d63bbdf6c583078f779ba1985a8d))
+* **beni:** install a Rust payload into a bare data carrier ([d4c059d](https://github.com/elct9620/beni/commit/d4c059dd7d5c3190e93fef7e332ea7fc258f1e27))
+* **beni:** read mruby booleans through the typed surface ([6b847fc](https://github.com/elct9620/beni/commit/6b847fce127bf244bb14867fa5ad95c4b47a21fb))
+* **coverage:** track mruby C API binding coverage ([c71f832](https://github.com/elct9620/beni/commit/c71f832ed05616d8545076d143d7a27ac14bad08))
+
 ## [0.5.0](https://github.com/elct9620/beni/compare/v0.4.0...v0.5.0) (2026-06-08)
 
 
