@@ -34,7 +34,8 @@ Gem::Specification.new do |spec|
         f.start_with?(*%w[bin/ Gemfile .gitignore test/ .github/ .rubocop.yml
                           crates/ Cargo.toml Cargo.lock rust-toolchain.toml
                           tasks/ build_config/ .claude/ CLAUDE.md SPEC.md
-                          Steepfile rbs_collection Rakefile
+                          Steepfile rbs_collection Rakefile .api_coverage.yml
+                          docs/api_coverage.md
                           release-please-config.json .release-please-manifest.json])
     end
   end

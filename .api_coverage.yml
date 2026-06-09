@@ -1,0 +1,119 @@
+# Typed-surface coverage manifest
+# ================================
+#
+# Hand-authored record of how the typed `beni` wrapper covers mruby's C
+# API. The C symbol *inventory* (the denominator) is scanned from the
+# vendored headers by `rake api:coverage`; this file is the *numerator*
+# the implementer maintains.
+#
+# Two sections:
+#
+#   typed       — keyed by mruby C API symbol (function or function-like
+#                 macro, exactly as in the headers). The value is a free
+#                 -form Note naming the Rust item(s) that graduate it —
+#                 the safe surface a `typed ✅` row points at, so the
+#                 checkmark has a verifiable Rust side. List several,
+#                 comma-separated, when more than one binds it; add
+#                 prose for caveats. A single bare symbol is rendered as
+#                 code automatically. A `~` Note is reported as
+#                 "unspecified": typed, but its Rust side is unnamed.
+#   extensions  — Rust-native surface with no 1:1 C API (RAII guards,
+#                 caches, trait conversions). Documented for context;
+#                 not part of the C-API coverage ratio.
+#
+# The raw `sys` FFI tier is derived automatically (bindgen + wrapper.h
+# shims), so it is not listed. A `typed` key absent from the scanned
+# inventory is reported as "unknown" by the rake task.
+---
+typed:
+  MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
+  RARRAY_LEN: Array::len
+  RSTRING_LEN: Value::as_bytes
+  RSTRING_PTR: Value::as_bytes
+  mrb_ary_entry: "`Array::entry`, `Value::ary_entry`"
+  mrb_ary_new: Mrb::ary_new
+  mrb_ary_push: Array::push
+  mrb_break_p: Value::as_break
+  mrb_break_value_get: Break::value
+  mrb_ccontext_filename: Ccontext::new
+  mrb_ccontext_free: Ccontext::drop
+  mrb_ccontext_new: Ccontext::new
+  mrb_check_error: Mrb::clear_exc
+  mrb_class_get: Mrb::class_get
+  mrb_class_get_under: RModule::class_get
+  mrb_class_name: RModule::name
+  mrb_class_ptr: Value::as_class_ptr
+  mrb_close: Mrb::drop
+  mrb_const_defined: Value::const_defined
+  mrb_const_get: Value::const_get
+  mrb_data_check_get_ptr: Value::data_get
+  mrb_data_object_alloc: "`RClass::data_wrap` (see DataType extension)"
+  mrb_define_alias: RModule::alias_method
+  mrb_define_class: Mrb::define_class
+  mrb_define_class_under: RModule::define_class
+  mrb_define_const: RModule::define_const
+  mrb_define_global_const: Mrb::define_global_const
+  mrb_define_method: RModule::define_method
+  mrb_define_module: Mrb::define_module
+  mrb_define_module_under: RModule::define_module
+  mrb_define_private_method: RModule::define_private_method
+  mrb_define_singleton_method: RModule::define_singleton_method
+  mrb_exc_new: RClass::exc_new
+  mrb_exc_raise: raised from `Err` by the dispatch bridge (see Error extension)
+  mrb_false_value: Value::false_
+  mrb_float_value: Value::from_float
+  mrb_funcall_argv: Value::call_argv
+  mrb_gc_arena_restore: "`ArenaScope::keep`/`drop` (see ArenaScope extension)"
+  mrb_gc_arena_save: "`Mrb::arena_scope` (see ArenaScope extension)"
+  mrb_gc_protect: "`ArenaScope::keep` (see ArenaScope extension)"
+  mrb_get_args: state::args
+  mrb_gv_get: Mrb::gv_get
+  mrb_gv_set: Mrb::gv_set
+  mrb_hash_get: Hash::get
+  mrb_hash_keys: Hash::keys
+  mrb_hash_new: Mrb::hash_new
+  mrb_hash_set: Hash::set
+  mrb_int_value: Value::from_int
+  mrb_intern_cstr: Mrb::intern_cstr
+  mrb_intern_str: Mrb::intern_str
+  mrb_iv_get: Value::iv_get
+  mrb_iv_set: Value::iv_set
+  mrb_load_irep_buf: Mrb::load_irep_buf
+  mrb_load_nstring_cxt: Ccontext::load_nstring
+  mrb_nil_p: Value::is_nil
+  mrb_nil_value: Value::nil
+  mrb_obj_as_string: Value::obj_as_string
+  mrb_obj_classname: Value::classname
+  mrb_obj_new: RClass::obj_new
+  mrb_obj_value: "`RClass::to_value`, `RClass::data_wrap`"
+  mrb_open: Mrb::open
+  mrb_protect_error: Mrb::protect
+  mrb_raise: RClass::raise
+  mrb_read_irep_buf: Mrb::load_bytecode
+  mrb_respond_to: Value::respond_to
+  mrb_str_new: Mrb::str_new
+  mrb_str_new_cstr: Mrb::str_new_cstr
+  mrb_sym_name: Mrb::sym_name
+  mrb_symbol_value: Symbol::from_sym
+  mrb_top_run: Mrb::load_bytecode
+  mrb_top_self: Mrb::load_bytecode
+  mrb_true_value: Value::true_
+  mrb_yield_argv: Proc::call
+
+extensions:
+  Error: >-
+    Result-based error model: a handler's `Err(Error)` is raised into the
+    VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught
+    back into `Err` by `Mrb::protect` (`mrb_protect_error`).
+  ArenaScope: >-
+    RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore`
+    with a `mrb_gc_protect` keep — a safety guard with no single C API.
+  Immediates: >-
+    Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` /
+    `mrb_true_value` / `mrb_false_value`.
+  DataType: >-
+    Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`,
+    adding Rust-side type safety to the data pointer.
+  convert: >-
+    `IntoValue` / `FromValue` trait conversions (magnus-style) layered on
+    the value box/unbox primitives.
