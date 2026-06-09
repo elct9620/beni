@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 63 (18%) |
+| function | 342 | 329 (96%) | 64 (19%) |
 | macro | 133 | 20 (15%) | 13 (10%) |
-| total | 475 | 349 (73%) | 76 (16%) |
+| total | 475 | 349 (73%) | 77 (16%) |
 
 ## mruby.h
 
@@ -323,7 +323,7 @@ Legend: ✅ covered · — missing
 | `mrb_data_check_get_ptr` | fn | ✅ | ✅ | `Value::data_get` |
 | `mrb_data_check_type` | fn | ✅ | — |  |
 | `mrb_data_get_ptr` | fn | ✅ | — |  |
-| `mrb_data_init` | fn | ✅ | — |  |
+| `mrb_data_init` | fn | ✅ | ✅ | `Value::data_reinit` |
 | `mrb_data_object_alloc` | fn | ✅ | ✅ | `RClass::data_wrap` (see DataType extension) |
 | `mrb_get_datatype` | macro | — | — |  |
 ## mruby/dump.h

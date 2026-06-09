@@ -47,6 +47,7 @@ typed:
   mrb_const_defined: Value::const_defined
   mrb_const_get: Value::const_get
   mrb_data_check_get_ptr: Value::data_get
+  mrb_data_init: Value::data_reinit
   mrb_data_object_alloc: "`RClass::data_wrap` (see DataType extension)"
   mrb_define_alias: RModule::alias_method
   mrb_define_class: Mrb::define_class

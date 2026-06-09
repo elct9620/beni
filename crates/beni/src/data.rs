@@ -178,6 +178,35 @@ impl Value {
             crate::not_linked()
         }
     }
+
+    /// Box `value` and install it as this carrier's payload under `ty`,
+    /// handing the box to the mruby GC — the same ownership transfer as
+    /// `RClass::data_wrap`, but into an existing instance instead of a
+    /// fresh one. This is the seam an `initialize_copy` uses to copy a
+    /// typed object: a `dup` or `clone` hands it the bare carrier it just
+    /// allocated, and the body installs a clone of the original's state.
+    ///
+    /// The carrier must be bare — its class marked through
+    /// `RClass::set_instance_data_tt`, holding no payload yet. The
+    /// install does not release a payload already present, so re-running
+    /// it over a live carrier leaks the previous box.
+    #[inline]
+    pub fn data_reinit<T>(self, _mrb: &Mrb, value: T, ty: &'static DataType<T>) {
+        #[cfg(mruby_linked)]
+        {
+            let ptr = Box::into_raw(Box::new(value)) as *mut core::ffi::c_void;
+            // SAFETY: `self` is a CDATA carrier from the live VM borrowed
+            // as `_mrb`; `ptr` is a freshly leaked `Box<T>` handed to
+            // mruby, which releases it via `ty`'s release hook; `ty` is
+            // `'static`, so its descriptor outlives the carrier.
+            unsafe { sys::mrb_data_init(self.into_raw(), ptr, ty.as_raw()) };
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (value, ty);
+            crate::not_linked()
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -221,6 +250,30 @@ mod tests {
             mrb.str_new(b"x").data_get(&mrb, &HOLDER_TYPE).is_none(),
             "a non-data value must not extract"
         );
+    }
+
+    #[test]
+    fn data_reinit_installs_into_a_bare_carrier() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb
+            .define_class(c"BeniReinitHolder", mrb.object_class())
+            .expect("defining the carrier class must succeed");
+        class.set_instance_data_tt(&mrb);
+
+        // A bare carrier — allocated as CDATA with no payload yet, the
+        // shape mruby's dup/clone hands to initialize_copy.
+        let obj = class.obj_new(&mrb, &[]);
+        assert!(obj.is_data(), "the fresh instance is a data carrier");
+        assert!(
+            obj.data_get(&mrb, &HOLDER_TYPE).is_none(),
+            "a bare carrier holds no payload before re-init"
+        );
+
+        obj.data_reinit(&mrb, Holder { tag: 99 }, &HOLDER_TYPE);
+        let got = obj
+            .data_get(&mrb, &HOLDER_TYPE)
+            .expect("the re-installed payload extracts under its type");
+        assert_eq!(got.tag, 99);
     }
 
     /// Drop probe with its own counter — kept distinct from `Holder` so
