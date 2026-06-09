@@ -15,6 +15,10 @@
           {
             "type": "command",
             "command": "file=$(jq -r '.tool_input.file_path | select(test(\"\\\\.(rb|rbs)$\"))'); if [ -n \"$file\" ]; then bundle exec steep check >&2 || exit 2; fi"
+          },
+          {
+            "type": "command",
+            "command": "file=$(jq -r '.tool_input.file_path | select(endswith(\".api_coverage.yml\"))'); if [ -n \"$file\" ]; then cd \"$CLAUDE_PROJECT_DIR\" && bundle exec rake api:coverage >&2 || exit 2; fi"
           }
         ]
       }

@@ -30,7 +30,7 @@ Apply these in order — earlier principles override later ones on conflict.
 
 10. **Commit lock files** (`Cargo.lock`, `Gemfile.lock`, `rbs_collection.lock.yaml`) alongside the dependency changes that produced them. Non-permanent design notes go to `tmp/` (gitignored), never `docs/`.
 
-11. **The typed `beni` surface graduates only what is safe to use without VM-internal reasoning** — a stronger bar than "cannot cause UB". An operation whose correctness depends on VM internals (call-frame layout, raw `mrb_context` / RBreak fields) stays behind `beni::sys`, where `unsafe` honestly signals the caller owns invariants the compiler can't check; zeroing a consumer's `sys::` use is never the goal. Refines Principle 6; the typed-surface contract lives in SPEC (e.g. `Proc::call` / `as_break` graduated, the raw frame-index shims stayed in `sys`).
+11. **The typed `beni` surface graduates only what is safe to use without VM-internal reasoning** — a stronger bar than "cannot cause UB". An operation whose correctness depends on VM internals (call-frame layout, raw `mrb_context` / RBreak fields) stays behind `beni::sys`, where `unsafe` honestly signals the caller owns invariants the compiler can't check; zeroing a consumer's `sys::` use is never the goal. Refines Principle 6; the typed-surface contract lives in SPEC (e.g. `Proc::call` / `as_break` graduated, the raw frame-index shims stayed in `sys`). Every graduation is recorded in the `.api_coverage.yml` manifest — add the C symbol with the public Rust item that binds it (a Rust-native construct with no 1:1 C API goes under `extensions:` instead); `rake api:coverage` regenerates `docs/api_coverage.md` from it. Only record symbols reachable through a public interface: test-only or internal-only bindings stay out until they are genuinely graduated.
 
 ## Build Pipeline
 
@@ -102,3 +102,4 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
 | Consumer scenarios | `test/scenarios/*/Rakefile` | Each documents the consumer path it pins; harness contract is `scenario:setup` → `beni:build` → `scenario:verify`. |
 | CI lanes | `.github/workflows/main.yml` | Lane rationale is commented inline (e.g. why wasm clippy lives in verify, not lint). |
 | RBS signatures | `sig/beni/` | Mirrors `lib/beni/` 1:1; stdlib via `Steepfile`, patches in `sig/patches/`. |
+| API coverage | `.api_coverage.yml` → `docs/api_coverage.md` | `rake api:coverage` diffs mruby's scanned C surface against the Rust layers; sys tier auto-derived, typed tier hand-curated in the manifest (see Principle 11). |
