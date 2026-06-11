@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/elct9620/beni/compare/v0.6.0...v0.6.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **wasi:** target wasm32-wasip1 instead of the deprecated wasi triple ([9603c38](https://github.com/elct9620/beni/commit/9603c385b77e2349400c459c5073cac73922a4af))
+
 ## [0.6.0](https://github.com/elct9620/beni/compare/v0.5.0...v0.6.0) (2026-06-09)
 
 
