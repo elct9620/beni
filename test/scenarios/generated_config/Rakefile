@@ -61,6 +61,14 @@ namespace :scenario do
     missing = artifacts.reject { |path| File.exist?(path) }
     abort "[scenario] missing artifacts:\n  #{missing.join("\n  ")}" unless missing.empty?
 
+    # The wasi toolchain beni stages into the consumer's mruby tree must
+    # target the non-deprecated wasm32-wasip1 triple; a drift back to
+    # wasm32-wasi floods every C compile with clang's -Wdeprecated.
+    staged_toolchain = File.expand_path("vendor/mruby/tasks/toolchains/wasi.rake", __dir__)
+    if File.read(staged_toolchain).match?(/--target=wasm32-wasi(?![\w-])/)
+      abort "[scenario] staged wasi toolchain passes a deprecated --target (expected wasm32-wasip1)"
+    end
+
     puts "[scenario] generated_config artifacts verified: #{artifacts.join(", ")}"
   end
 end

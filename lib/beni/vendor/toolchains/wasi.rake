@@ -9,7 +9,7 @@ MRuby::Toolchain.new(:wasi) do |conf, _params|
   # vendor tree this mruby source is staged in (MRUBY_ROOT's parent).
   wasi_sdk = ENV["WASI_SDK_PATH"] || File.join(File.expand_path("..", MRUBY_ROOT), "wasi-sdk")
   bin = File.join(wasi_sdk, "bin")
-  target_flags = ["--target=wasm32-wasi", "--sysroot=#{File.join(wasi_sdk, "share", "wasi-sysroot")}"]
+  target_flags = ["--target=wasm32-wasip1", "--sysroot=#{File.join(wasi_sdk, "share", "wasi-sysroot")}"]
   # setjmp/longjmp via the wasm exception-handling mechanism: all
   # three flags must be present at both compile and link stages.
   sjlj_flags = ["-mllvm", "-wasm-enable-sjlj", "-mllvm", "-wasm-use-legacy-eh=false"]

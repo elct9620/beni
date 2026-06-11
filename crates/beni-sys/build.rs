@@ -268,7 +268,7 @@ fn main() {
     // imports that the host cannot satisfy. Host builds use the
     // platform's native setjmp from libc — no extra directive.
     if let Some(wasi_sdk) = wasi_sdk.as_deref() {
-        let setjmp_dir = format!("{}/share/wasi-sysroot/lib/wasm32-wasi", wasi_sdk);
+        let setjmp_dir = format!("{}/share/wasi-sysroot/lib/wasm32-wasip1", wasi_sdk);
         println!("cargo:rustc-link-search=native={}", setjmp_dir);
         println!("cargo:rustc-link-lib=static=setjmp");
     }
@@ -289,7 +289,7 @@ fn run_bindgen(
     let mut builder = bindgen::Builder::default().header(wrapper_h.to_str().unwrap());
     if let Some(wasi_sdk) = wasi_sdk {
         builder = builder
-            .clang_arg("--target=wasm32-wasi")
+            .clang_arg("--target=wasm32-wasip1")
             .clang_arg(format!("--sysroot={}/share/wasi-sysroot", wasi_sdk));
     }
     // `-D<name>[=<value>]` tokens straight from flags.mak.
