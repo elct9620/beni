@@ -41,7 +41,7 @@
 
 use beni_sys as sys;
 
-use crate::Mrb;
+use crate::{Error, Mrb};
 
 /// Compile-time NUL-terminated C-string literal pointer.
 ///
@@ -943,6 +943,79 @@ impl Value {
             crate::not_linked()
         }
     }
+
+    /// `mrb_obj_equal(mrb, self, other)` — TRUE when `self` and `other`
+    /// are the same object, Ruby's `equal?`. A pure identity compare:
+    /// it dispatches nothing, so it never raises and yields a `bool`.
+    #[inline]
+    pub fn obj_equal(self, mrb: &Mrb, other: Value) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive; `self` and `other` share the VM by
+            // the single-VM contract. `mrb_obj_equal` only inspects the
+            // two values' identity.
+            unsafe { sys::mrb_obj_equal(mrb.as_ptr(), self.0, other.0) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_equal(mrb, self, other)` — Ruby `==` equality. May run a
+    /// user-defined `==`, so it runs under the same protection as
+    /// `Mrb::protect`: `Ok(bool)` for the comparison, or `Err` when the
+    /// dispatched method raises.
+    #[inline]
+    pub fn equal(self, mrb: &Mrb, other: Value) -> Result<bool, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive; `self` and `other` share the
+                // VM. `mrb_equal` may dispatch `==` and raise, which
+                // `protect` catches into `Err`.
+                let eq = unsafe { sys::mrb_equal(mrb.as_ptr(), self.0, other.0) };
+                if eq {
+                    Value::true_()
+                } else {
+                    Value::false_()
+                }
+            })
+            .map(|v| v.to_bool())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_eql(mrb, self, other)` — Ruby `eql?`, the stricter equality
+    /// `Hash` keys use. May run a user-defined `eql?`, so like `equal`
+    /// it runs under protection: `Ok(bool)` or `Err` on a raise.
+    #[inline]
+    pub fn eql(self, mrb: &Mrb, other: Value) -> Result<bool, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: as `equal`; `mrb_eql` may dispatch `eql?` and
+                // raise, caught by `protect`.
+                let eq = unsafe { sys::mrb_eql(mrb.as_ptr(), self.0, other.0) };
+                if eq {
+                    Value::true_()
+                } else {
+                    Value::false_()
+                }
+            })
+            .map(|v| v.to_bool())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
 }
 
 /// A non-local `break` / `return` captured as the value inside a
@@ -1078,6 +1151,44 @@ mod linked_tests {
         // Appending empty bytes leaves the receiver unchanged.
         unsafe { s.str_cat(&mrb, b"") };
         assert_eq!(s.string_bytes(), Some(b"foobar".to_vec()));
+    }
+
+    #[test]
+    fn equality_separates_value_eql_and_identity() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let a = mrb.str_new(b"hello");
+        let b = mrb.str_new(b"hello");
+        let c = mrb.str_new(b"world");
+
+        // `==` and `eql?` are by value: distinct String objects with the
+        // same content compare equal, differing content does not.
+        assert!(a.equal(&mrb, b).expect("== does not raise for strings"));
+        assert!(a.eql(&mrb, b).expect("eql? does not raise for strings"));
+        assert!(!a.equal(&mrb, c).expect("== does not raise for strings"));
+
+        // `equal?` is identity: a value is the same object as itself but
+        // not as a distinct equal-valued object.
+        assert!(a.obj_equal(&mrb, a));
+        assert!(!a.obj_equal(&mrb, b));
+    }
+
+    #[test]
+    fn equal_surfaces_a_raising_user_method_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"eq_test.rb").expect("allocating the context must succeed");
+
+        let obj = cxt.load_nstring(b"class Boom; def ==(o); raise 'no'; end; end; Boom.new");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the class must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        // Comparing dispatches the user `==`, which raises — the raise
+        // surfaces as Err instead of unwinding across the call.
+        let other = mrb.str_new(b"x");
+        assert!(matches!(obj.equal(&mrb, other), Err(Error::Exception(_))));
     }
 
     #[test]

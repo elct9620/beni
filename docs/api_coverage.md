@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 70 (20%) |
+| function | 342 | 329 (96%) | 73 (21%) |
 | macro | 124 | 20 (16%) | 25 (20%) |
-| total | 466 | 349 (75%) | 95 (20%) |
+| total | 466 | 349 (75%) | 98 (21%) |
 
 ## mruby.h
 
@@ -92,8 +92,8 @@ Legend: ✅ covered · — missing
 | `mrb_ensure_int_type` | fn | ✅ | — |  |
 | `mrb_ensure_integer_type` | fn | ✅ | — |  |
 | `mrb_ensure_string_type` | fn | ✅ | — |  |
-| `mrb_eql` | fn | ✅ | — |  |
-| `mrb_equal` | fn | ✅ | — |  |
+| `mrb_eql` | fn | ✅ | ✅ | `Value::eql` |
+| `mrb_equal` | fn | ✅ | ✅ | `Value::equal` |
 | `mrb_exc_get` | macro | — | — |  |
 | `mrb_exc_get_id` | fn | ✅ | — |  |
 | `mrb_exc_new` | fn | ✅ | ✅ | `RClass::exc_new`, also via `Error::new` (see Error extension) |
@@ -158,7 +158,7 @@ Legend: ✅ covered · — missing
 | `mrb_obj_clone` | fn | ✅ | ✅ | `Value::obj_clone` |
 | `mrb_obj_dup` | fn | ✅ | ✅ | `Value::obj_dup` |
 | `mrb_obj_eq` | fn | ✅ | — |  |
-| `mrb_obj_equal` | fn | ✅ | — |  |
+| `mrb_obj_equal` | fn | ✅ | ✅ | `Value::obj_equal` |
 | `mrb_obj_freeze` | fn | ✅ | — |  |
 | `mrb_obj_id` | fn | ✅ | — |  |
 | `mrb_obj_inspect` | fn | ✅ | — |  |
