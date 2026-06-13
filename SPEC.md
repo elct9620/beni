@@ -200,7 +200,7 @@ Selection, checksums, and cross-compile activation:
   the owned-`String` conversion rejects a non-string value by its tag and a
   string whose bytes are not UTF-8. A registered method grows an mruby string
   in place by appending Rust bytes, the way Ruby's `String#<<` extends its
-  receiver.
+  receiver; appending to a frozen string surfaces an `Err`.
 - A registered method or protected closure raises its own exception: it builds
   one from an exception class and a message and returns it as an `Err`, which
   crosses the boundary like any other `Err` — to a registered method's Ruby

@@ -378,7 +378,9 @@ impl Value {
     /// Append `bytes` to a String-tagged `self` in place via
     /// `mrb_str_cat`, the way Ruby's `String#<<` extends its receiver.
     /// The backing buffer may reallocate, but `self` keeps naming the
-    /// same `RString`, so it stays usable after the call.
+    /// same `RString`, so it stays usable after the call. Appending to a
+    /// frozen string raises `FrozenError`; the call runs under
+    /// `Mrb::protect`, so that surfaces as `Err` rather than long-jumping.
     ///
     /// # Safety
     ///
@@ -386,20 +388,27 @@ impl Value {
     /// `as_bytes` carries. Calling on another tag hands `mrb_str_cat`
     /// a non-string object and corrupts the VM.
     #[inline]
-    pub unsafe fn str_cat(self, mrb: &Mrb, bytes: &[u8]) {
+    pub unsafe fn str_cat(self, mrb: &Mrb, bytes: &[u8]) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: forwarded from the caller (String tag); `mrb` is
-            // alive by the borrow; `bytes` is read-only and copied into
-            // the string's buffer before the call returns.
-            unsafe {
-                sys::mrb_str_cat(
-                    mrb.as_ptr(),
-                    self.0,
-                    bytes.as_ptr() as *const core::ffi::c_char,
-                    bytes.len(),
-                );
-            }
+            mrb.protect(|mrb| {
+                // SAFETY: forwarded from the caller (String tag); `mrb`
+                // is alive inside the protect frame; `bytes` is read-only
+                // and copied into the string's buffer before the call
+                // returns. `mrb_str_cat` calls `mrb_str_modify`, which
+                // raises `FrozenError` on a frozen string — caught by
+                // `protect` into `Err`.
+                unsafe {
+                    sys::mrb_str_cat(
+                        mrb.as_ptr(),
+                        self.0,
+                        bytes.as_ptr() as *const core::ffi::c_char,
+                        bytes.len(),
+                    );
+                }
+                Value::nil()
+            })
+            .map(|_| ())
         }
         #[cfg(not(mruby_linked))]
         {
@@ -1143,14 +1152,35 @@ mod linked_tests {
 
         let s = mrb.str_new(b"foo");
         // SAFETY: `s` carries the String tag from `str_new`.
-        unsafe { s.str_cat(&mrb, b"bar") };
+        unsafe { s.str_cat(&mrb, b"bar") }.expect("appending to a mutable string succeeds");
         // The same value now names the grown string — append mutated it
         // in place rather than producing a new object.
         assert_eq!(s.string_bytes(), Some(b"foobar".to_vec()));
 
         // Appending empty bytes leaves the receiver unchanged.
-        unsafe { s.str_cat(&mrb, b"") };
+        // SAFETY: `s` is String-tagged.
+        unsafe { s.str_cat(&mrb, b"") }.expect("appending nothing succeeds");
         assert_eq!(s.string_bytes(), Some(b"foobar".to_vec()));
+    }
+
+    #[test]
+    fn str_cat_surfaces_frozen_receiver_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
+
+        // A frozen String still carries the String tag, so the unsafe
+        // precondition holds, but appending to it raises FrozenError —
+        // which protect catches into Err rather than long-jumping.
+        let frozen = cxt.load_nstring(b"'fixed'.freeze");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "freezing the string must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        // SAFETY: `frozen` is String-tagged (a frozen String literal).
+        let result = unsafe { frozen.str_cat(&mrb, b"more") };
+        assert!(matches!(result, Err(Error::Exception(_))));
     }
 
     #[test]
