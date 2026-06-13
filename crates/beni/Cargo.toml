@@ -31,4 +31,4 @@ crate-type = ["rlib"]
 # surface plus the layout-safe C shims. Re-exported through `sys` for
 # raw-FFI escape hatch access (`beni::sys::mrb_*`). The version
 # requirement is what registry consumers resolve against.
-beni-sys = { path = "../beni-sys", version = "0.6.1" }
+beni-sys = { path = "../beni-sys", version = "0.7.0" }

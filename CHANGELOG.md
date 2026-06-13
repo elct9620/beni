@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.7.0](https://github.com/elct9620/beni/compare/v0.6.1...v0.7.0) (2026-06-13)
+
+
+### Features
+
+* **beni:** add Error::new for handler-authored exceptions ([4842496](https://github.com/elct9620/beni/commit/48424965e4c771c2b9097e63ce973c42799a79a7))
+* **beni:** convert an mruby string to owned bytes ([ec5e175](https://github.com/elct9620/beni/commit/ec5e1756d1c6bb7620403c0cf38fe61ac13ad5e4))
+* **beni:** graduate array index-write and capacity/slice construction ([68af55d](https://github.com/elct9620/beni/commit/68af55d3330020356aaaf3c202f7e85c251c1aa8))
+* **beni:** graduate module functions; record class-method alignment ([c7c6c47](https://github.com/elct9620/beni/commit/c7c6c472c05a09830e7d022b4a1bc27c267e773b))
+* **beni:** graduate string append and owned-String conversion ([6035360](https://github.com/elct9620/beni/commit/60353601fd04f5d94524b5bb73ce80a304107ad8))
+* **beni:** graduate value comparison (==, eql?, identity) ([f12c645](https://github.com/elct9620/beni/commit/f12c6459929c053e80efc9333139f3688bed42ec))
+* **beni:** introduce RString and graduate string ops onto it ([d71c093](https://github.com/elct9620/beni/commit/d71c0939e9e3d6bd9a7f7577765bc03095eef489))
+* **beni:** report an RString's byte length on the typed surface ([47c4b48](https://github.com/elct9620/beni/commit/47c4b4830d2a6419cc9fa59fcab35606c9b7b2f8))
+* **coverage:** drop non-embedder macros, credit tag predicates ([5c6b656](https://github.com/elct9620/beni/commit/5c6b65670412eb4d7bb3c8e67d9c46c4d39e604a))
+
+
+### Bug Fixes
+
+* **beni:** protect str_cat against a frozen receiver ([9b78cc3](https://github.com/elct9620/beni/commit/9b78cc3f51ae0f78115fd6b9285931d6e083c044))
+* **beni:** read a String subclass to_s result by tag ([66589b9](https://github.com/elct9620/beni/commit/66589b9ff21f57982250f9de5ec18ce3b13b534a))
+* **coverage:** credit is_integer to integer_p, not fixnum_p ([32f064f](https://github.com/elct9620/beni/commit/32f064fe810b2181b826251b447dbfc16208cf31))
+* **coverage:** label trait graduations by their trait ([be598c6](https://github.com/elct9620/beni/commit/be598c6b4e59a885a6eaae08ee64c3900c9cb198))
+
 ## [0.6.1](https://github.com/elct9620/beni/compare/v0.6.0...v0.6.1) (2026-06-11)
 
 
