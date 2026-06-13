@@ -145,5 +145,6 @@ extensions:
     adding Rust-side type safety to the data pointer.
   convert: >-
     `IntoValue` / `FromValue` trait conversions (magnus-style) layered on
-    the value box/unbox primitives, including `FromValue for String` (an
-    mruby string copied out as an owned UTF-8 `String`).
+    the value box/unbox primitives, including `FromValue for String` and
+    `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as
+    arbitrary owned bytes).

@@ -10,10 +10,11 @@
 //! typed seam consumers call.
 //!
 //! Scope covers the scalar leaf types (`i32` / `f64` / `bool`), an
-//! owned `String`, and checked downcasts to the typed handles (`Array`
-//! / `Hash` / `RClass` / `Proc` / `Symbol`), discriminated by the
-//! value's type tag — container subclass instances convert. Every
-//! conversion is by value, copying rather than borrowing VM storage.
+//! owned `String` or byte vector, and checked downcasts to the typed
+//! handles (`RString` / `Array` / `Hash` / `RClass` / `Proc` /
+//! `Symbol`), discriminated by the value's type tag — string and
+//! container subclass instances convert. Every conversion is by value,
+//! copying rather than borrowing VM storage.
 
 use crate::{Array, Hash, Mrb, Proc, RClass, RString, Symbol, Value};
 
@@ -199,6 +200,17 @@ impl FromValue for String {
     }
 }
 
+impl FromValue for Vec<u8> {
+    // A String-tagged value yields its bytes verbatim — arbitrary, not
+    // required to be UTF-8 — the binary counterpart to the owned
+    // `String` conversion for callers that handle raw byte strings. A
+    // non-string tag rejects.
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        Some(RString::from_value(value)?.to_bytes())
+    }
+}
+
 #[cfg(all(test, mruby_linked))]
 mod tests {
     use super::*;
@@ -268,6 +280,18 @@ mod tests {
             Some(b"hi".to_vec())
         );
         assert!(RString::from_value(42i32.into_value(&mrb)).is_none());
+    }
+
+    #[test]
+    fn vec_u8_converts_arbitrary_bytes_and_rejects_non_string() {
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A String-tagged value yields its bytes verbatim — non-UTF-8
+        // bytes that the owned `String` conversion rejects survive here.
+        let binary = mrb.str_new(&[0xff, 0x00, 0xfe]).as_value();
+        assert_eq!(Vec::<u8>::from_value(binary), Some(vec![0xff, 0x00, 0xfe]));
+        // A non-string tag rejects, like every other downcast.
+        assert_eq!(Vec::<u8>::from_value(42i32.into_value(&mrb)), None);
     }
 
     #[test]
