@@ -195,6 +195,16 @@ Selection, checksums, and cross-compile activation:
   any other tag rejects. Conversion to `bool` instead follows Ruby truthiness
   — `nil` and `false` convert to `false`, every other value to `true` — so it
   is total and never rejects.
+- An mruby string converts to Rust as a byte slice or an owned `String`, and
+  Rust bytes convert to a new mruby string; the owned-`String` conversion
+  rejects a non-string value by its tag. A registered method grows an mruby
+  string in place by appending Rust bytes, the way Ruby's `String#<<` extends
+  its receiver.
+- A registered method or protected closure raises its own exception: it builds
+  one from an exception class and a message and returns it as an `Err`, which
+  crosses the boundary like any other `Err` — to a registered method's Ruby
+  caller as an mruby exception, to a protected closure's Rust caller as the
+  `Err` value.
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
   `RClass` and `RModule` handles. Methods are registered on those handles
