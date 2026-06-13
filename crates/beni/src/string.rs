@@ -147,6 +147,31 @@ impl RString {
         #[cfg(not(mruby_linked))]
         crate::not_linked()
     }
+
+    /// `RSTRING_LEN(self)` — the number of bytes in this string, via the
+    /// `mrb_rstring_len` shim (the macro expanded in the C compiler so
+    /// the embed-vs-heap length read matches the linked archive's
+    /// layout). It is a byte count, not a character count, and is never
+    /// negative, so the result is returned as `usize`. Mirrors
+    /// `Array::len`; cheaper than `to_bytes().len()`, which copies the
+    /// buffer out first.
+    #[inline]
+    pub fn len(self) -> usize {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `RSTRING_LEN` reads only the string header.
+            (unsafe { sys::mrb_rstring_len(self.0.as_raw()) }) as usize
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// TRUE when the string holds no bytes.
+    #[inline]
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -188,6 +213,21 @@ mod tests {
 
         let result = frozen.cat(&mrb, b"more");
         assert!(matches!(result, Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn len_and_is_empty_track_the_byte_count() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let empty = mrb.str_new(b"");
+        assert_eq!(empty.len(), 0);
+        assert!(empty.is_empty());
+
+        // The count is bytes, not characters: a 2-byte UTF-8 codepoint
+        // contributes its bytes, so "héllo" measures 6, not 5.
+        let s = mrb.str_new("héllo".as_bytes());
+        assert_eq!(s.len(), 6);
+        assert!(!s.is_empty());
     }
 
     #[test]

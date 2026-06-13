@@ -428,7 +428,7 @@ Legend: ✅ covered · — missing
 | `RSTRING_CSTR` | macro | — | — |  |
 | `RSTRING_EMBED_LEN` | macro | — | — |  |
 | `RSTRING_END` | macro | — | — |  |
-| `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes` |
+| `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes`, `RString::len` |
 | `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes` |
 | `mrb_obj_as_string` | fn | ✅ | ✅ | `Value::obj_as_string` |
 | `mrb_ptr_to_str` | fn | ✅ | — |  |

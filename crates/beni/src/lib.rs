@@ -255,6 +255,8 @@ mod tests {
         let _ = RString::cat;
         let _ = RString::as_bytes;
         let _ = RString::to_bytes;
+        let _ = RString::len;
+        let _ = RString::is_empty;
         let _ = Proc::from_value_unchecked;
         let _ = Proc::as_value;
         let _ = Proc::as_raw;

@@ -30,7 +30,7 @@ typed:
   MRB_ARGS_REQ: a typed method's positional arity, derived by `Module::define_method`
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
   RARRAY_LEN: Array::len
-  RSTRING_LEN: "`RString::as_bytes`, `RString::to_bytes`"
+  RSTRING_LEN: "`RString::as_bytes`, `RString::to_bytes`, `RString::len`"
   RSTRING_PTR: "`RString::as_bytes`, `RString::to_bytes`"
   mrb_ary_entry: "`Array::entry`, `Value::ary_entry`"
   mrb_ary_new: Mrb::ary_new
