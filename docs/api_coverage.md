@@ -10,14 +10,14 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 329 (96%) | 66 (19%) |
-| macro | 133 | 20 (15%) | 13 (10%) |
-| total | 475 | 349 (73%) | 79 (17%) |
+| macro | 124 | 20 (16%) | 25 (20%) |
+| total | 466 | 349 (75%) | 91 (20%) |
 
 ## mruby.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `MRB_ARGS_ANY` | macro | ✅ | — |  |
+| `MRB_ARGS_ANY` | macro | ✅ | ✅ | a typed method's `-1` arity, derived by `Module::define_method` |
 | `MRB_ARGS_ARG` | macro | — | — |  |
 | `MRB_ARGS_BLOCK` | macro | — | — |  |
 | `MRB_ARGS_KEY` | macro | — | — |  |
@@ -25,15 +25,13 @@ Legend: ✅ covered · — missing
 | `MRB_ARGS_NONE` | macro | ✅ | — |  |
 | `MRB_ARGS_OPT` | macro | — | — |  |
 | `MRB_ARGS_POST` | macro | — | — |  |
-| `MRB_ARGS_REQ` | macro | ✅ | — |  |
+| `MRB_ARGS_REQ` | macro | ✅ | ✅ | a typed method's positional arity, derived by `Module::define_method` |
 | `MRB_ARGS_REST` | macro | — | — |  |
 | `mrb_alloca` | macro | — | — |  |
 | `mrb_any_to_s` | fn | ✅ | — |  |
 | `mrb_argnum_error` | fn | ✅ | — |  |
 | `mrb_as_float` | macro | — | — |  |
 | `mrb_as_int` | macro | — | — |  |
-| `mrb_assert` | macro | — | — |  |
-| `mrb_assert_int_fit` | macro | — | — |  |
 | `mrb_attr_get` | fn | ✅ | — |  |
 | `mrb_basic_alloc_func` | fn | ✅ | — |  |
 | `mrb_block_given_p` | fn | ✅ | — |  |
@@ -133,7 +131,6 @@ Legend: ✅ covered · — missing
 | `mrb_incremental_gc` | fn | ✅ | — |  |
 | `mrb_inspect` | fn | ✅ | — |  |
 | `mrb_int` | macro | ✅ | — |  |
-| `mrb_int_hash_func` | macro | — | — |  |
 | `mrb_intern` | fn | ✅ | — |  |
 | `mrb_intern_check` | fn | ✅ | — |  |
 | `mrb_intern_check_cstr` | fn | ✅ | — |  |
@@ -190,12 +187,6 @@ Legend: ✅ covered · — missing
 | `mrb_singleton_class_ptr` | fn | ✅ | — |  |
 | `mrb_stack_extend` | fn | ✅ | — |  |
 | `mrb_state_atexit` | fn | ✅ | — |  |
-| `mrb_static_assert` | macro | — | — |  |
-| `mrb_static_assert1` | macro | — | — |  |
-| `mrb_static_assert2` | macro | — | — |  |
-| `mrb_static_assert_expand` | macro | — | — |  |
-| `mrb_static_assert_powerof2` | macro | — | — |  |
-| `mrb_static_assert_selector` | macro | — | — |  |
 | `mrb_str_new` | fn | ✅ | ✅ | `Mrb::str_new` |
 | `mrb_str_new_cstr` | fn | ✅ | ✅ | `Mrb::str_new_cstr` |
 | `mrb_str_new_cstr_frozen` | macro | — | — |  |
@@ -477,32 +468,32 @@ Legend: ✅ covered · — missing
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_array_p` | macro | — | — |  |
+| `mrb_array_p` | macro | — | ✅ | `Value::is_array`, via the value tag |
 | `mrb_bigint_p` | macro | — | — |  |
 | `mrb_bool` | macro | ✅ | — |  |
 | `mrb_bool_value` | fn | ✅ | — |  |
 | `mrb_break_p` | macro | ✅ | ✅ | `Value::as_break` |
-| `mrb_class_p` | macro | — | — |  |
+| `mrb_class_p` | macro | — | ✅ | `Value::is_class`, via the value tag |
 | `mrb_cptr_p` | macro | — | — |  |
 | `mrb_cptr_value` | fn | ✅ | — |  |
-| `mrb_data_p` | macro | — | — |  |
+| `mrb_data_p` | macro | — | ✅ | `Value::is_data`, via the value tag |
 | `mrb_env_p` | macro | — | — |  |
 | `mrb_exception_p` | macro | — | — |  |
 | `mrb_false_p` | macro | ✅ | ✅ | `Value::is_false` |
 | `mrb_false_value` | fn | ✅ | ✅ | `Value::false_` |
 | `mrb_fiber_p` | macro | — | — |  |
-| `mrb_fixnum_p` | macro | — | — |  |
+| `mrb_fixnum_p` | macro | — | ✅ | `Value::is_integer`, via the value tag |
 | `mrb_fixnum_value` | fn | ✅ | — |  |
-| `mrb_float_p` | macro | — | — |  |
+| `mrb_float_p` | macro | — | ✅ | `Value::is_float`, via the value tag |
 | `mrb_float_read` | fn | ✅ | — |  |
 | `mrb_float_value` | fn | ✅ | ✅ | `Value::from_float` |
 | `mrb_free_p` | macro | — | — |  |
-| `mrb_hash_p` | macro | — | — |  |
+| `mrb_hash_p` | macro | — | ✅ | `Value::is_hash`, via the value tag |
 | `mrb_iclass_p` | macro | — | — |  |
 | `mrb_immediate_p` | macro | — | — |  |
 | `mrb_int_read` | fn | ✅ | — |  |
 | `mrb_int_value` | fn | ✅ | ✅ | `Value::from_int` |
-| `mrb_integer_p` | macro | — | — |  |
+| `mrb_integer_p` | macro | — | ✅ | `Value::is_integer`, via the value tag |
 | `mrb_istruct_p` | macro | — | — |  |
 | `mrb_module_p` | macro | — | — |  |
 | `mrb_msvc_snprintf` | fn | — | — |  |
@@ -511,14 +502,14 @@ Legend: ✅ covered · — missing
 | `mrb_nil_value` | fn | ✅ | ✅ | `Value::nil` |
 | `mrb_obj_value` | fn | ✅ | ✅ | `RClass::to_value`, `RClass::data_wrap` |
 | `mrb_object_p` | macro | — | — |  |
-| `mrb_proc_p` | macro | — | — |  |
+| `mrb_proc_p` | macro | — | ✅ | `Value::is_proc`, via the value tag |
 | `mrb_range_p` | macro | — | — |  |
 | `mrb_read_float` | fn | ✅ | — |  |
 | `mrb_read_int` | fn | ✅ | — |  |
 | `mrb_ro_data_p` | macro | ✅ | — |  |
 | `mrb_sclass_p` | macro | — | — |  |
-| `mrb_string_p` | macro | — | — |  |
-| `mrb_symbol_p` | macro | — | — |  |
+| `mrb_string_p` | macro | — | ✅ | `Value::is_string`, via the value tag |
+| `mrb_symbol_p` | macro | — | ✅ | `Value::is_symbol`, via the value tag |
 | `mrb_symbol_value` | fn | ✅ | ✅ | `Symbol::from_sym` |
 | `mrb_test` | macro | ✅ | ✅ | `Value::to_bool` |
 | `mrb_true_p` | macro | ✅ | ✅ | `Value::is_true` |

@@ -268,7 +268,7 @@ Selection, checksums, and cross-compile activation:
   the typed surface graduates through a Rust-native construct rather than the
   matching C symbol counts as covered through that construct: a type predicate
   read from the value tag covers the per-type `_p` macro it stands in for, and
-  the typed argument reader covers the argument-spec macros it subsumes.
+  a typed method definition's arity derives the argument-spec aspec it declares.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.

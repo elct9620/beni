@@ -42,6 +42,16 @@ module BeniCoverage
       /\AMRB_SET_INSTANCE_TT\z/
     ].freeze
 
+    # +mrb_*+ macros that look like embedder API by name but are not:
+    # debug and compile-time assertions, and the internal integer hash
+    # helper. No embedder calls these, so they stay out of the
+    # denominator (see SPEC's coverage measure).
+    MACRO_DENY = [
+      /\Amrb_assert/,
+      /\Amrb_static_assert/,
+      /\Amrb_int_hash_func\z/
+    ].freeze
+
     Entry = Data.define(:name, :kind, :header)
 
     module_function
@@ -70,6 +80,8 @@ module BeniCoverage
     end
 
     def embedder_macro?(name)
+      return false if MACRO_DENY.any? { |re| re.match?(name) }
+
       name.start_with?("mrb_") || MACRO_ALLOW.any? { |re| re.match?(name) }
     end
   end

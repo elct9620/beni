@@ -26,6 +26,8 @@
 # inventory is reported as "unknown" by the rake task.
 ---
 typed:
+  MRB_ARGS_ANY: a typed method's `-1` arity, derived by `Module::define_method`
+  MRB_ARGS_REQ: a typed method's positional arity, derived by `Module::define_method`
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
   RARRAY_LEN: Array::len
   RSTRING_LEN: Value::as_bytes
@@ -33,7 +35,17 @@ typed:
   mrb_ary_entry: "`Array::entry`, `Value::ary_entry`"
   mrb_ary_new: Mrb::ary_new
   mrb_ary_push: Array::push
+  mrb_array_p: "`Value::is_array`, via the value tag"
   mrb_break_p: Value::as_break
+  mrb_class_p: "`Value::is_class`, via the value tag"
+  mrb_data_p: "`Value::is_data`, via the value tag"
+  mrb_fixnum_p: "`Value::is_integer`, via the value tag"
+  mrb_float_p: "`Value::is_float`, via the value tag"
+  mrb_hash_p: "`Value::is_hash`, via the value tag"
+  mrb_integer_p: "`Value::is_integer`, via the value tag"
+  mrb_proc_p: "`Value::is_proc`, via the value tag"
+  mrb_string_p: "`Value::is_string`, via the value tag"
+  mrb_symbol_p: "`Value::is_symbol`, via the value tag"
   mrb_break_value_get: Break::value
   mrb_ccontext_filename: Ccontext::new
   mrb_ccontext_free: Ccontext::drop
