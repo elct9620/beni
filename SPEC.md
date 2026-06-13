@@ -196,6 +196,13 @@ Selection, checksums, and cross-compile activation:
   follows Ruby truthiness
   — `nil` and `false` convert to `false`, every other value to `true` — so it
   is total and never rejects.
+- Every type tag carries a per-type boolean predicate (`Value::is_array`,
+  `is_string`, `is_integer`, … — the analogue of mruby's `mrb_*_p` macros)
+  reporting whether a value carries it. Where the tag has a typed handle, its
+  predicate and the matching `FromValue` downcast — magnus's `TryConvert`
+  analogue — agree exactly: the predicate holds for precisely the values the
+  downcast converts into the handle. The predicate answers "what type is
+  this?"; the downcast hands back the handle to operate on it.
 - Rust bytes convert to a new mruby string, returned as a typed `RString`
   handle. From an mruby string Rust reads the bytes three ways: a borrowed byte
   slice, an owned `String` when the bytes are valid UTF-8, or an owned byte
