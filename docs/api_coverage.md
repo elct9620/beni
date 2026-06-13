@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 329 (96%) | 75 (22%) |
-| macro | 124 | 20 (16%) | 25 (20%) |
-| total | 466 | 349 (75%) | 100 (21%) |
+| macro | 124 | 20 (16%) | 24 (19%) |
+| total | 466 | 349 (75%) | 99 (21%) |
 
 ## mruby.h
 
@@ -482,7 +482,7 @@ Legend: ✅ covered · — missing
 | `mrb_false_p` | macro | ✅ | ✅ | `Value::is_false` |
 | `mrb_false_value` | fn | ✅ | ✅ | `Value::false_` |
 | `mrb_fiber_p` | macro | — | — |  |
-| `mrb_fixnum_p` | macro | — | ✅ | `Value::is_integer`, via the value tag |
+| `mrb_fixnum_p` | macro | — | — |  |
 | `mrb_fixnum_value` | fn | ✅ | — |  |
 | `mrb_float_p` | macro | — | ✅ | `Value::is_float`, via the value tag |
 | `mrb_float_read` | fn | ✅ | — |  |
@@ -493,7 +493,7 @@ Legend: ✅ covered · — missing
 | `mrb_immediate_p` | macro | — | — |  |
 | `mrb_int_read` | fn | ✅ | — |  |
 | `mrb_int_value` | fn | ✅ | ✅ | `Value::from_int` |
-| `mrb_integer_p` | macro | — | ✅ | `Value::is_integer`, via the value tag |
+| `mrb_integer_p` | macro | — | ✅ | `Value::is_integer` — true for any Integer; the immediate-only `mrb_fixnum_p`, which diverges from this under word boxing, is intentionally not graduated |
 | `mrb_istruct_p` | macro | — | — |  |
 | `mrb_module_p` | macro | — | — |  |
 | `mrb_msvc_snprintf` | fn | — | — |  |
