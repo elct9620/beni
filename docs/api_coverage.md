@@ -53,9 +53,9 @@ Legend: ✅ covered · — missing
 | `mrb_class_defined_under_id` | fn | ✅ | — |  |
 | `mrb_class_get` | fn | ✅ | ✅ | `Mrb::class_get` |
 | `mrb_class_get_id` | fn | ✅ | — |  |
-| `mrb_class_get_under` | fn | ✅ | ✅ | `RModule::class_get` |
+| `mrb_class_get_under` | fn | ✅ | ✅ | `Module::class_get` |
 | `mrb_class_get_under_id` | fn | ✅ | — |  |
-| `mrb_class_name` | fn | ✅ | ✅ | `RModule::name` |
+| `mrb_class_name` | fn | ✅ | ✅ | `Module::name` |
 | `mrb_class_new` | fn | ✅ | — |  |
 | `mrb_class_new_instance` | fn | ✅ | — |  |
 | `mrb_class_path` | fn | ✅ | — |  |
@@ -63,28 +63,28 @@ Legend: ✅ covered · — missing
 | `mrb_cmp` | fn | ✅ | — |  |
 | `mrb_context_run` | macro | — | — |  |
 | `mrb_convert_type` | macro | — | — |  |
-| `mrb_define_alias` | fn | ✅ | ✅ | `RModule::alias_method` |
+| `mrb_define_alias` | fn | ✅ | ✅ | `Module::alias_method` |
 | `mrb_define_alias_id` | fn | ✅ | — |  |
 | `mrb_define_class` | fn | ✅ | ✅ | `Mrb::define_class` |
 | `mrb_define_class_id` | fn | ✅ | — |  |
 | `mrb_define_class_method` | fn | ✅ | ✅ | `Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment) |
 | `mrb_define_class_method_id` | fn | ✅ | — |  |
-| `mrb_define_class_under` | fn | ✅ | ✅ | `RModule::define_class` |
+| `mrb_define_class_under` | fn | ✅ | ✅ | `Module::define_class` |
 | `mrb_define_class_under_id` | fn | ✅ | — |  |
-| `mrb_define_const` | fn | ✅ | ✅ | `RModule::define_const` |
+| `mrb_define_const` | fn | ✅ | ✅ | `Module::define_const` |
 | `mrb_define_const_id` | fn | ✅ | — |  |
 | `mrb_define_global_const` | fn | ✅ | ✅ | `Mrb::define_global_const` |
-| `mrb_define_method` | fn | ✅ | ✅ | `RModule::define_method` |
+| `mrb_define_method` | fn | ✅ | ✅ | `Module::define_method` |
 | `mrb_define_method_id` | fn | ✅ | — |  |
 | `mrb_define_module` | fn | ✅ | ✅ | `Mrb::define_module` |
-| `mrb_define_module_function` | fn | ✅ | ✅ | `RModule::define_module_function` |
+| `mrb_define_module_function` | fn | ✅ | ✅ | `Module::define_module_function` |
 | `mrb_define_module_function_id` | fn | ✅ | — |  |
 | `mrb_define_module_id` | fn | ✅ | — |  |
-| `mrb_define_module_under` | fn | ✅ | ✅ | `RModule::define_module` |
+| `mrb_define_module_under` | fn | ✅ | ✅ | `Module::define_module` |
 | `mrb_define_module_under_id` | fn | ✅ | — |  |
-| `mrb_define_private_method` | fn | ✅ | ✅ | `RModule::define_private_method` |
+| `mrb_define_private_method` | fn | ✅ | ✅ | `Module::define_private_method` |
 | `mrb_define_private_method_id` | fn | ✅ | — |  |
-| `mrb_define_singleton_method` | fn | ✅ | ✅ | `RModule::define_singleton_method` |
+| `mrb_define_singleton_method` | fn | ✅ | ✅ | `Object::define_singleton_method` |
 | `mrb_define_singleton_method_id` | fn | ✅ | — |  |
 | `mrb_ensure_array_type` | fn | ✅ | — |  |
 | `mrb_ensure_float_type` | fn | ✅ | — |  |

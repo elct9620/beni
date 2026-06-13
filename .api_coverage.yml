@@ -54,8 +54,8 @@ typed:
   mrb_ccontext_new: Ccontext::new
   mrb_check_error: Mrb::clear_exc
   mrb_class_get: Mrb::class_get
-  mrb_class_get_under: RModule::class_get
-  mrb_class_name: RModule::name
+  mrb_class_get_under: Module::class_get
+  mrb_class_name: Module::name
   mrb_class_ptr: Value::as_class_ptr
   mrb_close: Mrb::drop
   mrb_const_defined: Value::const_defined
@@ -63,18 +63,18 @@ typed:
   mrb_data_check_get_ptr: Value::data_get
   mrb_data_init: Value::data_reinit
   mrb_data_object_alloc: "`RClass::data_wrap` (see DataType extension)"
-  mrb_define_alias: RModule::alias_method
+  mrb_define_alias: Module::alias_method
   mrb_define_class: Mrb::define_class
   mrb_define_class_method: "`Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment)"
-  mrb_define_class_under: RModule::define_class
-  mrb_define_const: RModule::define_const
+  mrb_define_class_under: Module::define_class
+  mrb_define_const: Module::define_const
   mrb_define_global_const: Mrb::define_global_const
-  mrb_define_method: RModule::define_method
+  mrb_define_method: Module::define_method
   mrb_define_module: Mrb::define_module
-  mrb_define_module_function: RModule::define_module_function
-  mrb_define_module_under: RModule::define_module
-  mrb_define_private_method: RModule::define_private_method
-  mrb_define_singleton_method: RModule::define_singleton_method
+  mrb_define_module_function: Module::define_module_function
+  mrb_define_module_under: Module::define_module
+  mrb_define_private_method: Module::define_private_method
+  mrb_define_singleton_method: Object::define_singleton_method
   mrb_eql: Value::eql
   mrb_equal: Value::equal
   mrb_obj_equal: Value::obj_equal
