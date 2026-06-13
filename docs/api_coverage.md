@@ -96,7 +96,7 @@ Legend: ✅ covered · — missing
 | `mrb_equal` | fn | ✅ | — |  |
 | `mrb_exc_get` | macro | — | — |  |
 | `mrb_exc_get_id` | fn | ✅ | — |  |
-| `mrb_exc_new` | fn | ✅ | ✅ | `RClass::exc_new` |
+| `mrb_exc_new` | fn | ✅ | ✅ | `RClass::exc_new`, also via `Error::new` (see Error extension) |
 | `mrb_exc_raise` | fn | ✅ | ✅ | raised from `Err` by the dispatch bridge (see Error extension) |
 | `mrb_fiber_alive_p` | fn | ✅ | — |  |
 | `mrb_fiber_new` | fn | ✅ | — |  |
@@ -551,6 +551,6 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 |------|-------------|
 | `ArenaScope` | RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore` with a `mrb_gc_protect` keep — a safety guard with no single C API. |
 | `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, adding Rust-side type safety to the data pointer. |
-| `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by `Mrb::protect` (`mrb_protect_error`). |
+| `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by `Mrb::protect` (`mrb_protect_error`). `Error::new` builds an exception error from a class and a message (via `RClass::exc_new`) for a handler to raise its own exception. |
 | `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
 | `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` (an mruby string copied out as an owned UTF-8 `String`). |

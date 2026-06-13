@@ -6,7 +6,7 @@
 //! instead of letting the raise long-jump across Rust frames, and a
 //! Rust panic caught at the FFI boundary travels the same channel.
 
-use crate::{Mrb, Value};
+use crate::{Mrb, RClass, Value};
 
 /// Error surfaced to Rust callers when mruby rejects an operation or
 /// a wrapped closure panics.
@@ -24,6 +24,17 @@ pub enum Error {
 }
 
 impl Error {
+    /// Build an exception error: a fresh instance of `class` carrying
+    /// `message`, wrapped as `Error::Exception`. The magnus-aligned way
+    /// a handler raises its own exception — `return Err(Error::new(...))`
+    /// — formatting `message` in Rust first when it is dynamic. The
+    /// bytes are copied into the exception before returning, through
+    /// `RClass::exc_new`.
+    #[inline]
+    pub fn new(mrb: &Mrb, class: RClass, message: &str) -> Self {
+        Error::Exception(class.exc_new(mrb, message))
+    }
+
     /// The error's message. An exception renders through the live VM
     /// (the carried `Value` cannot render itself without one),
     /// falling back to an empty string when the exception's `to_s`
@@ -67,6 +78,21 @@ pub(crate) fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 #[cfg(all(test, mruby_linked))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_builds_an_exception_error_carrying_the_message() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let runtime_error = mrb
+            .class_get(c"RuntimeError")
+            .expect("RuntimeError is a core class");
+
+        let err = Error::new(&mrb, runtime_error, "boom");
+
+        // The constructor produces the Exception variant, and the
+        // exception renders the message it was built with.
+        assert!(matches!(err, Error::Exception(_)));
+        assert_eq!(err.message(&mrb), "boom");
+    }
 
     #[test]
     fn panic_message_renders_every_payload_shape() {

@@ -71,7 +71,7 @@ typed:
   mrb_define_module_under: RModule::define_module
   mrb_define_private_method: RModule::define_private_method
   mrb_define_singleton_method: RModule::define_singleton_method
-  mrb_exc_new: RClass::exc_new
+  mrb_exc_new: "`RClass::exc_new`, also via `Error::new` (see Error extension)"
   mrb_exc_raise: raised from `Err` by the dispatch bridge (see Error extension)
   mrb_false_p: Value::is_false
   mrb_false_value: Value::false_
@@ -123,7 +123,9 @@ extensions:
   Error: >-
     Result-based error model: a handler's `Err(Error)` is raised into the
     VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught
-    back into `Err` by `Mrb::protect` (`mrb_protect_error`).
+    back into `Err` by `Mrb::protect` (`mrb_protect_error`). `Error::new`
+    builds an exception error from a class and a message (via
+    `RClass::exc_new`) for a handler to raise its own exception.
   ArenaScope: >-
     RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore`
     with a `mrb_gc_protect` keep — a safety guard with no single C API.
