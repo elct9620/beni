@@ -425,6 +425,41 @@ pub trait Module: private::ClassLike {
         }
     }
 
+    /// `mrb_define_module_function(mrb, self, name, func, aspec)` —
+    /// register a module function: one call defines both a private
+    /// instance method, for a class that mixes the module in, and a
+    /// singleton method on the module object, the way Ruby's
+    /// `module_function` exposes `Math.sqrt`. The aspec derivation and
+    /// rejection contract match `define_method`.
+    fn define_module_function(
+        self,
+        mrb: &Mrb,
+        name: &core::ffi::CStr,
+        method: MethodDef,
+    ) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            protect_register(mrb, method, |mrb, raw, aspec| {
+                // SAFETY: as `define_method` — same signature, same
+                // contract.
+                unsafe {
+                    sys::mrb_define_module_function(
+                        mrb.as_ptr(),
+                        self.raw(),
+                        name.as_ptr(),
+                        raw,
+                        aspec,
+                    )
+                };
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, method.func, method.arity);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_define_const(mrb, self, name, val)` — bind the constant
     /// `name` to `val` on this class or module. Runs inside
     /// `Mrb::protect`, so a frozen-receiver rejection surfaces as
@@ -692,6 +727,42 @@ mod tests {
             .class_get(&mrb, c"Widget")
             .expect("fetching the nested class must succeed");
         assert_eq!(fetched.name(&mrb), Some("BeniTrait::Widget"));
+    }
+
+    #[test]
+    fn define_module_function_attaches_to_module_and_includers() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let module = mrb
+            .define_module(c"BeniModFn")
+            .expect("defining the module must succeed");
+        module
+            .define_module_function(&mrb, c"seven", crate::method!(answer_seven, 0))
+            .expect("registering the module function must succeed");
+
+        let cxt = crate::Ccontext::new(&mrb, c"modfn_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        // Callable directly on the module object — the singleton form.
+        let direct = cxt.load_nstring(b"BeniModFn.seven");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "calling the module function must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(unsafe { direct.unbox_integer() }, 7);
+
+        // Callable as a bare private helper inside a class that mixes the
+        // module in — the private-instance form.
+        let included = cxt.load_nstring(
+            b"class BeniModUser; include BeniModFn; def go; seven; end; end; BeniModUser.new.go",
+        );
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "calling the mixed-in private form must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(unsafe { included.unbox_integer() }, 7);
     }
 
     #[test]

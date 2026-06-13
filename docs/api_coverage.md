@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 73 (21%) |
+| function | 342 | 329 (96%) | 75 (22%) |
 | macro | 124 | 20 (16%) | 25 (20%) |
-| total | 466 | 349 (75%) | 98 (21%) |
+| total | 466 | 349 (75%) | 100 (21%) |
 
 ## mruby.h
 
@@ -67,7 +67,7 @@ Legend: ✅ covered · — missing
 | `mrb_define_alias_id` | fn | ✅ | — |  |
 | `mrb_define_class` | fn | ✅ | ✅ | `Mrb::define_class` |
 | `mrb_define_class_id` | fn | ✅ | — |  |
-| `mrb_define_class_method` | fn | ✅ | — |  |
+| `mrb_define_class_method` | fn | ✅ | ✅ | `Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment) |
 | `mrb_define_class_method_id` | fn | ✅ | — |  |
 | `mrb_define_class_under` | fn | ✅ | ✅ | `RModule::define_class` |
 | `mrb_define_class_under_id` | fn | ✅ | — |  |
@@ -77,7 +77,7 @@ Legend: ✅ covered · — missing
 | `mrb_define_method` | fn | ✅ | ✅ | `RModule::define_method` |
 | `mrb_define_method_id` | fn | ✅ | — |  |
 | `mrb_define_module` | fn | ✅ | ✅ | `Mrb::define_module` |
-| `mrb_define_module_function` | fn | ✅ | — |  |
+| `mrb_define_module_function` | fn | ✅ | ✅ | `RModule::define_module_function` |
 | `mrb_define_module_function_id` | fn | ✅ | — |  |
 | `mrb_define_module_id` | fn | ✅ | — |  |
 | `mrb_define_module_under` | fn | ✅ | ✅ | `RModule::define_module` |
