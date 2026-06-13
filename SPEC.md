@@ -261,6 +261,14 @@ Selection, checksums, and cross-compile activation:
   surface does not expose remains reachable there, unsafe and outside the
   wrapper's guarantees; closing a consumer's `beni::sys` use to zero is not
   a goal.
+- `docs/api_coverage.md` measures how far the typed surface has graduated
+  mruby's embedder API — the functions and macros an embedder calls across the
+  public embedder headers. Compile-time and debug assertion macros and internal
+  helper macros are not embedder API and stay out of the measure. A capability
+  the typed surface graduates through a Rust-native construct rather than the
+  matching C symbol counts as covered through that construct: a type predicate
+  read from the value tag covers the per-type `_p` macro it stands in for, and
+  the typed argument reader covers the argument-spec macros it subsumes.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.
