@@ -147,7 +147,7 @@ mod tests {
 
         assert!(Symbol::from_value(sym_val).is_some());
         // A non-symbol value — and an immediate — both reject.
-        assert!(Symbol::from_value(mrb.str_new(b"k")).is_none());
+        assert!(Symbol::from_value(mrb.str_new(b"k").as_value()).is_none());
         assert!(Symbol::from_value(42i32.into_value(&mrb)).is_none());
     }
 }

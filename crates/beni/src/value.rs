@@ -41,6 +41,8 @@
 
 use beni_sys as sys;
 
+#[cfg(mruby_linked)]
+use crate::RString;
 use crate::{Error, Mrb};
 
 /// Compile-time NUL-terminated C-string literal pointer.
@@ -340,111 +342,6 @@ impl Value {
         }
     }
 
-    /// Borrow the raw bytes of a String-tagged `self`. Routes through
-    /// the `mrb_rstring_ptr` / `mrb_rstring_len` static-inline
-    /// wrappers in `wrapper.h`, which expand the `RSTRING_PTR(s)` /
-    /// `RSTRING_LEN(s)` macros inside the C compiler so the
-    /// embed-vs-heap branch comes from mruby's own header rather
-    /// than a Rust-side mirror.
-    ///
-    /// The returned slice points at storage owned by the mruby VM;
-    /// the `&Mrb` borrow keeps the state alive for the slice's
-    /// lifetime, but does not block GC or string mutation. Callers
-    /// must consume the slice before the next mruby call that could
-    /// touch this string.
-    ///
-    /// # Safety
-    ///
-    /// `self` must be a String-tagged `Value`. Caller must not
-    /// invoke another mruby API that could free or move the
-    /// string's backing buffer before consuming the slice.
-    #[inline]
-    pub unsafe fn as_bytes(self, _mrb: &Mrb) -> &[u8] {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: forwarded from caller. The wrapper-h inline
-            // helpers expand the RSTRING_PTR / RSTRING_LEN macros
-            // against mruby's own headers.
-            let ptr = unsafe { sys::mrb_rstring_ptr(self.0) } as *const u8;
-            let len = unsafe { sys::mrb_rstring_len(self.0) } as usize;
-            // SAFETY: ptr / len pair describes a buffer owned by mruby
-            // and alive while the borrowed `&Mrb` outlives this slice.
-            unsafe { core::slice::from_raw_parts(ptr, len) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
-    }
-
-    /// Append `bytes` to a String-tagged `self` in place via
-    /// `mrb_str_cat`, the way Ruby's `String#<<` extends its receiver.
-    /// The backing buffer may reallocate, but `self` keeps naming the
-    /// same `RString`, so it stays usable after the call. Appending to a
-    /// frozen string raises `FrozenError`; the call runs under
-    /// `Mrb::protect`, so that surfaces as `Err` rather than long-jumping.
-    ///
-    /// # Safety
-    ///
-    /// `self` must be a String-tagged `Value` — the same obligation
-    /// `as_bytes` carries. Calling on another tag hands `mrb_str_cat`
-    /// a non-string object and corrupts the VM.
-    #[inline]
-    pub unsafe fn str_cat(self, mrb: &Mrb, bytes: &[u8]) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: forwarded from the caller (String tag); `mrb`
-                // is alive inside the protect frame; `bytes` is read-only
-                // and copied into the string's buffer before the call
-                // returns. `mrb_str_cat` calls `mrb_str_modify`, which
-                // raises `FrozenError` on a frozen string — caught by
-                // `protect` into `Err`.
-                unsafe {
-                    sys::mrb_str_cat(
-                        mrb.as_ptr(),
-                        self.0,
-                        bytes.as_ptr() as *const core::ffi::c_char,
-                        bytes.len(),
-                    );
-                }
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, bytes);
-            crate::not_linked()
-        }
-    }
-
-    /// Copy a String-tagged `self`'s bytes into an owned `Vec<u8>`, or
-    /// `None` for any non-string tag. The bytes are copied out before
-    /// returning, so — unlike `as_bytes` — the result needs no `&Mrb`
-    /// lifetime anchor and outlives later mruby calls. Backs
-    /// `FromValue for String`.
-    #[inline]
-    pub(crate) fn string_bytes(self) -> Option<Vec<u8>> {
-        #[cfg(mruby_linked)]
-        {
-            if !self.is_string() {
-                return None;
-            }
-            // SAFETY: the `is_string` guard just above established the
-            // String tag; `mrb_rstring_ptr` / `mrb_rstring_len` read the
-            // RString header without touching `mrb_state`, and the slice
-            // is copied immediately, so no borrow escapes the VM-alive
-            // window every `Value` already assumes.
-            let bytes = unsafe {
-                let ptr = sys::mrb_rstring_ptr(self.0) as *const u8;
-                let len = sys::mrb_rstring_len(self.0) as usize;
-                core::slice::from_raw_parts(ptr, len)
-            };
-            Some(bytes.to_vec())
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
-    }
-
     /// `mrb_obj_classname(mrb, self)` — return the Ruby class name of
     /// `self` as a borrowed `&'static str`, or `""` when mruby
     /// returns NULL.
@@ -482,7 +379,7 @@ impl Value {
     /// Strings, so the redundant call is cheap and keeps a single
     /// conversion entry point.
     ///
-    /// Bytes are read through `as_bytes` (RSTRING_PTR / RSTRING_LEN),
+    /// Bytes are read through `RString::as_bytes` (RSTRING_PTR / RSTRING_LEN),
     /// not as a C string: an embedded NUL is a valid UTF-8 codepoint
     /// and must survive, yet `mrb_str_to_cstr` truncates at and raises
     /// on a NUL — and on the outcome-encode path (a `#eval` / `#run`
@@ -510,9 +407,11 @@ impl Value {
             if s_val.classname(mrb) != "String" {
                 return String::new();
             }
-            // SAFETY: the classname gate confirms `s_val` is String-tagged;
-            // the bytes are copied before any further mruby call.
-            let bytes = unsafe { s_val.as_bytes(mrb) };
+            // SAFETY: the classname gate confirms `s_val` is String-tagged,
+            // so the unchecked wrap is sound; the bytes are copied before
+            // any further mruby call.
+            let s = unsafe { RString::from_value_unchecked(s_val) };
+            let bytes = unsafe { s.as_bytes(mrb) };
             core::str::from_utf8(bytes).unwrap_or("").to_string()
         }
         #[cfg(not(mruby_linked))]
@@ -753,7 +652,7 @@ impl Value {
     }
 
     /// TRUE when `self` carries `MRB_TT_STRING`. See `Value::is_integer`.
-    /// Pair with `Value::as_bytes` for the byte-borrow path.
+    /// Pair with `RString::as_bytes` for the byte-borrow path.
     #[inline]
     pub fn is_string(self) -> bool {
         #[cfg(mruby_linked)]
@@ -1132,7 +1031,7 @@ mod linked_tests {
         // No ordinary value carries the break tag — including a real
         // exception object (a raise is not a break).
         assert!(42i32.into_value(&mrb).as_break().is_none());
-        assert!(mrb.str_new(b"x").as_break().is_none());
+        assert!(mrb.str_new(b"x").as_value().as_break().is_none());
         assert!(Value::nil().as_break().is_none());
     }
 
@@ -1140,56 +1039,19 @@ mod linked_tests {
     fn is_string_discriminates_the_string_tag() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-        assert!(mrb.str_new(b"x").is_string());
+        assert!(mrb.str_new(b"x").as_value().is_string());
         // A non-String tag — and an immediate — both reject.
         assert!(!42i32.into_value(&mrb).is_string());
         assert!(!Value::nil().is_string());
     }
 
     #[test]
-    fn str_cat_appends_bytes_in_place() {
-        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
-
-        let s = mrb.str_new(b"foo");
-        // SAFETY: `s` carries the String tag from `str_new`.
-        unsafe { s.str_cat(&mrb, b"bar") }.expect("appending to a mutable string succeeds");
-        // The same value now names the grown string — append mutated it
-        // in place rather than producing a new object.
-        assert_eq!(s.string_bytes(), Some(b"foobar".to_vec()));
-
-        // Appending empty bytes leaves the receiver unchanged.
-        // SAFETY: `s` is String-tagged.
-        unsafe { s.str_cat(&mrb, b"") }.expect("appending nothing succeeds");
-        assert_eq!(s.string_bytes(), Some(b"foobar".to_vec()));
-    }
-
-    #[test]
-    fn str_cat_surfaces_frozen_receiver_as_err() {
-        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
-        let cxt =
-            Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
-
-        // A frozen String still carries the String tag, so the unsafe
-        // precondition holds, but appending to it raises FrozenError —
-        // which protect catches into Err rather than long-jumping.
-        let frozen = cxt.load_nstring(b"'fixed'.freeze");
-        assert!(
-            mrb.pending_exc().is_nil(),
-            "freezing the string must not raise: {}",
-            mrb.pending_exc().to_string(&mrb)
-        );
-        // SAFETY: `frozen` is String-tagged (a frozen String literal).
-        let result = unsafe { frozen.str_cat(&mrb, b"more") };
-        assert!(matches!(result, Err(Error::Exception(_))));
-    }
-
-    #[test]
     fn equality_separates_value_eql_and_identity() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-        let a = mrb.str_new(b"hello");
-        let b = mrb.str_new(b"hello");
-        let c = mrb.str_new(b"world");
+        let a = mrb.str_new(b"hello").as_value();
+        let b = mrb.str_new(b"hello").as_value();
+        let c = mrb.str_new(b"world").as_value();
 
         // `==` and `eql?` are by value: distinct String objects with the
         // same content compare equal, differing content does not.
@@ -1217,7 +1079,7 @@ mod linked_tests {
 
         // Comparing dispatches the user `==`, which raises — the raise
         // surfaces as Err instead of unwinding across the call.
-        let other = mrb.str_new(b"x");
+        let other = mrb.str_new(b"x").as_value();
         assert!(matches!(obj.equal(&mrb, other), Err(Error::Exception(_))));
     }
 
@@ -1248,7 +1110,7 @@ mod linked_tests {
         assert!(!Value::false_().to_bool());
         assert!(!Value::nil().to_bool());
         assert!(0i32.into_value(&mrb).to_bool());
-        assert!(mrb.str_new(b"").to_bool());
+        assert!(mrb.str_new(b"").as_value().to_bool());
     }
 
     #[test]

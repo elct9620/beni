@@ -428,15 +428,15 @@ Legend: ✅ covered · — missing
 | `RSTRING_CSTR` | macro | — | — |  |
 | `RSTRING_EMBED_LEN` | macro | — | — |  |
 | `RSTRING_END` | macro | — | — |  |
-| `RSTRING_LEN` | macro | ✅ | ✅ | `Value::as_bytes` |
-| `RSTRING_PTR` | macro | ✅ | ✅ | `Value::as_bytes` |
+| `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes` |
+| `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes` |
 | `mrb_obj_as_string` | fn | ✅ | ✅ | `Value::obj_as_string` |
 | `mrb_ptr_to_str` | fn | ✅ | — |  |
 | `mrb_str_append` | fn | ✅ | — |  |
 | `mrb_str_buf_append` | macro | — | — |  |
 | `mrb_str_buf_cat` | macro | — | — |  |
 | `mrb_str_buf_new` | macro | — | — |  |
-| `mrb_str_cat` | fn | ✅ | ✅ | `Value::str_cat` |
+| `mrb_str_cat` | fn | ✅ | ✅ | `RString::cat` |
 | `mrb_str_cat2` | macro | — | — |  |
 | `mrb_str_cat_cstr` | fn | ✅ | — |  |
 | `mrb_str_cat_lit` | macro | — | — |  |

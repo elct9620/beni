@@ -154,7 +154,7 @@ mod tests {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
         let got = mrb
-            .protect(|m| m.str_new(b"ok"))
+            .protect(|m| m.str_new(b"ok").as_value())
             .expect("a non-raising body must come back Ok");
 
         assert_eq!(got.to_string(&mrb), "ok");
@@ -184,7 +184,7 @@ mod tests {
         }
         // The VM stays usable after the protected raise.
         let again = mrb
-            .protect(|m| m.str_new(b"alive"))
+            .protect(|m| m.str_new(b"alive").as_value())
             .expect("the VM must survive the protected raise");
         assert_eq!(again.to_string(&mrb), "alive");
     }

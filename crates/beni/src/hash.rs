@@ -118,10 +118,17 @@ mod tests {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let hash = mrb.hash_new();
 
-        hash.set(&mrb, mrb.str_new(b"k"), mrb.str_new(b"v"));
+        hash.set(
+            &mrb,
+            mrb.str_new(b"k").as_value(),
+            mrb.str_new(b"v").as_value(),
+        );
 
-        assert_eq!(hash.get(&mrb, mrb.str_new(b"k")).to_string(&mrb), "v");
-        assert!(hash.get(&mrb, mrb.str_new(b"absent")).is_nil());
+        assert_eq!(
+            hash.get(&mrb, mrb.str_new(b"k").as_value()).to_string(&mrb),
+            "v"
+        );
+        assert!(hash.get(&mrb, mrb.str_new(b"absent").as_value()).is_nil());
     }
 
     #[test]
@@ -129,7 +136,11 @@ mod tests {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let hash = mrb.hash_new();
 
-        hash.set(&mrb, mrb.str_new(b"k"), mrb.str_new(b"v"));
+        hash.set(
+            &mrb,
+            mrb.str_new(b"k").as_value(),
+            mrb.str_new(b"v").as_value(),
+        );
         let keys = hash.keys(&mrb);
 
         assert_eq!(keys.entry(0).to_string(&mrb), "k");

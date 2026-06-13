@@ -167,8 +167,8 @@ mod tests {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let ary = mrb.ary_new();
 
-        ary.push(&mrb, mrb.str_new(b"first"));
-        ary.push(&mrb, mrb.str_new(b"second"));
+        ary.push(&mrb, mrb.str_new(b"first").as_value());
+        ary.push(&mrb, mrb.str_new(b"second").as_value());
 
         assert_eq!(ary.entry(0).to_string(&mrb), "first");
         assert_eq!(ary.entry(-1).to_string(&mrb), "second");
@@ -179,7 +179,7 @@ mod tests {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let ary = mrb.ary_new();
 
-        ary.push(&mrb, mrb.str_new(b"only"));
+        ary.push(&mrb, mrb.str_new(b"only").as_value());
 
         assert!(ary.entry(1).is_nil());
         assert!(ary.entry(-2).is_nil());
@@ -195,7 +195,7 @@ mod tests {
         let ary = mrb.ary_new();
 
         // Writing past the end grows the array, filling the gap with nil.
-        ary.store(&mrb, 2, mrb.str_new(b"two"))
+        ary.store(&mrb, 2, mrb.str_new(b"two").as_value())
             .expect("an in-range store succeeds");
         assert_eq!(ary.len(), 3);
         assert!(ary.entry(0).is_nil());
@@ -203,7 +203,7 @@ mod tests {
         assert_eq!(ary.entry(2).to_string(&mrb), "two");
 
         // A negative index counts from the tail.
-        ary.store(&mrb, -1, mrb.str_new(b"last"))
+        ary.store(&mrb, -1, mrb.str_new(b"last").as_value())
             .expect("a negative in-range store succeeds");
         assert_eq!(ary.entry(2).to_string(&mrb), "last");
     }
@@ -212,14 +212,16 @@ mod tests {
     fn store_out_of_range_index_surfaces_err() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let ary = mrb.ary_new();
-        ary.push(&mrb, mrb.str_new(b"only"));
+        ary.push(&mrb, mrb.str_new(b"only").as_value());
 
         // A negative index reaching past the beginning raises IndexError.
-        assert!(ary.store(&mrb, -5, mrb.str_new(b"x")).is_err());
+        assert!(ary.store(&mrb, -5, mrb.str_new(b"x").as_value()).is_err());
         // An index beyond the archive's `mrb_int` width saturates so
         // mruby's own range check rejects it as too large, rather than a
         // truncated index hitting the wrong slot.
-        assert!(ary.store(&mrb, isize::MAX, mrb.str_new(b"x")).is_err());
+        assert!(ary
+            .store(&mrb, isize::MAX, mrb.str_new(b"x").as_value())
+            .is_err());
     }
 
     #[test]
@@ -230,8 +232,8 @@ mod tests {
         assert_eq!(ary.len(), 0);
         assert!(ary.is_empty());
 
-        ary.push(&mrb, mrb.str_new(b"a"));
-        ary.push(&mrb, mrb.str_new(b"b"));
+        ary.push(&mrb, mrb.str_new(b"a").as_value());
+        ary.push(&mrb, mrb.str_new(b"b").as_value());
 
         assert_eq!(ary.len(), 2);
         assert!(!ary.is_empty());

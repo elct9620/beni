@@ -95,7 +95,7 @@ impl Drop for ArenaScope<'_> {
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use crate::Mrb;
+    use crate::{FromValue, Mrb, RString};
     use beni_sys as sys;
 
     /// Current arena index — mruby's save helper only reads it.
@@ -134,7 +134,7 @@ mod tests {
 
         let scope = mrb.arena_scope();
         let _noise = mrb.str_new(b"released with the scope");
-        let survivor = scope.keep(mrb.str_new(b"survivor"));
+        let survivor = scope.keep(mrb.str_new(b"survivor").as_value());
 
         assert_eq!(
             arena_index(&mrb),
@@ -146,9 +146,9 @@ mod tests {
         // full GC.
         // SAFETY: `mrb` is alive.
         unsafe { sys::mrb_full_gc(mrb.as_ptr()) };
-        // SAFETY: `survivor` is a String-tagged value from this VM,
-        // consumed before the next mruby call.
-        assert_eq!(unsafe { survivor.as_bytes(&mrb) }, b"survivor");
+        // The survivor's bytes are still readable after the GC.
+        let survived = RString::from_value(survivor).expect("the survivor is String-tagged");
+        assert_eq!(survived.to_bytes(), b"survivor");
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
         // where its scope was opened".
         let outer = mrb.arena_scope();
         let inner = mrb.arena_scope();
-        let _survivor = inner.keep(mrb.str_new(b"outer-owned"));
+        let _survivor = inner.keep(mrb.str_new(b"outer-owned").as_value());
         drop(outer);
 
         assert_eq!(

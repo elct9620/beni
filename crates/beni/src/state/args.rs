@@ -568,7 +568,7 @@ mod tests {
     /// verifies both the pointer and the length survived the read.
     fn str_echo(mrb: &Mrb, _self: Value) -> Value {
         let bytes = mrb.get_args::<Str>();
-        mrb.str_new(bytes)
+        mrb.str_new(bytes).as_value()
     }
 
     /// Registered through `method!(rest_block_report, -1)`: reads the
@@ -595,7 +595,7 @@ mod tests {
             .expect("registering the bridge must succeed");
 
         let receiver = class.obj_new(&mrb, &[]);
-        let got = receiver.call(&mrb, c"s_echo", &[mrb.str_new(b"hello")]);
+        let got = receiver.call(&mrb, c"s_echo", &[mrb.str_new(b"hello").as_value()]);
 
         assert!(got.is_string(), "the `\"S\"` read yields a String value");
         assert_eq!(got.to_string(&mrb), "hello");
@@ -612,7 +612,7 @@ mod tests {
             .expect("registering the bridge must succeed");
 
         let receiver = class.obj_new(&mrb, &[]);
-        let got = receiver.call(&mrb, c"str_echo", &[mrb.str_new(b"hello")]);
+        let got = receiver.call(&mrb, c"str_echo", &[mrb.str_new(b"hello").as_value()]);
 
         // The echoed String equals the input only if both the byte
         // pointer and the length were read correctly.

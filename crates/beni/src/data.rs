@@ -247,7 +247,10 @@ mod tests {
             "a different data type must not extract"
         );
         assert!(
-            mrb.str_new(b"x").data_get(&mrb, &HOLDER_TYPE).is_none(),
+            mrb.str_new(b"x")
+                .as_value()
+                .data_get(&mrb, &HOLDER_TYPE)
+                .is_none(),
             "a non-data value must not extract"
         );
     }

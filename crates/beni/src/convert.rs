@@ -15,7 +15,7 @@
 //! value's type tag — container subclass instances convert. Every
 //! conversion is by value, copying rather than borrowing VM storage.
 
-use crate::{Array, Hash, Mrb, Proc, RClass, Symbol, Value};
+use crate::{Array, Hash, Mrb, Proc, RClass, RString, Symbol, Value};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
@@ -177,6 +177,17 @@ impl FromValue for Symbol {
     }
 }
 
+impl FromValue for RString {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the wrap precondition (MRB_TT_STRING tagging) is
+        // established by the `is_string` guard immediately before it.
+        value
+            .is_string()
+            .then(|| unsafe { RString::from_value_unchecked(value) })
+    }
+}
+
 impl FromValue for String {
     // A String-tagged value whose bytes are valid UTF-8 converts; a
     // non-string tag and a non-UTF-8 string both reject — a Rust
@@ -184,8 +195,7 @@ impl FromValue for String {
     // cannot become one. Mirrors magnus's `TryConvert for String`.
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
-        let bytes = value.string_bytes()?;
-        Self::from_utf8(bytes).ok()
+        Self::from_utf8(RString::from_value(value)?.to_bytes()).ok()
     }
 }
 
@@ -233,7 +243,7 @@ mod tests {
 
         // A UTF-8 string value converts to an owned Rust String,
         // multi-byte characters included.
-        let s = mrb.str_new("héllo".as_bytes());
+        let s = mrb.str_new("héllo".as_bytes()).as_value();
         assert_eq!(String::from_value(s), Some("héllo".to_string()));
 
         // A non-string tag rejects.
@@ -241,8 +251,23 @@ mod tests {
 
         // A String-tagged value whose bytes are not valid UTF-8 rejects
         // — it cannot become a Rust String, whose invariant is UTF-8.
-        let invalid = mrb.str_new(&[0xff, 0xfe]);
+        let invalid = mrb.str_new(&[0xff, 0xfe]).as_value();
         assert_eq!(String::from_value(invalid), None);
+    }
+
+    #[test]
+    fn rstring_downcasts_by_tag() {
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A String-tagged value downcasts to the typed handle; a
+        // non-string tag rejects instead of wrapping a value the
+        // `mrb_str_*` calls would misread.
+        let s = mrb.str_new(b"hi").as_value();
+        assert_eq!(
+            RString::from_value(s).map(|r| r.to_bytes()),
+            Some(b"hi".to_vec())
+        );
+        assert!(RString::from_value(42i32.into_value(&mrb)).is_none());
     }
 
     #[test]
@@ -281,7 +306,7 @@ mod tests {
         // its subclass name yet converts and operates as an Array.
         assert_eq!(sub.classname(&mrb), "MyAry");
         let ary = Array::from_value(sub).expect("subclass instance carries MRB_TT_ARRAY");
-        ary.push(&mrb, mrb.str_new(b"x"));
+        ary.push(&mrb, mrb.str_new(b"x").as_value());
         assert_eq!(ary.entry(0).to_string(&mrb), "x");
     }
 

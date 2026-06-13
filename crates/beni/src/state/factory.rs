@@ -7,7 +7,7 @@
 //! than on `Mrb` so the call shape mirrors Ruby (`arr.push(x)`,
 //! not `mrb.ary_push(arr, x)`).
 
-use crate::{Array, Hash, Mrb, Value};
+use crate::{Array, Hash, Mrb, RString, Value};
 #[cfg(mruby_linked)]
 use beni_sys as sys;
 
@@ -19,19 +19,20 @@ impl Mrb {
     /// `bytes.len()` saturates to `sys::mrb_int::MAX` (the archive's
     /// configured integer width). Real callers stay far below that.
     #[inline]
-    pub fn str_new(&self, bytes: &[u8]) -> Value {
+    pub fn str_new(&self, bytes: &[u8]) -> RString {
         #[cfg(mruby_linked)]
         {
             let len = bytes.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
             // SAFETY: `self` is alive by the `&self` borrow; `bytes`
-            // outlives the synchronous call.
-            Value::from_raw(unsafe {
-                sys::mrb_str_new(
+            // outlives the synchronous call. `mrb_str_new` always returns
+            // a String-tagged value, so the unchecked wrap is sound.
+            unsafe {
+                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new(
                     self.as_ptr(),
                     bytes.as_ptr() as *const core::ffi::c_char,
                     len,
-                )
-            })
+                )))
+            }
         }
         #[cfg(not(mruby_linked))]
         {
@@ -44,12 +45,18 @@ impl Mrb {
     /// a NUL-terminated C string. The `&CStr` borrow guarantees the
     /// terminator.
     #[inline]
-    pub fn str_new_cstr(&self, s: &core::ffi::CStr) -> Value {
+    pub fn str_new_cstr(&self, s: &core::ffi::CStr) -> RString {
         #[cfg(mruby_linked)]
         {
             // SAFETY: `self` is alive; `s.as_ptr()` is NUL-terminated by
-            // the `&CStr` contract.
-            Value::from_raw(unsafe { sys::mrb_str_new_cstr(self.as_ptr(), s.as_ptr()) })
+            // the `&CStr` contract. `mrb_str_new_cstr` always returns a
+            // String-tagged value, so the unchecked wrap is sound.
+            unsafe {
+                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_cstr(
+                    self.as_ptr(),
+                    s.as_ptr(),
+                )))
+            }
         }
         #[cfg(not(mruby_linked))]
         {
@@ -149,8 +156,14 @@ mod tests {
     fn str_factories_roundtrip_their_bytes() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-        assert_eq!(mrb.str_new(b"from bytes").to_string(&mrb), "from bytes");
-        assert_eq!(mrb.str_new_cstr(c"from cstr").to_string(&mrb), "from cstr");
+        assert_eq!(
+            mrb.str_new(b"from bytes").as_value().to_string(&mrb),
+            "from bytes"
+        );
+        assert_eq!(
+            mrb.str_new_cstr(c"from cstr").as_value().to_string(&mrb),
+            "from cstr"
+        );
     }
 
     #[test]
@@ -161,7 +174,7 @@ mod tests {
         // fills as usual.
         let ary = mrb.ary_new_capa(8);
         assert!(ary.is_empty());
-        ary.push(&mrb, mrb.str_new(b"x"));
+        ary.push(&mrb, mrb.str_new(b"x").as_value());
         assert_eq!(ary.len(), 1);
     }
 
@@ -169,7 +182,11 @@ mod tests {
     fn ary_new_from_copies_the_slice_in_order() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-        let values = [mrb.str_new(b"a"), mrb.str_new(b"b"), mrb.str_new(b"c")];
+        let values = [
+            mrb.str_new(b"a").as_value(),
+            mrb.str_new(b"b").as_value(),
+            mrb.str_new(b"c").as_value(),
+        ];
         let ary = mrb.ary_new_from(&values);
 
         assert_eq!(ary.len(), 3);

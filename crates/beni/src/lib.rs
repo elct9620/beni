@@ -63,6 +63,7 @@ pub mod hash;
 pub mod method;
 pub mod proc;
 pub mod state;
+pub mod string;
 pub mod symbol;
 pub mod value;
 
@@ -82,6 +83,7 @@ pub use gem::Gem;
 pub use hash::Hash;
 pub use method::{MethodDef, MethodReturn};
 pub use proc::Proc;
+pub use string::RString;
 pub use symbol::Symbol;
 pub use value::cstr_ptr;
 pub use value::{Break, Value};
@@ -173,7 +175,6 @@ mod tests {
         let _ = Value::from_int;
         let _ = Value::from_float;
         let _ = Value::obj_as_string;
-        let _ = Value::as_bytes;
         let _ = Value::classname;
         let _ = Value::to_string;
         let _ = Value::as_class_ptr;
@@ -248,6 +249,12 @@ mod tests {
         let _ = Array::entry;
         let _ = Array::len;
         let _ = Array::is_empty;
+        let _ = RString::from_value_unchecked;
+        let _ = RString::as_value;
+        let _ = RString::as_raw;
+        let _ = RString::cat;
+        let _ = RString::as_bytes;
+        let _ = RString::to_bytes;
         let _ = Proc::from_value_unchecked;
         let _ = Proc::as_value;
         let _ = Proc::as_raw;

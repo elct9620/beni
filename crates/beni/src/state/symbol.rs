@@ -91,7 +91,7 @@ mod tests {
     fn intern_str_yields_the_same_id_as_intern_cstr() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-        let via_str = mrb.intern_str(mrb.str_new(b"beni_sym"));
+        let via_str = mrb.intern_str(mrb.str_new(b"beni_sym").as_value());
 
         assert_eq!(via_str, mrb.intern_cstr(c"beni_sym"));
     }
