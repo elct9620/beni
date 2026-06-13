@@ -206,10 +206,11 @@ Selection, checksums, and cross-compile activation:
   crosses the boundary like any other `Err` — to a registered method's Ruby
   caller as an mruby exception, to a protected closure's Rust caller as the
   `Err` value.
-- Beyond push and indexed read, the typed array writes a value at an index —
-  growing the array with `nil` to reach a past-the-end index, the way Ruby's
-  `ary[i] = v` does — and is constructed empty, with a preallocated capacity,
-  or from a slice of values.
+- Beyond push and indexed read, the typed array writes a value at an index
+  following Ruby's `ary[i] = v` — growing with `nil` to reach a past-the-end
+  index — which surfaces an `Err` when the index is out of range: a negative
+  index past the beginning, or one too large. It is constructed empty, with a
+  preallocated capacity, or from a slice of values.
 - Two values compare three ways. Object identity (`equal?`) is a total
   predicate — the same object or not. Value equality (`==`) and hash-key
   equality (`eql?`) follow Ruby semantics, which may run a user-defined `==` or

@@ -34,7 +34,10 @@ typed:
   RSTRING_PTR: Value::as_bytes
   mrb_ary_entry: "`Array::entry`, `Value::ary_entry`"
   mrb_ary_new: Mrb::ary_new
+  mrb_ary_new_capa: Mrb::ary_new_capa
+  mrb_ary_new_from_values: Mrb::ary_new_from
   mrb_ary_push: Array::push
+  mrb_ary_set: Array::store
   mrb_array_p: "`Value::is_array`, via the value tag"
   mrb_break_p: Value::as_break
   mrb_class_p: "`Value::is_class`, via the value tag"

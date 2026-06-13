@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 67 (20%) |
+| function | 342 | 329 (96%) | 70 (20%) |
 | macro | 124 | 20 (16%) | 25 (20%) |
-| total | 466 | 349 (75%) | 92 (20%) |
+| total | 466 | 349 (75%) | 95 (20%) |
 
 ## mruby.h
 
@@ -244,15 +244,15 @@ Legend: ✅ covered · — missing
 | `mrb_ary_make_shared_copy` | fn | ✅ | — |  |
 | `mrb_ary_modify` | fn | ✅ | — |  |
 | `mrb_ary_new` | fn | ✅ | ✅ | `Mrb::ary_new` |
-| `mrb_ary_new_capa` | fn | ✅ | — |  |
-| `mrb_ary_new_from_values` | fn | ✅ | — |  |
+| `mrb_ary_new_capa` | fn | ✅ | ✅ | `Mrb::ary_new_capa` |
+| `mrb_ary_new_from_values` | fn | ✅ | ✅ | `Mrb::ary_new_from` |
 | `mrb_ary_pop` | fn | ✅ | — |  |
 | `mrb_ary_ptr` | macro | — | — |  |
 | `mrb_ary_push` | fn | ✅ | ✅ | `Array::push` |
 | `mrb_ary_ref` | macro | — | — |  |
 | `mrb_ary_replace` | fn | ✅ | — |  |
 | `mrb_ary_resize` | fn | ✅ | — |  |
-| `mrb_ary_set` | fn | ✅ | — |  |
+| `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
 | `mrb_ary_shift` | fn | ✅ | — |  |
 | `mrb_ary_splat` | fn | ✅ | — |  |
 | `mrb_ary_splice` | fn | ✅ | — |  |

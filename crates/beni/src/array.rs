@@ -11,7 +11,7 @@
 //! `entry`) live here. Named-value constructors that magnus places on
 //! the type itself stay there too (`Symbol::new`).
 
-use crate::{Mrb, Value};
+use crate::{Error, Mrb, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
@@ -97,6 +97,43 @@ impl Array {
         }
     }
 
+    /// `mrb_ary_set(mrb, self, idx, val)` — write `val` at `idx`,
+    /// following Ruby's `ary[idx] = val`: a positive index past the end
+    /// grows the array with `nil`, and a negative index counts from the
+    /// tail. An index that reaches past the beginning, or one too large,
+    /// raises `IndexError`, surfaced here as `Err`.
+    #[inline]
+    pub fn store(self, mrb: &Mrb, idx: isize, val: Value) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            // An index outside the archive's `mrb_int` width names no
+            // slot; saturate it to the nearest bound so mruby's own
+            // range check raises the matching `IndexError` (too large,
+            // or past the beginning) rather than a truncated index
+            // silently hitting the wrong slot.
+            let n = sys::mrb_int::try_from(idx).unwrap_or(if idx < 0 {
+                sys::mrb_int::MIN
+            } else {
+                sys::mrb_int::MAX
+            });
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive; `self` is Array-tagged by the
+                // `from_value_unchecked` contract; `val` shares the VM
+                // by the single-VM contract. `mrb_ary_set` range-checks
+                // `n` and may raise `IndexError`, which `protect` catches
+                // into `Err`.
+                unsafe { sys::mrb_ary_set(mrb.as_ptr(), self.0.as_raw(), n, val.as_raw()) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, idx, val);
+            crate::not_linked()
+        }
+    }
+
     /// `RARRAY_LEN(self)` — the number of elements, via the
     /// `mrb_rarray_len_func` shim (the macro expanded in the C compiler
     /// so the embed-vs-heap length read matches the linked archive's
@@ -150,6 +187,39 @@ mod tests {
         // range by definition — same nil contract, no truncation.
         assert!(ary.entry(isize::MAX).is_nil());
         assert!(ary.entry(isize::MIN).is_nil());
+    }
+
+    #[test]
+    fn store_writes_grows_and_counts_from_the_tail() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+
+        // Writing past the end grows the array, filling the gap with nil.
+        ary.store(&mrb, 2, mrb.str_new(b"two"))
+            .expect("an in-range store succeeds");
+        assert_eq!(ary.len(), 3);
+        assert!(ary.entry(0).is_nil());
+        assert!(ary.entry(1).is_nil());
+        assert_eq!(ary.entry(2).to_string(&mrb), "two");
+
+        // A negative index counts from the tail.
+        ary.store(&mrb, -1, mrb.str_new(b"last"))
+            .expect("a negative in-range store succeeds");
+        assert_eq!(ary.entry(2).to_string(&mrb), "last");
+    }
+
+    #[test]
+    fn store_out_of_range_index_surfaces_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        ary.push(&mrb, mrb.str_new(b"only"));
+
+        // A negative index reaching past the beginning raises IndexError.
+        assert!(ary.store(&mrb, -5, mrb.str_new(b"x")).is_err());
+        // An index beyond the archive's `mrb_int` width saturates so
+        // mruby's own range check rejects it as too large, rather than a
+        // truncated index hitting the wrong slot.
+        assert!(ary.store(&mrb, isize::MAX, mrb.str_new(b"x")).is_err());
     }
 
     #[test]
