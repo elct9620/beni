@@ -224,6 +224,12 @@ Selection, checksums, and cross-compile activation:
   values cross the boundary through `IntoValue` / `FromValue`; the `Module`
   trait also binds constants and aliases existing methods on the handle. A
   definition, registration, or alias mruby rejects surfaces as a Rust `Err`.
+- A module function registers on a module handle in one call, becoming both a
+  private instance method — for a class that mixes the module in — and a
+  singleton method on the module object itself, the way `Math.sqrt` is callable
+  as `Math.sqrt` and as a bare helper inside an including class. Class methods
+  need no separate form: a singleton method defined on a class is its class
+  method, mirroring magnus.
 - A Rust-owned value backs an mruby object through the data-carrier
   mechanism (`CDATA`): a class is marked so its instances carry Rust data,
   a Rust value is wrapped as an instance of that class, and it is extracted
