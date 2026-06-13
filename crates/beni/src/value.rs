@@ -1108,6 +1108,27 @@ mod linked_tests {
     }
 
     #[test]
+    fn eql_surfaces_a_raising_user_method_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"eql_test.rb").expect("allocating the context must succeed");
+
+        let obj =
+            cxt.load_nstring(b"class BoomEql; def eql?(o); raise 'no'; end; end; BoomEql.new");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the class must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        // `eql?` short-circuits on identity, so distinct objects are
+        // needed to reach the dispatch — which raises, surfacing as Err
+        // rather than unwinding across the call, the eql? counterpart to
+        // the `==` path above.
+        let other = mrb.str_new(b"x").as_value();
+        assert!(matches!(obj.eql(&mrb, other), Err(Error::Exception(_))));
+    }
+
+    #[test]
     fn bool_predicates_separate_true_false_and_nil() {
         // The immediate singletons need a live VM to have been captured,
         // even though the predicates themselves take no `Mrb`.
