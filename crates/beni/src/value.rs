@@ -375,6 +375,67 @@ impl Value {
         crate::not_linked()
     }
 
+    /// Append `bytes` to a String-tagged `self` in place via
+    /// `mrb_str_cat`, the way Ruby's `String#<<` extends its receiver.
+    /// The backing buffer may reallocate, but `self` keeps naming the
+    /// same `RString`, so it stays usable after the call.
+    ///
+    /// # Safety
+    ///
+    /// `self` must be a String-tagged `Value` — the same obligation
+    /// `as_bytes` carries. Calling on another tag hands `mrb_str_cat`
+    /// a non-string object and corrupts the VM.
+    #[inline]
+    pub unsafe fn str_cat(self, mrb: &Mrb, bytes: &[u8]) {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: forwarded from the caller (String tag); `mrb` is
+            // alive by the borrow; `bytes` is read-only and copied into
+            // the string's buffer before the call returns.
+            unsafe {
+                sys::mrb_str_cat(
+                    mrb.as_ptr(),
+                    self.0,
+                    bytes.as_ptr() as *const core::ffi::c_char,
+                    bytes.len(),
+                );
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, bytes);
+            crate::not_linked()
+        }
+    }
+
+    /// Copy a String-tagged `self`'s bytes into an owned `Vec<u8>`, or
+    /// `None` for any non-string tag. The bytes are copied out before
+    /// returning, so — unlike `as_bytes` — the result needs no `&Mrb`
+    /// lifetime anchor and outlives later mruby calls. Backs
+    /// `FromValue for String`.
+    #[inline]
+    pub(crate) fn string_bytes(self) -> Option<Vec<u8>> {
+        #[cfg(mruby_linked)]
+        {
+            if !self.is_string() {
+                return None;
+            }
+            // SAFETY: the `is_string` guard just above established the
+            // String tag; `mrb_rstring_ptr` / `mrb_rstring_len` read the
+            // RString header without touching `mrb_state`, and the slice
+            // is copied immediately, so no borrow escapes the VM-alive
+            // window every `Value` already assumes.
+            let bytes = unsafe {
+                let ptr = sys::mrb_rstring_ptr(self.0) as *const u8;
+                let len = sys::mrb_rstring_len(self.0) as usize;
+                core::slice::from_raw_parts(ptr, len)
+            };
+            Some(bytes.to_vec())
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// `mrb_obj_classname(mrb, self)` — return the Ruby class name of
     /// `self` as a borrowed `&'static str`, or `""` when mruby
     /// returns NULL.
@@ -1001,6 +1062,22 @@ mod linked_tests {
         // A non-String tag — and an immediate — both reject.
         assert!(!42i32.into_value(&mrb).is_string());
         assert!(!Value::nil().is_string());
+    }
+
+    #[test]
+    fn str_cat_appends_bytes_in_place() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let s = mrb.str_new(b"foo");
+        // SAFETY: `s` carries the String tag from `str_new`.
+        unsafe { s.str_cat(&mrb, b"bar") };
+        // The same value now names the grown string — append mutated it
+        // in place rather than producing a new object.
+        assert_eq!(s.string_bytes(), Some(b"foobar".to_vec()));
+
+        // Appending empty bytes leaves the receiver unchanged.
+        unsafe { s.str_cat(&mrb, b"") };
+        assert_eq!(s.string_bytes(), Some(b"foobar".to_vec()));
     }
 
     #[test]

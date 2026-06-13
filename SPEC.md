@@ -195,11 +195,12 @@ Selection, checksums, and cross-compile activation:
   any other tag rejects. Conversion to `bool` instead follows Ruby truthiness
   — `nil` and `false` convert to `false`, every other value to `true` — so it
   is total and never rejects.
-- An mruby string converts to Rust as a byte slice or an owned `String`, and
-  Rust bytes convert to a new mruby string; the owned-`String` conversion
-  rejects a non-string value by its tag. A registered method grows an mruby
-  string in place by appending Rust bytes, the way Ruby's `String#<<` extends
-  its receiver.
+- An mruby string converts to Rust as a byte slice or, when its bytes are
+  valid UTF-8, an owned `String`, and Rust bytes convert to a new mruby string;
+  the owned-`String` conversion rejects a non-string value by its tag and a
+  string whose bytes are not UTF-8. A registered method grows an mruby string
+  in place by appending Rust bytes, the way Ruby's `String#<<` extends its
+  receiver.
 - A registered method or protected closure raises its own exception: it builds
   one from an exception class and a message and returns it as an `Err`, which
   crosses the boundary like any other `Err` — to a registered method's Ruby

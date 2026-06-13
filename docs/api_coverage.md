@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 66 (19%) |
+| function | 342 | 329 (96%) | 67 (20%) |
 | macro | 124 | 20 (16%) | 25 (20%) |
-| total | 466 | 349 (75%) | 91 (20%) |
+| total | 466 | 349 (75%) | 92 (20%) |
 
 ## mruby.h
 
@@ -436,7 +436,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_buf_append` | macro | — | — |  |
 | `mrb_str_buf_cat` | macro | — | — |  |
 | `mrb_str_buf_new` | macro | — | — |  |
-| `mrb_str_cat` | fn | ✅ | — |  |
+| `mrb_str_cat` | fn | ✅ | ✅ | `Value::str_cat` |
 | `mrb_str_cat2` | macro | — | — |  |
 | `mrb_str_cat_cstr` | fn | ✅ | — |  |
 | `mrb_str_cat_lit` | macro | — | — |  |
@@ -553,4 +553,4 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, adding Rust-side type safety to the data pointer. |
 | `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by `Mrb::protect` (`mrb_protect_error`). |
 | `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
-| `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives. |
+| `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` (an mruby string copied out as an owned UTF-8 `String`). |

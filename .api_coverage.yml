@@ -107,6 +107,7 @@ typed:
   mrb_raise: RClass::raise
   mrb_read_irep_buf: Mrb::load_bytecode
   mrb_respond_to: Value::respond_to
+  mrb_str_cat: Value::str_cat
   mrb_str_new: Mrb::str_new
   mrb_str_new_cstr: Mrb::str_new_cstr
   mrb_sym_name: Mrb::sym_name
@@ -134,4 +135,5 @@ extensions:
     adding Rust-side type safety to the data pointer.
   convert: >-
     `IntoValue` / `FromValue` trait conversions (magnus-style) layered on
-    the value box/unbox primitives.
+    the value box/unbox primitives, including `FromValue for String` (an
+    mruby string copied out as an owned UTF-8 `String`).

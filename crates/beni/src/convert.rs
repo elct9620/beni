@@ -9,11 +9,11 @@
 //! those primitives are the C-bind floor, these traits are the safe
 //! typed seam consumers call.
 //!
-//! Scope covers the scalar leaf types (`i32` / `f64` / `bool`) and
-//! checked downcasts to the typed handles (`Array` / `Hash` /
-//! `RClass` / `Proc` / `Symbol`), discriminated by the value's type
-//! tag — container subclass instances convert. No owned/borrowed split
-//! — every conversion is by value.
+//! Scope covers the scalar leaf types (`i32` / `f64` / `bool`), an
+//! owned `String`, and checked downcasts to the typed handles (`Array`
+//! / `Hash` / `RClass` / `Proc` / `Symbol`), discriminated by the
+//! value's type tag — container subclass instances convert. Every
+//! conversion is by value, copying rather than borrowing VM storage.
 
 use crate::{Array, Hash, Mrb, Proc, RClass, Symbol, Value};
 
@@ -177,6 +177,18 @@ impl FromValue for Symbol {
     }
 }
 
+impl FromValue for String {
+    // A String-tagged value whose bytes are valid UTF-8 converts; a
+    // non-string tag and a non-UTF-8 string both reject — a Rust
+    // `String` is UTF-8 by invariant, so non-UTF-8 bytes genuinely
+    // cannot become one. Mirrors magnus's `TryConvert for String`.
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        let bytes = value.string_bytes()?;
+        Self::from_utf8(bytes).ok()
+    }
+}
+
 #[cfg(all(test, mruby_linked))]
 mod tests {
     use super::*;
@@ -213,6 +225,24 @@ mod tests {
         // non-boolean through Ruby truthiness (`nil` is falsy). The full
         // truthiness boundary lives with `Value::to_bool` in value.rs.
         assert_eq!(bool::from_value(Value::nil()), Some(false));
+    }
+
+    #[test]
+    fn string_converts_utf8_and_rejects_otherwise() {
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A UTF-8 string value converts to an owned Rust String,
+        // multi-byte characters included.
+        let s = mrb.str_new("héllo".as_bytes());
+        assert_eq!(String::from_value(s), Some("héllo".to_string()));
+
+        // A non-string tag rejects.
+        assert_eq!(String::from_value(42i32.into_value(&mrb)), None);
+
+        // A String-tagged value whose bytes are not valid UTF-8 rejects
+        // — it cannot become a Rust String, whose invariant is UTF-8.
+        let invalid = mrb.str_new(&[0xff, 0xfe]);
+        assert_eq!(String::from_value(invalid), None);
     }
 
     #[test]
