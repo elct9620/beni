@@ -41,9 +41,9 @@
 
 use beni_sys as sys;
 
-#[cfg(mruby_linked)]
-use crate::RString;
 use crate::{Error, Mrb};
+#[cfg(mruby_linked)]
+use crate::{FromValue, RString};
 
 /// Compile-time NUL-terminated C-string literal pointer.
 ///
@@ -404,13 +404,15 @@ impl Value {
                 mrb.clear_exc();
                 return String::new();
             }
-            if s_val.classname(mrb) != "String" {
+            // Discriminate by the String tag, not the classname: a String
+            // subclass instance is String-tagged and reads its bytes the
+            // same way, so it converts too; a non-String `to_s` result
+            // rejects. Same rule the `FromValue` downcasts follow.
+            let Some(s) = RString::from_value(s_val) else {
                 return String::new();
-            }
-            // SAFETY: the classname gate confirms `s_val` is String-tagged,
-            // so the unchecked wrap is sound; the bytes are copied before
-            // any further mruby call.
-            let s = unsafe { RString::from_value_unchecked(s_val) };
+            };
+            // SAFETY: `from_value` confirmed the String tag; the bytes are
+            // copied before any further mruby call.
             let bytes = unsafe { s.as_bytes(mrb) };
             core::str::from_utf8(bytes).unwrap_or("").to_string()
         }
@@ -1043,6 +1045,28 @@ mod linked_tests {
         // A non-String tag — and an immediate — both reject.
         assert!(!42i32.into_value(&mrb).is_string());
         assert!(!Value::nil().is_string());
+    }
+
+    #[test]
+    fn to_string_reads_a_string_subclass_result() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"to_s_test.rb").expect("allocating the context must succeed");
+
+        // `to_s` returns a String *subclass* instance: String-tagged, so it
+        // reads the same way as a plain String. The tag, not the classname,
+        // decides — the subclass result converts rather than collapsing to
+        // an empty string.
+        let obj = cxt.load_nstring(
+            b"class BeniSubStr < String; end; class BeniHasSubToS; def to_s; BeniSubStr.new('sub'); end; end; BeniHasSubToS.new",
+        );
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the classes must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        assert_eq!(obj.to_string(&mrb), "sub");
     }
 
     #[test]
