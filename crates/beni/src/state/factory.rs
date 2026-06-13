@@ -109,7 +109,7 @@ impl Mrb {
     /// `Array` holding a copy of `values`, in order. `values.len()`
     /// saturates to the archive's `mrb_int` width.
     #[inline]
-    pub fn ary_new_from(&self, values: &[Value]) -> Array {
+    pub fn ary_new_from_values(&self, values: &[Value]) -> Array {
         #[cfg(mruby_linked)]
         {
             let len = values.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
@@ -179,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn ary_new_from_copies_the_slice_in_order() {
+    fn ary_new_from_values_copies_the_slice_in_order() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
         let values = [
@@ -187,7 +187,7 @@ mod tests {
             mrb.str_new(b"b").as_value(),
             mrb.str_new(b"c").as_value(),
         ];
-        let ary = mrb.ary_new_from(&values);
+        let ary = mrb.ary_new_from_values(&values);
 
         assert_eq!(ary.len(), 3);
         assert_eq!(ary.entry(0).to_string(&mrb), "a");

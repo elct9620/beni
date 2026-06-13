@@ -245,7 +245,7 @@ Legend: ✅ covered · — missing
 | `mrb_ary_modify` | fn | ✅ | — |  |
 | `mrb_ary_new` | fn | ✅ | ✅ | `Mrb::ary_new` |
 | `mrb_ary_new_capa` | fn | ✅ | ✅ | `Mrb::ary_new_capa` |
-| `mrb_ary_new_from_values` | fn | ✅ | ✅ | `Mrb::ary_new_from` |
+| `mrb_ary_new_from_values` | fn | ✅ | ✅ | `Mrb::ary_new_from_values` |
 | `mrb_ary_pop` | fn | ✅ | — |  |
 | `mrb_ary_ptr` | macro | — | — |  |
 | `mrb_ary_push` | fn | ✅ | ✅ | `Array::push` |
