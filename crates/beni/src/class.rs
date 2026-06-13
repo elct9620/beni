@@ -766,6 +766,43 @@ mod tests {
     }
 
     #[test]
+    fn module_function_instance_form_is_private() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let module = mrb
+            .define_module(c"BeniModFnPriv")
+            .expect("defining the module must succeed");
+        module
+            .define_module_function(&mrb, c"seven", crate::method!(answer_seven, 0))
+            .expect("registering the module function must succeed");
+
+        let cxt = crate::Ccontext::new(&mrb, c"modfn_priv_test.rb")
+            .expect("allocating the compile context must succeed");
+        cxt.load_nstring(b"class BeniModUserPriv; include BeniModFnPriv; end");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the includer must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        // The mixed-in instance form is private: dispatching it with an
+        // explicit receiver raises NoMethodError — the visibility half of
+        // `module_function` the bare-helper call alone cannot prove.
+        let _ = cxt.load_nstring(b"BeniModUserPriv.new.seven");
+        let exc = mrb.pending_exc();
+        assert!(
+            !exc.is_nil(),
+            "explicit-receiver dispatch of the private instance form must raise"
+        );
+        let message = Error::Exception(exc).message(&mrb);
+        assert!(
+            message.contains("private"),
+            "the NoMethodError must name the visibility: {message}"
+        );
+        mrb.clear_exc();
+    }
+
+    #[test]
     fn define_const_binds_a_constant_readable_from_ruby() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let module = mrb
