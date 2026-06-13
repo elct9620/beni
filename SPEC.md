@@ -189,18 +189,21 @@ Selection, checksums, and cross-compile activation:
   conversions (`IntoValue`, a total conversion that cannot fail;
   `FromValue`, a checked conversion that can reject), class and module
   definition, and closure-based exception protection.
-- `FromValue` downcasts to the typed handles (`Array`, `Hash`, `RClass`,
-  `Proc`, `Symbol`) discriminate by mruby's type tag alone: a value carrying
-  the target's tag converts (for the containers, subclass instances included),
-  any other tag rejects. Conversion to `bool` instead follows Ruby truthiness
+- `FromValue` downcasts to the typed handles (`RString`, `Array`, `Hash`,
+  `RClass`, `Proc`, `Symbol`) discriminate by mruby's type tag alone: a value
+  carrying the target's tag converts (for strings and the containers, subclass
+  instances included), any other tag rejects. Conversion to `bool` instead
+  follows Ruby truthiness
   — `nil` and `false` convert to `false`, every other value to `true` — so it
   is total and never rejects.
-- An mruby string converts to Rust as a byte slice or, when its bytes are
-  valid UTF-8, an owned `String`, and Rust bytes convert to a new mruby string;
-  the owned-`String` conversion rejects a non-string value by its tag and a
-  string whose bytes are not UTF-8. A registered method grows an mruby string
-  in place by appending Rust bytes, the way Ruby's `String#<<` extends its
-  receiver; appending to a frozen string surfaces an `Err`.
+- Rust bytes convert to a new mruby string, returned as a typed `RString`
+  handle. From an mruby string Rust reads the bytes three ways: a borrowed byte
+  slice, an owned `String` when the bytes are valid UTF-8, or an owned byte
+  vector for arbitrary bytes; both owned conversions reject a non-string value
+  by its tag, and the `String` conversion additionally rejects bytes that are
+  not UTF-8. A registered method grows an `RString` in place by appending Rust
+  bytes, the way Ruby's `String#<<` extends its receiver; appending to a frozen
+  string surfaces an `Err`.
 - A registered method or protected closure raises its own exception: it builds
   one from an exception class and a message and returns it as an `Err`, which
   crosses the boundary like any other `Err` — to a registered method's Ruby
