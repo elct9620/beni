@@ -14,7 +14,7 @@ Apply these in order — earlier principles override later ones on conflict.
 
 2. **kobako-derived code is scaffolding, not precedent.** Much of this repo was extracted from kobako; matching kobako's shape is never a design justification. Follow upstream conventions instead — mruby's own (`rake` entry point, `MRUBY_CONFIG`, untouched `build_config/default.rb` as the gem default), wasi-sdk's (`/opt/wasi-sdk`), the `-sys` crate conventions (`*_LIB_DIR`, `links =` metadata), and magnus's wrapper idioms for the `beni` crate's API surface.
 
-3. **Verify toolchain facts against vendored sources, not memory.** mruby behavior claims must be checked in `vendor/mruby` before being relied on or written into SPEC/comments. Worked example: `MRuby::Lockfile` is enabled at autoload (class body calls `enable`) — an earlier analysis assumed it was opt-in and was wrong.
+3. **Verify toolchain facts against vendored sources, not memory.** mruby behavior claims must be checked in `vendor/mruby` before being relied on or written into SPEC/comments — e.g. `MRuby::Lockfile` is enabled at autoload (the class body calls `enable`), not opt-in.
 
 4. **The compile-flags sidecar is the only ABI alignment channel.** `beni-sys` parses `libmruby.flags.mak` next to each archive; never hard-code ABI defines in the crates, and never let a staged archive without its sidecar fall back to guessing. The gem ships no config template — `beni:config` copies the configured version's upstream default config from the staged mruby source; `build_config/mruby.rb` is the repo's own validation config (the generate-then-edit consumer posture, kept committed).
 
@@ -67,7 +67,7 @@ Tasks      Beni::Tasks (Rake::TaskLib    beni      typed wrapper (magnus idioms)
   │          — beni:* task surface)        L2  convert::{IntoValue, FromValue}
 Build      Beni::Builder (drives            │   state::args (Format dispatch)
   │          mruby's own rake via            │   state::protect (mrb_protect_error)
-  │          MRUBY_CONFIG; requests          L1  Mrb RAII · Value/RClass/Array/Hash
+  │          MRUBY_CONFIG; requests          L1  Mrb RAII · Value + typed
   │          flags.mak file tasks)           │   newtypes · Ccontext
 Config     Beni::BuildConfig                 L0  pub use beni_sys as sys
   │          (beni:config: copies the      ──────────────────────────────
