@@ -157,6 +157,45 @@ impl Symbol {
     }
 }
 
+/// A definition or lookup name given as a symbol-or-name key — beni's
+/// mirror of `magnus`'s `IntoId`. A name interns to its symbol; an
+/// already-interned `Symbol` is reused without re-interning. The typed
+/// define/get surface accepts any `IntoSym`, routing every key through
+/// mruby's `_id`-suffixed C variant.
+pub trait IntoSym {
+    /// Resolve this key to its interned `mrb_sym` against `mrb`.
+    fn into_sym(self, mrb: &Mrb) -> sys::mrb_sym;
+}
+
+impl IntoSym for &core::ffi::CStr {
+    /// A name key interns through `Mrb::intern_cstr`.
+    #[inline]
+    fn into_sym(self, mrb: &Mrb) -> sys::mrb_sym {
+        #[cfg(mruby_linked)]
+        {
+            mrb.intern_cstr(self)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+}
+
+impl IntoSym for Symbol {
+    /// An already-interned `Symbol` reuses its id with no re-intern.
+    #[inline]
+    fn into_sym(self, _mrb: &Mrb) -> sys::mrb_sym {
+        #[cfg(mruby_linked)]
+        {
+            self.to_sym()
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+}
+
 #[cfg(all(test, mruby_linked))]
 mod tests {
     use super::*;

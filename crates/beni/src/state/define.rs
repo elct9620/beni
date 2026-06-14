@@ -18,21 +18,23 @@
 //! `crate::RClass` / `crate::RModule`. Global variable access is a
 //! plain table operation that cannot raise.
 
-use crate::{Error, Mrb, RClass, RModule, Value};
+use crate::{Error, IntoSym, Mrb, RClass, RModule, Value};
 use beni_sys as sys;
 
 impl Mrb {
-    /// `mrb_define_module(mrb, name)` — return the module named
-    /// `name`, defining it at top level if not already present.
-    /// mruby rejects a same-named constant that is not a module.
+    /// `mrb_define_module_id(mrb, name)` — return the module named
+    /// `name`, defining it at top level if not already present. The
+    /// name is a symbol-or-name key (`IntoSym`). mruby rejects a
+    /// same-named constant that is not a module.
     #[inline]
-    pub fn define_module(&self, name: &core::ffi::CStr) -> Result<RModule, Error> {
+    pub fn define_module<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(self);
             crate::class::protect_class_ptr(self, |mrb| {
                 // SAFETY: `mrb` is alive inside the protect frame;
-                // `name` is NUL-terminated.
-                unsafe { sys::mrb_define_module(mrb.as_ptr(), name.as_ptr()) }
+                // `sym` was interned against the same VM.
+                unsafe { sys::mrb_define_module_id(mrb.as_ptr(), sym) }
             })
             .map(RModule::from_raw)
         }
@@ -43,18 +45,20 @@ impl Mrb {
         }
     }
 
-    /// `mrb_define_class(mrb, name, super_)` — define a top-level
-    /// class named `name` inheriting from `super_`. mruby rejects a
-    /// superclass mismatch with an existing definition, or a
-    /// same-named constant that is not a class.
+    /// `mrb_define_class_id(mrb, name, super_)` — define a top-level
+    /// class named `name` inheriting from `super_`. The name is a
+    /// symbol-or-name key (`IntoSym`). mruby rejects a superclass
+    /// mismatch with an existing definition, or a same-named constant
+    /// that is not a class.
     #[inline]
-    pub fn define_class(&self, name: &core::ffi::CStr, super_: RClass) -> Result<RClass, Error> {
+    pub fn define_class<K: IntoSym>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(self);
             crate::class::protect_class_ptr(self, |mrb| {
                 // SAFETY: as `define_module`; `super_` was produced by
                 // the same VM.
-                unsafe { sys::mrb_define_class(mrb.as_ptr(), name.as_ptr(), super_.as_raw()) }
+                unsafe { sys::mrb_define_class_id(mrb.as_ptr(), sym, super_.as_raw()) }
             })
             .map(RClass::from_raw)
         }
@@ -65,18 +69,19 @@ impl Mrb {
         }
     }
 
-    /// `mrb_class_get(mrb, name)` — fetch the top-level class named
-    /// `name`. mruby raises `NameError` when the constant is missing
-    /// and `TypeError` when it is not a class (vendored
-    /// `src/class.c` documents both), so the lookup is fallible by
-    /// contract.
+    /// `mrb_class_get_id(mrb, name)` — fetch the top-level class named
+    /// `name`. The name is a symbol-or-name key (`IntoSym`). mruby
+    /// raises `NameError` when the constant is missing and `TypeError`
+    /// when it is not a class (vendored `src/class.c` documents both),
+    /// so the lookup is fallible by contract.
     #[inline]
-    pub fn class_get(&self, name: &core::ffi::CStr) -> Result<RClass, Error> {
+    pub fn class_get<K: IntoSym>(&self, name: K) -> Result<RClass, Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(self);
             crate::class::protect_class_ptr(self, |mrb| {
                 // SAFETY: as `define_module`.
-                unsafe { sys::mrb_class_get(mrb.as_ptr(), name.as_ptr()) }
+                unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) }
             })
             .map(RClass::from_raw)
         }

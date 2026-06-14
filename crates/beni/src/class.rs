@@ -28,7 +28,7 @@
 //! surfaces as `Err(Error::Exception)` instead of long-jumping across
 //! Rust frames.
 
-use crate::{Error, MethodDef, Mrb, Value};
+use crate::{Error, IntoSym, MethodDef, Mrb, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby class. `#[repr(transparent)]` over
@@ -295,28 +295,30 @@ impl RModule {
 /// `Mrb::protect`, so an mruby raise surfaces as
 /// `Err(Error::Exception)` and never unwinds across FFI.
 pub trait Module: private::ClassLike {
-    /// `mrb_define_class_under(mrb, self, name, superclass)` — define
-    /// (or fetch) the nested class `self::name` inheriting from
-    /// `superclass`. mruby rejects a superclass mismatch with an
-    /// existing definition, or a same-named constant that is not a
-    /// class.
-    fn define_class(
+    /// `mrb_define_class_under_id(mrb, self, name, superclass)` —
+    /// define (or fetch) the nested class `self::name` inheriting from
+    /// `superclass`. The name is a symbol-or-name key (`IntoSym`),
+    /// resolved to its symbol before the `_id` definition call. mruby
+    /// rejects a superclass mismatch with an existing definition, or a
+    /// same-named constant that is not a class.
+    fn define_class<K: IntoSym>(
         self,
         mrb: &Mrb,
-        name: &core::ffi::CStr,
+        name: K,
         superclass: RClass,
     ) -> Result<RClass, Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(mrb);
             protect_class_ptr(mrb, |mrb| {
                 // SAFETY: `mrb` is alive inside the protect frame;
                 // `self` and `superclass` originate from the same VM;
-                // `name` is NUL-terminated.
+                // `sym` was interned against the same VM.
                 unsafe {
-                    sys::mrb_define_class_under(
+                    sys::mrb_define_class_under_id(
                         mrb.as_ptr(),
                         self.raw(),
-                        name.as_ptr(),
+                        sym,
                         superclass.as_raw(),
                     )
                 }
@@ -330,15 +332,17 @@ pub trait Module: private::ClassLike {
         }
     }
 
-    /// `mrb_define_module_under(mrb, self, name)` — define (or fetch)
-    /// the nested module `self::name`. mruby rejects a same-named
+    /// `mrb_define_module_under_id(mrb, self, name)` — define (or
+    /// fetch) the nested module `self::name`. The name is a
+    /// symbol-or-name key (`IntoSym`). mruby rejects a same-named
     /// constant that is not a module.
-    fn define_module(self, mrb: &Mrb, name: &core::ffi::CStr) -> Result<RModule, Error> {
+    fn define_module<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(mrb);
             protect_class_ptr(mrb, |mrb| {
                 // SAFETY: as `define_class`.
-                unsafe { sys::mrb_define_module_under(mrb.as_ptr(), self.raw(), name.as_ptr()) }
+                unsafe { sys::mrb_define_module_under_id(mrb.as_ptr(), self.raw(), sym) }
             })
             .map(RModule::from_raw)
         }
@@ -349,17 +353,19 @@ pub trait Module: private::ClassLike {
         }
     }
 
-    /// `mrb_class_get_under(mrb, self, name)` — fetch the nested
-    /// class `self::name`. mruby raises `NameError` when the constant
-    /// is missing and `TypeError` when it is not a class
-    /// (vendored `src/class.c` documents both), so the lookup is
-    /// fallible by contract.
-    fn class_get(self, mrb: &Mrb, name: &core::ffi::CStr) -> Result<RClass, Error> {
+    /// `mrb_class_get_under_id(mrb, self, name)` — fetch the nested
+    /// class `self::name`. The name is a symbol-or-name key
+    /// (`IntoSym`). mruby raises `NameError` when the constant is
+    /// missing and `TypeError` when it is not a class (vendored
+    /// `src/class.c` documents both), so the lookup is fallible by
+    /// contract.
+    fn class_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RClass, Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(mrb);
             protect_class_ptr(mrb, |mrb| {
                 // SAFETY: as `define_class`.
-                unsafe { sys::mrb_class_get_under(mrb.as_ptr(), self.raw(), name.as_ptr()) }
+                unsafe { sys::mrb_class_get_under_id(mrb.as_ptr(), self.raw(), sym) }
             })
             .map(RClass::from_raw)
         }
@@ -370,26 +376,21 @@ pub trait Module: private::ClassLike {
         }
     }
 
-    /// `mrb_define_method(mrb, self, name, func, aspec)` — register
-    /// an instance method from a `method!`-wrapped Rust function.
-    /// The aspec is derived from the wrapper's arity
-    /// (`-1` = any arguments, `0..` = that many required
-    /// positionals). mruby rejects registration on a frozen receiver.
-    fn define_method(
-        self,
-        mrb: &Mrb,
-        name: &core::ffi::CStr,
-        method: MethodDef,
-    ) -> Result<(), Error> {
+    /// `mrb_define_method_id(mrb, self, name, func, aspec)` — register
+    /// an instance method from a `method!`-wrapped Rust function. The
+    /// name is a symbol-or-name key (`IntoSym`). The aspec is derived
+    /// from the wrapper's arity (`-1` = any arguments, `0..` = that
+    /// many required positionals). mruby rejects registration on a
+    /// frozen receiver.
+    fn define_method<K: IntoSym>(self, mrb: &Mrb, name: K, method: MethodDef) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(mrb);
             protect_register(mrb, method, |mrb, raw, aspec| {
                 // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` was produced by the same VM; `name` is
-                // NUL-terminated; `raw` has the C ABI mruby expects.
-                unsafe {
-                    sys::mrb_define_method(mrb.as_ptr(), self.raw(), name.as_ptr(), raw, aspec)
-                };
+                // `self` was produced by the same VM; `sym` was
+                // interned against it; `raw` has the C ABI mruby expects.
+                unsafe { sys::mrb_define_method_id(mrb.as_ptr(), self.raw(), sym, raw, aspec) };
             })
         }
         #[cfg(not(mruby_linked))]
@@ -399,30 +400,25 @@ pub trait Module: private::ClassLike {
         }
     }
 
-    /// `mrb_define_private_method(mrb, self, name, func, aspec)` —
+    /// `mrb_define_private_method_id(mrb, self, name, func, aspec)` —
     /// like `define_method`, with private visibility: Ruby-level
-    /// dispatch with an explicit receiver raises `NoMethodError`.
-    /// The aspec derivation and rejection contract match
-    /// `define_method`.
-    fn define_private_method(
+    /// dispatch with an explicit receiver raises `NoMethodError`. The
+    /// name is a symbol-or-name key (`IntoSym`). The aspec derivation
+    /// and rejection contract match `define_method`.
+    fn define_private_method<K: IntoSym>(
         self,
         mrb: &Mrb,
-        name: &core::ffi::CStr,
+        name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(mrb);
             protect_register(mrb, method, |mrb, raw, aspec| {
                 // SAFETY: as `define_method` — same signature, same
                 // contract.
                 unsafe {
-                    sys::mrb_define_private_method(
-                        mrb.as_ptr(),
-                        self.raw(),
-                        name.as_ptr(),
-                        raw,
-                        aspec,
-                    )
+                    sys::mrb_define_private_method_id(mrb.as_ptr(), self.raw(), sym, raw, aspec)
                 };
             })
         }
@@ -433,31 +429,27 @@ pub trait Module: private::ClassLike {
         }
     }
 
-    /// `mrb_define_module_function(mrb, self, name, func, aspec)` —
+    /// `mrb_define_module_function_id(mrb, self, name, func, aspec)` —
     /// register a module function: one call defines both a private
     /// instance method, for a class that mixes the module in, and a
     /// singleton method on the module object, the way Ruby's
-    /// `module_function` exposes `Math.sqrt`. The aspec derivation and
+    /// `module_function` exposes `Math.sqrt`. The name is a
+    /// symbol-or-name key (`IntoSym`). The aspec derivation and
     /// rejection contract match `define_method`.
-    fn define_module_function(
+    fn define_module_function<K: IntoSym>(
         self,
         mrb: &Mrb,
-        name: &core::ffi::CStr,
+        name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(mrb);
             protect_register(mrb, method, |mrb, raw, aspec| {
                 // SAFETY: as `define_method` — same signature, same
                 // contract.
                 unsafe {
-                    sys::mrb_define_module_function(
-                        mrb.as_ptr(),
-                        self.raw(),
-                        name.as_ptr(),
-                        raw,
-                        aspec,
-                    )
+                    sys::mrb_define_module_function_id(mrb.as_ptr(), self.raw(), sym, raw, aspec)
                 };
             })
         }
@@ -468,21 +460,21 @@ pub trait Module: private::ClassLike {
         }
     }
 
-    /// `mrb_define_const(mrb, self, name, val)` — bind the constant
-    /// `name` to `val` on this class or module. Runs inside
-    /// `Mrb::protect`, so a frozen-receiver rejection surfaces as
-    /// `Err(Error::Exception)` rather than long-jumping — the same
-    /// contract as the definition methods above.
-    fn define_const(self, mrb: &Mrb, name: &core::ffi::CStr, val: Value) -> Result<(), Error> {
+    /// `mrb_define_const_id(mrb, self, name, val)` — bind the constant
+    /// `name` to `val` on this class or module. The name is a
+    /// symbol-or-name key (`IntoSym`). Runs inside `Mrb::protect`, so a
+    /// frozen-receiver rejection surfaces as `Err(Error::Exception)`
+    /// rather than long-jumping — the same contract as the definition
+    /// methods above.
+    fn define_const<K: IntoSym>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(mrb);
             mrb.protect(|mrb| {
                 // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` and `val` originate from the same VM; `name`
-                // is NUL-terminated.
-                unsafe {
-                    sys::mrb_define_const(mrb.as_ptr(), self.raw(), name.as_ptr(), val.as_raw())
-                };
+                // `self` and `val` originate from the same VM; `sym`
+                // was interned against it.
+                unsafe { sys::mrb_define_const_id(mrb.as_ptr(), self.raw(), sym, val.as_raw()) };
                 Value::nil()
             })
             .map(|_| ())
@@ -586,30 +578,32 @@ impl Module for RModule {}
 /// `magnus::Object`, currently covering singleton-method
 /// registration on the two handle newtypes.
 pub trait Object: private::ClassLike {
-    /// `mrb_define_singleton_method(mrb, self, name, func, aspec)` —
+    /// `mrb_define_singleton_method_id(mrb, self, name, func, aspec)` —
     /// register a singleton-class method on this handle from a
-    /// `method!`-wrapped Rust function. The receiver is treated
-    /// as `RObject *` so the singleton-class shim
-    /// attaches to the metaclass (matching mruby's own contract).
-    /// mruby rejects receivers that cannot carry a singleton class.
-    fn define_singleton_method(
+    /// `method!`-wrapped Rust function. The name is a symbol-or-name
+    /// key (`IntoSym`). The receiver is treated as `RObject *` so the
+    /// singleton-class shim attaches to the metaclass (matching mruby's
+    /// own contract). mruby rejects receivers that cannot carry a
+    /// singleton class.
+    fn define_singleton_method<K: IntoSym>(
         self,
         mrb: &Mrb,
-        name: &core::ffi::CStr,
+        name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
+            let sym = name.into_sym(mrb);
             protect_register(mrb, method, |mrb, raw, aspec| {
                 // SAFETY: as `Module::define_method`; `RClass *` and
                 // `RObject *` are both `c_void *` aliases in this
                 // crate's binding, and the cast matches what
                 // `mrbgems/mruby-singleton-class` does inline.
                 unsafe {
-                    sys::mrb_define_singleton_method(
+                    sys::mrb_define_singleton_method_id(
                         mrb.as_ptr(),
                         self.raw() as *mut sys::RObject,
-                        name.as_ptr(),
+                        sym,
                         raw,
                         aspec,
                     )
@@ -639,6 +633,158 @@ mod tests {
 
     fn answer_nine(_mrb: &Mrb, _self: Value) -> i32 {
         9
+    }
+
+    #[test]
+    fn symbol_key_reaches_the_same_definition_as_the_name() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        // Defining with an already-interned Symbol must reach the same
+        // definition path as a name key: the class is then fetchable by
+        // its plain name, and a method registered under a Symbol key is
+        // callable.
+        let name = crate::Symbol::new(&mrb, c"BeniSymKeyed");
+        let class = mrb
+            .define_class(name, object)
+            .expect("defining the class under a Symbol key must succeed");
+        class
+            .define_method(
+                &mrb,
+                crate::Symbol::new(&mrb, c"answer"),
+                crate::method!(answer_seven, 0),
+            )
+            .expect("registering a method under a Symbol key must succeed");
+        class
+            .define_const(
+                &mrb,
+                crate::Symbol::new(&mrb, c"ANSWER"),
+                Value::from_int(&mrb, 7),
+            )
+            .expect("binding a constant under a Symbol key must succeed");
+
+        // Fetch by Symbol key resolves to the class defined above.
+        let fetched = mrb
+            .class_get(crate::Symbol::new(&mrb, c"BeniSymKeyed"))
+            .expect("fetching by a Symbol key must reach the defined class");
+        assert_eq!(fetched.name(&mrb), Some("BeniSymKeyed"));
+
+        // The method and constant keyed by Symbol read back through the
+        // equivalent name — both keys resolve to the same interned sym.
+        let receiver = fetched
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let got = receiver
+            .funcall(&mrb, c"answer", &[])
+            .expect("the Symbol-keyed method must be callable by name");
+        assert_eq!(unsafe { got.unbox_integer() }, 7);
+
+        // SAFETY: `fetched` is a live handle from this VM.
+        let const_val = unsafe { fetched.to_value(&mrb) }
+            .const_get(&mrb, mrb.intern_cstr(c"ANSWER"))
+            .expect("the Symbol-keyed constant must read by name");
+        assert_eq!(unsafe { const_val.unbox_integer() }, 7);
+    }
+
+    #[test]
+    fn symbol_key_and_name_key_are_interchangeable_for_lookup() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        // A class defined by name is fetchable by Symbol, and one defined
+        // by Symbol is fetchable by name — the two key forms are
+        // interchangeable because both resolve to the same interned sym.
+        mrb.define_class(c"BeniByName", object)
+            .expect("defining by name must succeed");
+        let by_sym = mrb
+            .class_get(crate::Symbol::new(&mrb, c"BeniByName"))
+            .expect("a name-defined class is fetchable by Symbol key");
+        assert_eq!(by_sym.name(&mrb), Some("BeniByName"));
+    }
+
+    #[test]
+    fn symbol_key_registers_private_singleton_and_module_function() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        // Each registration variant routes its Symbol key through the
+        // matching `_id` C function; a method registered under a Symbol
+        // is then reachable, proving the key reached the definition.
+        let class = mrb
+            .define_class(c"BeniSymVariants", object)
+            .expect("defining the class must succeed");
+        class
+            .define_private_method(
+                &mrb,
+                crate::Symbol::new(&mrb, c"secret"),
+                crate::method!(answer_seven, 0),
+            )
+            .expect("registering the private method under a Symbol key must succeed");
+        class
+            .define_singleton_method(
+                &mrb,
+                crate::Symbol::new(&mrb, c"klass_answer"),
+                crate::method!(answer_nine, 0),
+            )
+            .expect("registering the singleton method under a Symbol key must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        // funcall bypasses visibility, reaching the private body.
+        let private = receiver
+            .funcall(&mrb, c"secret", &[])
+            .expect("the Symbol-keyed private method must be reachable via funcall");
+        assert_eq!(unsafe { private.unbox_integer() }, 7);
+        // SAFETY: `class` is a live handle from this VM.
+        let singleton = unsafe { class.to_value(&mrb) }
+            .funcall(&mrb, c"klass_answer", &[])
+            .expect("the Symbol-keyed singleton method must be callable");
+        assert_eq!(unsafe { singleton.unbox_integer() }, 9);
+
+        let module = mrb
+            .define_module(c"BeniSymModFn")
+            .expect("defining the module must succeed");
+        module
+            .define_module_function(
+                &mrb,
+                crate::Symbol::new(&mrb, c"mod_seven"),
+                crate::method!(answer_seven, 0),
+            )
+            .expect("registering the module function under a Symbol key must succeed");
+
+        // The module function is callable as a singleton on the module
+        // object — the consumer-visible end of the Symbol-keyed
+        // registration.
+        let cxt = crate::Ccontext::new(&mrb, c"sym_modfn.rb")
+            .expect("allocating the compile context must succeed");
+        let got = cxt.load_nstring(b"BeniSymModFn.mod_seven");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "calling the Symbol-keyed module function must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(unsafe { got.unbox_integer() }, 7);
+    }
+
+    #[test]
+    fn nested_definition_accepts_a_symbol_key() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        // The namespaced Module-trait define/get also accept a Symbol key.
+        let outer = mrb
+            .define_module(crate::Symbol::new(&mrb, c"BeniSymNs"))
+            .expect("defining the module under a Symbol key must succeed");
+        let nested = outer
+            .define_class(&mrb, crate::Symbol::new(&mrb, c"Inner"), object)
+            .expect("defining the nested class under a Symbol key must succeed");
+        assert_eq!(nested.name(&mrb), Some("BeniSymNs::Inner"));
+
+        let fetched = outer
+            .class_get(&mrb, crate::Symbol::new(&mrb, c"Inner"))
+            .expect("fetching the nested class under a Symbol key must succeed");
+        assert_eq!(fetched.name(&mrb), Some("BeniSymNs::Inner"));
     }
 
     #[test]

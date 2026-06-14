@@ -66,8 +66,10 @@ typed:
   mrb_ccontext_new: Ccontext::new
   mrb_check_error: Mrb::clear_exc
   mrb_check_frozen_value: "`Value::check_frozen` — the frozen-state precondition guard; `mrb_check_frozen` (the `void*` form) and `mrb_check_type` (a raw `mrb_vtype` tag, subsumed by the `FromValue` downcasts) stay in `sys`"
-  mrb_class_get: Mrb::class_get
-  mrb_class_get_under: Module::class_get
+  mrb_class_get: "`Mrb::class_get` with a name key — interns and routes through `mrb_class_get_id`"
+  mrb_class_get_id: "`Mrb::class_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
+  mrb_class_get_under: "`Module::class_get` with a name key — interns and routes through `mrb_class_get_under_id`"
+  mrb_class_get_under_id: "`Module::class_get` with a `Symbol` key (the symbol-or-name key)"
   mrb_class_name: Module::name
   mrb_class_ptr: Value::as_class_ptr
   mrb_close: Mrb::drop
@@ -78,17 +80,27 @@ typed:
   mrb_data_init: Value::data_reinit
   mrb_data_object_alloc: "`RClass::data_wrap` (see DataType extension)"
   mrb_define_alias: Module::alias_method
-  mrb_define_class: Mrb::define_class
+  mrb_define_class: "`Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id`"
+  mrb_define_class_id: "`Mrb::define_class` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
   mrb_define_class_method: "`Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment)"
-  mrb_define_class_under: Module::define_class
-  mrb_define_const: Module::define_const
+  mrb_define_class_method_id: "`Object::define_singleton_method` with a `Symbol` key on a class — a class's singleton method is its class method (magnus alignment)"
+  mrb_define_class_under: "`Module::define_class` with a name key — interns and routes through `mrb_define_class_under_id`"
+  mrb_define_class_under_id: "`Module::define_class` with a `Symbol` key (the symbol-or-name key)"
+  mrb_define_const: "`Module::define_const` with a name key — interns and routes through `mrb_define_const_id`"
+  mrb_define_const_id: "`Module::define_const` with a `Symbol` key (the symbol-or-name key)"
   mrb_define_global_const: Mrb::define_global_const
-  mrb_define_method: Module::define_method
-  mrb_define_module: Mrb::define_module
-  mrb_define_module_function: Module::define_module_function
-  mrb_define_module_under: Module::define_module
-  mrb_define_private_method: Module::define_private_method
-  mrb_define_singleton_method: Object::define_singleton_method
+  mrb_define_method: "`Module::define_method` with a name key — interns and routes through `mrb_define_method_id`"
+  mrb_define_method_id: "`Module::define_method` with a `Symbol` key (the symbol-or-name key)"
+  mrb_define_module: "`Mrb::define_module` with a name key — interns and routes through `mrb_define_module_id`"
+  mrb_define_module_id: "`Mrb::define_module` with a `Symbol` key (the symbol-or-name key)"
+  mrb_define_module_function: "`Module::define_module_function` with a name key — interns and routes through `mrb_define_module_function_id`"
+  mrb_define_module_function_id: "`Module::define_module_function` with a `Symbol` key (the symbol-or-name key)"
+  mrb_define_module_under: "`Module::define_module` with a name key — interns and routes through `mrb_define_module_under_id`"
+  mrb_define_module_under_id: "`Module::define_module` with a `Symbol` key (the symbol-or-name key)"
+  mrb_define_private_method: "`Module::define_private_method` with a name key — interns and routes through `mrb_define_private_method_id`"
+  mrb_define_private_method_id: "`Module::define_private_method` with a `Symbol` key (the symbol-or-name key)"
+  mrb_define_singleton_method: "`Object::define_singleton_method` with a name key — interns and routes through `mrb_define_singleton_method_id`"
+  mrb_define_singleton_method_id: "`Object::define_singleton_method` with a `Symbol` key (the symbol-or-name key)"
   mrb_eql: Value::eql
   mrb_equal: Value::equal
   mrb_obj_equal: Value::obj_equal
