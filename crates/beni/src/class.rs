@@ -246,11 +246,14 @@ impl RClass {
     /// `RClass::raise` for the path that returns the exception as a
     /// `Value` — a bridge body wraps it in `Error::Exception` to raise
     /// it to the Ruby caller at the boundary instead of long-jumping
-    /// mid-body.
+    /// mid-body. `msg.len()` saturates to `sys::mrb_int::MAX` (the
+    /// archive's configured integer width), like `Mrb::str_new`; real
+    /// handler messages stay far below that.
     #[inline]
     pub fn exc_new(self, mrb: &Mrb, msg: &str) -> Value {
         #[cfg(mruby_linked)]
         {
+            let len = msg.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
             // SAFETY: `mrb` is alive; `self` originates from the same
             // VM; `msg`'s bytes are copied into the new exception
             // object before the call returns.
@@ -259,7 +262,7 @@ impl RClass {
                     mrb.as_ptr(),
                     self.0,
                     msg.as_ptr() as *const core::ffi::c_char,
-                    msg.len() as sys::mrb_int,
+                    len,
                 )
             })
         }
