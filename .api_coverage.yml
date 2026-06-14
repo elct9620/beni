@@ -99,6 +99,8 @@ typed:
   mrb_gc_arena_restore: "`ArenaScope::keep`/`drop` (see ArenaScope extension)"
   mrb_gc_arena_save: "`Mrb::arena_scope` (see ArenaScope extension)"
   mrb_gc_protect: "`ArenaScope::keep` (see ArenaScope extension)"
+  mrb_get_arg1: "`Mrb::arg1` — the single required argument, raising `ArgumentError` on any other count (the strict counterpart to a `format::O` read)"
+  mrb_get_argc: Mrb::argc
   mrb_get_args: state::args
   mrb_gv_get: Mrb::gv_get
   mrb_gv_set: Mrb::gv_set

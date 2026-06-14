@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 105 (31%) |
+| function | 342 | 329 (96%) | 107 (31%) |
 | macro | 124 | 22 (18%) | 27 (22%) |
-| total | 466 | 351 (75%) | 132 (28%) |
+| total | 466 | 351 (75%) | 134 (29%) |
 
 ## mruby.h
 
@@ -121,8 +121,8 @@ Legend: ✅ covered · — missing
 | `mrb_gc_protect` | fn | ✅ | ✅ | `ArenaScope::keep` (see ArenaScope extension) |
 | `mrb_gc_register` | fn | ✅ | — |  |
 | `mrb_gc_unregister` | fn | ✅ | — |  |
-| `mrb_get_arg1` | fn | ✅ | — |  |
-| `mrb_get_argc` | fn | ✅ | — |  |
+| `mrb_get_arg1` | fn | ✅ | ✅ | `Mrb::arg1` — the single required argument, raising `ArgumentError` on any other count (the strict counterpart to a `format::O` read) |
+| `mrb_get_argc` | fn | ✅ | ✅ | `Mrb::argc` |
 | `mrb_get_args` | fn | ✅ | ✅ | `state::args` |
 | `mrb_get_args_a` | fn | ✅ | — |  |
 | `mrb_get_argv` | fn | ✅ | — |  |

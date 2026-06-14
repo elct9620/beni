@@ -105,6 +105,41 @@ impl Mrb {
     pub fn get_args<F: Format>(&self) -> F::Output<'_> {
         F::read(self)
     }
+
+    /// Read the single required argument from the call frame. Raises
+    /// `ArgumentError` to the Ruby caller unless exactly one positional
+    /// argument is present — the strict counterpart to a `format::O`
+    /// read, which takes the first slot without checking the count.
+    ///
+    /// Callable only from a `-1` method body, the frame mruby raises
+    /// out of; the long-jump runs no Rust drops, so the caller must
+    /// hold no live value needing `Drop`.
+    #[inline]
+    pub fn arg1(&self) -> Value {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive by the `&self` borrow. The raise
+            // on a wrong argument count long-jumps to the Ruby caller,
+            // which the `-1` bridge frame is the contract for.
+            Value::from_raw(unsafe { sys::mrb_get_arg1(self.as_ptr()) })
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// Read the number of arguments passed to the call frame, splat
+    /// arguments counted as their expanded length. Does not raise.
+    #[inline]
+    pub fn argc(&self) -> sys::mrb_int {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive by the `&self` borrow; the read is
+            // total — it never raises.
+            unsafe { sys::mrb_get_argc(self.as_ptr()) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
 }
 
 /// Zero-sized marker types implementing `Format`. Each marker maps
@@ -673,5 +708,85 @@ mod tests {
         // No block: the slot decodes as nil.
         let without_block = cxt.load_nstring(b"$beni_rest_block_recv.rest_block_report(1, 2)");
         assert_eq!(i32::from_value(without_block), Some(-1));
+    }
+
+    /// Registered through `method!(arg1_echo, -1)`: reads the single
+    /// required argument via `Mrb::arg1` and returns it unchanged.
+    fn arg1_echo(mrb: &Mrb, _self: Value) -> Value {
+        mrb.arg1()
+    }
+
+    /// Registered through `method!(argc_report, -1)`: returns the
+    /// argument count read via `Mrb::argc` as an mruby Integer.
+    fn argc_report(mrb: &Mrb, _self: Value) -> Value {
+        Value::from_int(mrb, mrb.argc())
+    }
+
+    #[test]
+    fn arg1_reads_the_single_argument() {
+        use crate::{FromValue, Module};
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(&mrb, c"arg1_echo", crate::method!(arg1_echo, -1))
+            .expect("registering the bridge must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let got = receiver
+            .funcall(&mrb, c"arg1_echo", &[Value::from_int(&mrb, 42)])
+            .expect("the single-argument read must not raise");
+        assert_eq!(i32::from_value(got), Some(42));
+    }
+
+    #[test]
+    fn arg1_raises_argument_error_on_wrong_count() {
+        use crate::{Error, Module};
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(&mrb, c"arg1_echo", crate::method!(arg1_echo, -1))
+            .expect("registering the bridge must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        // Two positionals: `mrb_get_arg1` raises ArgumentError rather
+        // than returning the first — the strict-count contract.
+        let args = [Value::from_int(&mrb, 1), Value::from_int(&mrb, 2)];
+        let err = receiver
+            .funcall(&mrb, c"arg1_echo", &args)
+            .expect_err("a non-single argument count must surface as Err");
+        match err {
+            Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
+            Error::Panic(_) => panic!("a wrong argument count must raise, not panic"),
+        }
+    }
+
+    #[test]
+    fn argc_reads_the_argument_count() {
+        use crate::{FromValue, Module};
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(&mrb, c"argc_report", crate::method!(argc_report, -1))
+            .expect("registering the bridge must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let args = [
+            Value::from_int(&mrb, 1),
+            Value::from_int(&mrb, 2),
+            Value::from_int(&mrb, 3),
+        ];
+        let got = receiver
+            .funcall(&mrb, c"argc_report", &args)
+            .expect("the count read must not raise");
+        assert_eq!(i32::from_value(got), Some(3));
     }
 }
