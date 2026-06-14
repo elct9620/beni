@@ -246,8 +246,9 @@ raise/return contract:
 |---|---|---|
 | Mutates a receiver — array append/remove/extend/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, or a hash read running a `default` lookup for an absent key | the dispatched code raises; a constant fetch also when the name resolves to no constant | `Result` |
+| Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types | the value is non-numeric, or an infinite / NaN float converts to integer | `Result` |
-| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, instance-variable read, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range falls outside the string |
+| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, instance-variable read and presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range falls outside the string |
 
 #### Containers
 
@@ -296,7 +297,8 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | class | the class the value belongs to |
 | freeze | freeze the value in place |
 | frozen check | a precondition guard that surfaces an `Err` when the value is frozen — an immediate counts as frozen — and `Ok` otherwise; runs no user Ruby |
-| instance variable | read a named instance variable — `nil` when unset — or assign one in place; the read never raises, the assignment surfaces an `Err` when the receiver is frozen or cannot hold instance variables |
+| instance variable | read a named instance variable — `nil` when unset — assign one in place, or test its presence; the read and presence test never raise, the assignment surfaces an `Err` when the receiver is frozen or cannot hold instance variables |
+| class variable | read a named class variable from a module or class, walking the ancestry; surfaces an `Err` when the name resolves to no class variable |
 | constant | fetch a named constant from a module or class, or test its presence; the fetch surfaces an `Err` when the name resolves to no constant or its `const_missing` hook raises |
 | `respond_to?` | whether the value answers to a named method; a total predicate |
 
