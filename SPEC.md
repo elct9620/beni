@@ -310,6 +310,12 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
   trait also binds constants, aliases existing methods, and mixes another module
   into the handle. A definition, registration, alias, or module inclusion mruby
   rejects — including a cyclic include — surfaces as a Rust `Err`.
+- A method registered for any arity reads its own call frame instead of
+  receiving converted positionals: a shape-typed read projects the frame
+  against a format marker into a typed tuple, a single-argument read returns
+  the one required argument, and a count read returns the number of arguments
+  passed. The single-argument read raises `ArgumentError` to the Ruby caller
+  unless exactly one positional argument is present.
 - Constructing an instance of a class handle runs Ruby's `Class.new` —
   allocating the object and running its `initialize` with an argument slice; a
   raising `initialize` surfaces as a Rust `Err`. Mirrors `magnus`'s
@@ -434,6 +440,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | mruby raising during class or module definition, method registration, method aliasing, or module inclusion (including a cyclic include) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
+| A registered method body's single-argument read receiving other than one positional argument | raised as an `ArgumentError` to the Ruby caller |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
 
 ## Terminology
