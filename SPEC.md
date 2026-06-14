@@ -219,10 +219,15 @@ Rust reads the bytes three ways:
 
 A registered method grows an `RString` in place by appending Rust bytes, or
 appending another mruby string's bytes, the way Ruby's `String#<<` extends its
-receiver. Beyond reading and appending, a
+receiver. It also appends any value coerced to a string, the way Ruby's
+`String#concat` accepts a non-string argument — the dispatching counterpart to
+the byte and string appends. Beyond reading and appending, a
 string duplicates into an independent copy (Ruby's `String#dup`) and orders
 against another by byte content (Ruby's `String#<=>`) — a total comparison that
-dispatches nothing and never raises.
+dispatches nothing and never raises. A registered method also resizes a string's
+length in place — truncating, or extending with undefined trailing bytes — and
+reads a substring by character range, yielding the substring or nothing when the
+range falls outside the string.
 
 #### Errors and the raise/return contract
 
@@ -236,10 +241,10 @@ raise/return contract:
 
 | Operation kind | Surfaces `Err` | Returns |
 |---|---|---|
-| Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge/clear, string append, instance-variable assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; an instance-variable assignment also when the receiver cannot hold instance variables | `Result` |
+| Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge/clear, string append and resize, instance-variable assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, or a hash read running a `default` lookup for an absent key | the dispatched code raises; a constant fetch also when the name resolves to no constant | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types | the value is non-numeric, or an infinite / NaN float converts to integer | `Result` |
-| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, byte comparison, instance-variable read, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
+| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, instance-variable read, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range falls outside the string |
 
 #### Containers
 
