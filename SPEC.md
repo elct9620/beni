@@ -231,7 +231,7 @@ raise/return contract:
 | Operation kind | Surfaces `Err` | Returns |
 |---|---|---|
 | Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge, string append | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large | `Result` |
-| Dispatches Ruby — a method call, `==` / `eql?`, or a hash assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?` | the dispatched code raises, or `fetch` finds the key absent | `Result` |
+| Dispatches Ruby — a method call, `==` / `eql?`, or a hash assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?` | the dispatched code raises | `Result` |
 | Reads or inspects without dispatching — indexed read, keys, values, size, emptiness, duplication, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
 
 #### Containers
@@ -255,7 +255,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 |---|---|
 | assign | set a key's value |
 | read | the value, or `nil` when the key is absent |
-| fetch | the value, the way Ruby's `Hash#fetch` reads |
+| fetch | the value, or a supplied default when the key is absent, like Ruby's `Hash#fetch(key, default)` |
 | key test | whether a key is present |
 | delete | remove a key, returning its former value |
 | merge | fold another hash into this one |
@@ -399,7 +399,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | A typed array, hash, or string mutated through a frozen receiver | surfaced as a Rust `Err`, never unwinds across FFI |
-| A Ruby method invoked through a value's dispatch, a hash assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or `fetch` on an absent key, raising | surfaced as a Rust `Err`, never unwinds across FFI |
+| A Ruby method invoked through a value's dispatch, or a hash assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
 | mruby raising during class or module definition, method registration, method aliasing, or module inclusion (including a cyclic include) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
