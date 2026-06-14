@@ -43,10 +43,12 @@ typed:
   mrb_ary_new_from_values: Mrb::ary_new_from_values
   mrb_ary_pop: Array::pop
   mrb_ary_push: Array::push
+  mrb_ary_resize: Array::resize
   mrb_ary_set: Array::store
   mrb_ary_shift: Array::shift
   mrb_ary_unshift: Array::unshift
   mrb_array_p: "`Value::is_array`, via the value tag"
+  mrb_assoc_new: Mrb::assoc_new
   mrb_as_float: "`Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast"
   mrb_as_int: "`Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast"
   mrb_break_p: Value::as_break

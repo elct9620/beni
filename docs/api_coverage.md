@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 107 (31%) |
+| function | 342 | 329 (96%) | 109 (32%) |
 | macro | 124 | 22 (18%) | 27 (22%) |
-| total | 466 | 351 (75%) | 134 (29%) |
+| total | 466 | 351 (75%) | 136 (29%) |
 
 ## mruby.h
 
@@ -251,14 +251,14 @@ Legend: ✅ covered · — missing
 | `mrb_ary_push` | fn | ✅ | ✅ | `Array::push` |
 | `mrb_ary_ref` | macro | — | — |  |
 | `mrb_ary_replace` | fn | ✅ | — |  |
-| `mrb_ary_resize` | fn | ✅ | — |  |
+| `mrb_ary_resize` | fn | ✅ | ✅ | `Array::resize` |
 | `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
 | `mrb_ary_shift` | fn | ✅ | ✅ | `Array::shift` |
 | `mrb_ary_splat` | fn | ✅ | — |  |
 | `mrb_ary_splice` | fn | ✅ | — |  |
 | `mrb_ary_unshift` | fn | ✅ | ✅ | `Array::unshift` |
 | `mrb_ary_value` | macro | — | — |  |
-| `mrb_assoc_new` | fn | ✅ | — |  |
+| `mrb_assoc_new` | fn | ✅ | ✅ | `Mrb::assoc_new` |
 ## mruby/class.h
 
 | Symbol | Kind | sys | typed | Note |

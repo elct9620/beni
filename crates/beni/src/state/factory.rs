@@ -173,6 +173,31 @@ impl Mrb {
         #[cfg(not(mruby_linked))]
         crate::not_linked()
     }
+
+    /// `mrb_assoc_new(mrb, car, cdr)` — construct the two-element mruby
+    /// `Array` `[car, cdr]`. A pure allocation that copies the two values
+    /// into a fresh array, so it never raises.
+    #[inline]
+    pub fn assoc_new(&self, car: Value, cdr: Value) -> Array {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive; `car` and `cdr` share the VM by the
+            // single-VM contract. `mrb_assoc_new` always returns an
+            // Array-tagged value, so the unchecked wrap is sound.
+            unsafe {
+                Array::from_value_unchecked(Value::from_raw(sys::mrb_assoc_new(
+                    self.as_ptr(),
+                    car.as_raw(),
+                    cdr.as_raw(),
+                )))
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (car, cdr);
+            crate::not_linked()
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -233,5 +258,19 @@ mod tests {
         assert_eq!(ary.len(), 3);
         assert_eq!(ary.entry(0).to_string(&mrb), "a");
         assert_eq!(ary.entry(2).to_string(&mrb), "c");
+    }
+
+    #[test]
+    fn assoc_new_pairs_the_two_values_in_order() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let pair = mrb.assoc_new(
+            mrb.str_new(b"car").as_value(),
+            mrb.str_new(b"cdr").as_value(),
+        );
+
+        assert_eq!(pair.len(), 2);
+        assert_eq!(pair.entry(0).to_string(&mrb), "car");
+        assert_eq!(pair.entry(1).to_string(&mrb), "cdr");
     }
 }

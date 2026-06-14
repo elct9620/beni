@@ -143,6 +143,34 @@ impl Array {
         }
     }
 
+    /// `mrb_ary_resize(mrb, self, new_len)` — set the array's length:
+    /// grow with `nil` to reach a longer length, or truncate to a shorter
+    /// one. Resizing a frozen array raises `FrozenError`; the call runs
+    /// under `Mrb::protect`, so that surfaces as `Err`. `new_len`
+    /// saturates to the archive's `mrb_int` width.
+    #[inline]
+    pub fn resize(self, mrb: &Mrb, new_len: usize) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            let new_len = new_len.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // is Array-tagged by the `from_value_unchecked` contract.
+                // `mrb_ary_resize` routes through `mrb_ary_modify`, which
+                // raises `FrozenError` on a frozen array — caught by
+                // `protect` into `Err`.
+                unsafe { sys::mrb_ary_resize(mrb.as_ptr(), self.0.as_raw(), new_len) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, new_len);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_ary_pop(mrb, self)` — remove and return the last element,
     /// Ruby's `Array#pop`, or `nil` when the array is empty. Popping a
     /// frozen array raises `FrozenError`, surfaced here as `Err`.
@@ -464,6 +492,26 @@ mod tests {
     }
 
     #[test]
+    fn resize_grows_with_nil_and_truncates() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        ary.push(&mrb, mrb.str_new(b"a").as_value())
+            .expect("push succeeds");
+
+        // Growing past the current length fills the new slots with nil.
+        ary.resize(&mrb, 3).expect("grow succeeds");
+        assert_eq!(ary.len(), 3);
+        assert_eq!(ary.entry(0).to_string(&mrb), "a");
+        assert!(ary.entry(1).is_nil());
+        assert!(ary.entry(2).is_nil());
+
+        // Truncating drops the tail.
+        ary.resize(&mrb, 1).expect("truncate succeeds");
+        assert_eq!(ary.len(), 1);
+        assert_eq!(ary.entry(0).to_string(&mrb), "a");
+    }
+
+    #[test]
     fn pop_surfaces_frozen_receiver_as_err() {
         use crate::{Array, Ccontext, FromValue};
 
@@ -503,6 +551,7 @@ mod tests {
         ));
         assert!(matches!(frozen.shift(&mrb), Err(Error::Exception(_))));
         assert!(matches!(frozen.clear(&mrb), Err(Error::Exception(_))));
+        assert!(matches!(frozen.resize(&mrb, 5), Err(Error::Exception(_))));
         // An in-range indexed write reaches the frozen check too, not just
         // the out-of-range path pinned above.
         assert!(matches!(
