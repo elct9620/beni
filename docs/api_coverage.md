@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 126 (37%) |
+| function | 342 | 329 (96%) | 127 (37%) |
 | macro | 124 | 22 (18%) | 30 (24%) |
-| total | 466 | 351 (75%) | 156 (33%) |
+| total | 466 | 351 (75%) | 157 (34%) |
 
 ## mruby.h
 
@@ -91,7 +91,7 @@ Legend: ✅ covered · — missing
 | `mrb_ensure_hash_type` | fn | ✅ | — |  |
 | `mrb_ensure_int_type` | fn | ✅ | — |  |
 | `mrb_ensure_integer_type` | fn | ✅ | — |  |
-| `mrb_ensure_string_type` | fn | ✅ | — |  |
+| `mrb_ensure_string_type` | fn | ✅ | ✅ | `Value::ensure_string` — the raising String-tag coercion to an `RString` handle; `mrb_check_string_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `RString` downcast and stays in `sys` |
 | `mrb_eql` | fn | ✅ | ✅ | `Value::eql` |
 | `mrb_equal` | fn | ✅ | ✅ | `Value::equal` |
 | `mrb_exc_get` | macro | — | — |  |

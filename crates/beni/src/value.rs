@@ -299,6 +299,42 @@ impl Value {
         }
     }
 
+    /// Coerce `self` to a typed `RString` handle by its String tag,
+    /// surfacing a non-String as an `Err` rather than rejecting it to
+    /// `None`: `Ok` with the handle when `self` is String-tagged, `Err`
+    /// carrying a `TypeError` for any other tag. It runs no user Ruby —
+    /// it dispatches no `to_str` — so it is the raising counterpart to
+    /// the `RString::from_value` downcast, not the dispatching `to_s`
+    /// coercion `Value::obj_as_string` performs. The `TypeError` it would
+    /// long-jump is caught by `Mrb::protect` into the returned `Err`.
+    /// Suits a handler that requires a String argument and rejects
+    /// anything else; reach for the `FromValue` downcast instead when a
+    /// non-String should read as absent. Mirrors mruby's
+    /// `mrb_ensure_string_type`.
+    #[inline]
+    pub fn ensure_string(self, mrb: &Mrb) -> Result<crate::RString, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_ensure_string_type`
+                // raises `TypeError` on a non-String tag — caught by
+                // `protect` into `Err` — and otherwise returns `self`
+                // unchanged.
+                Value(unsafe { sys::mrb_ensure_string_type(mrb.as_ptr(), self.0) })
+            })
+            // SAFETY: an `Ok` result passed `mrb_string_p` inside
+            // `mrb_ensure_string_type`, so it carries the String tag the
+            // unchecked wrap requires.
+            .map(|v| unsafe { RString::from_value_unchecked(v) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// `obj.dup` — a shallow copy of `self`: its instance variables are
     /// copied (not the objects they reference), the copy is unfrozen and
     /// carries no singleton class, and the class's `initialize_copy`
@@ -1614,6 +1650,31 @@ mod linked_tests {
             .obj_as_string(&mrb)
             .expect("to_s of an integer does not raise")
             .is_string());
+    }
+
+    #[test]
+    fn ensure_string_returns_the_handle_or_raises_by_tag() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A String tag yields the same string as a typed handle — no
+        // copy, no dispatch.
+        let s = mrb.str_new(b"hi").as_value();
+        let handle = s
+            .ensure_string(&mrb)
+            .expect("a String value coerces without raising");
+        assert!(s.obj_equal(&mrb, handle.as_value()));
+        assert_eq!(handle.to_bytes(), b"hi".to_vec());
+
+        // A non-String tag raises `TypeError` rather than coercing — the
+        // contrast with `obj_as_string`, which would render the integer
+        // through `to_s`. The raise is the genuine `TypeError` class, not
+        // some other exception.
+        match 42i32.into_value(&mrb).ensure_string(&mrb) {
+            Err(Error::Exception(exc)) => {
+                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+            }
+            _ => panic!("a non-String value surfaces a TypeError Err"),
+        }
     }
 
     #[test]
