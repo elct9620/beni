@@ -334,6 +334,16 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
   holding a `Symbol` reaches the definition or lookup without a redundant
   intern; the result is identical to passing the equivalent name, since both
   resolve to the same interned symbol.
+- A class handle resolves to its real class — its singleton-class and
+  include-class links skipped — yielding the first user-facing class in the
+  chain. A handle that is already a real class returns itself; the resolution
+  walks the class structure and never raises. This is the named normalization a
+  consumer reaches for after obtaining a handle that may be a singleton or
+  include class (through the raw FFI seam); the value-level "class the value
+  belongs to" already returns the real class, so it needs no separate
+  resolution. The raw class of a value before that normalization — which may be
+  a singleton or include class and demands VM-internal reasoning to use — stays
+  behind `beni::sys`.
 - A method registered for any arity reads its own call frame instead of
   receiving converted positionals: a shape-typed read projects the frame
   against a format marker into a typed tuple, a single-argument read returns
