@@ -304,10 +304,12 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
   carrying a different data type, or none, does not extract. A bare carrier
   that holds no payload yet — the instance an mruby `dup` or `clone`
   allocates before `initialize_copy` runs — can have a Rust value installed
-  into it. The install does not release any payload the carrier already
-  holds, so it targets empty carriers; it is the seam through which a typed
-  object copies its Rust state. The mruby garbage collector owns the wrapped
-  value's lifetime, releasing it when its carrier is collected. Mirrors
+  into it. The install targets a bare carrier: it does not release any
+  payload the carrier already holds, and on a value that carries no data
+  type it does nothing — a total operation safe on any value. It is the
+  seam through which a typed object copies its Rust state. The mruby
+  garbage collector owns the wrapped value's lifetime, releasing it when
+  its carrier is collected. Mirrors
   `magnus`'s typed-data wrapping, and meets the graduation bar — correct use
   needs no reasoning about VM internals — so it lives on the typed surface
   rather than behind `beni::sys`.
