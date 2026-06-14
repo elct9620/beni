@@ -197,6 +197,14 @@ the Rust/Ruby boundary:
 | `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `Proc` / `Symbol` | `Value` → typed handle | converts on the target's type tag (subclass instances included for strings and containers); any other tag rejects |
 | `FromValue` → `bool` | `Value` → `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true`; total, never rejects |
 
+A value also converts to an `RString` handle by the same String type tag, but
+surfacing the mismatch as an `Err` rather than rejecting to `None`: it succeeds
+with the handle on a String tag and surfaces a `TypeError` on any other tag. It
+runs no user Ruby — it dispatches no `to_str` — so it is the raising counterpart
+to the `FromValue` → `RString` downcast, not the dispatching `to_s` string
+coercion. The downcast suits a handler that treats a non-String as absent; the
+raising form suits one that requires a String argument and rejects anything else.
+
 Every type tag also carries a per-type predicate (`Value::is_array`,
 `is_string`, `is_integer`, … — the analogue of mruby's `mrb_*_p` macros). Where
 a tag has a typed handle, its predicate and `FromValue` downcast — magnus's
@@ -260,7 +268,7 @@ raise/return contract:
 | Mutates a receiver — array append/remove/extend/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, or a hash read running a `default` lookup for an absent key | the dispatched code raises; a constant fetch also when the name resolves to no constant | `Result` |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
-| Converts without dispatching — a numeric conversion across the numeric types | the value is non-numeric, or an infinite / NaN float converts to integer | `Result` |
+| Converts without dispatching — a numeric conversion across the numeric types, or coercing a value to an `RString` handle by its String tag | the value is non-numeric, or an infinite / NaN float converts to integer; the coerced value carries no String tag | `Result` |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, symbol name and dump reads, instance-variable read and presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
@@ -469,7 +477,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | A typed array, hash, or string mutated through a frozen receiver, or an instance-variable assignment to a frozen receiver or one that cannot hold instance variables | surfaced as a Rust `Err`, never unwinds across FFI |
 | A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
-| A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer | surfaced as a Rust `Err`, never unwinds across FFI |
+| A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
 | mruby raising during class or module definition, method registration, method aliasing, or module inclusion (including a cyclic include) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
