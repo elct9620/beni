@@ -277,20 +277,20 @@ impl Value {
         }
     }
 
-    /// `mrb_obj_as_string(mrb, self)` — coerce `self` to a String
-    /// value via mruby's public coercion helper. Returns `self`
-    /// unchanged when it is already a String; otherwise calls `to_s`
-    /// and returns the result. May raise `TypeError` when the
-    /// receiver's `to_s` does not return a String — only safe to
-    /// call from contexts that can absorb a longjmp (C bridges,
-    /// `mrb_protect_error` bodies).
+    /// Coerce `self` to a string value — `self` unchanged when it is
+    /// already a string, otherwise the result of its `to_s`. Runs under
+    /// `Mrb::protect`: `Ok` with the string value, or `Err` when `to_s`
+    /// does not return a string. Mirrors mruby's `mrb_obj_as_string`.
     #[inline]
-    pub fn obj_as_string(self, mrb: &Mrb) -> Value {
+    pub fn obj_as_string(self, mrb: &Mrb) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: `mrb` is alive by the borrow; `self` originates
-            // from the same VM.
-            Value::from_raw(unsafe { sys::mrb_obj_as_string(mrb.as_ptr(), self.0) })
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_obj_as_string` may run
+                // `to_s` and raise — caught by `protect` into `Err`.
+                Value(unsafe { sys::mrb_obj_as_string(mrb.as_ptr(), self.0) })
+            })
         }
         #[cfg(not(mruby_linked))]
         {
@@ -302,17 +302,19 @@ impl Value {
     /// `obj.dup` — a shallow copy of `self`: its instance variables are
     /// copied (not the objects they reference), the copy is unfrozen and
     /// carries no singleton class, and the class's `initialize_copy`
-    /// runs on it. An immediate returns itself. Mirrors mruby's
-    /// `mrb_obj_dup`; raises `TypeError` on a singleton class, so call it
-    /// only where a longjmp can be absorbed (a C bridge or an
-    /// `mrb_protect_error` body), as with `Value::obj_as_string`.
+    /// runs on it. An immediate returns itself. Runs under `Mrb::protect`:
+    /// `Ok` with the copy, or `Err` when `initialize_copy` raises.
+    /// Mirrors mruby's `mrb_obj_dup`.
     #[inline]
-    pub fn obj_dup(self, mrb: &Mrb) -> Value {
+    pub fn obj_dup(self, mrb: &Mrb) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: `mrb` is alive by the borrow; `self` originates
-            // from the same VM.
-            Value::from_raw(unsafe { sys::mrb_obj_dup(mrb.as_ptr(), self.0) })
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_obj_dup` runs
+                // `initialize_copy` and may raise — caught by `protect`.
+                Value(unsafe { sys::mrb_obj_dup(mrb.as_ptr(), self.0) })
+            })
         }
         #[cfg(not(mruby_linked))]
         {
@@ -324,16 +326,18 @@ impl Value {
     /// `obj.clone` — like `dup` but also copies the singleton class and
     /// the frozen state, the deeper of the two duplications; the class's
     /// `initialize_copy` runs on the copy. An immediate returns itself.
-    /// Mirrors mruby's `mrb_obj_clone`; raises `TypeError` on a singleton
-    /// class, so call it only where a longjmp can be absorbed, as with
-    /// `Value::obj_as_string`.
+    /// Runs under `Mrb::protect`: `Ok` with the copy, or `Err` when
+    /// `initialize_copy` raises. Mirrors mruby's `mrb_obj_clone`.
     #[inline]
-    pub fn obj_clone(self, mrb: &Mrb) -> Value {
+    pub fn obj_clone(self, mrb: &Mrb) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: `mrb` is alive by the borrow; `self` originates
-            // from the same VM.
-            Value::from_raw(unsafe { sys::mrb_obj_clone(mrb.as_ptr(), self.0) })
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_obj_clone` runs
+                // `initialize_copy` and may raise — caught by `protect`.
+                Value(unsafe { sys::mrb_obj_clone(mrb.as_ptr(), self.0) })
+            })
         }
         #[cfg(not(mruby_linked))]
         {
@@ -1304,6 +1308,46 @@ mod linked_tests {
     }
 
     #[test]
+    fn dup_and_clone_surface_a_raising_initialize_copy_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"copy_test.rb").expect("allocating the context must succeed");
+
+        let obj = cxt.load_nstring(
+            b"class BoomCopy; def initialize_copy(o); raise 'no'; end; end; BoomCopy.new",
+        );
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the class must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        // Both copies run `initialize_copy`, which raises — surfaced as
+        // Err instead of unwinding across the call.
+        assert!(matches!(obj.obj_dup(&mrb), Err(Error::Exception(_))));
+        assert!(matches!(obj.obj_clone(&mrb), Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn obj_as_string_coerces_through_to_s() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Already a string: coercion returns a string value.
+        let already = mrb.str_new(b"hi").as_value();
+        assert!(already
+            .obj_as_string(&mrb)
+            .expect("a string coerces without raising")
+            .is_string());
+
+        // A non-string coerces through its `to_s`.
+        assert!(42i32
+            .into_value(&mrb)
+            .obj_as_string(&mrb)
+            .expect("to_s of an integer does not raise")
+            .is_string());
+    }
+
+    #[test]
     fn bool_predicates_separate_true_false_and_nil() {
         // The immediate singletons need a live VM to have been captured,
         // even though the predicates themselves take no `Mrb`.
@@ -1342,7 +1386,7 @@ mod linked_tests {
         let orig = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o");
         assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
-        let dup = orig.obj_dup(&mrb);
+        let dup = orig.obj_dup(&mrb).expect("dup does not raise");
         let x = mrb.intern_cstr(c"@x");
         // The dup carries the copied ivar...
         assert_eq!(i32::from_value(dup.iv_get(&mrb, x)), Some(1));
@@ -1365,11 +1409,13 @@ mod linked_tests {
         // dup always yields an unfrozen object.
         assert!(frozen
             .obj_clone(&mrb)
+            .expect("clone does not raise")
             .funcall(&mrb, c"frozen?", &[])
             .expect("frozen? does not raise")
             .to_bool());
         assert!(!frozen
             .obj_dup(&mrb)
+            .expect("dup does not raise")
             .funcall(&mrb, c"frozen?", &[])
             .expect("frozen? does not raise")
             .to_bool());

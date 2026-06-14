@@ -175,6 +175,8 @@ mod tests {
         let _ = Value::from_int;
         let _ = Value::from_float;
         let _ = Value::obj_as_string;
+        let _ = Value::obj_dup;
+        let _ = Value::obj_clone;
         let _ = Value::classname;
         let _ = Value::to_string;
         let _ = Value::as_class_ptr;
