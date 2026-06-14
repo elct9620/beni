@@ -518,6 +518,30 @@ pub trait Module: private::ClassLike {
         }
     }
 
+    /// `mrb_include_module(mrb, self, module)` — mix `module` into this
+    /// class or module, Ruby's `include`. A frozen receiver raises
+    /// `FrozenError` and a cyclic include raises `ArgumentError`; both
+    /// surface as `Err` via `Mrb::protect`.
+    fn include_module(self, mrb: &Mrb, module: RModule) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // and `module` originate from the same VM. `mrb_include_module`
+                // checks frozen state and rejects a cyclic include, raising
+                // FrozenError or ArgumentError — caught by `protect`.
+                unsafe { sys::mrb_include_module(mrb.as_ptr(), self.raw(), module.as_raw()) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, module);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_class_name(mrb, self)` — the handle's full Ruby name
     /// (e.g. `"MyService::KV"`). Returns `None` when mruby yields
     /// NULL. The returned slice points into mruby's interned
@@ -854,6 +878,36 @@ mod tests {
             .funcall(&mrb, c"original_answer", &[])
             .expect("the aliased method must not raise");
         assert_eq!(unsafe { got.unbox_integer() }, 7);
+    }
+
+    #[test]
+    fn include_module_mixes_in_and_rejects_a_cyclic_include() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let helper = mrb
+            .define_module(c"BeniMixin")
+            .expect("defining the module must succeed");
+        helper
+            .define_method(&mrb, c"helped", crate::method!(answer_seven, 0))
+            .expect("registering the module method must succeed");
+
+        let class = mrb
+            .define_class(c"BeniHost", object)
+            .expect("defining the class must succeed");
+        class
+            .include_module(&mrb, helper)
+            .expect("including the module must succeed");
+
+        // An instance of the host now answers the mixed-in method.
+        let receiver = class.obj_new(&mrb, &[]);
+        let got = receiver
+            .funcall(&mrb, c"helped", &[])
+            .expect("the mixed-in method must not raise");
+        assert_eq!(unsafe { got.unbox_integer() }, 7);
+
+        // Including a module into itself is a cyclic include — rejected.
+        assert!(helper.include_module(&mrb, helper).is_err());
     }
 
     #[test]

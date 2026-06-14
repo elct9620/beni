@@ -107,6 +107,7 @@ typed:
   mrb_hash_set: Hash::set
   mrb_hash_size: Hash::len
   mrb_hash_values: Hash::values
+  mrb_include_module: Module::include_module
   mrb_int_value: Value::from_int
   mrb_intern_cstr: Mrb::intern_cstr
   mrb_intern_str: Mrb::intern_str
