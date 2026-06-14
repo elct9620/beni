@@ -1313,10 +1313,13 @@ mod linked_tests {
             mrb.pending_exc().to_string(&mrb)
         );
 
-        // `eql?` short-circuits on identity, so distinct objects are
-        // needed to reach the dispatch — which raises, surfacing as Err
-        // rather than unwinding across the call, the eql? counterpart to
-        // the `==` path above.
+        // `eql?` short-circuits on identity: comparing the object to
+        // itself returns true without reaching the raising eql?.
+        assert!(matches!(obj.eql(&mrb, obj), Ok(true)));
+
+        // Distinct objects reach the dispatch — which raises, surfacing
+        // as Err rather than unwinding across the call, the eql?
+        // counterpart to the `==` path above.
         let other = mrb.str_new(b"x").as_value();
         assert!(matches!(obj.eql(&mrb, other), Err(Error::Exception(_))));
     }
@@ -1346,12 +1349,13 @@ mod linked_tests {
     fn obj_as_string_coerces_through_to_s() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-        // Already a string: coercion returns a string value.
+        // Already a string: coercion returns that same string, not a copy.
         let already = mrb.str_new(b"hi").as_value();
-        assert!(already
+        let coerced = already
             .obj_as_string(&mrb)
-            .expect("a string coerces without raising")
-            .is_string());
+            .expect("a string coerces without raising");
+        assert!(coerced.is_string());
+        assert!(already.obj_equal(&mrb, coerced));
 
         // A non-string coerces through its `to_s`.
         assert!(42i32

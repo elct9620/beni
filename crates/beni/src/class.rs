@@ -701,6 +701,30 @@ mod tests {
     }
 
     #[test]
+    fn registering_onto_a_frozen_class_surfaces_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = crate::Ccontext::new(&mrb, c"frozen_reg.rb")
+            .expect("allocating the context must succeed");
+
+        // The handle still resolves once the class is frozen, but
+        // registering onto it raises FrozenError — caught into Err the
+        // same way the other definition rejections are.
+        cxt.load_nstring(b"class BeniFrozenReg; end; BeniFrozenReg.freeze");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining and freezing must not raise"
+        );
+        let class = mrb
+            .class_get(c"BeniFrozenReg")
+            .expect("the class is defined");
+
+        assert!(matches!(
+            class.define_method(&mrb, c"m", crate::method!(answer_seven, 0)),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
     fn private_method_rejects_public_dispatch_but_is_attached() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let object = mrb.object_class();

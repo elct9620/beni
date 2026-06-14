@@ -503,5 +503,11 @@ mod tests {
         ));
         assert!(matches!(frozen.shift(&mrb), Err(Error::Exception(_))));
         assert!(matches!(frozen.clear(&mrb), Err(Error::Exception(_))));
+        // An in-range indexed write reaches the frozen check too, not just
+        // the out-of-range path pinned above.
+        assert!(matches!(
+            frozen.store(&mrb, 0, mrb.str_new(b"x").as_value()),
+            Err(Error::Exception(_))
+        ));
     }
 }

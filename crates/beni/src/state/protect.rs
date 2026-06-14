@@ -188,4 +188,23 @@ mod tests {
             .expect("the VM must survive the protected raise");
         assert_eq!(again.to_string(&mrb), "alive");
     }
+
+    #[test]
+    fn protect_surfaces_a_panicking_body_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let err = mrb
+            .protect(|_| panic!("boom from rust"))
+            .expect_err("a panic inside the body must surface as Err");
+
+        match err {
+            Error::Panic(msg) => assert!(msg.contains("boom from rust")),
+            Error::Exception(_) => panic!("a Rust panic must surface as Error::Panic"),
+        }
+        // The VM stays usable after the caught panic.
+        let again = mrb
+            .protect(|m| m.str_new(b"alive").as_value())
+            .expect("the VM must survive the caught panic");
+        assert_eq!(again.to_string(&mrb), "alive");
+    }
 }

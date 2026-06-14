@@ -388,6 +388,43 @@ mod tests {
     }
 
     #[test]
+    fn keyed_operations_surface_a_raising_key_as_err() {
+        use crate::{Ccontext, Error, Value};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"raising_key.rb").expect("allocating the context must succeed");
+
+        // mruby locates a key by dispatching its `hash` and `eql?`; a key
+        // that raises in both drives every keyed operation through the
+        // dispatch protect must catch rather than long-jump. A seeded
+        // entry forces the comparison to run even on a small hash.
+        let key = cxt.load_nstring(
+            b"class BeniBoomKey; def hash; raise 'no'; end; def eql?(o); raise 'no'; end; end; BeniBoomKey.new",
+        );
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the key class must not raise"
+        );
+
+        let hash = mrb.hash_new();
+        hash.set(&mrb, mrb.str_new(b"seed").as_value(), Value::nil())
+            .expect("seeding a plain key does not raise");
+
+        let v = mrb.str_new(b"v").as_value();
+        assert!(matches!(hash.set(&mrb, key, v), Err(Error::Exception(_))));
+        assert!(matches!(
+            hash.contains_key(&mrb, key),
+            Err(Error::Exception(_))
+        ));
+        assert!(matches!(
+            hash.fetch(&mrb, key, Value::nil()),
+            Err(Error::Exception(_))
+        ));
+        assert!(matches!(hash.delete(&mrb, key), Err(Error::Exception(_))));
+    }
+
+    #[test]
     fn values_size_and_emptiness_read_the_structure() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let hash = mrb.hash_new();
