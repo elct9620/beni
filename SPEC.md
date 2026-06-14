@@ -209,31 +209,50 @@ Selection, checksums, and cross-compile activation:
   vector for arbitrary bytes; both owned conversions reject a non-string value
   by its tag, and the `String` conversion additionally rejects bytes that are
   not UTF-8. A registered method grows an `RString` in place by appending Rust
-  bytes, the way Ruby's `String#<<` extends its receiver; appending to a frozen
-  string surfaces an `Err`.
+  bytes, the way Ruby's `String#<<` extends its receiver.
 - A registered method or protected closure raises its own exception: it builds
   one from an exception class and a message and returns it as an `Err`, which
   crosses the boundary like any other `Err` — to a registered method's Ruby
   caller as an mruby exception, to a protected closure's Rust caller as the
   `Err` value.
-- Beyond push and indexed read, the typed array writes a value at an index
-  following Ruby's `ary[i] = v` — growing with `nil` to reach a past-the-end
-  index — which surfaces an `Err` when the index is out of range: a negative
-  index past the beginning, or one too large. It is constructed empty, with a
-  preallocated capacity, or from a slice of values.
-- Two values compare three ways. Object identity (`equal?`) is a total
-  predicate — the same object or not. Value equality (`==`) and hash-key
-  equality (`eql?`) follow Ruby semantics, which may run a user-defined `==` or
-  `eql?`, so each runs under the same protection as a protected closure and
-  yields `Ok(bool)`, or an `Err` when that method raises.
+- The typed surface's mutating and dispatching operations follow one
+  raise/return contract:
+
+  | Operation kind | Surfaces `Err` | Returns |
+  |---|---|---|
+  | Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge, string append | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large | `Result` |
+  | Dispatches Ruby — a method call, `==` / `eql?`, or a hash assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?` | the dispatched code raises, or `fetch` finds the key absent | `Result` |
+  | Reads or inspects without dispatching — indexed read, keys, values, size, emptiness, duplication, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
+
+- The typed array carries Ruby `Array`'s surface: constructed empty, with a
+  preallocated capacity, or from a slice of values; a value appends, an indexed
+  read returns the element or `nil` out of range, an indexed write follows Ruby's
+  `ary[i] = v` and grows with `nil` to reach past the end, a value is removed
+  from either end, another array's elements extend it, it is emptied, and it is
+  duplicated.
+- The typed hash carries Ruby `Hash`'s surface beyond construction: a key is
+  assigned, read back (`nil` when absent), or fetched the way Ruby's `Hash#fetch`
+  reads; a key's presence is tested; a key is deleted, returning its former
+  value; another hash merges into it; it is emptied and duplicated; and its keys,
+  values, size, and emptiness are read.
+- Two values compare three ways: object identity (`equal?`, a total predicate —
+  the same object or not), value equality (`==`), and hash-key equality (`eql?`).
+  The latter two follow Ruby semantics and may run a user-defined `==` or `eql?`.
+- A value dispatches a Ruby method by name, passing an argument slice and
+  receiving the method's return value.
+- A value answers Ruby's reflective questions: whether it is an instance of a
+  class or any of its subclasses (`is_a?`), whether it is a direct instance of a
+  class (`instance_of?`), and the class it belongs to. A value is also frozen in
+  place.
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
   `RClass` and `RModule` handles. Methods are registered on those handles
   through the `Module` and `Object` traits (mirroring `magnus::Module` and
   `magnus::Object`), accepting Rust closures whose arguments and return
   values cross the boundary through `IntoValue` / `FromValue`; the `Module`
-  trait also binds constants and aliases existing methods on the handle. A
-  definition, registration, or alias mruby rejects surfaces as a Rust `Err`.
+  trait also binds constants, aliases existing methods, and mixes another module
+  into the handle. A definition, registration, alias, or module inclusion mruby
+  rejects — including a cyclic include — surfaces as a Rust `Err`.
 - A module function registers on a module handle in one call, becoming both a
   private instance method — for a class that mixes the module in — and a
   singleton method on the module object itself, the way `Math.sqrt` is callable
@@ -339,8 +358,10 @@ Selection, checksums, and cross-compile activation:
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
+| A typed array, hash, or string mutated through a frozen receiver | surfaced as a Rust `Err`, never unwinds across FFI |
+| A Ruby method invoked through a value's dispatch, a hash assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or `fetch` on an absent key, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
-| mruby raising during class or module definition, method registration, or method aliasing | surfaced as a Rust `Err`, never unwinds across FFI |
+| mruby raising during class or module definition, method registration, method aliasing, or module inclusion (including a cyclic include) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
