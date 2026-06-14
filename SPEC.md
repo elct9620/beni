@@ -326,6 +326,14 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
   trait also binds constants, aliases existing methods, and mixes another module
   into the handle. A definition, registration, alias, or module inclusion mruby
   rejects — including a cyclic include — surfaces as a Rust `Err`.
+- Every definition and lookup keyed by a name — class, module, method, private
+  method, module function, class method, constant, and the class/module lookups
+  on `Mrb` and within a namespace — accepts the name as a symbol-or-name key,
+  mirroring `magnus`'s `IntoId`: a string key interns to a symbol, an
+  already-interned `Symbol` key is reused without re-interning. A consumer
+  holding a `Symbol` reaches the definition or lookup without a redundant
+  intern; the result is identical to passing the equivalent name, since both
+  resolve to the same interned symbol.
 - A method registered for any arity reads its own call frame instead of
   receiving converted positionals: a shape-typed read projects the frame
   against a format marker into a typed tuple, a single-argument read returns
@@ -463,6 +471,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 
 | Term | Meaning |
 |---|---|
+| symbol-or-name key | a definition or lookup name given either as a string, which interns to a symbol, or as an already-interned `Symbol`, reused as-is — beni's mirror of `magnus`'s `IntoId` |
 | toolchain | a vendored build dependency (mruby source, wasi-sdk) |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
