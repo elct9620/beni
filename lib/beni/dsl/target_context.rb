@@ -21,14 +21,15 @@ module Beni
       end
 
       def toolchain(name, &block)
+        key = name.to_s
         if block
           raise Error,
-                "`toolchain #{name.inspect}` inside a target block must not carry a block — " \
+                "`toolchain #{key.inspect}` inside a target block must not carry a block — " \
                 "definitions live at the top level"
         end
-        DSL.assert_known_toolchain!(name)
+        DSL.assert_known_toolchain!(key)
 
-        @references << name unless @references.include?(name)
+        @references << key unless @references.include?(key)
       end
     end
   end

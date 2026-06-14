@@ -39,15 +39,16 @@ module Beni
       # A top-level +toolchain <name>+ — always a definition, so the
       # block is part of the grammar and +mruby+ is never definable.
       def toolchain(name, &block)
-        raise Error, "top-level `toolchain #{name.inspect}` must carry a definition block" unless block
-        if name == "mruby"
+        key = name.to_s
+        raise Error, "top-level `toolchain #{key.inspect}` must carry a definition block" unless block
+        if key == "mruby"
           raise Error, "a toolchain definition never names \"mruby\" — select it with the `version` setting"
         end
 
-        DSL.assert_known_toolchain!(name)
-        raise Error, "duplicate toolchain definition #{name.inspect}" if @definitions.key?(name)
+        DSL.assert_known_toolchain!(key)
+        raise Error, "duplicate toolchain definition #{key.inspect}" if @definitions.key?(key)
 
-        @definitions[name] = DefinitionContext.collect(name, &block)
+        @definitions[key] = DefinitionContext.collect(key, &block)
       end
 
       # Resolve the collected declarations (SPEC.md Behaviors: selection

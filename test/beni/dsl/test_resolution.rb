@@ -87,6 +87,23 @@ module Beni
         assert_equal "3.2.0", configuration.mruby_version
       end
 
+      def test_a_symbol_toolchain_name_normalizes_like_a_string
+        configuration = configure do
+          target(:wasi) { toolchain :"wasi-sdk" }
+
+          # A symbol definition keys the same as the string reference, so
+          # the override still applies — the name normalizes like `target`.
+          toolchain :"wasi-sdk" do
+            version "30.0"
+            sha256 "cafe"
+          end
+        end
+        selected = configuration.toolchains.find { |toolchain| toolchain.name == "wasi-sdk" }
+
+        assert_equal %w[mruby wasi-sdk], configuration.toolchains.map(&:name).sort
+        assert_equal "30.0", selected.version
+      end
+
       private
 
       # A wasi target referencing wasi-sdk plus a definition overriding

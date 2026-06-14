@@ -15,7 +15,7 @@ module Beni
 
       def target: (Symbol | String name) ?{ () [self: TargetContext] -> void } -> void
 
-      def toolchain: (String name) ?{ () [self: DefinitionContext] -> void } -> void
+      def toolchain: (Symbol | String name) ?{ () [self: DefinitionContext] -> void } -> void
 
       def configuration: () -> Configuration
 

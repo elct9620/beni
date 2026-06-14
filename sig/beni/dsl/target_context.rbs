@@ -9,7 +9,7 @@ module Beni
 
       def initialize: () -> void
 
-      def toolchain: (String name) ?{ () -> void } -> void
+      def toolchain: (Symbol | String name) ?{ () -> void } -> void
     end
   end
 end
