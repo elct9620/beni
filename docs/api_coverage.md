@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 96 (28%) |
+| function | 342 | 329 (96%) | 97 (28%) |
 | macro | 124 | 20 (16%) | 24 (19%) |
-| total | 466 | 349 (75%) | 120 (26%) |
+| total | 466 | 349 (75%) | 121 (26%) |
 
 ## mruby.h
 
@@ -129,7 +129,7 @@ Legend: ✅ covered · — missing
 | `mrb_get_mid` | fn | ✅ | — |  |
 | `mrb_include_module` | fn | ✅ | ✅ | `Module::include_module` |
 | `mrb_incremental_gc` | fn | ✅ | — |  |
-| `mrb_inspect` | fn | ✅ | — |  |
+| `mrb_inspect` | fn | ✅ | ✅ | `Value::inspect` |
 | `mrb_int` | macro | ✅ | — |  |
 | `mrb_intern` | fn | ✅ | — |  |
 | `mrb_intern_check` | fn | ✅ | — |  |

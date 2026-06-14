@@ -401,17 +401,62 @@ impl Value {
             let Ok(s_val) = self.funcall(mrb, c"to_s", &[]) else {
                 return String::new();
             };
-            // Discriminate by the String tag, not the classname: a String
-            // subclass instance is String-tagged and reads its bytes the
-            // same way, so it converts too; a non-String `to_s` result
-            // rejects. Same rule the `FromValue` downcasts follow.
-            let Some(s) = RString::from_value(s_val) else {
+            s_val.string_lossy(mrb)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// Read a String-tagged value into an owned UTF-8 `String`,
+    /// collapsing a non-String tag or non-UTF-8 bytes to an empty
+    /// string — the shared render tail of `to_string` and `inspect`.
+    /// The String tag, not the classname, decides: a String subclass
+    /// instance reads its bytes the same way a plain String does, the
+    /// rule the `FromValue` downcasts follow.
+    #[cfg(mruby_linked)]
+    #[inline]
+    fn string_lossy(self, mrb: &Mrb) -> String {
+        let Some(s) = RString::from_value(self) else {
+            return String::new();
+        };
+        // SAFETY: `from_value` confirmed the String tag; the bytes are
+        // copied before any further mruby call.
+        let bytes = unsafe { s.as_bytes(mrb) };
+        core::str::from_utf8(bytes).unwrap_or("").to_string()
+    }
+
+    /// `mrb_inspect(mrb, self)` — the value's debug string, Ruby's
+    /// `inspect`, copied out as an owned Rust `String`. The inspect
+    /// counterpart to `to_string`'s `to_s` render path, and infallible
+    /// the same way.
+    ///
+    /// ## Exception handling
+    ///
+    /// `mrb_inspect` dispatches the receiver's `inspect` (falling back to
+    /// `to_s` when that does not return a String), so a user-defined
+    /// `inspect` that raises is **swallowed**: an empty `String` is
+    /// returned. The dispatch runs under `Mrb::protect`, whose frame
+    /// catches the raise into `Err` and leaves no pending `mrb->exc` to
+    /// corrupt later mruby calls in the same C bridge. Bytes that are not
+    /// valid UTF-8 likewise collapse to an empty `String`.
+    #[inline]
+    pub fn inspect(self, mrb: &Mrb) -> String {
+        #[cfg(mruby_linked)]
+        {
+            let Ok(s_val) = mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_inspect` dispatches
+                // `inspect` and may raise — caught by `protect` into `Err`.
+                Value::from_raw(unsafe { sys::mrb_inspect(mrb.as_ptr(), self.0) })
+            }) else {
                 return String::new();
             };
-            // SAFETY: `from_value` confirmed the String tag; the bytes are
-            // copied before any further mruby call.
-            let bytes = unsafe { s.as_bytes(mrb) };
-            core::str::from_utf8(bytes).unwrap_or("").to_string()
+            // `mrb_inspect` returns a String on success; read it by tag the
+            // same way `to_string` does.
+            s_val.string_lossy(mrb)
         }
         #[cfg(not(mruby_linked))]
         {
@@ -1163,6 +1208,40 @@ mod linked_tests {
         );
 
         assert_eq!(obj.to_string(&mrb), "sub");
+    }
+
+    #[test]
+    fn inspect_renders_the_ruby_debug_string() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A String inspects quoted, an Integer and nil render canonically —
+        // the debug forms, not the to_s forms.
+        assert_eq!(mrb.str_new(b"hi").as_value().inspect(&mrb), "\"hi\"");
+        assert_eq!(42i32.into_value(&mrb).inspect(&mrb), "42");
+        assert_eq!(Value::nil().inspect(&mrb), "nil");
+    }
+
+    #[test]
+    fn inspect_swallows_a_raising_inspect_as_empty() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"inspect_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        let obj = cxt
+            .load_nstring(b"class BoomInspect; def inspect; raise 'no'; end; end; BoomInspect.new");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the class must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        // A raising user inspect is swallowed into an empty string, and the
+        // protect frame leaves no pending exception behind.
+        assert_eq!(obj.inspect(&mrb), String::new());
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the swallowed raise must not leave a pending exception"
+        );
     }
 
     #[test]
