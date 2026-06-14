@@ -73,6 +73,7 @@ typed:
   mrb_close: Mrb::drop
   mrb_const_defined: Value::const_defined
   mrb_const_get: Value::const_get
+  mrb_cv_get: "`Value::cv_get` — the value-level class-variable read; `mrb_mod_cv_set` / `mrb_cv_set` (the writes) stay in `sys`"
   mrb_data_check_get_ptr: Value::data_get
   mrb_data_init: Value::data_reinit
   mrb_data_object_alloc: "`RClass::data_wrap` (see DataType extension)"
@@ -123,6 +124,7 @@ typed:
   mrb_int_value: Value::from_int
   mrb_intern_cstr: Mrb::intern_cstr
   mrb_intern_str: Mrb::intern_str
+  mrb_iv_defined: "`Value::iv_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys`"
   mrb_iv_get: Value::iv_get
   mrb_iv_set: Value::iv_set
   mrb_load_irep_buf: Mrb::load_irep_buf

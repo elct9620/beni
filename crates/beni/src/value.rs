@@ -881,6 +881,25 @@ impl Value {
         }
     }
 
+    /// `mrb_iv_defined(mrb, self, sym)` — TRUE when instance variable
+    /// `sym` is set on `self`. A receiver that cannot hold instance
+    /// variables reads as FALSE rather than raising. The value-level
+    /// analogue of the raw-`RObject*` `mrb_obj_iv_defined`, which stays
+    /// in `sys`.
+    #[inline]
+    pub fn iv_defined(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `iv_set`.
+            unsafe { sys::mrb_iv_defined(mrb.as_ptr(), self.0, sym) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_const_defined(mrb, self, sym)` — TRUE when constant `sym`
     /// is defined on `self` (the module or class value).
     #[inline]
@@ -911,6 +930,28 @@ impl Value {
                 // a `const_missing` hook that may raise — both caught
                 // by `protect`.
                 Value(unsafe { sys::mrb_const_get(mrb.as_ptr(), self.0, sym) })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_cv_get(mrb, self, sym)` — read class variable `sym` from
+    /// `self` (the module or class value), walking the ancestry.
+    /// Surfaces an `Err` when `sym` resolves to no class variable.
+    #[inline]
+    pub fn cv_get(self, mrb: &Mrb, sym: sys::mrb_sym) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` originates from the same VM. `mrb_cv_get`
+                // raises `NameError` for an undefined class variable —
+                // caught by `protect`.
+                Value(unsafe { sys::mrb_cv_get(mrb.as_ptr(), self.0, sym) })
             })
         }
         #[cfg(not(mruby_linked))]
@@ -1594,6 +1635,48 @@ mod linked_tests {
             module.const_get(&mrb, missing),
             Err(Error::Exception(_))
         ));
+    }
+
+    #[test]
+    fn cv_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"cv_get_test.rb").expect("allocating the context must succeed");
+
+        let class = cxt.load_nstring(b"class BeniCvHost; @@count = 3; end; BeniCvHost");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // A defined class variable reads back its value.
+        let count = mrb.intern_cstr(c"@@count");
+        assert_eq!(
+            i32::from_value(class.cv_get(&mrb, count).expect("@@count is defined")),
+            Some(3)
+        );
+
+        // An absent class variable raises NameError — surfaced as Err
+        // instead of unwinding across the call.
+        let missing = mrb.intern_cstr(c"@@beni_missing");
+        assert!(matches!(
+            class.cv_get(&mrb, missing),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn iv_defined_tests_instance_variable_presence() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"iv_defined_test.rb")
+            .expect("allocating the context must succeed");
+
+        let obj = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // A set instance variable is present; an unset one is not — the
+        // predicate is total, raising for neither.
+        let x = mrb.intern_cstr(c"@x");
+        let y = mrb.intern_cstr(c"@y");
+        assert!(obj.iv_defined(&mrb, x));
+        assert!(!obj.iv_defined(&mrb, y));
     }
 
     #[test]

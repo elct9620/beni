@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 109 (32%) |
+| function | 342 | 329 (96%) | 111 (32%) |
 | macro | 124 | 22 (18%) | 27 (22%) |
-| total | 466 | 351 (75%) | 136 (29%) |
+| total | 466 | 351 (75%) | 138 (30%) |
 
 ## mruby.h
 
@@ -526,13 +526,13 @@ Legend: ✅ covered · — missing
 | `mrb_const_remove` | fn | ✅ | — |  |
 | `mrb_const_set` | fn | ✅ | — |  |
 | `mrb_cv_defined` | fn | ✅ | — |  |
-| `mrb_cv_get` | fn | ✅ | — |  |
+| `mrb_cv_get` | fn | ✅ | ✅ | `Value::cv_get` — the value-level class-variable read; `mrb_mod_cv_set` / `mrb_cv_set` (the writes) stay in `sys` |
 | `mrb_cv_set` | fn | ✅ | — |  |
 | `mrb_gv_get` | fn | ✅ | ✅ | `Mrb::gv_get` |
 | `mrb_gv_remove` | fn | ✅ | — |  |
 | `mrb_gv_set` | fn | ✅ | ✅ | `Mrb::gv_set` |
 | `mrb_iv_copy` | fn | ✅ | — |  |
-| `mrb_iv_defined` | fn | ✅ | — |  |
+| `mrb_iv_defined` | fn | ✅ | ✅ | `Value::iv_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys` |
 | `mrb_iv_foreach` | fn | ✅ | — |  |
 | `mrb_iv_get` | fn | ✅ | ✅ | `Value::iv_get` |
 | `mrb_iv_name_sym_check` | fn | ✅ | — |  |

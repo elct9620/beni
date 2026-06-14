@@ -200,8 +200,10 @@ mod tests {
         let _ = Value::ary_entry;
         let _ = Value::iv_set;
         let _ = Value::iv_get;
+        let _ = Value::iv_defined;
         let _ = Value::const_defined;
         let _ = Value::const_get;
+        let _ = Value::cv_get;
         let _ = Value::respond_to;
         let _ = Value::as_break;
         let _ = Break::value;
