@@ -234,8 +234,8 @@ raise/return contract:
 | Operation kind | Surfaces `Err` | Returns |
 |---|---|---|
 | Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge/clear, string append | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large | `Result` |
-| Dispatches Ruby — a method call, `==` / `eql?`, or a hash assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?` | the dispatched code raises | `Result` |
-| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, duplication, byte comparison, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
+| Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, or a hash assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?` | the dispatched code raises | `Result` |
+| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, byte comparison, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
 
 #### Containers
 
@@ -275,6 +275,8 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | `==` / `eql?` | Ruby value and hash-key equality; may run a user-defined `==` or `eql?` |
 | dispatch | call a Ruby method by name with an argument slice, receiving its return value |
 | inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect`, and a raise inside it yields an empty string |
+| `dup` / `clone` | copy the object, running its `initialize_copy` — `dup` resets the frozen state and drops the singleton class, `clone` preserves both; an immediate returns itself; may raise |
+| string coercion | the value as a string — itself when already a string, otherwise its `to_s`; may raise when `to_s` does not return a string |
 | `is_a?` | an instance of a class or any of its subclasses |
 | `instance_of?` | a direct instance of a class |
 | class | the class the value belongs to |
@@ -405,7 +407,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | A typed array, hash, or string mutated through a frozen receiver | surfaced as a Rust `Err`, never unwinds across FFI |
-| A Ruby method invoked through a value's dispatch, or a hash assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, raising | surfaced as a Rust `Err`, never unwinds across FFI |
+| A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, or a hash assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
 | mruby raising during class or module definition, method registration, method aliasing, or module inclusion (including a cyclic include) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
