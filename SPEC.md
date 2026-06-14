@@ -235,6 +235,7 @@ raise/return contract:
 |---|---|---|
 | Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge/clear, string append, instance-variable assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; an instance-variable assignment also when the receiver cannot hold instance variables | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, or a hash read running a `default` lookup for an absent key | the dispatched code raises; a constant fetch also when the name resolves to no constant | `Result` |
+| Converts without dispatching — a numeric conversion across the numeric types | the value is non-numeric, or an infinite / NaN float converts to integer | `Result` |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, byte comparison, instance-variable read, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
 
 #### Containers
@@ -277,6 +278,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect`, and a raise inside it yields an empty string |
 | `dup` / `clone` | copy the object, running its `initialize_copy` — `dup` resets the frozen state and drops the singleton class, `clone` preserves both; an immediate returns itself; may raise |
 | string coercion | the value as a string — itself when already a string, otherwise its `to_s`; may raise when `to_s` does not return a string |
+| numeric conversion | the value as a Rust integer or float, converted across the numeric types — to integer, an Integer reads directly and a Float truncates; to float, a Float reads directly and an Integer widens; surfaces an `Err` when the value is non-numeric, or when an infinite or NaN float converts to integer. Runs no user Ruby. Unlike the exact-tag `FromValue` downcast, which rejects any other tag outright, this converts between numeric types |
 | `is_a?` | an instance of a class or any of its subclasses |
 | `instance_of?` | a direct instance of a class |
 | class | the class the value belongs to |
@@ -415,6 +417,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | A typed array, hash, or string mutated through a frozen receiver, or an instance-variable assignment to a frozen receiver or one that cannot hold instance variables | surfaced as a Rust `Err`, never unwinds across FFI |
 | A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
+| A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer | surfaced as a Rust `Err`, never unwinds across FFI |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
 | mruby raising during class or module definition, method registration, method aliasing, or module inclusion (including a cyclic include) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
