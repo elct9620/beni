@@ -206,8 +206,10 @@ downcast hands back the handle to operate on it.
 
 #### Strings
 
-Rust bytes convert to a new mruby string, returned as a typed `RString`. From
-an mruby string Rust reads the bytes three ways:
+Rust bytes convert to a new mruby string, returned as a typed `RString`; a
+string also constructs empty with a preallocated capacity, the buffer Ruby's
+`String.new(capacity:)` reserves for appends that follow. From an mruby string
+Rust reads the bytes three ways:
 
 | Read | Yields | Rejects |
 |---|---|---|
@@ -215,8 +217,9 @@ an mruby string Rust reads the bytes three ways:
 | owned `String` | the bytes when valid UTF-8 | a non-string tag, or non-UTF-8 bytes |
 | owned `Vec<u8>` | arbitrary bytes | a non-string tag |
 
-A registered method grows an `RString` in place by appending Rust bytes, the
-way Ruby's `String#<<` extends its receiver. Beyond reading and appending, a
+A registered method grows an `RString` in place by appending Rust bytes, or
+appending another mruby string's bytes, the way Ruby's `String#<<` extends its
+receiver. Beyond reading and appending, a
 string duplicates into an independent copy (Ruby's `String#dup`) and orders
 against another by byte content (Ruby's `String#<=>`) — a total comparison that
 dispatches nothing and never raises.
