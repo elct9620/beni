@@ -229,6 +229,19 @@ length in place — truncating, or extending with undefined trailing bytes — a
 reads a substring by character range, yielding the substring or nothing when the
 range falls outside the string.
 
+#### Symbols
+
+A name interns into a typed `Symbol`, and an already-interned id reifies back
+into one; the symbol reads its interned id back out. Beyond the id, a symbol
+reads its name three ways — all non-dispatching reads that never raise, each
+yielding nothing when mruby has no name for the id:
+
+| Read | Yields |
+|---|---|
+| name as `&str` | the name as UTF-8, escaped to its quoted dump form when it carries an embedded NUL |
+| name as bytes | the raw name bytes with their true length, embedded NUL bytes included and unescaped |
+| dump form | the name's symbol-literal representation, quoted and escaped when the name is not a plain identifier — Ruby's `Symbol#inspect` without the leading colon |
+
 #### Errors and the raise/return contract
 
 A registered method or protected closure raises its own exception: it builds one
@@ -248,7 +261,7 @@ raise/return contract:
 | Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, or a hash read running a `default` lookup for an absent key | the dispatched code raises; a constant fetch also when the name resolves to no constant | `Result` |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types | the value is non-numeric, or an infinite / NaN float converts to integer | `Result` |
-| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, instance-variable read and presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range falls outside the string |
+| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, symbol name and dump reads, instance-variable read and presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
 
