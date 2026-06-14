@@ -194,7 +194,7 @@ the Rust/Ruby boundary:
 | Conversion | Direction | Rule |
 |---|---|---|
 | `IntoValue` | Rust value → `Value` | total — cannot fail |
-| `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `Proc` / `Symbol` | `Value` → typed handle | converts on the target's type tag (subclass instances included for strings and containers); any other tag rejects |
+| `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag (subclass instances included for strings and containers); any other tag rejects |
 | `FromValue` → `bool` | `Value` → `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true`; total, never rejects |
 
 A value also converts to an `RString` handle by the same String type tag, but
@@ -250,6 +250,14 @@ yielding nothing when mruby has no name for the id:
 | name as bytes | the raw name bytes with their true length, embedded NUL bytes included and unescaped |
 | dump form | the name's symbol-literal representation, quoted and escaped when the name is not a plain identifier — Ruby's `Symbol#inspect` without the leading colon |
 
+#### Ranges
+
+A Range constructs from a begin value, an end value, and an exclusive-end flag,
+mirroring Ruby's `Range.new(begin, end, exclusive)`; it surfaces an `Err` when
+the two bounds cannot be compared — the `ArgumentError` mruby raises for a bad
+range. A Range reads its begin value, its end value, and whether it excludes its
+end — three non-dispatching reads that never raise.
+
 #### Errors and the raise/return contract
 
 A registered method or protected closure raises its own exception: it builds one
@@ -266,10 +274,10 @@ raise/return contract:
 | Operation kind | Surfaces `Err` | Returns |
 |---|---|---|
 | Mutates a receiver — array append/remove/extend/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment, class-variable assignment, constant assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables; a constant assignment also when the receiver is not a class or module | `Result` |
-| Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, or a hash read running a `default` lookup for an absent key | the dispatched code raises; a constant fetch also when the name resolves to no constant | `Result` |
+| Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types, or coercing a value to an `RString` handle by its String tag | the value is non-numeric, or an infinite / NaN float converts to integer; the coerced value carries no String tag | `Result` |
-| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, symbol name and dump reads, instance-variable read and presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
+| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
 
