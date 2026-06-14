@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 98 (29%) |
+| function | 342 | 329 (96%) | 100 (29%) |
 | macro | 124 | 22 (18%) | 27 (22%) |
-| total | 466 | 351 (75%) | 125 (27%) |
+| total | 466 | 351 (75%) | 127 (27%) |
 
 ## mruby.h
 
@@ -440,7 +440,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_cat2` | macro | — | — |  |
 | `mrb_str_cat_cstr` | fn | ✅ | — |  |
 | `mrb_str_cat_lit` | macro | — | — |  |
-| `mrb_str_cat_str` | fn | ✅ | — |  |
+| `mrb_str_cat_str` | fn | ✅ | ✅ | `RString::cat_str` |
 | `mrb_str_cmp` | fn | ✅ | ✅ | `RString::cmp` |
 | `mrb_str_concat` | fn | ✅ | — |  |
 | `mrb_str_dup` | fn | ✅ | ✅ | `RString::dup` |
@@ -450,7 +450,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_intern` | fn | ✅ | — |  |
 | `mrb_str_modify` | fn | ✅ | — |  |
 | `mrb_str_modify_keep_ascii` | fn | ✅ | — |  |
-| `mrb_str_new_capa` | fn | ✅ | — |  |
+| `mrb_str_new_capa` | fn | ✅ | ✅ | `Mrb::str_new_capa` |
 | `mrb_str_plus` | fn | ✅ | — |  |
 | `mrb_str_ptr` | macro | — | — |  |
 | `mrb_str_resize` | fn | ✅ | — |  |

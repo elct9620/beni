@@ -152,6 +152,7 @@ mod tests {
         let _ = ArenaScope::keep;
         let _ = Mrb::str_new;
         let _ = Mrb::str_new_cstr;
+        let _ = Mrb::str_new_capa;
         let _ = Mrb::ary_new;
         let _ = Mrb::hash_new;
         let _ = Mrb::intern_cstr;
@@ -256,6 +257,7 @@ mod tests {
         let _ = RString::as_value;
         let _ = RString::as_raw;
         let _ = RString::cat;
+        let _ = RString::cat_str;
         let _ = RString::as_bytes;
         let _ = RString::to_bytes;
         let _ = RString::len;

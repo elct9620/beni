@@ -65,6 +65,33 @@ impl Mrb {
         }
     }
 
+    /// `mrb_str_new_capa(mrb, capa)` — construct an empty mruby `String`
+    /// with `capa` bytes of buffer reserved up front, sparing the
+    /// reallocs a run of `cat` onto a fresh string would otherwise
+    /// trigger (Ruby's `String.new(capacity:)`). The string starts empty;
+    /// `capa` is a hint, not content. `capa` saturates to the archive's
+    /// `mrb_int` width, mirroring `ary_new_capa`.
+    #[inline]
+    pub fn str_new_capa(&self, capa: usize) -> RString {
+        #[cfg(mruby_linked)]
+        {
+            let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+            // SAFETY: `self` is alive; `mrb_str_new_capa` always returns
+            // a String-tagged value, so the unchecked wrap is sound.
+            unsafe {
+                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_capa(
+                    self.as_ptr(),
+                    capa,
+                )))
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = capa;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_ary_new(mrb)` — construct a fresh empty mruby `Array` as
     /// a typed `Array`. Element operations (`push`, `entry`) live
     /// on the returned newtype.
@@ -164,6 +191,19 @@ mod tests {
             mrb.str_new_cstr(c"from cstr").as_value().to_string(&mrb),
             "from cstr"
         );
+    }
+
+    #[test]
+    fn str_new_capa_preallocates_an_empty_string() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Capacity is a hint, not content — the string starts empty and
+        // fills as usual through cat.
+        let s = mrb.str_new_capa(16);
+        assert!(s.is_empty());
+        s.cat(&mrb, b"reserved")
+            .expect("append to a fresh string succeeds");
+        assert_eq!(s.to_bytes(), b"reserved".to_vec());
     }
 
     #[test]
