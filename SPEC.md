@@ -232,9 +232,12 @@ range falls outside the string.
 #### Errors and the raise/return contract
 
 A registered method or protected closure raises its own exception: it builds one
-from an exception class and a message and returns it as an `Err`, which crosses
-the boundary like any other `Err` — to a registered method's Ruby caller as an
-mruby exception, to a protected closure's Rust caller as the `Err` value.
+from an exception class and a message, or — when validating its own argument
+count — from a given count and the expected minimum and maximum, yielding the
+canonical `ArgumentError` ("wrong number of arguments (given N, expected …)")
+mruby itself produces. Either way it returns the exception as an `Err`, which
+crosses the boundary like any other `Err` — to a registered method's Ruby caller
+as an mruby exception, to a protected closure's Rust caller as the `Err` value.
 
 Every mutating or dispatching operation across the typed surface follows one
 raise/return contract:
