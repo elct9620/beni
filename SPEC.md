@@ -244,7 +244,7 @@ raise/return contract:
 
 | Operation kind | Surfaces `Err` | Returns |
 |---|---|---|
-| Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge/clear, string append and resize, instance-variable assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables | `Result` |
+| Mutates a receiver — array append/remove/extend/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, or a hash read running a `default` lookup for an absent key | the dispatched code raises; a constant fetch also when the name resolves to no constant | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types | the value is non-numeric, or an infinite / NaN float converts to integer | `Result` |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, instance-variable read, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range falls outside the string |
@@ -255,10 +255,11 @@ The typed array carries Ruby `Array`'s surface:
 
 | Operation | Behavior |
 |---|---|
-| construct | empty, with a preallocated capacity, or from a slice of values |
+| construct | empty, with a preallocated capacity, from a slice of values, or as a pair holding two given values |
 | append | add a value to the end |
 | indexed read | the element, or `nil` when the index is out of range |
 | indexed write | Ruby's `ary[i] = v`, growing with `nil` to reach past the end |
+| resize | set the length — growing with `nil` to reach a longer length, truncating to a shorter one |
 | remove | take a value from either end |
 | extend | append another array's elements |
 | clear | empty it |
