@@ -156,6 +156,7 @@ typed:
   mrb_obj_clone: Value::obj_clone
   mrb_obj_dup: Value::obj_dup
   mrb_obj_freeze: Value::freeze
+  mrb_obj_id: "`Value::object_id` — the value-level identity id; `mrb_obj_eq` (the boxing-internal identity primitive `mrb_obj_equal` wraps), `mrb_obj_itself` (returns its own receiver), and `mrb_obj_respond_to` (the raw-`RClass*` form of the graduated value-level `mrb_respond_to`) stay in `sys`"
   mrb_obj_is_instance_of: Value::is_instance_of
   mrb_obj_is_kind_of: Value::is_kind_of
   mrb_obj_new: RClass::obj_new

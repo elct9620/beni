@@ -1182,6 +1182,22 @@ impl Value {
         }
     }
 
+    /// `mrb_obj_id(self)` — a unique integer identifier for `self`,
+    /// Ruby's `object_id`. Reads the value's identity from the boxed
+    /// word alone, so it takes no `Mrb`, dispatches nothing, and never
+    /// raises.
+    #[inline]
+    pub fn object_id(self) -> sys::mrb_int {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb_obj_id` reads only `self`'s boxed word for its
+            // identity and does not touch `mrb_state`.
+            unsafe { sys::mrb_obj_id(self.0) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// `mrb_equal(mrb, self, other)` — Ruby `==` equality. May run a
     /// user-defined `==`, so it runs under the same protection as
     /// `Mrb::protect`: `Ok(bool)` for the comparison, or `Err` when the
@@ -1534,6 +1550,23 @@ mod linked_tests {
         // not as a distinct equal-valued object.
         assert!(a.obj_equal(&mrb, a));
         assert!(!a.obj_equal(&mrb, b));
+    }
+
+    #[test]
+    fn object_id_is_stable_per_value_and_distinct_across_identity() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let a = mrb.str_new(b"hello").as_value();
+        let b = mrb.str_new(b"hello").as_value();
+
+        // The id reads from identity, not content: a value's id equals
+        // its own, two identity-distinct objects of equal content differ.
+        assert_eq!(a.object_id(), a.object_id());
+        assert_ne!(a.object_id(), b.object_id());
+
+        // An immediate's id is likewise its own and stable.
+        let n = 7i32.into_value(&mrb);
+        assert_eq!(n.object_id(), 7i32.into_value(&mrb).object_id());
     }
 
     #[test]

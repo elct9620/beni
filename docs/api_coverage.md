@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 129 (38%) |
+| function | 342 | 329 (96%) | 130 (38%) |
 | macro | 124 | 22 (18%) | 30 (24%) |
-| total | 466 | 351 (75%) | 159 (34%) |
+| total | 466 | 351 (75%) | 160 (34%) |
 
 ## mruby.h
 
@@ -160,7 +160,7 @@ Legend: ✅ covered · — missing
 | `mrb_obj_eq` | fn | ✅ | — |  |
 | `mrb_obj_equal` | fn | ✅ | ✅ | `Value::obj_equal` |
 | `mrb_obj_freeze` | fn | ✅ | ✅ | `Value::freeze` |
-| `mrb_obj_id` | fn | ✅ | — |  |
+| `mrb_obj_id` | fn | ✅ | ✅ | `Value::object_id` — the value-level identity id; `mrb_obj_eq` (the boxing-internal identity primitive `mrb_obj_equal` wraps), `mrb_obj_itself` (returns its own receiver), and `mrb_obj_respond_to` (the raw-`RClass*` form of the graduated value-level `mrb_respond_to`) stay in `sys` |
 | `mrb_obj_inspect` | fn | ✅ | — |  |
 | `mrb_obj_is_instance_of` | fn | ✅ | ✅ | `Value::is_instance_of` |
 | `mrb_obj_is_kind_of` | fn | ✅ | ✅ | `Value::is_kind_of` |
