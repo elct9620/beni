@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 75 (22%) |
+| function | 342 | 329 (96%) | 81 (24%) |
 | macro | 124 | 20 (16%) | 24 (19%) |
-| total | 466 | 349 (75%) | 99 (21%) |
+| total | 466 | 349 (75%) | 105 (23%) |
 
 ## mruby.h
 
@@ -236,9 +236,9 @@ Legend: ✅ covered · — missing
 |--------|------|:---:|:-----:|------|
 | `RARRAY_LEN` | macro | ✅ | ✅ | `Array::len` |
 | `RARRAY_PTR` | macro | — | — |  |
-| `mrb_ary_clear` | fn | ✅ | — |  |
-| `mrb_ary_concat` | fn | ✅ | — |  |
-| `mrb_ary_dup` | fn | ✅ | — |  |
+| `mrb_ary_clear` | fn | ✅ | ✅ | `Array::clear` |
+| `mrb_ary_concat` | fn | ✅ | ✅ | `Array::concat` |
+| `mrb_ary_dup` | fn | ✅ | ✅ | `Array::dup` |
 | `mrb_ary_entry` | fn | ✅ | ✅ | `Array::entry`, `Value::ary_entry` |
 | `mrb_ary_join` | fn | ✅ | — |  |
 | `mrb_ary_make_shared_copy` | fn | ✅ | — |  |
@@ -246,17 +246,17 @@ Legend: ✅ covered · — missing
 | `mrb_ary_new` | fn | ✅ | ✅ | `Mrb::ary_new` |
 | `mrb_ary_new_capa` | fn | ✅ | ✅ | `Mrb::ary_new_capa` |
 | `mrb_ary_new_from_values` | fn | ✅ | ✅ | `Mrb::ary_new_from_values` |
-| `mrb_ary_pop` | fn | ✅ | — |  |
+| `mrb_ary_pop` | fn | ✅ | ✅ | `Array::pop` |
 | `mrb_ary_ptr` | macro | — | — |  |
 | `mrb_ary_push` | fn | ✅ | ✅ | `Array::push` |
 | `mrb_ary_ref` | macro | — | — |  |
 | `mrb_ary_replace` | fn | ✅ | — |  |
 | `mrb_ary_resize` | fn | ✅ | — |  |
 | `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
-| `mrb_ary_shift` | fn | ✅ | — |  |
+| `mrb_ary_shift` | fn | ✅ | ✅ | `Array::shift` |
 | `mrb_ary_splat` | fn | ✅ | — |  |
 | `mrb_ary_splice` | fn | ✅ | — |  |
-| `mrb_ary_unshift` | fn | ✅ | — |  |
+| `mrb_ary_unshift` | fn | ✅ | ✅ | `Array::unshift` |
 | `mrb_ary_value` | macro | — | — |  |
 | `mrb_assoc_new` | fn | ✅ | — |  |
 ## mruby/class.h

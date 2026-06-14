@@ -143,6 +143,138 @@ impl Array {
         }
     }
 
+    /// `mrb_ary_pop(mrb, self)` — remove and return the last element,
+    /// Ruby's `Array#pop`, or `nil` when the array is empty. Popping a
+    /// frozen array raises `FrozenError`, surfaced here as `Err`.
+    #[inline]
+    pub fn pop(self, mrb: &Mrb) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // is Array-tagged by the `from_value_unchecked` contract.
+                // `mrb_ary_pop` checks frozen state and may raise
+                // `FrozenError` — caught by `protect`.
+                Value::from_raw(unsafe { sys::mrb_ary_pop(mrb.as_ptr(), self.0.as_raw()) })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_ary_shift(mrb, self)` — remove and return the first element,
+    /// Ruby's `Array#shift`, or `nil` when the array is empty. Shifting a
+    /// frozen array raises `FrozenError`, surfaced as `Err`.
+    #[inline]
+    pub fn shift(self, mrb: &Mrb) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: as `pop`; `mrb_ary_shift` checks frozen state and
+                // may raise `FrozenError` — caught by `protect`.
+                Value::from_raw(unsafe { sys::mrb_ary_shift(mrb.as_ptr(), self.0.as_raw()) })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_ary_unshift(mrb, self, val)` — prepend `val`, Ruby's
+    /// `Array#unshift`. Prepending to a frozen array raises `FrozenError`,
+    /// surfaced as `Err`.
+    #[inline]
+    pub fn unshift(self, mrb: &Mrb, val: Value) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: as `push`; `mrb_ary_unshift` modifies and may
+                // raise `FrozenError` — caught by `protect`.
+                unsafe { sys::mrb_ary_unshift(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, val);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_ary_concat(mrb, self, other)` — append `other`'s elements,
+    /// Ruby's `Array#concat`. Concatenating into a frozen array raises
+    /// `FrozenError`, surfaced as `Err`.
+    #[inline]
+    pub fn concat(self, mrb: &Mrb, other: Array) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: as `push`; `self` and `other` are Array-tagged
+                // and share the VM. `mrb_ary_concat` modifies `self` and
+                // may raise `FrozenError` — caught by `protect`.
+                unsafe { sys::mrb_ary_concat(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_ary_clear(mrb, self)` — remove all elements, Ruby's
+    /// `Array#clear`. Clearing a frozen array raises `FrozenError`,
+    /// surfaced as `Err`.
+    #[inline]
+    pub fn clear(self, mrb: &Mrb) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: as `push`; `mrb_ary_clear` modifies and may raise
+                // `FrozenError` — caught by `protect`.
+                unsafe { sys::mrb_ary_clear(mrb.as_ptr(), self.0.as_raw()) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_ary_dup(mrb, self)` — a shallow copy, Ruby's `Array#dup`. It
+    /// does not mutate the receiver, so it never fails.
+    #[inline]
+    pub fn dup(self, mrb: &Mrb) -> Array {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
+            // contract; `mrb_ary_dup` returns a fresh Array-tagged value,
+            // so the unchecked wrap is sound.
+            unsafe {
+                Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_dup(
+                    mrb.as_ptr(),
+                    self.0.as_raw(),
+                )))
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// `RARRAY_LEN(self)` — the number of elements, via the
     /// `mrb_rarray_len_func` shim (the macro expanded in the C compiler
     /// so the embed-vs-heap length read matches the linked archive's
@@ -268,5 +400,74 @@ mod tests {
         let frozen = Array::from_value(cxt.load_nstring(b"[].freeze"))
             .expect("a frozen Array literal is Array-tagged");
         assert!(frozen.push(&mrb, mrb.str_new(b"x").as_value()).is_err());
+    }
+
+    #[test]
+    fn pop_and_shift_remove_from_each_end() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        ary.push(&mrb, mrb.str_new(b"a").as_value())
+            .expect("push succeeds");
+        ary.push(&mrb, mrb.str_new(b"b").as_value())
+            .expect("push succeeds");
+
+        assert_eq!(ary.pop(&mrb).expect("pop succeeds").to_string(&mrb), "b");
+        assert_eq!(
+            ary.shift(&mrb).expect("shift succeeds").to_string(&mrb),
+            "a"
+        );
+        // Draining past empty yields nil, not an error.
+        assert!(ary.pop(&mrb).expect("pop on empty succeeds").is_nil());
+        assert!(ary.shift(&mrb).expect("shift on empty succeeds").is_nil());
+    }
+
+    #[test]
+    fn unshift_prepends_and_concat_extends() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        ary.push(&mrb, mrb.str_new(b"mid").as_value())
+            .expect("push succeeds");
+        ary.unshift(&mrb, mrb.str_new(b"head").as_value())
+            .expect("unshift succeeds");
+
+        let tail = mrb.ary_new();
+        tail.push(&mrb, mrb.str_new(b"tail").as_value())
+            .expect("push succeeds");
+        ary.concat(&mrb, tail).expect("concat succeeds");
+
+        assert_eq!(ary.entry(0).to_string(&mrb), "head");
+        assert_eq!(ary.entry(1).to_string(&mrb), "mid");
+        assert_eq!(ary.entry(2).to_string(&mrb), "tail");
+    }
+
+    #[test]
+    fn clear_empties_and_dup_copies_independently() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        ary.push(&mrb, mrb.str_new(b"x").as_value())
+            .expect("push succeeds");
+
+        let copy = ary.dup(&mrb);
+        ary.clear(&mrb).expect("clear succeeds");
+
+        // clear emptied the original; dup is an independent array.
+        assert!(ary.is_empty());
+        assert_eq!(copy.len(), 1);
+        assert_eq!(copy.entry(0).to_string(&mrb), "x");
+    }
+
+    #[test]
+    fn pop_surfaces_frozen_receiver_as_err() {
+        use crate::{Array, Ccontext, FromValue};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_pop.rb").expect("allocating the context must succeed");
+
+        // pop checks frozen state before touching the elements, so even a
+        // populated frozen array surfaces FrozenError as Err.
+        let frozen = Array::from_value(cxt.load_nstring(b"[1].freeze"))
+            .expect("a frozen Array literal is Array-tagged");
+        assert!(frozen.pop(&mrb).is_err());
     }
 }
