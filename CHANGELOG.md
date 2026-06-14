@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.7.0](https://github.com/elct9620/beni/compare/v0.6.1...v0.7.0) (2026-06-14)
+
+
+### Features
+
+* **beni:** add Error::new for handler-authored exceptions ([4842496](https://github.com/elct9620/beni/commit/48424965e4c771c2b9097e63ce973c42799a79a7))
+* **beni:** convert an mruby string to owned bytes ([ec5e175](https://github.com/elct9620/beni/commit/ec5e1756d1c6bb7620403c0cf38fe61ac13ad5e4))
+* **beni:** graduate array index-write and capacity/slice construction ([68af55d](https://github.com/elct9620/beni/commit/68af55d3330020356aaaf3c202f7e85c251c1aa8))
+* **beni:** graduate module functions; record class-method alignment ([c7c6c47](https://github.com/elct9620/beni/commit/c7c6c472c05a09830e7d022b4a1bc27c267e773b))
+* **beni:** graduate module inclusion onto the Module trait ([c751c3f](https://github.com/elct9620/beni/commit/c751c3f152a9f8384788e6fb4467cb2bf44effab))
+* **beni:** graduate string append and owned-String conversion ([6035360](https://github.com/elct9620/beni/commit/60353601fd04f5d94524b5bb73ce80a304107ad8))
+* **beni:** graduate the typed array's remove/extend/clear/dup surface ([842d4f2](https://github.com/elct9620/beni/commit/842d4f227be6ea0f71c09691d5ef1b3e0e439165))
+* **beni:** graduate the typed hash's clear onto the Hash surface ([a1ef297](https://github.com/elct9620/beni/commit/a1ef297dab8e0463462f78849b099a8dde78ba8c))
+* **beni:** graduate the typed hash's read, fetch, delete, and merge surface ([4af31f1](https://github.com/elct9620/beni/commit/4af31f1d2589c334c3c7204f74907c44c86d0b85))
+* **beni:** graduate the typed string's dup and byte compare ([05ea9ef](https://github.com/elct9620/beni/commit/05ea9ef4793411c4f7ace2352b3a17e38075bae1))
+* **beni:** graduate the typed value's inspect render ([e6f7bb0](https://github.com/elct9620/beni/commit/e6f7bb042aee9869b94aa338ab7346bd61f13822))
+* **beni:** graduate the value reflection surface (class, is_a?, freeze) ([66f4dfd](https://github.com/elct9620/beni/commit/66f4dfd24daeb4d060ddb492da6533f640ac1a6f))
+* **beni:** graduate value comparison (==, eql?, identity) ([f12c645](https://github.com/elct9620/beni/commit/f12c6459929c053e80efc9333139f3688bed42ec))
+* **beni:** introduce RString and graduate string ops onto it ([d71c093](https://github.com/elct9620/beni/commit/d71c0939e9e3d6bd9a7f7577765bc03095eef489))
+* **beni:** report an RString's byte length on the typed surface ([47c4b48](https://github.com/elct9620/beni/commit/47c4b4830d2a6419cc9fa59fcab35606c9b7b2f8))
+* **coverage:** drop non-embedder macros, credit tag predicates ([5c6b656](https://github.com/elct9620/beni/commit/5c6b65670412eb4d7bb3c8e67d9c46c4d39e604a))
+
+
+### Bug Fixes
+
+* **beni:** make data_reinit a safe no-op on a non-carrier value ([e5339f2](https://github.com/elct9620/beni/commit/e5339f22a0b8d253ff361a5764a51375f9edae2f))
+* **beni:** normalize a symbol toolchain name like a target ([ff1beb7](https://github.com/elct9620/beni/commit/ff1beb746c44cf298a6c88e22b600b6a7a5774d9))
+* **beni:** protect str_cat against a frozen receiver ([9b78cc3](https://github.com/elct9620/beni/commit/9b78cc3f51ae0f78115fd6b9285931d6e083c044))
+* **beni:** protect the dispatching and mutating typed ops against raises ([8b83ab9](https://github.com/elct9620/beni/commit/8b83ab936d5f696e0fb58b343af7dedffd3776e0))
+* **beni:** read a String subclass to_s result by tag ([66589b9](https://github.com/elct9620/beni/commit/66589b9ff21f57982250f9de5ec18ce3b13b534a))
+* **beni:** route class obj_new through protect ([124cd29](https://github.com/elct9620/beni/commit/124cd29288ed4f5c42a151888350e248df48e58e))
+* **beni:** route Hash::get through protect ([e0a9c92](https://github.com/elct9620/beni/commit/e0a9c92e42f06e9d09b977de4975c4c81dc4327e))
+* **beni:** route value dup, clone, and string coercion through protect ([3ac8cc2](https://github.com/elct9620/beni/commit/3ac8cc2cb3bf8a4bc6a44d7ecad8b4f7cdcf9385))
+* **beni:** route value iv_set and const_get through protect ([d46f18c](https://github.com/elct9620/beni/commit/d46f18cdcab51e8907123a405cf7225ee21f505c))
+* **beni:** saturate the exception message length like the string factory ([11eb7b9](https://github.com/elct9620/beni/commit/11eb7b91bb7f3b935fbdd1e4ca5863b0d4ba8a8c))
+* **coverage:** credit is_integer to integer_p, not fixnum_p ([32f064f](https://github.com/elct9620/beni/commit/32f064fe810b2181b826251b447dbfc16208cf31))
+* **coverage:** label trait graduations by their trait ([be598c6](https://github.com/elct9620/beni/commit/be598c6b4e59a885a6eaae08ee64c3900c9cb198))
+
 ## [0.6.1](https://github.com/elct9620/beni/compare/v0.6.0...v0.6.1) (2026-06-11)
 
 
