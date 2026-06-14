@@ -6,5 +6,7 @@ module Beni
     attr_reader toolchains: Array[SelectedToolchain]
 
     def initialize: (vendor_dir: String, build_config: String?, targets: Array[String], toolchains: Array[SelectedToolchain]) -> void
+
+    def mruby_version: () -> String
   end
 end

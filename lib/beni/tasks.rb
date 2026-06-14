@@ -145,15 +145,9 @@ module Beni
         dest = configuration.build_config
         raise Error, "[beni] beni:config requires a `build_config` declaration naming the file to generate" unless dest
 
-        BuildConfig.generate(dest, mruby_dir: builder.mruby_dir, version: mruby_version)
+        BuildConfig.generate(dest, mruby_dir: builder.mruby_dir, version: configuration.mruby_version)
         puts "[beni] generated #{dest} — edit it to define further targets"
       end
-    end
-
-    # mruby's selected version — always present, `mruby` is selected in
-    # every resolution.
-    def mruby_version
-      configuration.toolchains.to_h { |toolchain| [toolchain.name, toolchain.version] }.fetch("mruby")
     end
   end
 end

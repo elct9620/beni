@@ -75,6 +75,18 @@ module Beni
         assert_equal(1, configuration.toolchains.map(&:name).count { |name| name == "wasi-sdk" })
       end
 
+      def test_mruby_version_reads_the_versioned_head_of_the_selection
+        configuration = configure do
+          version "3.2.0"
+          target(:wasi) { toolchain "wasi-sdk" }
+        end
+
+        # mruby leads the selection, so the configured version surfaces
+        # as the head's even when other toolchains are selected.
+        assert_equal "mruby", configuration.toolchains.first.name
+        assert_equal "3.2.0", configuration.mruby_version
+      end
+
       private
 
       # A wasi target referencing wasi-sdk plus a definition overriding

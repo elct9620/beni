@@ -30,7 +30,5 @@ module Beni
     def define_clean_task: () -> void
 
     def define_config_task: () -> void
-
-    def mruby_version: () -> String
   end
 end
