@@ -184,66 +184,100 @@ Selection, checksums, and cross-compile activation:
 
 ### beni crate — typed wrapper
 
-- Owns every Rust-level abstraction over the C API: an RAII interpreter
-  handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes with typed
-  conversions (`IntoValue`, a total conversion that cannot fail;
-  `FromValue`, a checked conversion that can reject), class and module
-  definition, and closure-based exception protection.
-- `FromValue` downcasts to the typed handles (`RString`, `Array`, `Hash`,
-  `RClass`, `Proc`, `Symbol`) discriminate by mruby's type tag alone: a value
-  carrying the target's tag converts (for strings and the containers, subclass
-  instances included), any other tag rejects. Conversion to `bool` instead
-  follows Ruby truthiness
-  — `nil` and `false` convert to `false`, every other value to `true` — so it
-  is total and never rejects.
-- Every type tag carries a per-type boolean predicate (`Value::is_array`,
-  `is_string`, `is_integer`, … — the analogue of mruby's `mrb_*_p` macros)
-  reporting whether a value carries it. Where the tag has a typed handle, its
-  predicate and the matching `FromValue` downcast — magnus's `TryConvert`
-  analogue — agree exactly: the predicate holds for precisely the values the
-  downcast converts into the handle. The predicate answers "what type is
-  this?"; the downcast hands back the handle to operate on it.
-- Rust bytes convert to a new mruby string, returned as a typed `RString`
-  handle. From an mruby string Rust reads the bytes three ways: a borrowed byte
-  slice, an owned `String` when the bytes are valid UTF-8, or an owned byte
-  vector for arbitrary bytes; both owned conversions reject a non-string value
-  by its tag, and the `String` conversion additionally rejects bytes that are
-  not UTF-8. A registered method grows an `RString` in place by appending Rust
-  bytes, the way Ruby's `String#<<` extends its receiver.
-- A registered method or protected closure raises its own exception: it builds
-  one from an exception class and a message and returns it as an `Err`, which
-  crosses the boundary like any other `Err` — to a registered method's Ruby
-  caller as an mruby exception, to a protected closure's Rust caller as the
-  `Err` value.
-- The typed surface's mutating and dispatching operations follow one
-  raise/return contract:
+#### Handle, values, and conversions
 
-  | Operation kind | Surfaces `Err` | Returns |
-  |---|---|---|
-  | Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge, string append | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large | `Result` |
-  | Dispatches Ruby — a method call, `==` / `eql?`, or a hash assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?` | the dispatched code raises, or `fetch` finds the key absent | `Result` |
-  | Reads or inspects without dispatching — indexed read, keys, values, size, emptiness, duplication, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
+The crate owns every Rust-level abstraction over the C API: an RAII interpreter
+handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes, class and module
+definition, and closure-based exception protection. Two typed conversions cross
+the Rust/Ruby boundary:
 
-- The typed array carries Ruby `Array`'s surface: constructed empty, with a
-  preallocated capacity, or from a slice of values; a value appends, an indexed
-  read returns the element or `nil` out of range, an indexed write follows Ruby's
-  `ary[i] = v` and grows with `nil` to reach past the end, a value is removed
-  from either end, another array's elements extend it, it is emptied, and it is
-  duplicated.
-- The typed hash carries Ruby `Hash`'s surface beyond construction: a key is
-  assigned, read back (`nil` when absent), or fetched the way Ruby's `Hash#fetch`
-  reads; a key's presence is tested; a key is deleted, returning its former
-  value; another hash merges into it; it is emptied and duplicated; and its keys,
-  values, size, and emptiness are read.
-- Two values compare three ways: object identity (`equal?`, a total predicate —
-  the same object or not), value equality (`==`), and hash-key equality (`eql?`).
-  The latter two follow Ruby semantics and may run a user-defined `==` or `eql?`.
-- A value dispatches a Ruby method by name, passing an argument slice and
-  receiving the method's return value.
-- A value answers Ruby's reflective questions: whether it is an instance of a
-  class or any of its subclasses (`is_a?`), whether it is a direct instance of a
-  class (`instance_of?`), and the class it belongs to. A value is also frozen in
-  place.
+| Conversion | Direction | Rule |
+|---|---|---|
+| `IntoValue` | Rust value → `Value` | total — cannot fail |
+| `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `Proc` / `Symbol` | `Value` → typed handle | converts on the target's type tag (subclass instances included for strings and containers); any other tag rejects |
+| `FromValue` → `bool` | `Value` → `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true`; total, never rejects |
+
+Every type tag also carries a per-type predicate (`Value::is_array`,
+`is_string`, `is_integer`, … — the analogue of mruby's `mrb_*_p` macros). Where
+a tag has a typed handle, its predicate and `FromValue` downcast — magnus's
+`TryConvert` analogue — agree exactly: the predicate holds for precisely the
+values the downcast accepts. The predicate answers "what type is this?"; the
+downcast hands back the handle to operate on it.
+
+#### Strings
+
+Rust bytes convert to a new mruby string, returned as a typed `RString`. From
+an mruby string Rust reads the bytes three ways:
+
+| Read | Yields | Rejects |
+|---|---|---|
+| borrowed slice | a byte view of the string | — |
+| owned `String` | the bytes when valid UTF-8 | a non-string tag, or non-UTF-8 bytes |
+| owned `Vec<u8>` | arbitrary bytes | a non-string tag |
+
+A registered method grows an `RString` in place by appending Rust bytes, the
+way Ruby's `String#<<` extends its receiver.
+
+#### Errors and the raise/return contract
+
+A registered method or protected closure raises its own exception: it builds one
+from an exception class and a message and returns it as an `Err`, which crosses
+the boundary like any other `Err` — to a registered method's Ruby caller as an
+mruby exception, to a protected closure's Rust caller as the `Err` value.
+
+Every mutating or dispatching operation across the typed surface follows one
+raise/return contract:
+
+| Operation kind | Surfaces `Err` | Returns |
+|---|---|---|
+| Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge, string append | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large | `Result` |
+| Dispatches Ruby — a method call, `==` / `eql?`, or a hash assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?` | the dispatched code raises, or `fetch` finds the key absent | `Result` |
+| Reads or inspects without dispatching — indexed read, keys, values, size, emptiness, duplication, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
+
+#### Containers
+
+The typed array carries Ruby `Array`'s surface:
+
+| Operation | Behavior |
+|---|---|
+| construct | empty, with a preallocated capacity, or from a slice of values |
+| append | add a value to the end |
+| indexed read | the element, or `nil` when the index is out of range |
+| indexed write | Ruby's `ary[i] = v`, growing with `nil` to reach past the end |
+| remove | take a value from either end |
+| extend | append another array's elements |
+| clear | empty it |
+| duplicate | copy it |
+
+The typed hash carries Ruby `Hash`'s surface beyond construction:
+
+| Operation | Behavior |
+|---|---|
+| assign | set a key's value |
+| read | the value, or `nil` when the key is absent |
+| fetch | the value, the way Ruby's `Hash#fetch` reads |
+| key test | whether a key is present |
+| delete | remove a key, returning its former value |
+| merge | fold another hash into this one |
+| clear | empty it |
+| duplicate | copy it |
+| keys / values | read as typed arrays |
+| size / emptiness | the entry count, and whether it holds no entries |
+
+#### Value operations
+
+| Operation | Semantics |
+|---|---|
+| `equal?` | object identity — the same object or not; a total predicate |
+| `==` / `eql?` | Ruby value and hash-key equality; may run a user-defined `==` or `eql?` |
+| dispatch | call a Ruby method by name with an argument slice, receiving its return value |
+| `is_a?` | an instance of a class or any of its subclasses |
+| `instance_of?` | a direct instance of a class |
+| class | the class the value belongs to |
+| freeze | freeze the value in place |
+
+#### Classes, modules, and methods
+
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
   `RClass` and `RModule` handles. Methods are registered on those handles
@@ -273,6 +307,9 @@ Selection, checksums, and cross-compile activation:
   `magnus`'s typed-data wrapping, and meets the graduation bar — correct use
   needs no reasoning about VM internals — so it lives on the typed surface
   rather than behind `beni::sys`.
+
+#### Gems, arena scopes, and blocks
+
 - Provides the `Gem` trait — the unit of Ruby surface a Rust crate ships:
 
   ```rust
@@ -301,6 +338,9 @@ Selection, checksums, and cross-compile activation:
   that distinguish those cases are mruby VM internals with no stable public
   accessor; the typed surface does not expose them, so a consumer that must
   classify reaches them through the `beni::sys` escape hatch.
+
+#### Graduation, safety, and coverage
+
 - The safe API cannot cause undefined behavior while the GC validity rule
   holds: a value created inside an arena scope is not used after that
   scope ends, and a survivor carried out through `keep` counts as created
