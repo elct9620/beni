@@ -301,7 +301,7 @@ impl Array {
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use crate::Mrb;
+    use crate::{Error, Mrb};
 
     #[test]
     fn push_and_entry_roundtrip_through_a_live_array() {
@@ -360,13 +360,17 @@ mod tests {
             .expect("push to a fresh array succeeds");
 
         // A negative index reaching past the beginning raises IndexError.
-        assert!(ary.store(&mrb, -5, mrb.str_new(b"x").as_value()).is_err());
+        assert!(matches!(
+            ary.store(&mrb, -5, mrb.str_new(b"x").as_value()),
+            Err(Error::Exception(_))
+        ));
         // An index beyond the archive's `mrb_int` width saturates so
         // mruby's own range check rejects it as too large, rather than a
         // truncated index hitting the wrong slot.
-        assert!(ary
-            .store(&mrb, isize::MAX, mrb.str_new(b"x").as_value())
-            .is_err());
+        assert!(matches!(
+            ary.store(&mrb, isize::MAX, mrb.str_new(b"x").as_value()),
+            Err(Error::Exception(_))
+        ));
     }
 
     #[test]
@@ -399,7 +403,10 @@ mod tests {
         // catches into Err rather than long-jumping.
         let frozen = Array::from_value(cxt.load_nstring(b"[].freeze"))
             .expect("a frozen Array literal is Array-tagged");
-        assert!(frozen.push(&mrb, mrb.str_new(b"x").as_value()).is_err());
+        assert!(matches!(
+            frozen.push(&mrb, mrb.str_new(b"x").as_value()),
+            Err(Error::Exception(_))
+        ));
     }
 
     #[test]
@@ -468,6 +475,33 @@ mod tests {
         // populated frozen array surfaces FrozenError as Err.
         let frozen = Array::from_value(cxt.load_nstring(b"[1].freeze"))
             .expect("a frozen Array literal is Array-tagged");
-        assert!(frozen.pop(&mrb).is_err());
+        assert!(matches!(frozen.pop(&mrb), Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn remaining_mutators_surface_frozen_receiver_as_err() {
+        use crate::{Array, Ccontext, FromValue};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_ary_mut.rb").expect("allocating the context must succeed");
+
+        // Every mutator routes through mrb_ary_modify, which raises
+        // FrozenError on a frozen receiver — protect catches each into Err.
+        // push and pop are pinned separately; this covers the rest.
+        let frozen = Array::from_value(cxt.load_nstring(b"[1].freeze"))
+            .expect("a frozen Array literal is Array-tagged");
+        let other = mrb.ary_new();
+
+        assert!(matches!(
+            frozen.unshift(&mrb, mrb.str_new(b"x").as_value()),
+            Err(Error::Exception(_))
+        ));
+        assert!(matches!(
+            frozen.concat(&mrb, other),
+            Err(Error::Exception(_))
+        ));
+        assert!(matches!(frozen.shift(&mrb), Err(Error::Exception(_))));
+        assert!(matches!(frozen.clear(&mrb), Err(Error::Exception(_))));
     }
 }

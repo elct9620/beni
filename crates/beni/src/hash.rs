@@ -366,7 +366,7 @@ mod tests {
 
     #[test]
     fn set_surfaces_frozen_receiver_as_err() {
-        use crate::{Ccontext, FromValue, Hash};
+        use crate::{Ccontext, Error, FromValue, Hash};
 
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let cxt =
@@ -377,13 +377,14 @@ mod tests {
         // into Err rather than long-jumping.
         let frozen = Hash::from_value(cxt.load_nstring(b"{}.freeze"))
             .expect("a frozen Hash literal is Hash-tagged");
-        assert!(frozen
-            .set(
+        assert!(matches!(
+            frozen.set(
                 &mrb,
                 mrb.str_new(b"k").as_value(),
                 mrb.str_new(b"v").as_value()
-            )
-            .is_err());
+            ),
+            Err(Error::Exception(_))
+        ));
     }
 
     #[test]
@@ -486,7 +487,7 @@ mod tests {
 
     #[test]
     fn clear_surfaces_frozen_receiver_as_err() {
-        use crate::{Ccontext, FromValue, Hash};
+        use crate::{Ccontext, Error, FromValue, Hash};
 
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let cxt =
@@ -496,7 +497,7 @@ mod tests {
         // populated frozen hash surfaces FrozenError as Err.
         let frozen = Hash::from_value(cxt.load_nstring(b"{a: 1}.freeze"))
             .expect("a frozen Hash literal is Hash-tagged");
-        assert!(frozen.clear(&mrb).is_err());
+        assert!(matches!(frozen.clear(&mrb), Err(Error::Exception(_))));
     }
 
     #[test]
@@ -524,7 +525,7 @@ mod tests {
 
     #[test]
     fn delete_surfaces_frozen_receiver_as_err() {
-        use crate::{Ccontext, FromValue, Hash};
+        use crate::{Ccontext, Error, FromValue, Hash};
 
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let cxt =
@@ -534,6 +535,35 @@ mod tests {
         // populated frozen hash surfaces FrozenError as Err.
         let frozen = Hash::from_value(cxt.load_nstring(b"{a: 1}.freeze"))
             .expect("a frozen Hash literal is Hash-tagged");
-        assert!(frozen.delete(&mrb, mrb.str_new(b"a").as_value()).is_err());
+        assert!(matches!(
+            frozen.delete(&mrb, mrb.str_new(b"a").as_value()),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn update_surfaces_frozen_receiver_as_err() {
+        use crate::{Ccontext, Error, FromValue, Hash};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_update.rb").expect("allocating the context must succeed");
+
+        // merge checks frozen state before folding entries, so merging
+        // into a frozen hash surfaces FrozenError as Err.
+        let frozen = Hash::from_value(cxt.load_nstring(b"{a: 1}.freeze"))
+            .expect("a frozen Hash literal is Hash-tagged");
+        let other = mrb.hash_new();
+        other
+            .set(
+                &mrb,
+                mrb.str_new(b"b").as_value(),
+                mrb.str_new(b"2").as_value(),
+            )
+            .expect("set succeeds");
+        assert!(matches!(
+            frozen.update(&mrb, other),
+            Err(Error::Exception(_))
+        ));
     }
 }
