@@ -216,7 +216,10 @@ an mruby string Rust reads the bytes three ways:
 | owned `Vec<u8>` | arbitrary bytes | a non-string tag |
 
 A registered method grows an `RString` in place by appending Rust bytes, the
-way Ruby's `String#<<` extends its receiver.
+way Ruby's `String#<<` extends its receiver. Beyond reading and appending, a
+string duplicates into an independent copy (Ruby's `String#dup`) and orders
+against another by byte content (Ruby's `String#<=>`) — a total comparison that
+dispatches nothing and never raises.
 
 #### Errors and the raise/return contract
 
@@ -230,9 +233,9 @@ raise/return contract:
 
 | Operation kind | Surfaces `Err` | Returns |
 |---|---|---|
-| Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge, string append | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large | `Result` |
-| Dispatches Ruby — a method call, `==` / `eql?`, or a hash assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?` | the dispatched code raises | `Result` |
-| Reads or inspects without dispatching — indexed read, keys, values, size, emptiness, duplication, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
+| Mutates a receiver — array append/remove/extend/clear and indexed write, hash assign/delete/merge/clear, string append | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large | `Result` |
+| Dispatches Ruby — a method call, `inspect`, `==` / `eql?`, or a hash assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?` | the dispatched code raises | `Result` |
+| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, duplication, byte comparison, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value |
 
 #### Containers
 
@@ -271,6 +274,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | `equal?` | object identity — the same object or not; a total predicate |
 | `==` / `eql?` | Ruby value and hash-key equality; may run a user-defined `==` or `eql?` |
 | dispatch | call a Ruby method by name with an argument slice, receiving its return value |
+| inspect | the value's `inspect` string as a typed `RString`; may run a user-defined `inspect` |
 | `is_a?` | an instance of a class or any of its subclasses |
 | `instance_of?` | a direct instance of a class |
 | class | the class the value belongs to |
