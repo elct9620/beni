@@ -167,6 +167,10 @@ typed:
   mrb_open: Mrb::open
   mrb_protect_error: Mrb::protect
   mrb_raise: RClass::raise
+  mrb_range_beg: Range::begin
+  mrb_range_end: Range::end_
+  mrb_range_excl_p: Range::is_exclusive
+  mrb_range_new: Mrb::range_new
   mrb_read_irep_buf: Mrb::load_bytecode
   mrb_respond_to: Value::respond_to
   mrb_str_cat: RString::cat

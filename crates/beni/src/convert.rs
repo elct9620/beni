@@ -12,11 +12,11 @@
 //! Scope covers the scalar leaf types (`i32` / `f64` / `bool`), an
 //! owned `String` or byte vector, and checked downcasts to the typed
 //! handles (`RString` / `Array` / `Hash` / `RClass` / `Proc` /
-//! `Symbol`), discriminated by the value's type tag — string and
-//! container subclass instances convert. Every conversion is by value,
-//! copying rather than borrowing VM storage.
+//! `Symbol` / `Range`), discriminated by the value's type tag — string
+//! and container subclass instances convert. Every conversion is by
+//! value, copying rather than borrowing VM storage.
 
-use crate::{Array, Hash, Mrb, Proc, RClass, RString, Symbol, Value};
+use crate::{Array, Hash, Mrb, Proc, RClass, RString, Range, Symbol, Value};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
@@ -186,6 +186,17 @@ impl FromValue for RString {
         value
             .is_string()
             .then(|| unsafe { RString::from_value_unchecked(value) })
+    }
+}
+
+impl FromValue for Range {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the wrap precondition (MRB_TT_RANGE tagging) is
+        // established by the `is_range` guard immediately before it.
+        value
+            .is_range()
+            .then(|| unsafe { Range::from_value_unchecked(value) })
     }
 }
 

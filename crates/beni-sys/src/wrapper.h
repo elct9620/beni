@@ -28,6 +28,7 @@
 #include <mruby/hash.h>
 #include <mruby/irep.h>
 #include <mruby/proc.h>
+#include <mruby/range.h>
 #include <mruby/string.h>
 #include <mruby/value.h>
 #include <mruby/variable.h>
@@ -287,4 +288,36 @@ static inline mrb_float
 mrb_as_float_func(mrb_state *mrb, mrb_value val)
 {
   return mrb_as_float(mrb, val);
+}
+
+/* Begin value of a Range-tagged mrb_value. Counterpart to the
+ * `mrb_range_beg(mrb, r)` macro in <mruby/range.h>, which reads
+ * `RANGE_BEG` off the `struct RRange` the macro resolves via
+ * `mrb_range_ptr`. The begin/end fields live inline or behind an
+ * `edges` pointer depending on the boxing config (`MRB_RANGE_EMBED`),
+ * so the C compiler must do the read against the layout libmruby.a
+ * was built with. */
+static inline mrb_value
+mrb_range_beg_func(mrb_state *mrb, mrb_value range)
+{
+  return mrb_range_beg(mrb, range);
+}
+
+/* End value of a Range-tagged mrb_value. Counterpart to the
+ * `mrb_range_end(mrb, r)` macro; same embed-vs-edges layout branch as
+ * `mrb_range_beg_func`. */
+static inline mrb_value
+mrb_range_end_func(mrb_state *mrb, mrb_value range)
+{
+  return mrb_range_end(mrb, range);
+}
+
+/* Exclude-end flag of a Range-tagged mrb_value. Counterpart to the
+ * `mrb_range_excl_p(mrb, r)` macro, which reads `RANGE_EXCL` off the
+ * `struct RRange`; routed through the C compiler for the same layout
+ * reason. */
+static inline mrb_bool
+mrb_range_excl_p_func(mrb_state *mrb, mrb_value range)
+{
+  return mrb_range_excl_p(mrb, range);
 }

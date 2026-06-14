@@ -1,13 +1,15 @@
-//! String / Array / Hash factories on `Mrb`.
+//! String / Array / Hash / Range factories on `Mrb`.
 //!
 //! `str_new` / `str_new_cstr` construct mruby Strings from Rust byte
 //! slices or a NUL-terminated `&CStr`. `ary_new` / `hash_new` return
-//! typed `Array` / `Hash` newtypes — per-collection operations
-//! (`push`, `set`, `get`, `keys`) live on the value newtype rather
-//! than on `Mrb` so the call shape mirrors Ruby (`arr.push(x)`,
-//! not `mrb.ary_push(arr, x)`).
+//! typed `Array` / `Hash` newtypes, and `range_new` returns a typed
+//! `Range` — per-collection operations (`push`, `set`, `get`, `keys`,
+//! the range bound reads) live on the value newtype rather than on
+//! `Mrb` so the call shape mirrors Ruby (`arr.push(x)`, not
+//! `mrb.ary_push(arr, x)`). `range_new` is the one factory that can
+//! raise — comparing incomparable bounds — so it returns a `Result`.
 
-use crate::{Array, Hash, Mrb, RString, Value};
+use crate::{Array, Error, Hash, Mrb, RString, Range, Value};
 #[cfg(mruby_linked)]
 use beni_sys as sys;
 
@@ -220,6 +222,38 @@ impl Mrb {
         #[cfg(not(mruby_linked))]
         {
             let _ = (car, cdr);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_range_new(mrb, begin, end, exclusive)` — construct an mruby
+    /// `Range` from a begin value, an end value, and an exclusive-end
+    /// flag, Ruby's `Range.new(begin, end, exclusive)`. mruby compares
+    /// the two bounds and raises `ArgumentError` ("bad value for range")
+    /// when they cannot be compared; the call runs under `Mrb::protect`,
+    /// so that surfaces as `Err` rather than long-jumping. `nil` bounds
+    /// and a numeric pair always succeed.
+    #[inline]
+    pub fn range_new(&self, begin: Value, end: Value, exclusive: bool) -> Result<Range, Error> {
+        #[cfg(mruby_linked)]
+        {
+            self.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `begin`
+                // and `end` share the VM by the single-VM contract.
+                // `mrb_range_new` compares the bounds and raises
+                // `ArgumentError` on an incomparable pair — caught by
+                // `protect` into `Err`.
+                Value::from_raw(unsafe {
+                    sys::mrb_range_new(mrb.as_ptr(), begin.as_raw(), end.as_raw(), exclusive)
+                })
+            })
+            // SAFETY: an `Ok` result came from `mrb_range_new`, which
+            // returns a Range-tagged value on success.
+            .map(|v| unsafe { Range::from_value_unchecked(v) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (begin, end, exclusive);
             crate::not_linked()
         }
     }

@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 133 (39%) |
-| macro | 124 | 22 (18%) | 30 (24%) |
-| total | 466 | 351 (75%) | 163 (35%) |
+| function | 342 | 332 (97%) | 134 (39%) |
+| macro | 124 | 25 (20%) | 33 (27%) |
+| total | 466 | 357 (77%) | 167 (36%) |
 
 ## mruby.h
 
@@ -412,12 +412,12 @@ Legend: ✅ covered · — missing
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `mrb_gc_free_range` | macro | — | — |  |
-| `mrb_range_beg` | macro | — | — |  |
-| `mrb_range_beg_len` | fn | — | — |  |
-| `mrb_range_end` | macro | — | — |  |
-| `mrb_range_excl_p` | macro | — | — |  |
-| `mrb_range_new` | fn | — | — |  |
-| `mrb_range_ptr` | fn | — | — |  |
+| `mrb_range_beg` | macro | ✅ | ✅ | `Range::begin` |
+| `mrb_range_beg_len` | fn | ✅ | — |  |
+| `mrb_range_end` | macro | ✅ | ✅ | `Range::end_` |
+| `mrb_range_excl_p` | macro | ✅ | ✅ | `Range::is_exclusive` |
+| `mrb_range_new` | fn | ✅ | ✅ | `Mrb::range_new` |
+| `mrb_range_ptr` | fn | ✅ | — |  |
 | `mrb_range_raw_ptr` | macro | — | — |  |
 | `mrb_range_value` | macro | — | — |  |
 ## mruby/string.h
