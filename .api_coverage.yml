@@ -127,12 +127,14 @@ typed:
   mrb_hash_clear: Hash::clear
   mrb_hash_delete_key: Hash::delete
   mrb_hash_dup: Hash::dup
+  mrb_hash_empty_p: Hash::is_empty
   mrb_hash_fetch: Hash::fetch
   mrb_hash_get: Hash::get
   mrb_hash_key_p: Hash::contains_key
   mrb_hash_keys: Hash::keys
   mrb_hash_merge: Hash::update
   mrb_hash_new: Mrb::hash_new
+  mrb_hash_new_capa: Mrb::hash_new_capa
   mrb_hash_set: Hash::set
   mrb_hash_size: Hash::len
   mrb_hash_values: Hash::values

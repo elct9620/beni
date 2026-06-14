@@ -174,6 +174,31 @@ impl Mrb {
         crate::not_linked()
     }
 
+    /// `mrb_hash_new_capa(mrb, capa)` — construct an empty mruby `Hash`
+    /// with room preallocated for `capa` entries, sparing the reallocs
+    /// a run of `set` onto a fresh hash would otherwise trigger. `capa`
+    /// saturates to the archive's `mrb_int` width.
+    #[inline]
+    pub fn hash_new_capa(&self, capa: usize) -> Hash {
+        #[cfg(mruby_linked)]
+        {
+            let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+            // SAFETY: `self` is alive; `mrb_hash_new_capa` always returns
+            // a Hash-tagged value, so the unchecked wrap is sound.
+            unsafe {
+                Hash::from_value_unchecked(Value::from_raw(sys::mrb_hash_new_capa(
+                    self.as_ptr(),
+                    capa,
+                )))
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = capa;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_assoc_new(mrb, car, cdr)` — construct the two-element mruby
     /// `Array` `[car, cdr]`. A pure allocation that copies the two values
     /// into a fresh array, so it never raises.
@@ -242,6 +267,23 @@ mod tests {
         ary.push(&mrb, mrb.str_new(b"x").as_value())
             .expect("push to a fresh array succeeds");
         assert_eq!(ary.len(), 1);
+    }
+
+    #[test]
+    fn hash_new_capa_preallocates_an_empty_hash() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Capacity is a hint, not content — the hash starts empty and
+        // fills as usual.
+        let hash = mrb.hash_new_capa(8);
+        assert!(hash.is_empty(&mrb));
+        hash.set(
+            &mrb,
+            mrb.str_new(b"k").as_value(),
+            mrb.str_new(b"v").as_value(),
+        )
+        .expect("set to a fresh hash succeeds");
+        assert_eq!(hash.len(&mrb), 1);
     }
 
     #[test]

@@ -168,10 +168,21 @@ impl Hash {
         }
     }
 
-    /// TRUE when the hash holds no entries.
+    /// `mrb_hash_empty_p(mrb, self)` — TRUE when the hash holds no
+    /// entries, Ruby's `Hash#empty?`. A pure read that never fails.
     #[inline]
     pub fn is_empty(self, mrb: &Mrb) -> bool {
-        self.len(mrb) == 0
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is Hash-tagged by the contract; `mrb_hash_empty_p`
+            // reads only the entry count.
+            unsafe { sys::mrb_hash_empty_p(mrb.as_ptr(), self.0.as_raw()) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
     }
 
     /// `mrb_hash_key_p(mrb, self, key)` — whether `key` is present,
