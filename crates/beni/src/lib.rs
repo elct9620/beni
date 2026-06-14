@@ -207,6 +207,7 @@ mod tests {
         let _ = Value::respond_to;
         let _ = Value::as_break;
         let _ = Break::value;
+        let _ = RClass::real;
         let _ = RClass::to_value;
         let _ = RClass::obj_new;
         let _ = RClass::raise;

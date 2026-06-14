@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 125 (37%) |
+| function | 342 | 329 (96%) | 126 (37%) |
 | macro | 124 | 22 (18%) | 30 (24%) |
-| total | 466 | 351 (75%) | 155 (33%) |
+| total | 466 | 351 (75%) | 156 (33%) |
 
 ## mruby.h
 
@@ -268,7 +268,7 @@ Legend: ✅ covered · — missing
 | `mrb_class` | fn | ✅ | — |  |
 | `mrb_class_outer` | fn | ✅ | — |  |
 | `mrb_class_ptr` | macro | ✅ | ✅ | `Value::as_class_ptr` |
-| `mrb_class_real` | fn | ✅ | — |  |
+| `mrb_class_real` | fn | ✅ | ✅ | `RClass::real` — resolve a class handle to its real class, skipping singleton / include classes; `mrb_class` (the raw class of a value, which may be a singleton or include class and needs VM-internal reasoning) stays in `sys`, and `Value::class` via `mrb_obj_class` already returns the real class of a value |
 | `mrb_define_method_raw` | fn | ✅ | — |  |
 | `mrb_mc_clear_by_class` | macro | ✅ | — |  |
 | `mrb_method_search` | fn | ✅ | — |  |

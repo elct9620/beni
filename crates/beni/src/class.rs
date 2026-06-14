@@ -154,6 +154,29 @@ impl RClass {
         self.0.is_null()
     }
 
+    /// `mrb_class_real(self)` — resolve this handle to its real class,
+    /// skipping the singleton-class and include-class links a `super`
+    /// chain threads through, and yielding the first user-facing class.
+    /// A handle that is already a real class returns itself. The
+    /// resolution walks the class structure and never raises, so it
+    /// needs no `Mrb::protect`. The normalization a consumer reaches for
+    /// after obtaining a handle that may be a singleton or include class
+    /// through `RClass::from_raw` / `Value::as_class_ptr`; the
+    /// real-class result `Value::class` already returns needs no further
+    /// resolution.
+    #[inline]
+    pub fn real(self) -> RClass {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb_class_real` only walks the `super` chain past
+            // singleton / include classes; it reads no `mrb_state` and
+            // returns a real class pointer for any live class handle.
+            RClass::from_raw(unsafe { sys::mrb_class_real(self.0) })
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// Reify this class handle as an mruby `Value` via mruby's own
     /// `mrb_obj_value` (an `MRB_INLINE` reached through bindgen's
     /// static-fn trampoline). Used by call paths that need to pass
@@ -1137,6 +1160,71 @@ mod tests {
             "the NameError must name the missing method: {}",
             err.message(&mrb)
         );
+    }
+
+    #[test]
+    fn real_returns_a_real_class_handle_unchanged() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A real class resolves to itself: the handle a safe lookup
+        // hands back is already past any singleton / include link, so
+        // `real` returns the same class — same pointer, same name.
+        let object = mrb.object_class();
+        let resolved = object.real();
+        assert_eq!(resolved.as_raw(), object.as_raw());
+        assert_eq!(resolved.name(&mrb), Some("Object"));
+
+        let runtime_error = mrb
+            .class_get(c"RuntimeError")
+            .expect("RuntimeError is present in every VM");
+        assert_eq!(runtime_error.real().as_raw(), runtime_error.as_raw());
+        assert_eq!(runtime_error.real().name(&mrb), Some("RuntimeError"));
+    }
+
+    #[test]
+    fn real_resolves_a_singleton_class_to_its_attached_object_class() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        // A class's singleton class is an SCLASS whose real class is the
+        // first user-facing class above it. The metaclass of `Object`
+        // descends from `Class`, so resolving it lands on a named real
+        // class rather than the `#<Class:...>` singleton form — the
+        // normalization a consumer needs after reaching a singleton
+        // handle through the raw seam.
+        let target = mrb
+            .define_class(c"BeniRealTarget", object)
+            .expect("defining the class must succeed");
+
+        // `target.singleton_class` reached through Ruby, downcast to its
+        // class pointer through the raw seam, is a singleton handle.
+        let cxt = crate::Ccontext::new(&mrb, c"real_sclass.rb")
+            .expect("allocating the compile context must succeed");
+        let sclass_val = cxt.load_nstring(b"BeniRealTarget.singleton_class");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "reaching the singleton class must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        // A singleton class carries `MRB_TT_SCLASS`, not the plain class
+        // tag `is_class` gates on, yet it still wraps an `RClass` the
+        // `mrb_class_ptr` cast recovers — the raw-seam handle a consumer
+        // would hold before normalizing.
+        // SAFETY: `singleton_class` returns a class-family value (SCLASS),
+        // so its payload is an `RClass` pointer the cast reads.
+        let sclass = RClass::from_raw(unsafe { sclass_val.as_class_ptr() });
+
+        // The singleton handle is not itself a real class — its name is
+        // the `#<Class:...>` form — but `real` walks past it to a named
+        // user-facing class.
+        let resolved = sclass.real();
+        assert_ne!(resolved.as_raw(), sclass.as_raw());
+        let name = resolved.name(&mrb).expect("the real class is named");
+        assert!(
+            !name.starts_with("#<"),
+            "real must skip the singleton class, got: {name}"
+        );
+        let _ = target;
     }
 
     #[test]
