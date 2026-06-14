@@ -134,6 +134,8 @@ typed:
   mrb_read_irep_buf: Mrb::load_bytecode
   mrb_respond_to: Value::respond_to
   mrb_str_cat: RString::cat
+  mrb_str_cmp: RString::cmp
+  mrb_str_dup: RString::dup
   mrb_str_new: Mrb::str_new
   mrb_str_new_cstr: Mrb::str_new_cstr
   mrb_sym_name: Mrb::sym_name

@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 94 (27%) |
+| function | 342 | 329 (96%) | 96 (28%) |
 | macro | 124 | 20 (16%) | 24 (19%) |
-| total | 466 | 349 (75%) | 118 (25%) |
+| total | 466 | 349 (75%) | 120 (26%) |
 
 ## mruby.h
 
@@ -441,9 +441,9 @@ Legend: ✅ covered · — missing
 | `mrb_str_cat_cstr` | fn | ✅ | — |  |
 | `mrb_str_cat_lit` | macro | — | — |  |
 | `mrb_str_cat_str` | fn | ✅ | — |  |
-| `mrb_str_cmp` | fn | ✅ | — |  |
+| `mrb_str_cmp` | fn | ✅ | ✅ | `RString::cmp` |
 | `mrb_str_concat` | fn | ✅ | — |  |
-| `mrb_str_dup` | fn | ✅ | — |  |
+| `mrb_str_dup` | fn | ✅ | ✅ | `RString::dup` |
 | `mrb_str_equal` | fn | ✅ | — |  |
 | `mrb_str_index` | fn | ✅ | — |  |
 | `mrb_str_index_lit` | macro | — | — |  |

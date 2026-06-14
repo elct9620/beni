@@ -172,6 +172,55 @@ impl RString {
     pub fn is_empty(self) -> bool {
         self.len() == 0
     }
+
+    /// `mrb_str_dup(mrb, self)` — a copy with its own buffer, Ruby's
+    /// `String#dup`. It does not mutate the receiver, so it never fails.
+    /// Mirrors `Array::dup` / `Hash::dup`; mruby has no copy-on-write
+    /// share here, so the bytes are copied outright.
+    #[inline]
+    pub fn dup(self, mrb: &Mrb) -> RString {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `mrb_str_dup` returns a fresh String-tagged value, so the
+            // unchecked wrap is sound.
+            unsafe {
+                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_dup(
+                    mrb.as_ptr(),
+                    self.0.as_raw(),
+                )))
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_str_cmp(mrb, self, other)` — order this string against
+    /// `other` by byte content, Ruby's `String#<=>`. A pure `memcmp`
+    /// that dispatches nothing, so it never raises: a shared prefix
+    /// orders the shorter string first, and equal bytes of equal length
+    /// compare `Equal`. The `RString` type on both sides guarantees the
+    /// String layout `mrb_str_cmp` assumes. Mirrors magnus's
+    /// `RString::cmp`.
+    #[inline]
+    pub fn cmp(self, mrb: &Mrb, other: RString) -> core::cmp::Ordering {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` and `other` are String-tagged by the newtype
+            // contract and share the VM; `mrb_str_cmp` reads only their
+            // byte buffers and returns -1 / 0 / 1.
+            let ord = unsafe { sys::mrb_str_cmp(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
+            ord.cmp(&0)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -228,6 +277,39 @@ mod tests {
         let s = mrb.str_new("héllo".as_bytes());
         assert_eq!(s.len(), 6);
         assert!(!s.is_empty());
+    }
+
+    #[test]
+    fn dup_copies_into_an_independent_string() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let s = mrb.str_new(b"orig");
+        let copy = s.dup(&mrb);
+
+        // dup is an independent object: appending to the original leaves
+        // the copy untouched.
+        s.cat(&mrb, b"+more").expect("append succeeds");
+        assert_eq!(copy.to_bytes(), b"orig".to_vec());
+        assert_eq!(s.to_bytes(), b"orig+more".to_vec());
+    }
+
+    #[test]
+    fn cmp_orders_by_byte_content() {
+        use core::cmp::Ordering;
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let abc = mrb.str_new(b"abc");
+        let abd = mrb.str_new(b"abd");
+        let abc2 = mrb.str_new(b"abc");
+
+        assert_eq!(abc.cmp(&mrb, abd), Ordering::Less);
+        assert_eq!(abd.cmp(&mrb, abc), Ordering::Greater);
+        assert_eq!(abc.cmp(&mrb, abc2), Ordering::Equal);
+
+        // A prefix orders before the longer string it begins.
+        let ab = mrb.str_new(b"ab");
+        assert_eq!(ab.cmp(&mrb, abc), Ordering::Less);
     }
 
     #[test]
