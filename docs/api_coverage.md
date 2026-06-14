@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 104 (30%) |
+| function | 342 | 329 (96%) | 105 (31%) |
 | macro | 124 | 22 (18%) | 27 (22%) |
-| total | 466 | 351 (75%) | 131 (28%) |
+| total | 466 | 351 (75%) | 132 (28%) |
 
 ## mruby.h
 
@@ -40,7 +40,7 @@ Legend: ✅ covered · — missing
 | `mrb_check_array_type` | fn | ✅ | — |  |
 | `mrb_check_convert_type` | macro | — | — |  |
 | `mrb_check_frozen` | fn | ✅ | — |  |
-| `mrb_check_frozen_value` | fn | ✅ | — |  |
+| `mrb_check_frozen_value` | fn | ✅ | ✅ | `Value::check_frozen` — the frozen-state precondition guard; `mrb_check_frozen` (the `void*` form) and `mrb_check_type` (a raw `mrb_vtype` tag, subsumed by the `FromValue` downcasts) stay in `sys` |
 | `mrb_check_hash_type` | fn | ✅ | — |  |
 | `mrb_check_intern` | fn | ✅ | — |  |
 | `mrb_check_intern_cstr` | fn | ✅ | — |  |

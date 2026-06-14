@@ -63,6 +63,7 @@ typed:
   mrb_ccontext_free: Ccontext::drop
   mrb_ccontext_new: Ccontext::new
   mrb_check_error: Mrb::clear_exc
+  mrb_check_frozen_value: "`Value::check_frozen` — the frozen-state precondition guard; `mrb_check_frozen` (the `void*` form) and `mrb_check_type` (a raw `mrb_vtype` tag, subsumed by the `FromValue` downcasts) stay in `sys`"
   mrb_class_get: Mrb::class_get
   mrb_class_get_under: Module::class_get
   mrb_class_name: Module::name

@@ -1013,6 +1013,35 @@ impl Value {
         }
     }
 
+    /// `mrb_check_frozen_value(mrb, self)` — a precondition guard that
+    /// surfaces an `Err` when `self` is frozen, `Ok(())` otherwise. An
+    /// immediate counts as frozen. Runs no user Ruby; the `FrozenError`
+    /// it would long-jump is caught by `Mrb::protect` into the returned
+    /// `Err`. The magnus-aligned way a handler rejects a write to a frozen
+    /// receiver before attempting it — mruby's own mutating operations
+    /// already perform this check internally, so this is the early-guard
+    /// form, not a prerequisite for them.
+    #[inline]
+    pub fn check_frozen(self, mrb: &Mrb) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_check_frozen_value`
+                // raises `FrozenError` on a frozen or immediate receiver —
+                // caught by `protect`.
+                unsafe { sys::mrb_check_frozen_value(mrb.as_ptr(), self.0) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_obj_equal(mrb, self, other)` — TRUE when `self` and `other`
     /// are the same object, Ruby's `equal?`. A pure identity compare:
     /// it dispatches nothing, so it never raises and yields a `bool`.
@@ -1413,6 +1442,39 @@ mod linked_tests {
         // Err instead of unwinding across the call.
         assert!(matches!(obj.obj_dup(&mrb), Err(Error::Exception(_))));
         assert!(matches!(obj.obj_clone(&mrb), Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn check_frozen_guards_frozen_and_immediate_receivers() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A mutable heap object passes the guard.
+        let mutable = mrb.str_new(b"open").as_value();
+        assert!(matches!(mutable.check_frozen(&mrb), Ok(())));
+
+        // Freezing it flips the guard to a `FrozenError`, surfaced as Err
+        // rather than unwinding across the call. The protect frame leaves
+        // no pending exception behind.
+        let frozen = mutable.freeze(&mrb);
+        let err = frozen
+            .check_frozen(&mrb)
+            .expect_err("a frozen receiver must surface as Err");
+        match err {
+            Error::Exception(exc) => {
+                assert_eq!(exc.classname(&mrb), "FrozenError");
+            }
+            Error::Panic(_) => unreachable!("the guard must surface as Error::Exception"),
+        }
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the caught raise must not leave a pending exception"
+        );
+
+        // An immediate counts as frozen.
+        assert!(matches!(
+            42i32.into_value(&mrb).check_frozen(&mrb),
+            Err(Error::Exception(_))
+        ));
     }
 
     #[test]
