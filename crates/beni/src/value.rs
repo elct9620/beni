@@ -834,21 +834,29 @@ impl Value {
     // these as `mrb_iv_set` / `mrb_iv_get` / `mrb_const_defined` /
     // `mrb_const_get` / `mrb_respond_to`; the inherent methods carry
     // the same names so the call shape mirrors the C-side
-    // documentation one-to-one. The `&Mrb` borrow upholds liveness,
-    // and `self` provides the receiver — together the methods are
-    // safe Rust.
+    // documentation one-to-one. The reads (`iv_get`, `const_defined`,
+    // `respond_to`) dispatch nothing and hand back a bare value; the
+    // assigning and fetching operations (`iv_set`, `const_get`) can
+    // raise, so they route through `protect` and return a `Result`.
     // ----------------------------------------------------------------
 
     /// `mrb_iv_set(mrb, self, sym, val)` — assign instance variable
-    /// `sym` on `self` to `val`. `self` must be an object value
-    /// produced by `mrb`.
+    /// `sym` on `self` to `val`. Surfaces an `Err` when `self` is
+    /// frozen or cannot hold instance variables.
     #[inline]
-    pub fn iv_set(self, mrb: &Mrb, sym: sys::mrb_sym, val: Value) {
+    pub fn iv_set(self, mrb: &Mrb, sym: sys::mrb_sym, val: Value) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: `mrb` is alive by the borrow; `self` and `val`
-            // originate from the same VM by the single-VM contract.
-            unsafe { sys::mrb_iv_set(mrb.as_ptr(), self.0, sym, val.0) };
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` and `val` originate from the same VM.
+                // `mrb_iv_set` raises `FrozenError` on a frozen
+                // receiver and `ArgumentError` on one that cannot hold
+                // instance variables — both caught by `protect`.
+                unsafe { sys::mrb_iv_set(mrb.as_ptr(), self.0, sym, val.0) };
+                Value::nil()
+            })
+            .map(|_| ())
         }
         #[cfg(not(mruby_linked))]
         {
@@ -890,14 +898,20 @@ impl Value {
     }
 
     /// `mrb_const_get(mrb, self, sym)` — fetch the constant value at
-    /// `sym` from `self`. Sets `mrb->exc` if the constant is
-    /// undefined; callers should gate with `Value::const_defined`.
+    /// `sym` from `self`. Surfaces an `Err` when `sym` resolves to no
+    /// constant or its `const_missing` hook raises.
     #[inline]
-    pub fn const_get(self, mrb: &Mrb, sym: sys::mrb_sym) -> Value {
+    pub fn const_get(self, mrb: &Mrb, sym: sys::mrb_sym) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: as `iv_set`.
-            Value(unsafe { sys::mrb_const_get(mrb.as_ptr(), self.0, sym) })
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` originates from the same VM. `mrb_const_get`
+                // raises `NameError` for an undefined constant and runs
+                // a `const_missing` hook that may raise — both caught
+                // by `protect`.
+                Value(unsafe { sys::mrb_const_get(mrb.as_ptr(), self.0, sym) })
+            })
         }
         #[cfg(not(mruby_linked))]
         {
@@ -1391,9 +1405,59 @@ mod linked_tests {
         // The dup carries the copied ivar...
         assert_eq!(i32::from_value(dup.iv_get(&mrb, x)), Some(1));
         // ...and is a distinct object: mutating it leaves the original.
-        dup.iv_set(&mrb, x, 2i32.into_value(&mrb));
+        dup.iv_set(&mrb, x, 2i32.into_value(&mrb))
+            .expect("iv_set on a fresh object does not raise");
         assert_eq!(i32::from_value(dup.iv_get(&mrb, x)), Some(2));
         assert_eq!(i32::from_value(orig.iv_get(&mrb, x)), Some(1));
+    }
+
+    #[test]
+    fn iv_set_surfaces_frozen_and_non_object_receivers_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"iv_set_test.rb").expect("allocating the context must succeed");
+        let x = mrb.intern_cstr(c"@x");
+        let one = 1i32.into_value(&mrb);
+
+        // A frozen receiver rejects the assignment — surfaced as Err
+        // instead of unwinding across the call.
+        let frozen = cxt.load_nstring(b"Object.new.freeze");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+        assert!(matches!(
+            frozen.iv_set(&mrb, x, one),
+            Err(Error::Exception(_))
+        ));
+
+        // An immediate cannot hold instance variables — also an Err, not UB.
+        assert!(matches!(
+            42i32.into_value(&mrb).iv_set(&mrb, x, one),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn const_get_reads_a_constant_and_surfaces_an_absent_one_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"const_get_test.rb").expect("allocating the context must succeed");
+
+        let module = cxt.load_nstring(b"module BeniConstHost; FOO = 7; end; BeniConstHost");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // A defined constant reads back its value.
+        let foo = mrb.intern_cstr(c"FOO");
+        assert_eq!(
+            i32::from_value(module.const_get(&mrb, foo).expect("FOO is defined")),
+            Some(7)
+        );
+
+        // An absent constant raises NameError — surfaced as Err instead
+        // of unwinding across the call.
+        let missing = mrb.intern_cstr(c"BENI_MISSING");
+        assert!(matches!(
+            module.const_get(&mrb, missing),
+            Err(Error::Exception(_))
+        ));
     }
 
     #[test]
