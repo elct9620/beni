@@ -54,10 +54,13 @@ typed:
   mrb_break_p: Value::as_break
   mrb_class_p: "`Value::is_class`, via the value tag"
   mrb_data_p: "`Value::is_data`, via the value tag"
+  mrb_exception_p: "`Value::is_exception`, via the value tag"
   mrb_float_p: "`Value::is_float`, via the value tag"
   mrb_hash_p: "`Value::is_hash`, via the value tag"
   mrb_integer_p: "`Value::is_integer` — true for any Integer; the immediate-only `mrb_fixnum_p`, which diverges from this under word boxing, is intentionally not graduated"
+  mrb_module_p: "`Value::is_module`, via the value tag"
   mrb_proc_p: "`Value::is_proc`, via the value tag"
+  mrb_range_p: "`Value::is_range`, via the value tag"
   mrb_string_p: "`Value::is_string`, via the value tag"
   mrb_symbol_p: "`Value::is_symbol`, via the value tag"
   mrb_break_value_get: Break::value

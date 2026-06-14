@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 329 (96%) | 125 (37%) |
-| macro | 124 | 22 (18%) | 27 (22%) |
-| total | 466 | 351 (75%) | 152 (33%) |
+| macro | 124 | 22 (18%) | 30 (24%) |
+| total | 466 | 351 (75%) | 155 (33%) |
 
 ## mruby.h
 
@@ -478,7 +478,7 @@ Legend: ✅ covered · — missing
 | `mrb_cptr_value` | fn | ✅ | — |  |
 | `mrb_data_p` | macro | — | ✅ | `Value::is_data`, via the value tag |
 | `mrb_env_p` | macro | — | — |  |
-| `mrb_exception_p` | macro | — | — |  |
+| `mrb_exception_p` | macro | — | ✅ | `Value::is_exception`, via the value tag |
 | `mrb_false_p` | macro | ✅ | ✅ | `Value::is_false` |
 | `mrb_false_value` | fn | ✅ | ✅ | `Value::false_` |
 | `mrb_fiber_p` | macro | — | — |  |
@@ -495,7 +495,7 @@ Legend: ✅ covered · — missing
 | `mrb_int_value` | fn | ✅ | ✅ | `Value::from_int` |
 | `mrb_integer_p` | macro | — | ✅ | `Value::is_integer` — true for any Integer; the immediate-only `mrb_fixnum_p`, which diverges from this under word boxing, is intentionally not graduated |
 | `mrb_istruct_p` | macro | — | — |  |
-| `mrb_module_p` | macro | — | — |  |
+| `mrb_module_p` | macro | — | ✅ | `Value::is_module`, via the value tag |
 | `mrb_msvc_snprintf` | fn | — | — |  |
 | `mrb_msvc_vsnprintf` | fn | — | — |  |
 | `mrb_nil_p` | macro | ✅ | ✅ | `Value::is_nil` |
@@ -503,7 +503,7 @@ Legend: ✅ covered · — missing
 | `mrb_obj_value` | fn | ✅ | ✅ | `RClass::to_value`, `RClass::data_wrap` |
 | `mrb_object_p` | macro | — | — |  |
 | `mrb_proc_p` | macro | — | ✅ | `Value::is_proc`, via the value tag |
-| `mrb_range_p` | macro | — | — |  |
+| `mrb_range_p` | macro | — | ✅ | `Value::is_range`, via the value tag |
 | `mrb_read_float` | fn | ✅ | — |  |
 | `mrb_read_int` | fn | ✅ | — |  |
 | `mrb_ro_data_p` | macro | ✅ | — |  |

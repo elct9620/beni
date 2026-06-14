@@ -694,6 +694,21 @@ impl Value {
         crate::not_linked()
     }
 
+    /// TRUE when `self` carries `MRB_TT_MODULE` — the module tag only;
+    /// classes (`MRB_TT_CLASS`) are excluded, the complement of
+    /// `Value::is_class`. See `Value::is_integer`. No typed handle binds
+    /// this tag yet, so the predicate stands alone.
+    #[inline]
+    pub fn is_module(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_integer`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_MODULE }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// TRUE when `self` carries `MRB_TT_PROC`. See `Value::is_integer`.
     /// Pair with `Proc::from_value_unchecked` for the direct-wrap path.
     #[inline]
@@ -742,6 +757,35 @@ impl Value {
         {
             // SAFETY: as `is_integer`.
             unsafe { sys::mrb_type(self.0) == sys::MRB_TT_SYMBOL }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// TRUE when `self` carries `MRB_TT_RANGE`. See `Value::is_integer`.
+    /// No typed handle binds this tag yet, so the predicate stands alone.
+    #[inline]
+    pub fn is_range(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_integer`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_RANGE }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// TRUE when `self` carries `MRB_TT_EXCEPTION` — the exception-object
+    /// tag, the type every `raise`d value carries; an arbitrary class that
+    /// merely descends from `Exception` is not yet an instance and reads
+    /// FALSE. See `Value::is_integer`. No typed handle binds this tag yet,
+    /// so the predicate stands alone.
+    #[inline]
+    pub fn is_exception(self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_integer`.
+            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_EXCEPTION }
         }
         #[cfg(not(mruby_linked))]
         crate::not_linked()
@@ -1344,6 +1388,40 @@ mod linked_tests {
         // A non-String tag — and an immediate — both reject.
         assert!(!42i32.into_value(&mrb).is_string());
         assert!(!Value::nil().is_string());
+    }
+
+    #[test]
+    fn tag_predicates_discriminate_module_range_and_exception() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"tag_pred_test.rb").expect("allocating the context must succeed");
+
+        let module = cxt.load_nstring(b"Enumerable");
+        let range = cxt.load_nstring(b"(1..3)");
+        let exception = cxt.load_nstring(b"RuntimeError.new('boom')");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the literals must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        // Each predicate holds for exactly its own tag.
+        assert!(module.is_module());
+        assert!(range.is_range());
+        assert!(exception.is_exception());
+
+        // A class is not a module: is_class and is_module split the
+        // class-family tags, and neither claims the other's value.
+        let class = cxt.load_nstring(b"String");
+        assert!(class.is_class());
+        assert!(!class.is_module());
+        assert!(!module.is_class());
+
+        // No predicate claims an unrelated tag, nor an immediate.
+        assert!(!range.is_module());
+        assert!(!exception.is_range());
+        assert!(!42i32.into_value(&mrb).is_exception());
+        assert!(!Value::nil().is_module());
     }
 
     #[test]
