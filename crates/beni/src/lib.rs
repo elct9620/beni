@@ -229,6 +229,7 @@ mod tests {
         let _ = <RClass as Object>::define_singleton_method;
         let _ = <RModule as Object>::define_singleton_method;
         let _ = Error::message;
+        let _ = Error::argnum;
         let _ = MethodDef::new;
         struct _SurfaceGem;
         impl Gem for _SurfaceGem {

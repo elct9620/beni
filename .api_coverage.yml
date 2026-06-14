@@ -33,6 +33,7 @@ typed:
   RARRAY_LEN: Array::len
   RSTRING_LEN: "`RString::as_bytes`, `RString::to_bytes`, `RString::len`"
   RSTRING_PTR: "`RString::as_bytes`, `RString::to_bytes`"
+  mrb_argnum_error: Error::argnum
   mrb_ary_clear: Array::clear
   mrb_ary_concat: Array::concat
   mrb_ary_dup: Array::dup
@@ -163,7 +164,10 @@ extensions:
     VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught
     back into `Err` by `Mrb::protect` (`mrb_protect_error`). `Error::new`
     builds an exception error from a class and a message (via
-    `RClass::exc_new`) for a handler to raise its own exception.
+    `RClass::exc_new`) for a handler to raise its own exception, and
+    `Error::argnum` builds the canonical wrong-argument-count
+    `ArgumentError` (via `mrb_argnum_error`) for a handler validating its
+    own arity.
   ArenaScope: >-
     RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore`
     with a `mrb_gc_protect` keep — a safety guard with no single C API.

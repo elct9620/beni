@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 103 (30%) |
+| function | 342 | 329 (96%) | 104 (30%) |
 | macro | 124 | 22 (18%) | 27 (22%) |
-| total | 466 | 351 (75%) | 130 (28%) |
+| total | 466 | 351 (75%) | 131 (28%) |
 
 ## mruby.h
 
@@ -29,7 +29,7 @@ Legend: ✅ covered · — missing
 | `MRB_ARGS_REST` | macro | — | — |  |
 | `mrb_alloca` | macro | — | — |  |
 | `mrb_any_to_s` | fn | ✅ | — |  |
-| `mrb_argnum_error` | fn | ✅ | — |  |
+| `mrb_argnum_error` | fn | ✅ | ✅ | `Error::argnum` |
 | `mrb_as_float` | macro | ✅ | ✅ | `Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast |
 | `mrb_as_int` | macro | ✅ | ✅ | `Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast |
 | `mrb_attr_get` | fn | ✅ | — |  |
@@ -551,6 +551,6 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 |------|-------------|
 | `ArenaScope` | RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore` with a `mrb_gc_protect` keep — a safety guard with no single C API. |
 | `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, adding Rust-side type safety to the data pointer. |
-| `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by `Mrb::protect` (`mrb_protect_error`). `Error::new` builds an exception error from a class and a message (via `RClass::exc_new`) for a handler to raise its own exception. |
+| `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by `Mrb::protect` (`mrb_protect_error`). `Error::new` builds an exception error from a class and a message (via `RClass::exc_new`) for a handler to raise its own exception, and `Error::argnum` builds the canonical wrong-argument-count `ArgumentError` (via `mrb_argnum_error`) for a handler validating its own arity. |
 | `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
 | `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` and `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as arbitrary owned bytes). |

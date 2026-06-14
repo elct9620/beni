@@ -7,6 +7,8 @@
 //! Rust panic caught at the FFI boundary travels the same channel.
 
 use crate::{Mrb, RClass, Value};
+#[cfg(mruby_linked)]
+use beni_sys as sys;
 
 /// Error surfaced to Rust callers when mruby rejects an operation or
 /// a wrapped closure panics.
@@ -33,6 +35,48 @@ impl Error {
     #[inline]
     pub fn new(mrb: &Mrb, class: RClass, message: &str) -> Self {
         Error::Exception(class.exc_new(mrb, message))
+    }
+
+    /// Build the canonical `ArgumentError` for a wrong argument count —
+    /// the magnus-aligned way a handler validating its own arity reports
+    /// it: `return Err(Error::argnum(mrb, given, min, max))`. `min == max`
+    /// renders "expected `min`", a negative `max` renders "expected
+    /// `min`+", and `min < max` renders "expected `min`..`max`". The
+    /// message comes from mruby's own `mrb_argnum_error`, captured
+    /// through `Mrb::protect` so its raise surfaces as the returned
+    /// `Error::Exception` instead of long-jumping. `given` saturates to
+    /// `sys::mrb_int::MAX` (the archive's configured integer width), like
+    /// `Mrb::str_new`; real argument counts stay far below that.
+    #[inline]
+    pub fn argnum(mrb: &Mrb, given: i64, min: i32, max: i32) -> Self {
+        #[cfg(mruby_linked)]
+        {
+            let argc = given.min(sys::mrb_int::MAX as i64) as sys::mrb_int;
+            match mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `mrb_argnum_error` raises `ArgumentError`, caught by
+                // `protect` and surfaced as the `Err` below.
+                unsafe {
+                    sys::mrb_argnum_error(
+                        mrb.as_ptr(),
+                        argc,
+                        min as core::ffi::c_int,
+                        max as core::ffi::c_int,
+                    );
+                }
+                Value::zeroed()
+            }) {
+                Err(err) => err,
+                // `mrb_argnum_error` always raises, so `protect` returns
+                // `Err`; an `Ok` would mean the symbol did not raise.
+                Ok(_) => unreachable!("mrb_argnum_error must raise ArgumentError"),
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, given, min, max);
+            crate::not_linked()
+        }
     }
 
     /// The error's message. An exception renders through the live VM
@@ -92,6 +136,54 @@ mod tests {
         // exception renders the message it was built with.
         assert!(matches!(err, Error::Exception(_)));
         assert_eq!(err.message(&mrb), "boom");
+    }
+
+    #[test]
+    fn argnum_renders_the_fixed_count_form() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // min == max: "wrong number of arguments (given 3, expected 2)".
+        let err = Error::argnum(&mrb, 3, 2, 2);
+
+        assert!(matches!(err, Error::Exception(_)));
+        let exc = match err {
+            Error::Exception(v) => v,
+            Error::Panic(_) => unreachable!("argnum must surface as Error::Exception"),
+        };
+        assert_eq!(exc.classname(&mrb), "ArgumentError");
+        let message = Error::Exception(exc).message(&mrb);
+        assert!(
+            message.contains("given 3") && message.contains("expected 2"),
+            "unexpected message: {message}"
+        );
+    }
+
+    #[test]
+    fn argnum_renders_the_open_ended_form_for_a_negative_max() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // max < 0: "expected 2+" — at least `min`, no upper bound.
+        let err = Error::argnum(&mrb, 1, 2, -1);
+
+        let message = err.message(&mrb);
+        assert!(
+            message.contains("given 1") && message.contains("expected 2+"),
+            "unexpected message: {message}"
+        );
+    }
+
+    #[test]
+    fn argnum_renders_the_range_form_for_distinct_bounds() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // min < max: "expected 2..4" — an inclusive range.
+        let err = Error::argnum(&mrb, 5, 2, 4);
+
+        let message = err.message(&mrb);
+        assert!(
+            message.contains("given 5") && message.contains("expected 2..4"),
+            "unexpected message: {message}"
+        );
     }
 
     #[test]
