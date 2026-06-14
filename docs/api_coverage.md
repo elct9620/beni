@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 130 (38%) |
+| function | 342 | 329 (96%) | 133 (39%) |
 | macro | 124 | 22 (18%) | 30 (24%) |
-| total | 466 | 351 (75%) | 160 (34%) |
+| total | 466 | 351 (75%) | 163 (35%) |
 
 ## mruby.h
 
@@ -524,12 +524,12 @@ Legend: ✅ covered · — missing
 | `mrb_const_defined_at` | fn | ✅ | — |  |
 | `mrb_const_get` | fn | ✅ | ✅ | `Value::const_get` |
 | `mrb_const_remove` | fn | ✅ | — |  |
-| `mrb_const_set` | fn | ✅ | — |  |
+| `mrb_const_set` | fn | ✅ | ✅ | `Value::const_set` |
 | `mrb_cv_defined` | fn | ✅ | — |  |
-| `mrb_cv_get` | fn | ✅ | ✅ | `Value::cv_get` — the value-level class-variable read; `mrb_mod_cv_set` / `mrb_cv_set` (the writes) stay in `sys` |
-| `mrb_cv_set` | fn | ✅ | — |  |
+| `mrb_cv_get` | fn | ✅ | ✅ | `Value::cv_get` |
+| `mrb_cv_set` | fn | ✅ | ✅ | `Value::cv_set` — the value-level class-variable write; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in `sys` |
 | `mrb_gv_get` | fn | ✅ | ✅ | `Mrb::gv_get` |
-| `mrb_gv_remove` | fn | ✅ | — |  |
+| `mrb_gv_remove` | fn | ✅ | ✅ | `Mrb::gv_remove` |
 | `mrb_gv_set` | fn | ✅ | ✅ | `Mrb::gv_set` |
 | `mrb_iv_copy` | fn | ✅ | — |  |
 | `mrb_iv_defined` | fn | ✅ | ✅ | `Value::iv_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys` |

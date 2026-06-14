@@ -79,7 +79,9 @@ typed:
   mrb_close: Mrb::drop
   mrb_const_defined: Value::const_defined
   mrb_const_get: Value::const_get
-  mrb_cv_get: "`Value::cv_get` — the value-level class-variable read; `mrb_mod_cv_set` / `mrb_cv_set` (the writes) stay in `sys`"
+  mrb_const_set: Value::const_set
+  mrb_cv_get: Value::cv_get
+  mrb_cv_set: "`Value::cv_set` — the value-level class-variable write; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in `sys`"
   mrb_data_check_get_ptr: Value::data_get
   mrb_data_init: Value::data_reinit
   mrb_data_object_alloc: "`RClass::data_wrap` (see DataType extension)"
@@ -123,6 +125,7 @@ typed:
   mrb_get_argc: Mrb::argc
   mrb_get_args: state::args
   mrb_gv_get: Mrb::gv_get
+  mrb_gv_remove: Mrb::gv_remove
   mrb_gv_set: Mrb::gv_set
   mrb_hash_clear: Hash::clear
   mrb_hash_delete_key: Hash::delete

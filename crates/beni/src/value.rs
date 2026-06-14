@@ -912,14 +912,16 @@ impl Value {
     }
 
     // ----------------------------------------------------------------
-    // Instance variable / constant accessors. The mruby C API spells
-    // these as `mrb_iv_set` / `mrb_iv_get` / `mrb_const_defined` /
-    // `mrb_const_get` / `mrb_respond_to`; the inherent methods carry
-    // the same names so the call shape mirrors the C-side
+    // Instance variable / constant / class variable accessors. The
+    // mruby C API spells these as `mrb_iv_set` / `mrb_iv_get` /
+    // `mrb_const_set` / `mrb_const_get` / `mrb_cv_set` / `mrb_cv_get` /
+    // `mrb_const_defined` / `mrb_respond_to`; the inherent methods
+    // carry the same names so the call shape mirrors the C-side
     // documentation one-to-one. The reads (`iv_get`, `const_defined`,
     // `respond_to`) dispatch nothing and hand back a bare value; the
-    // assigning and fetching operations (`iv_set`, `const_get`) can
-    // raise, so they route through `protect` and return a `Result`.
+    // assigning and fetching operations (`iv_set`, `const_set`,
+    // `const_get`, `cv_set`, `cv_get`) can raise, so they route through
+    // `protect` and return a `Result`.
     // ----------------------------------------------------------------
 
     /// `mrb_iv_set(mrb, self, sym, val)` — assign instance variable
@@ -1021,6 +1023,34 @@ impl Value {
         }
     }
 
+    /// `mrb_const_set(mrb, self, sym, val)` — assign constant `sym` on
+    /// `self` (the module or class value) to `val`. Surfaces an `Err`
+    /// when `self` is not a class or module, when `self` is frozen, or
+    /// when the `const_added` hook raises. The value-level write
+    /// complementing `const_get`.
+    #[inline]
+    pub fn const_set(self, mrb: &Mrb, sym: sys::mrb_sym, val: Value) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` and `val` originate from the same VM.
+                // `mrb_const_set` raises `TypeError` when `self` is not
+                // a class or module, `FrozenError` when it is frozen,
+                // and runs a `const_added` hook that may raise — all
+                // caught by `protect`.
+                unsafe { sys::mrb_const_set(mrb.as_ptr(), self.0, sym, val.0) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym, val);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_cv_get(mrb, self, sym)` — read class variable `sym` from
     /// `self` (the module or class value), walking the ancestry.
     /// Surfaces an `Err` when `sym` resolves to no class variable.
@@ -1039,6 +1069,32 @@ impl Value {
         #[cfg(not(mruby_linked))]
         {
             let _ = (mrb, sym);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_cv_set(mrb, self, sym, val)` — assign class variable `sym`
+    /// on `self` (the module or class value) to `val`. Surfaces an
+    /// `Err` when `self` is frozen. The value-level write complementing
+    /// `cv_get`; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in
+    /// `sys`.
+    #[inline]
+    pub fn cv_set(self, mrb: &Mrb, sym: sys::mrb_sym, val: Value) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` and `val` originate from the same VM.
+                // `mrb_cv_set` raises `FrozenError` on a frozen
+                // receiver — caught by `protect`.
+                unsafe { sys::mrb_cv_set(mrb.as_ptr(), self.0, sym, val.0) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym, val);
             crate::not_linked()
         }
     }
@@ -1896,6 +1952,62 @@ mod linked_tests {
         let missing = mrb.intern_cstr(c"@@beni_missing");
         assert!(matches!(
             class.cv_get(&mrb, missing),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn const_set_assigns_a_constant_and_surfaces_a_non_module_receiver_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"const_set_test.rb").expect("allocating the context must succeed");
+
+        let module = cxt.load_nstring(b"module BeniConstWriteHost; end; BeniConstWriteHost");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // A fresh constant assigned on a module reads back its value.
+        let bar = mrb.intern_cstr(c"BAR");
+        module
+            .const_set(&mrb, bar, 9i32.into_value(&mrb))
+            .expect("assigning a constant on a module must succeed");
+        assert_eq!(
+            i32::from_value(module.const_get(&mrb, bar).expect("BAR was just set")),
+            Some(9)
+        );
+
+        // A non-module receiver raises TypeError — surfaced as Err
+        // instead of unwinding across the call.
+        assert!(matches!(
+            42i32.into_value(&mrb).const_set(&mrb, bar, Value::nil()),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn cv_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"cv_set_test.rb").expect("allocating the context must succeed");
+
+        let class = cxt.load_nstring(b"class BeniCvWriteHost; end; BeniCvWriteHost");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // A class variable assigned on a class reads back its value.
+        let total = mrb.intern_cstr(c"@@total");
+        class
+            .cv_set(&mrb, total, 5i32.into_value(&mrb))
+            .expect("assigning a class variable on a class must succeed");
+        assert_eq!(
+            i32::from_value(class.cv_get(&mrb, total).expect("@@total was just set")),
+            Some(5)
+        );
+
+        // A frozen receiver rejects the assignment — surfaced as Err
+        // instead of unwinding across the call.
+        let frozen = cxt.load_nstring(b"BeniCvWriteHost.freeze");
+        assert!(mrb.pending_exc().is_nil(), "freezing must not raise");
+        assert!(matches!(
+            frozen.cv_set(&mrb, total, 6i32.into_value(&mrb)),
             Err(Error::Exception(_))
         ));
     }

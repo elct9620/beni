@@ -141,6 +141,25 @@ impl Mrb {
             crate::not_linked()
         }
     }
+
+    /// `mrb_gv_remove(mrb, sym)` — remove a global variable. Removing
+    /// an unset global is a no-op; neither case raises. The global
+    /// reads as nil afterwards, the same as one never set.
+    #[inline]
+    pub fn gv_remove(&self, sym: sys::mrb_sym) {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive; `sym` was interned against the
+            // same VM (caller contract). `mrb_gv_remove` deletes the
+            // entry and does not raise.
+            unsafe { sys::mrb_gv_remove(self.as_ptr(), sym) };
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = sym;
+            crate::not_linked()
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -169,5 +188,23 @@ mod tests {
 
         mrb.gv_set(sym, Value::from_int(&mrb, 2));
         assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(2));
+    }
+
+    #[test]
+    fn gv_remove_clears_a_global_back_to_nil() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let sym = mrb.intern_cstr(c"$beni_gv_removed");
+
+        // A set global reads its value, then removing it reads nil —
+        // the same as one never set.
+        mrb.gv_set(sym, Value::from_int(&mrb, 7));
+        assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(7));
+
+        mrb.gv_remove(sym);
+        assert!(mrb.gv_get(sym).is_nil());
+
+        // Removing an unset global is a no-op, not a raise.
+        mrb.gv_remove(sym);
+        assert!(mrb.gv_get(sym).is_nil());
     }
 }
