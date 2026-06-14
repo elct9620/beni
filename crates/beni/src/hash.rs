@@ -81,15 +81,21 @@ impl Hash {
         }
     }
 
-    /// `mrb_hash_get(mrb, self, key)` — return the value for `key`,
-    /// or `nil` when absent.
+    /// `mrb_hash_get(mrb, self, key)` — the value for `key`, or `nil`
+    /// when absent. The lookup runs the key's `hash`/`eql?`, and an
+    /// absent key runs the hash's `default`; either may raise, so the
+    /// call runs under `Mrb::protect` and surfaces that as `Err`.
     #[inline]
-    pub fn get(self, mrb: &Mrb, key: Value) -> Value {
+    pub fn get(self, mrb: &Mrb, key: Value) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: as `set`.
-            Value::from_raw(unsafe {
-                sys::mrb_hash_get(mrb.as_ptr(), self.0.as_raw(), key.as_raw())
+            mrb.protect(|mrb| {
+                // SAFETY: as `contains_key`; `mrb_hash_get` runs the key's
+                // `hash`/`eql?` and an absent-key `default` lookup, both of
+                // which may raise — caught by `protect`.
+                Value::from_raw(unsafe {
+                    sys::mrb_hash_get(mrb.as_ptr(), self.0.as_raw(), key.as_raw())
+                })
             })
         }
         #[cfg(not(mruby_linked))]
@@ -341,10 +347,15 @@ mod tests {
         .expect("assigning into a fresh hash succeeds");
 
         assert_eq!(
-            hash.get(&mrb, mrb.str_new(b"k").as_value()).to_string(&mrb),
+            hash.get(&mrb, mrb.str_new(b"k").as_value())
+                .expect("a present string key reads without raising")
+                .to_string(&mrb),
             "v"
         );
-        assert!(hash.get(&mrb, mrb.str_new(b"absent").as_value()).is_nil());
+        assert!(hash
+            .get(&mrb, mrb.str_new(b"absent").as_value())
+            .expect("an absent string key reads without raising")
+            .is_nil());
     }
 
     #[test]
@@ -413,6 +424,7 @@ mod tests {
 
         let v = mrb.str_new(b"v").as_value();
         assert!(matches!(hash.set(&mrb, key, v), Err(Error::Exception(_))));
+        assert!(matches!(hash.get(&mrb, key), Err(Error::Exception(_))));
         assert!(matches!(
             hash.contains_key(&mrb, key),
             Err(Error::Exception(_))
@@ -422,6 +434,30 @@ mod tests {
             Err(Error::Exception(_))
         ));
         assert!(matches!(hash.delete(&mrb, key), Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn read_surfaces_a_raising_default_as_err() {
+        use crate::{Ccontext, Error, FromValue, Hash};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"raising_default.rb")
+            .expect("allocating the context must succeed");
+
+        // A hash whose default block raises turns an absent-key read into
+        // a raise protect must catch — the default path a read takes and
+        // fetch does not.
+        let hash = Hash::from_value(cxt.load_nstring(b"Hash.new { raise 'no' }"))
+            .expect("a Hash is Hash-tagged");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "building the hash must not raise"
+        );
+
+        assert!(matches!(
+            hash.get(&mrb, mrb.str_new(b"absent").as_value()),
+            Err(Error::Exception(_))
+        ));
     }
 
     #[test]
@@ -501,7 +537,9 @@ mod tests {
             .expect("set succeeds");
         hash.update(&mrb, other).expect("update succeeds");
         assert_eq!(
-            hash.get(&mrb, mrb.str_new(b"a").as_value()).to_string(&mrb),
+            hash.get(&mrb, mrb.str_new(b"a").as_value())
+                .expect("a present string key reads without raising")
+                .to_string(&mrb),
             "1"
         );
     }
@@ -555,7 +593,9 @@ mod tests {
         // Mutating the original leaves the dup untouched.
         assert!(hash.is_empty(&mrb));
         assert_eq!(
-            copy.get(&mrb, mrb.str_new(b"k").as_value()).to_string(&mrb),
+            copy.get(&mrb, mrb.str_new(b"k").as_value())
+                .expect("a present string key reads without raising")
+                .to_string(&mrb),
             "v"
         );
     }
