@@ -1496,7 +1496,9 @@ mod linked_tests {
             .define_method(&mrb, c"run", crate::method!(report_break, -1))
             .expect("registering the yielder method must succeed");
 
-        let recv = class.obj_new(&mrb, &[]);
+        let recv = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let slot = mrb.intern_cstr(c"$beni_break_recv");
         mrb.gv_set(slot, recv);
 

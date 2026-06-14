@@ -22,10 +22,11 @@
 //!
 //! ## Error contract
 //!
-//! Every definition, registration, and lookup runs inside
-//! `Mrb::protect`, so an mruby raise (superclass mismatch, frozen
-//! receiver, missing constant, …) surfaces as `Err(Error::Exception)`
-//! instead of long-jumping across Rust frames.
+//! Every definition, registration, lookup, and instance construction
+//! runs inside `Mrb::protect`, so an mruby raise (superclass mismatch,
+//! frozen receiver, missing constant, a raising `initialize`, …)
+//! surfaces as `Err(Error::Exception)` instead of long-jumping across
+//! Rust frames.
 
 use crate::{Error, MethodDef, Mrb, Value};
 use beni_sys as sys;
@@ -182,20 +183,24 @@ impl RClass {
     }
 
     /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
-    /// a new instance of this class, calling `initialize` with `args`.
-    /// A raising `initialize` long-jumps — only call from contexts
-    /// that can absorb one (C bridges, `Mrb::protect` bodies).
+    /// a new instance of this class, running `initialize` with `args`.
+    /// Surfaces an `Err` when `initialize` raises. Mirrors `magnus`'s
+    /// `Class::new_instance`.
     #[inline]
-    pub fn obj_new(self, mrb: &Mrb, args: &[Value]) -> Value {
+    pub fn obj_new(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
             // Value is repr(transparent) over mrb_value; the slice
             // pointer reuses the same layout.
             let argv = args.as_ptr() as *const sys::mrb_value;
-            // SAFETY: `mrb` is alive; `self` and every `args` entry
-            // originate from the same VM.
-            Value::from_raw(unsafe {
-                sys::mrb_obj_new(mrb.as_ptr(), self.0, args.len() as sys::mrb_int, argv)
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` and every `args` entry originate from the same
+                // VM. `mrb_obj_new` runs `initialize`, which may raise —
+                // caught by `protect`.
+                Value::from_raw(unsafe {
+                    sys::mrb_obj_new(mrb.as_ptr(), self.0, args.len() as sys::mrb_int, argv)
+                })
             })
         }
         #[cfg(not(mruby_linked))]
@@ -676,6 +681,26 @@ mod tests {
     }
 
     #[test]
+    fn obj_new_surfaces_a_raising_initialize_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = crate::Ccontext::new(&mrb, c"obj_new_test.rb")
+            .expect("allocating the context must succeed");
+
+        cxt.load_nstring(b"class BeniBoomInit; def initialize; raise 'no'; end; end");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the class must not raise"
+        );
+
+        // Constructing runs the raising initialize — surfaced as Err
+        // instead of long-jumping across the call.
+        let class = mrb
+            .class_get(c"BeniBoomInit")
+            .expect("the class is defined");
+        assert!(matches!(class.obj_new(&mrb, &[]), Err(Error::Exception(_))));
+    }
+
+    #[test]
     fn private_method_rejects_public_dispatch_but_is_attached() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let object = mrb.object_class();
@@ -686,7 +711,9 @@ mod tests {
         class
             .define_private_method(&mrb, c"secret", crate::method!(answer_seven, 0))
             .expect("registering the private method must succeed");
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
 
         // VM-dispatched code with an explicit receiver must observe
         // the visibility (the funcall path bypasses it by design):
@@ -732,7 +759,9 @@ mod tests {
         class
             .define_method(&mrb, c"answer", crate::method!(answer_seven, 0))
             .expect("registering the instance method must succeed");
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let got = receiver
             .funcall(&mrb, c"answer", &[])
             .expect("the registered method must not raise");
@@ -873,7 +902,9 @@ mod tests {
 
         // The alias resolves to the same body as the original — the
         // consumer-visible point of preserving a method before override.
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let got = receiver
             .funcall(&mrb, c"original_answer", &[])
             .expect("the aliased method must not raise");
@@ -900,7 +931,9 @@ mod tests {
             .expect("including the module must succeed");
 
         // An instance of the host now answers the mixed-in method.
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let got = receiver
             .funcall(&mrb, c"helped", &[])
             .expect("the mixed-in method must not raise");

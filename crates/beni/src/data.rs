@@ -271,7 +271,9 @@ mod tests {
 
         // A bare carrier — allocated as CDATA with no payload yet, the
         // shape mruby's dup/clone hands to initialize_copy.
-        let obj = class.obj_new(&mrb, &[]);
+        let obj = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         assert!(obj.is_data(), "the fresh instance is a data carrier");
         assert!(
             obj.data_get(&mrb, &HOLDER_TYPE).is_none(),

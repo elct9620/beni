@@ -443,7 +443,9 @@ mod tests {
             .define_method(&mrb, c"add", method!(add, 2))
             .expect("registering the typed method must succeed");
 
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let args = [Value::from_int(&mrb, 1), Value::from_int(&mrb, 2)];
         let got = receiver
             .funcall(&mrb, c"add", &args)
@@ -462,7 +464,9 @@ mod tests {
         // A Float argument fails the i32 FromValue conversion: the
         // bridge must raise TypeError to the Ruby caller and the
         // wrapped function must never run.
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let args = [Value::from_float(&mrb, 1.5), Value::from_int(&mrb, 2)];
         let err = receiver
             .funcall(&mrb, c"add", &args)
@@ -489,7 +493,9 @@ mod tests {
         // The panic must be caught at the bridge and re-raised as a
         // RuntimeError the Ruby-side caller (here: the protect frame)
         // observes — never an unwind through mruby's C frames.
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let err = receiver
             .funcall(&mrb, c"detonate", &[])
             .expect_err("the panic must surface as a Ruby exception");
@@ -522,7 +528,9 @@ mod tests {
             .define_method(&mrb, c"try", method!(fallible, 0))
             .expect("registering the fallible method must succeed");
 
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let err = receiver
             .funcall(&mrb, c"try", &[])
             .expect_err("the body's Err must surface as a raise");

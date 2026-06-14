@@ -482,7 +482,9 @@ mod tests {
             .define_method(&mrb, c"rest_count", crate::method!(rest_count, -1))
             .expect("registering the bridge must succeed");
 
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let args = [
             Value::from_int(&mrb, 1),
             Value::from_int(&mrb, 2),
@@ -513,7 +515,9 @@ mod tests {
             .define_method(&mrb, c"io_first", crate::method!(io_first, -1))
             .expect("registering the bridge must succeed");
 
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let args = [Value::from_int(&mrb, 7), Value::from_int(&mrb, 99)];
         let got = receiver
             .funcall(&mrb, c"io_first", &args)
@@ -545,7 +549,9 @@ mod tests {
             )
             .expect("registering the bridge must succeed");
 
-        let recv = class.obj_new(&mrb, &[]);
+        let recv = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let slot = mrb.intern_cstr(c"$beni_nrest_recv");
         mrb.gv_set(slot, recv);
 
@@ -598,7 +604,9 @@ mod tests {
             .define_method(&mrb, c"s_echo", crate::method!(s_echo, -1))
             .expect("registering the bridge must succeed");
 
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let got = receiver
             .funcall(&mrb, c"s_echo", &[mrb.str_new(b"hello").as_value()])
             .expect("the bridge must not raise");
@@ -617,7 +625,9 @@ mod tests {
             .define_method(&mrb, c"str_echo", crate::method!(str_echo, -1))
             .expect("registering the bridge must succeed");
 
-        let receiver = class.obj_new(&mrb, &[]);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let got = receiver
             .funcall(&mrb, c"str_echo", &[mrb.str_new(b"hello").as_value()])
             .expect("the bridge must not raise");
@@ -641,7 +651,9 @@ mod tests {
             )
             .expect("registering the bridge must succeed");
 
-        let recv = class.obj_new(&mrb, &[]);
+        let recv = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
         let slot = mrb.intern_cstr(c"$beni_rest_block_recv");
         mrb.gv_set(slot, recv);
 
