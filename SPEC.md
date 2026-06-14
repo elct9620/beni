@@ -309,7 +309,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | `equal?` | object identity — the same object or not; a total predicate |
 | `object_id` | a unique integer identifier for the value; dispatches nothing and never raises, a total operation |
 | `==` / `eql?` | Ruby value and hash-key equality; may run a user-defined `==` or `eql?` |
-| dispatch | call a Ruby method by name with an argument slice, receiving its return value |
+| dispatch | call a Ruby method named by a symbol-or-name key with an argument slice, receiving its return value |
 | inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect`, and a raise inside it yields an empty string |
 | `dup` / `clone` | copy the object, running its `initialize_copy` — `dup` resets the frozen state and drops the singleton class, `clone` preserves both; an immediate returns itself; may raise |
 | string coercion | the value as a string — itself when already a string, otherwise its `to_s`; may raise when `to_s` does not return a string |
@@ -336,9 +336,10 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   into the handle. A definition, registration, alias, or module inclusion mruby
   rejects — including a cyclic include — surfaces as a Rust `Err`.
 - Every definition and lookup keyed by a name — class, module, method, private
-  method, module function, class method, constant, and the class/module lookups
-  on `Mrb` and within a namespace — accepts the name as a symbol-or-name key,
-  mirroring `magnus`'s `IntoId`: a string key interns to a symbol, an
+  method, module function, class method, constant, the class/module lookups
+  on `Mrb` and within a namespace, and method dispatch on a value — accepts the
+  name as a symbol-or-name key, mirroring `magnus`'s `IntoId`: a string key
+  interns to a symbol, an
   already-interned `Symbol` key is reused without re-interning. A consumer
   holding a `Symbol` reaches the definition or lookup without a redundant
   intern; the result is identical to passing the equivalent name, since both
