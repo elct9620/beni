@@ -11,12 +11,9 @@
  * by the mruby surface itself — they cover bindgen's `wrap_static_fns`
  * trampoline file. bindgen emits a trampoline for every `static inline`
  * function reached through the include tree, including wasi-libc
- * helpers like `FD_ISSET`. The generated trampoline file `#include`s
+ * helpers like `FD_ISSET`; the generated trampoline file `#include`s
  * only this wrapper, so `bool` and `fd_set` must resolve here even
- * though the safe layer never calls those helpers. Release builds
- * happened to inline-strip the unused trampolines; debug builds keep
- * them, which is what surfaces the compile failure without these
- * pre-includes.
+ * though the safe layer never calls those helpers.
  */
 
 #include <stdbool.h>
