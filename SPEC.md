@@ -307,6 +307,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | Operation | Semantics |
 |---|---|
 | `equal?` | object identity — the same object or not; a total predicate |
+| `object_id` | a unique integer identifier for the value; dispatches nothing and never raises, a total operation |
 | `==` / `eql?` | Ruby value and hash-key equality; may run a user-defined `==` or `eql?` |
 | dispatch | call a Ruby method by name with an argument slice, receiving its return value |
 | inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect`, and a raise inside it yields an empty string |
