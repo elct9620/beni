@@ -117,9 +117,13 @@ typed:
   mrb_nil_p: Value::is_nil
   mrb_nil_value: Value::nil
   mrb_obj_as_string: Value::obj_as_string
+  mrb_obj_class: Value::class
   mrb_obj_classname: Value::classname
   mrb_obj_clone: Value::obj_clone
   mrb_obj_dup: Value::obj_dup
+  mrb_obj_freeze: Value::freeze
+  mrb_obj_is_instance_of: Value::is_instance_of
+  mrb_obj_is_kind_of: Value::is_kind_of
   mrb_obj_new: RClass::obj_new
   mrb_obj_value: "`RClass::to_value`, `RClass::data_wrap`"
   mrb_open: Mrb::open

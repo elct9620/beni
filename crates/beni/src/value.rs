@@ -41,7 +41,7 @@
 
 use beni_sys as sys;
 
-use crate::{Error, Mrb};
+use crate::{Error, Mrb, RClass};
 #[cfg(mruby_linked)]
 use crate::{FromValue, RString};
 
@@ -873,6 +873,83 @@ impl Value {
         }
     }
 
+    /// `mrb_obj_class(mrb, self)` — the class `self` belongs to, Ruby's
+    /// `Object#class`. Every value has a class, so this never fails.
+    #[inline]
+    pub fn class(self, mrb: &Mrb) -> RClass {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive; `self` shares the VM. `mrb_obj_class`
+            // returns the receiver's class pointer, never null.
+            RClass::from_raw(unsafe { sys::mrb_obj_class(mrb.as_ptr(), self.0) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_obj_is_kind_of(mrb, self, class)` — whether `self` is an
+    /// instance of `class` or any of its subclasses, Ruby's `is_a?`. A
+    /// pure ancestry walk that dispatches nothing, so it never raises.
+    #[inline]
+    pub fn is_kind_of(self, mrb: &Mrb, class: RClass) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive; `self` and `class` share the VM.
+            // `mrb_obj_is_kind_of` only walks the class hierarchy.
+            unsafe { sys::mrb_obj_is_kind_of(mrb.as_ptr(), self.0, class.as_raw()) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, class);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_obj_is_instance_of(mrb, self, class)` — whether `self` is a
+    /// direct instance of `class`, Ruby's `instance_of?`. A pure class
+    /// compare that dispatches nothing, so it never raises.
+    #[inline]
+    pub fn is_instance_of(self, mrb: &Mrb, class: RClass) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `is_kind_of`; `mrb_obj_is_instance_of` only reads
+            // the receiver's class.
+            unsafe {
+                sys::mrb_obj_is_instance_of(
+                    mrb.as_ptr(),
+                    self.0,
+                    class.as_raw() as *const sys::RClass,
+                )
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, class);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_obj_freeze(mrb, self)` — freeze `self` in place and return
+    /// it, Ruby's `Object#freeze`. Freezing is idempotent and never
+    /// raises.
+    #[inline]
+    pub fn freeze(self, mrb: &Mrb) -> Value {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive; `self` shares the VM. `mrb_obj_freeze`
+            // sets the frozen flag and returns the receiver.
+            Value::from_raw(unsafe { sys::mrb_obj_freeze(mrb.as_ptr(), self.0) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_obj_equal(mrb, self, other)` — TRUE when `self` and `other`
     /// are the same object, Ruby's `equal?`. A pure identity compare:
     /// it dispatches nothing, so it never raises and yields a `bool`.
@@ -1247,5 +1324,39 @@ mod linked_tests {
             mrb.pending_exc().to_string(&mrb)
         );
         assert_eq!(i32::from_value(got), Some(88));
+    }
+
+    #[test]
+    fn class_and_kind_predicates_read_the_hierarchy() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let s = mrb.str_new(b"hi").as_value();
+        let string_class = mrb.class_get(c"String").expect("String is defined");
+        let object_class = mrb.class_get(c"Object").expect("Object is defined");
+
+        // class() names the receiver's direct class.
+        assert_eq!(s.class(&mrb).name(&mrb), Some("String"));
+
+        // is_kind_of holds for the direct class and its ancestors;
+        // instance_of only for the direct class.
+        assert!(s.is_kind_of(&mrb, string_class));
+        assert!(s.is_kind_of(&mrb, object_class));
+        assert!(s.is_instance_of(&mrb, string_class));
+        assert!(!s.is_instance_of(&mrb, object_class));
+    }
+
+    #[test]
+    fn freeze_marks_the_value_frozen() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let s = mrb.str_new(b"x").as_value();
+        assert!(!s
+            .funcall(&mrb, c"frozen?", &[])
+            .expect("frozen? does not raise")
+            .to_bool());
+
+        let frozen = s.freeze(&mrb);
+        assert!(frozen
+            .funcall(&mrb, c"frozen?", &[])
+            .expect("frozen? does not raise")
+            .to_bool());
     }
 }

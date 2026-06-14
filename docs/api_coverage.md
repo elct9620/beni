@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 88 (26%) |
+| function | 342 | 329 (96%) | 92 (27%) |
 | macro | 124 | 20 (16%) | 24 (19%) |
-| total | 466 | 349 (75%) | 112 (24%) |
+| total | 466 | 349 (75%) | 116 (25%) |
 
 ## mruby.h
 
@@ -153,17 +153,17 @@ Legend: ✅ covered · — missing
 | `mrb_notimplement` | fn | ✅ | — |  |
 | `mrb_notimplement_m` | fn | ✅ | — |  |
 | `mrb_obj_alloc` | fn | ✅ | — |  |
-| `mrb_obj_class` | fn | ✅ | — |  |
+| `mrb_obj_class` | fn | ✅ | ✅ | `Value::class` |
 | `mrb_obj_classname` | fn | ✅ | ✅ | `Value::classname` |
 | `mrb_obj_clone` | fn | ✅ | ✅ | `Value::obj_clone` |
 | `mrb_obj_dup` | fn | ✅ | ✅ | `Value::obj_dup` |
 | `mrb_obj_eq` | fn | ✅ | — |  |
 | `mrb_obj_equal` | fn | ✅ | ✅ | `Value::obj_equal` |
-| `mrb_obj_freeze` | fn | ✅ | — |  |
+| `mrb_obj_freeze` | fn | ✅ | ✅ | `Value::freeze` |
 | `mrb_obj_id` | fn | ✅ | — |  |
 | `mrb_obj_inspect` | fn | ✅ | — |  |
-| `mrb_obj_is_instance_of` | fn | ✅ | — |  |
-| `mrb_obj_is_kind_of` | fn | ✅ | — |  |
+| `mrb_obj_is_instance_of` | fn | ✅ | ✅ | `Value::is_instance_of` |
+| `mrb_obj_is_kind_of` | fn | ✅ | ✅ | `Value::is_kind_of` |
 | `mrb_obj_itself` | fn | ✅ | — |  |
 | `mrb_obj_new` | fn | ✅ | ✅ | `RClass::obj_new` |
 | `mrb_obj_respond_to` | fn | ✅ | — |  |
