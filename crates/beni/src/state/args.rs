@@ -488,7 +488,9 @@ mod tests {
             Value::from_int(&mrb, 2),
             Value::from_int(&mrb, 3),
         ];
-        let count = receiver.call(&mrb, c"rest_count", &args);
+        let count = receiver
+            .funcall(&mrb, c"rest_count", &args)
+            .expect("the bridge must not raise");
 
         assert!(count.is_integer(), "bridge must return an Integer");
         assert_eq!(unsafe { count.unbox_integer() }, 3);
@@ -513,7 +515,9 @@ mod tests {
 
         let receiver = class.obj_new(&mrb, &[]);
         let args = [Value::from_int(&mrb, 7), Value::from_int(&mrb, 99)];
-        let got = receiver.call(&mrb, c"io_first", &args);
+        let got = receiver
+            .funcall(&mrb, c"io_first", &args)
+            .expect("the bridge must not raise");
 
         assert!(got.is_integer(), "bridge must return an Integer");
         assert_eq!(
@@ -595,7 +599,9 @@ mod tests {
             .expect("registering the bridge must succeed");
 
         let receiver = class.obj_new(&mrb, &[]);
-        let got = receiver.call(&mrb, c"s_echo", &[mrb.str_new(b"hello").as_value()]);
+        let got = receiver
+            .funcall(&mrb, c"s_echo", &[mrb.str_new(b"hello").as_value()])
+            .expect("the bridge must not raise");
 
         assert!(got.is_string(), "the `\"S\"` read yields a String value");
         assert_eq!(got.to_string(&mrb), "hello");
@@ -612,7 +618,9 @@ mod tests {
             .expect("registering the bridge must succeed");
 
         let receiver = class.obj_new(&mrb, &[]);
-        let got = receiver.call(&mrb, c"str_echo", &[mrb.str_new(b"hello").as_value()]);
+        let got = receiver
+            .funcall(&mrb, c"str_echo", &[mrb.str_new(b"hello").as_value()])
+            .expect("the bridge must not raise");
 
         // The echoed String equals the input only if both the byte
         // pointer and the length were read correctly.

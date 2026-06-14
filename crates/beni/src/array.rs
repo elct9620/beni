@@ -55,15 +55,24 @@ impl Array {
         self.0.as_raw()
     }
 
-    /// `mrb_ary_push(mrb, self, val)` — append `val` to this array.
+    /// `mrb_ary_push(mrb, self, val)` — append `val`, the way Ruby's
+    /// `Array#push` extends its receiver. Appending to a frozen array
+    /// raises `FrozenError`; the call runs under `Mrb::protect`, so that
+    /// surfaces as `Err` rather than long-jumping.
     #[inline]
-    pub fn push(self, mrb: &Mrb, val: Value) {
+    pub fn push(self, mrb: &Mrb, val: Value) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: `mrb` is alive; `self` is Array-tagged by the
-            // `from_value_unchecked` contract; `val` originates from the
-            // same VM by the single-VM contract.
-            unsafe { sys::mrb_ary_push(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // is Array-tagged by the `from_value_unchecked` contract;
+                // `val` originates from the same VM. `mrb_ary_push` calls
+                // `mrb_ary_modify`, which raises `FrozenError` on a frozen
+                // array — caught by `protect` into `Err`.
+                unsafe { sys::mrb_ary_push(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
+                Value::nil()
+            })
+            .map(|_| ())
         }
         #[cfg(not(mruby_linked))]
         {
@@ -167,8 +176,10 @@ mod tests {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let ary = mrb.ary_new();
 
-        ary.push(&mrb, mrb.str_new(b"first").as_value());
-        ary.push(&mrb, mrb.str_new(b"second").as_value());
+        ary.push(&mrb, mrb.str_new(b"first").as_value())
+            .expect("push to a fresh array succeeds");
+        ary.push(&mrb, mrb.str_new(b"second").as_value())
+            .expect("push to a fresh array succeeds");
 
         assert_eq!(ary.entry(0).to_string(&mrb), "first");
         assert_eq!(ary.entry(-1).to_string(&mrb), "second");
@@ -179,7 +190,8 @@ mod tests {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let ary = mrb.ary_new();
 
-        ary.push(&mrb, mrb.str_new(b"only").as_value());
+        ary.push(&mrb, mrb.str_new(b"only").as_value())
+            .expect("push to a fresh array succeeds");
 
         assert!(ary.entry(1).is_nil());
         assert!(ary.entry(-2).is_nil());
@@ -212,7 +224,8 @@ mod tests {
     fn store_out_of_range_index_surfaces_err() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let ary = mrb.ary_new();
-        ary.push(&mrb, mrb.str_new(b"only").as_value());
+        ary.push(&mrb, mrb.str_new(b"only").as_value())
+            .expect("push to a fresh array succeeds");
 
         // A negative index reaching past the beginning raises IndexError.
         assert!(ary.store(&mrb, -5, mrb.str_new(b"x").as_value()).is_err());
@@ -232,10 +245,28 @@ mod tests {
         assert_eq!(ary.len(), 0);
         assert!(ary.is_empty());
 
-        ary.push(&mrb, mrb.str_new(b"a").as_value());
-        ary.push(&mrb, mrb.str_new(b"b").as_value());
+        ary.push(&mrb, mrb.str_new(b"a").as_value())
+            .expect("push to a fresh array succeeds");
+        ary.push(&mrb, mrb.str_new(b"b").as_value())
+            .expect("push to a fresh array succeeds");
 
         assert_eq!(ary.len(), 2);
         assert!(!ary.is_empty());
+    }
+
+    #[test]
+    fn push_surfaces_frozen_receiver_as_err() {
+        use crate::{Array, Ccontext, FromValue};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_ary.rb").expect("allocating the context must succeed");
+
+        // A frozen Array still carries the Array tag, so the downcast
+        // holds, but pushing to it raises FrozenError — which protect
+        // catches into Err rather than long-jumping.
+        let frozen = Array::from_value(cxt.load_nstring(b"[].freeze"))
+            .expect("a frozen Array literal is Array-tagged");
+        assert!(frozen.push(&mrb, mrb.str_new(b"x").as_value()).is_err());
     }
 }

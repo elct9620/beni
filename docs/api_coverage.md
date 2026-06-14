@@ -110,7 +110,7 @@ Legend: ✅ covered · — missing
 | `mrb_full_gc` | fn | ✅ | — |  |
 | `mrb_func_basic_p` | fn | ✅ | — |  |
 | `mrb_funcall` | fn | ✅ | — |  |
-| `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::call_argv` |
+| `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::funcall` (by name), `Value::funcall_argv` (pre-interned sym) |
 | `mrb_funcall_id` | fn | ✅ | — |  |
 | `mrb_funcall_with_block` | fn | ✅ | — |  |
 | `mrb_garbage_collect` | fn | ✅ | — |  |

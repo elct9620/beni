@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_hash.rs`: factories live on `Ruby` /
 //! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
 
-use crate::{Array, Mrb, Value};
+use crate::{Array, Error, Mrb, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Hash`. `#[repr(transparent)]` over
@@ -52,14 +52,27 @@ impl Hash {
     }
 
     /// `mrb_hash_set(mrb, self, key, val)` — assign `key => val`.
+    /// Assigning into a frozen hash raises `FrozenError`, and storing a
+    /// key runs its Ruby `hash`/`eql?` which may raise; the call runs
+    /// under `Mrb::protect`, so either surfaces as `Err` rather than
+    /// long-jumping.
     #[inline]
-    pub fn set(self, mrb: &Mrb, key: Value, val: Value) {
+    pub fn set(self, mrb: &Mrb, key: Value, val: Value) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: `mrb` is alive; `self` is Hash-tagged by the
-            // `from_value_unchecked` contract; `key` and `val` originate
-            // from the same VM.
-            unsafe { sys::mrb_hash_set(mrb.as_ptr(), self.0.as_raw(), key.as_raw(), val.as_raw()) };
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // is Hash-tagged by the `from_value_unchecked` contract;
+                // `key` and `val` originate from the same VM.
+                // `mrb_hash_set` calls `hash_modify` (raises `FrozenError`
+                // on a frozen hash) and may run the key's `hash`/`eql?` —
+                // either caught by `protect` into `Err`.
+                unsafe {
+                    sys::mrb_hash_set(mrb.as_ptr(), self.0.as_raw(), key.as_raw(), val.as_raw())
+                };
+                Value::nil()
+            })
+            .map(|_| ())
         }
         #[cfg(not(mruby_linked))]
         {
@@ -122,7 +135,8 @@ mod tests {
             &mrb,
             mrb.str_new(b"k").as_value(),
             mrb.str_new(b"v").as_value(),
-        );
+        )
+        .expect("assigning into a fresh hash succeeds");
 
         assert_eq!(
             hash.get(&mrb, mrb.str_new(b"k").as_value()).to_string(&mrb),
@@ -140,10 +154,33 @@ mod tests {
             &mrb,
             mrb.str_new(b"k").as_value(),
             mrb.str_new(b"v").as_value(),
-        );
+        )
+        .expect("assigning into a fresh hash succeeds");
         let keys = hash.keys(&mrb);
 
         assert_eq!(keys.entry(0).to_string(&mrb), "k");
         assert!(keys.entry(1).is_nil());
+    }
+
+    #[test]
+    fn set_surfaces_frozen_receiver_as_err() {
+        use crate::{Ccontext, FromValue, Hash};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_hash.rb").expect("allocating the context must succeed");
+
+        // A frozen Hash still carries the Hash tag, so the downcast holds,
+        // but assigning into it raises FrozenError — which protect catches
+        // into Err rather than long-jumping.
+        let frozen = Hash::from_value(cxt.load_nstring(b"{}.freeze"))
+            .expect("a frozen Hash literal is Hash-tagged");
+        assert!(frozen
+            .set(
+                &mrb,
+                mrb.str_new(b"k").as_value(),
+                mrb.str_new(b"v").as_value()
+            )
+            .is_err());
     }
 }

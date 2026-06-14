@@ -178,8 +178,8 @@ mod tests {
         let _ = Value::classname;
         let _ = Value::to_string;
         let _ = Value::as_class_ptr;
-        let _ = Value::call;
-        let _ = Value::call_argv;
+        let _ = Value::funcall;
+        let _ = Value::funcall_argv;
         let _ = Value::is_nil;
         let _ = Value::is_integer;
         let _ = Value::is_float;

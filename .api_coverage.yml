@@ -83,7 +83,7 @@ typed:
   mrb_false_p: Value::is_false
   mrb_false_value: Value::false_
   mrb_float_value: Value::from_float
-  mrb_funcall_argv: Value::call_argv
+  mrb_funcall_argv: "`Value::funcall` (by name), `Value::funcall_argv` (pre-interned sym)"
   mrb_gc_arena_restore: "`ArenaScope::keep`/`drop` (see ArenaScope extension)"
   mrb_gc_arena_save: "`Mrb::arena_scope` (see ArenaScope extension)"
   mrb_gc_protect: "`ArenaScope::keep` (see ArenaScope extension)"

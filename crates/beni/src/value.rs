@@ -390,20 +390,17 @@ impl Value {
     /// ## Exception handling
     ///
     /// If `.to_s` raises (a user object overrides it with `raise`) or
-    /// returns a non-String, the failure is **swallowed**: any pending
-    /// `mrb->exc` is cleared and an empty `String` is returned, so the
-    /// leaked exception does not corrupt subsequent mruby calls in the
-    /// same C bridge. The clear is unconditional — an exception already
-    /// pending when `to_string` is entered is wiped with it.
+    /// returns a non-String, the failure is **swallowed**: an empty
+    /// `String` is returned. The dispatch runs through `funcall`, whose
+    /// `protect` frame catches the raise into `Err` and leaves no pending
+    /// `mrb->exc` to corrupt subsequent mruby calls in the same C bridge.
     #[inline]
     pub fn to_string(self, mrb: &Mrb) -> String {
         #[cfg(mruby_linked)]
         {
-            let s_val = self.call(mrb, c"to_s", &[]);
-            if !mrb.pending_exc().is_nil() {
-                mrb.clear_exc();
+            let Ok(s_val) = self.funcall(mrb, c"to_s", &[]) else {
                 return String::new();
-            }
+            };
             // Discriminate by the String tag, not the classname: a String
             // subclass instance is String-tagged and reads its bytes the
             // same way, so it converts too; a non-String `to_s` result
@@ -443,18 +440,24 @@ impl Value {
         crate::not_linked()
     }
 
-    /// Invoke `self.<method>(args...)` via the non-variadic
-    /// `mrb_funcall_argv`. The method name is interned through
-    /// `Mrb::intern_cstr`; use `Value::call_argv` directly when
-    /// the caller already holds an interned `sys::mrb_sym` (e.g. a
-    /// dispatch site that cached the sym across a `respond_to?`
-    /// gate).
+    /// Invoke `self.<method>(args...)` by name, interning it through
+    /// `Mrb::intern_cstr`. The method runs arbitrary Ruby, so the call
+    /// runs under `Mrb::protect`: a normal return is the `Ok` value, any
+    /// raise is `Err` rather than a long-jump across FFI. Use
+    /// `Value::funcall_argv` when the caller already holds an interned
+    /// `sys::mrb_sym` (e.g. a dispatch site that cached the sym across a
+    /// `respond_to?` gate). Mirrors magnus's `funcall`.
     #[inline]
-    pub fn call(self, mrb: &Mrb, name: &core::ffi::CStr, args: &[Value]) -> Value {
+    pub fn funcall(
+        self,
+        mrb: &Mrb,
+        name: &core::ffi::CStr,
+        args: &[Value],
+    ) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
             let sym = mrb.intern_cstr(name);
-            self.call_argv(mrb, sym, args)
+            self.funcall_argv(mrb, sym, args)
         }
         #[cfg(not(mruby_linked))]
         {
@@ -463,26 +466,42 @@ impl Value {
         }
     }
 
-    /// `mrb_funcall_argv(mrb, self, sym, argc, argv)` — invoke the
-    /// method already interned as `sym`. Counterpart to `Value::call`
-    /// for sites that pre-intern (typically because the same symbol is
-    /// queried via `respond_to?` first).
+    /// `mrb_funcall_argv(mrb, self, sym, argc, argv)` — invoke the method
+    /// already interned as `sym`, under `Mrb::protect`. Counterpart to
+    /// `Value::funcall` for sites that pre-intern (typically because the
+    /// same symbol is queried via `respond_to?` first). The dispatched
+    /// method runs arbitrary Ruby and may raise, which `protect` catches
+    /// into `Err` rather than long-jumping across FFI.
     ///
     /// `args` is `&[Value]`; `Value` is `#[repr(transparent)]` over
     /// `mrb_value`, so the slice layout matches mruby's `mrb_value`
     /// argv exactly — the pointer cast on the way through is a no-op
     /// at codegen level.
     #[inline]
-    pub fn call_argv(self, mrb: &Mrb, sym: sys::mrb_sym, args: &[Value]) -> Value {
+    pub fn funcall_argv(
+        self,
+        mrb: &Mrb,
+        sym: sys::mrb_sym,
+        args: &[Value],
+    ) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
-            let argv = args.as_ptr() as *const sys::mrb_value;
-            // SAFETY: `mrb` is alive by the borrow; `self` and every
-            // `args` entry originate from the same VM by the single-VM
-            // contract; `sym` was interned against the same VM (caller
-            // contract).
-            Value(unsafe {
-                sys::mrb_funcall_argv(mrb.as_ptr(), self.0, sym, args.len() as sys::mrb_int, argv)
+            mrb.protect(|mrb| {
+                let argv = args.as_ptr() as *const sys::mrb_value;
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // and every `args` entry originate from the same VM by the
+                // single-VM contract; `sym` was interned against the same
+                // VM (caller contract). `mrb_funcall_argv` dispatches
+                // arbitrary Ruby and may raise — caught by `protect`.
+                Value(unsafe {
+                    sys::mrb_funcall_argv(
+                        mrb.as_ptr(),
+                        self.0,
+                        sym,
+                        args.len() as sys::mrb_int,
+                        argv,
+                    )
+                })
             })
         }
         #[cfg(not(mruby_linked))]
@@ -1188,8 +1207,16 @@ mod linked_tests {
 
         // clone is the deeper copy — it preserves the frozen state;
         // dup always yields an unfrozen object.
-        assert!(frozen.obj_clone(&mrb).call(&mrb, c"frozen?", &[]).to_bool());
-        assert!(!frozen.obj_dup(&mrb).call(&mrb, c"frozen?", &[]).to_bool());
+        assert!(frozen
+            .obj_clone(&mrb)
+            .funcall(&mrb, c"frozen?", &[])
+            .expect("frozen? does not raise")
+            .to_bool());
+        assert!(!frozen
+            .obj_dup(&mrb)
+            .funcall(&mrb, c"frozen?", &[])
+            .expect("frozen? does not raise")
+            .to_bool());
     }
 
     #[test]

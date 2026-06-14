@@ -174,7 +174,8 @@ mod tests {
         // fills as usual.
         let ary = mrb.ary_new_capa(8);
         assert!(ary.is_empty());
-        ary.push(&mrb, mrb.str_new(b"x").as_value());
+        ary.push(&mrb, mrb.str_new(b"x").as_value())
+            .expect("push to a fresh array succeeds");
         assert_eq!(ary.len(), 1);
     }
 

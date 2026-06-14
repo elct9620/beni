@@ -684,8 +684,8 @@ mod tests {
 
         // mrb_funcall bypasses visibility, confirming the body is
         // attached and runs.
-        let got = mrb
-            .protect(|mrb| receiver.call(mrb, c"secret", &[]))
+        let got = receiver
+            .funcall(&mrb, c"secret", &[])
             .expect("funcall dispatch must reach the private body");
         assert_eq!(unsafe { got.unbox_integer() }, 7);
     }
@@ -709,7 +709,9 @@ mod tests {
             .define_method(&mrb, c"answer", crate::method!(answer_seven, 0))
             .expect("registering the instance method must succeed");
         let receiver = class.obj_new(&mrb, &[]);
-        let got = receiver.call(&mrb, c"answer", &[]);
+        let got = receiver
+            .funcall(&mrb, c"answer", &[])
+            .expect("the registered method must not raise");
         assert_eq!(unsafe { got.unbox_integer() }, 7);
 
         // Object trait: singleton registration on the class handle,
@@ -719,7 +721,9 @@ mod tests {
             .expect("registering the singleton method must succeed");
         // SAFETY: `class` is a live handle from this VM.
         let class_value = unsafe { class.to_value(&mrb) };
-        let got = class_value.call(&mrb, c"class_answer", &[]);
+        let got = class_value
+            .funcall(&mrb, c"class_answer", &[])
+            .expect("the registered class method must not raise");
         assert_eq!(unsafe { got.unbox_integer() }, 9);
 
         // Lookup round-trip through the trait.
@@ -846,7 +850,9 @@ mod tests {
         // The alias resolves to the same body as the original — the
         // consumer-visible point of preserving a method before override.
         let receiver = class.obj_new(&mrb, &[]);
-        let got = receiver.call(&mrb, c"original_answer", &[]);
+        let got = receiver
+            .funcall(&mrb, c"original_answer", &[])
+            .expect("the aliased method must not raise");
         assert_eq!(unsafe { got.unbox_integer() }, 7);
     }
 

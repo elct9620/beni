@@ -445,8 +445,8 @@ mod tests {
 
         let receiver = class.obj_new(&mrb, &[]);
         let args = [Value::from_int(&mrb, 1), Value::from_int(&mrb, 2)];
-        let got = mrb
-            .protect(|mrb| receiver.call(mrb, c"add", &args))
+        let got = receiver
+            .funcall(&mrb, c"add", &args)
             .expect("the call must not raise");
         assert_eq!(i32::from_value(got), Some(3));
     }
@@ -464,8 +464,8 @@ mod tests {
         // wrapped function must never run.
         let receiver = class.obj_new(&mrb, &[]);
         let args = [Value::from_float(&mrb, 1.5), Value::from_int(&mrb, 2)];
-        let err = mrb
-            .protect(|mrb| receiver.call(mrb, c"add", &args))
+        let err = receiver
+            .funcall(&mrb, c"add", &args)
             .expect_err("the conversion failure must surface as a raise");
         assert!(
             err.message(&mrb).contains("i32"),
@@ -490,8 +490,8 @@ mod tests {
         // RuntimeError the Ruby-side caller (here: the protect frame)
         // observes — never an unwind through mruby's C frames.
         let receiver = class.obj_new(&mrb, &[]);
-        let err = mrb
-            .protect(|mrb| receiver.call(mrb, c"detonate", &[]))
+        let err = receiver
+            .funcall(&mrb, c"detonate", &[])
             .expect_err("the panic must surface as a Ruby exception");
         assert!(matches!(err, Error::Exception(_)));
         assert!(
@@ -523,8 +523,8 @@ mod tests {
             .expect("registering the fallible method must succeed");
 
         let receiver = class.obj_new(&mrb, &[]);
-        let err = mrb
-            .protect(|mrb| receiver.call(mrb, c"try", &[]))
+        let err = receiver
+            .funcall(&mrb, c"try", &[])
             .expect_err("the body's Err must surface as a raise");
         assert!(
             err.message(&mrb).contains("fallible body says no"),
