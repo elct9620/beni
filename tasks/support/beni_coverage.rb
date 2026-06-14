@@ -4,6 +4,7 @@ require "yaml"
 require "fileutils"
 
 require_relative "beni_coverage/surface"
+require_relative "beni_coverage/frequency"
 require_relative "beni_coverage/report"
 
 # mruby C API coverage support module
@@ -24,6 +25,10 @@ require_relative "beni_coverage/report"
 #               +.api_coverage.yml+ manifest. The Rust shape does not map
 #               onto C names mechanically, so this tier is curated by
 #               implementers, not inferred.
+#
+# The +priority+ query is a separate concern from the report: it ranks
+# the not-yet-typed surface by mrbgems call frequency (+Frequency+) to
+# point graduation work at the symbols embedders lean on hardest.
 module BeniCoverage
   ROOT = File.expand_path("../..", __dir__)
   INCLUDE_ROOT = File.join(ROOT, "vendor", "mruby", "include")
@@ -31,6 +36,9 @@ module BeniCoverage
   MANIFEST = File.join(ROOT, ".api_coverage.yml")
   OUTPUT = File.join(ROOT, "docs", "api_coverage.md")
   VERSION_H = File.join(INCLUDE_ROOT, "mruby", "version.h")
+
+  # One not-yet-typed symbol worth graduating, with its downstream weight.
+  Priority = Data.define(:name, :uses, :header)
 
   module_function
 
@@ -41,6 +49,21 @@ module BeniCoverage
     FileUtils.mkdir_p(File.dirname(OUTPUT))
     File.write(OUTPUT, build_report(surface).to_md)
     OUTPUT
+  end
+
+  # Every embedder symbol the typed tier has not graduated yet, ranked by
+  # how often mrbgems call them — the complete worklist for what to bind
+  # next. Unused symbols (count 0) stay in, sorted last: no mrbgem reaches
+  # them, but the API still exists and graduation is not yet complete.
+  def priority
+    surface = Surface.parse(INCLUDE_ROOT)
+    rank(surface, load_manifest["typed"] || {}, Frequency.scan(ROOT, surface.map(&:name)))
+  end
+
+  def rank(surface, typed, uses)
+    surface.reject { |e| typed.key?(e.name) }
+           .map { |e| Priority.new(name: e.name, uses: uses[e.name], header: e.header) }
+           .sort_by { |e| [-e.uses, e.name] }
   end
 
   def build_report(surface)
