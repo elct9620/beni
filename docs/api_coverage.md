@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 329 (96%) | 98 (29%) |
-| macro | 124 | 22 (18%) | 26 (21%) |
-| total | 466 | 351 (75%) | 124 (27%) |
+| macro | 124 | 22 (18%) | 27 (22%) |
+| total | 466 | 351 (75%) | 125 (27%) |
 
 ## mruby.h
 
@@ -22,7 +22,7 @@ Legend: ✅ covered · — missing
 | `MRB_ARGS_BLOCK` | macro | — | — |  |
 | `MRB_ARGS_KEY` | macro | — | — |  |
 | `MRB_ARGS_NOBLOCK` | macro | — | — |  |
-| `MRB_ARGS_NONE` | macro | ✅ | — |  |
+| `MRB_ARGS_NONE` | macro | ✅ | ✅ | a typed method's `0` arity, derived by `Module::define_method` (the no-argument aspec a zero-arity definition declares) |
 | `MRB_ARGS_OPT` | macro | — | — |  |
 | `MRB_ARGS_POST` | macro | — | — |  |
 | `MRB_ARGS_REQ` | macro | ✅ | ✅ | a typed method's positional arity, derived by `Module::define_method` |
