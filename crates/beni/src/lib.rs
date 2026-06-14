@@ -191,6 +191,7 @@ mod tests {
         let _ = Value::is_string;
         let _ = Value::is_symbol;
         let _ = Value::data_get::<i32>;
+        let _ = Value::data_reinit::<i32>;
         let _ = Value::unbox_integer;
         let _ = Value::unbox_float;
         let _ = Value::ary_entry;

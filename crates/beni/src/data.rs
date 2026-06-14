@@ -186,20 +186,26 @@ impl Value {
     /// typed object: a `dup` or `clone` hands it the bare carrier it just
     /// allocated, and the body installs a clone of the original's state.
     ///
-    /// The carrier must be bare — its class marked through
-    /// `RClass::set_instance_data_tt`, holding no payload yet. The
-    /// install does not release a payload already present, so re-running
-    /// it over a live carrier leaks the previous box.
+    /// The install targets a CDATA carrier — a class marked through
+    /// `RClass::set_instance_data_tt`. It does not release a payload
+    /// already present, so re-running it over a live carrier leaks the
+    /// previous box; applied to a non-carrier value it does nothing.
     #[inline]
     pub fn data_reinit<T>(self, _mrb: &Mrb, value: T, ty: &'static DataType<T>) {
         #[cfg(mruby_linked)]
         {
-            let ptr = Box::into_raw(Box::new(value)) as *mut core::ffi::c_void;
-            // SAFETY: `self` is a CDATA carrier from the live VM borrowed
-            // as `_mrb`; `ptr` is a freshly leaked `Box<T>` handed to
-            // mruby, which releases it via `ty`'s release hook; `ty` is
-            // `'static`, so its descriptor outlives the carrier.
-            unsafe { sys::mrb_data_init(self.into_raw(), ptr, ty.as_raw()) };
+            // `mrb_data_init` writes through the carrier's `RData`, so it is
+            // defined only on a CDATA value; `is_data` mirrors mruby's
+            // `mrb_data_p` exactly, so gating on it keeps that write sound and
+            // leaves a non-carrier value untouched.
+            if self.is_data() {
+                let ptr = Box::into_raw(Box::new(value)) as *mut core::ffi::c_void;
+                // SAFETY: `self` is a CDATA carrier from the live VM borrowed
+                // as `_mrb`; `ptr` is a freshly leaked `Box<T>` handed to
+                // mruby, which releases it via `ty`'s release hook; `ty` is
+                // `'static`, so its descriptor outlives the carrier.
+                unsafe { sys::mrb_data_init(self.into_raw(), ptr, ty.as_raw()) };
+            }
         }
         #[cfg(not(mruby_linked))]
         {
@@ -277,6 +283,33 @@ mod tests {
             .data_get(&mrb, &HOLDER_TYPE)
             .expect("the re-installed payload extracts under its type");
         assert_eq!(got.tag, 99);
+    }
+
+    #[test]
+    fn data_reinit_on_a_non_carrier_is_a_safe_noop() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A non-CDATA value: the install must do nothing rather than
+        // reinterpret the value's bytes as a data carrier.
+        let string = mrb.str_new(b"intact");
+        let value = string.as_value();
+        assert!(!value.is_data(), "a string is not a data carrier");
+
+        value.data_reinit(&mrb, Holder { tag: 1 }, &HOLDER_TYPE);
+
+        assert!(
+            !value.is_data(),
+            "the value stays a non-carrier after the no-op install"
+        );
+        assert!(
+            value.data_get(&mrb, &HOLDER_TYPE).is_none(),
+            "no payload is installed into a non-carrier"
+        );
+        assert_eq!(
+            string.to_bytes(),
+            b"intact",
+            "the value's own representation is untouched"
+        );
     }
 
     /// Drop probe with its own counter — kept distinct from `Holder` so
