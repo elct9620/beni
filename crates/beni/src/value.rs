@@ -1085,6 +1085,76 @@ impl Value {
             crate::not_linked()
         }
     }
+
+    /// `mrb_as_int(mrb, self)` — convert `self` to a Rust integer across
+    /// the numeric types: an Integer reads directly and a Float truncates
+    /// toward zero. A non-numeric value raises `TypeError` and a Float
+    /// that is infinite or NaN raises `RangeError`, so the conversion runs
+    /// under `Mrb::protect`: `Ok` with the number, or `Err`. The
+    /// conversion runs no user Ruby — it dispatches no `to_int`. Distinct
+    /// from `i32::from_value`, the exact-tag downcast that never converts
+    /// across types and rejects a Float outright.
+    ///
+    /// The converted number round-trips through `Value::from_int` inside
+    /// the protect frame and `unbox_integer` after — `mrb_int_value` is
+    /// the boxing-agnostic constructor (heap bigint when the value
+    /// exceeds the inline range) and `mrb_integer` reads either form
+    /// back, so the round-trip is lossless across the full `mrb_int`
+    /// range.
+    #[inline]
+    pub fn as_int(self, mrb: &Mrb) -> Result<sys::mrb_int, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_as_int` raises
+                // `TypeError` on a non-numeric value and `RangeError` on
+                // an infinite / NaN float — both caught by `protect`. The
+                // result re-boxes losslessly through `from_int`.
+                let n = unsafe { sys::mrb_as_int_func(mrb.as_ptr(), self.0) };
+                Value::from_int(mrb, n)
+            })
+            // SAFETY: the `Ok` value was boxed by `Value::from_int` just
+            // above, so it carries an Integer tag the unbox accepts.
+            .map(|v| unsafe { v.unbox_integer() })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_as_float(mrb, self)` — convert `self` to a Rust float across
+    /// the numeric types: a Float reads directly and an Integer widens to
+    /// a float. A non-numeric value raises `TypeError`, so like `as_int`
+    /// the conversion runs under `Mrb::protect` and dispatches no `to_f`.
+    /// Distinct from `f64::from_value`, the exact-tag downcast that never
+    /// converts across types and rejects an Integer outright.
+    ///
+    /// The converted number round-trips through `Value::from_float` and
+    /// `unbox_float`, lossless under beni's pinned float config.
+    #[inline]
+    pub fn as_float(self, mrb: &Mrb) -> Result<sys::mrb_float, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: as `as_int`; `mrb_as_float` raises `TypeError`
+                // on a non-numeric value, caught by `protect`. The result
+                // re-boxes losslessly through `from_float`.
+                let f = unsafe { sys::mrb_as_float_func(mrb.as_ptr(), self.0) };
+                Value::from_float(mrb, f)
+            })
+            // SAFETY: the `Ok` value was boxed by `Value::from_float`
+            // just above, so it carries a Float tag the unbox accepts.
+            .map(|v| unsafe { v.unbox_float() })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
 }
 
 /// A non-local `break` / `return` captured as the value inside a
@@ -1553,5 +1623,58 @@ mod linked_tests {
             .funcall(&mrb, c"frozen?", &[])
             .expect("frozen? does not raise")
             .to_bool());
+    }
+
+    #[test]
+    fn as_int_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // An Integer reads directly.
+        assert_eq!(
+            42i32
+                .into_value(&mrb)
+                .as_int(&mrb)
+                .expect("an Integer converts"),
+            42
+        );
+
+        // A Float converts by truncating toward zero — unlike the
+        // exact-tag `i32::from_value`, which rejects the Float tag.
+        let float_val = 2.9f64.into_value(&mrb);
+        assert_eq!(i32::from_value(float_val), None);
+        assert_eq!(float_val.as_int(&mrb).expect("a Float truncates"), 2);
+
+        // A non-numeric value raises TypeError — surfaced as Err instead
+        // of unwinding across the call.
+        assert!(matches!(
+            mrb.str_new(b"x").as_value().as_int(&mrb),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn as_float_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A Float reads directly.
+        assert_eq!(
+            1.5f64
+                .into_value(&mrb)
+                .as_float(&mrb)
+                .expect("a Float converts"),
+            1.5
+        );
+
+        // An Integer widens to a float — unlike the exact-tag
+        // `f64::from_value`, which rejects the Integer tag.
+        let int_val = 3i32.into_value(&mrb);
+        assert_eq!(f64::from_value(int_val), None);
+        assert_eq!(int_val.as_float(&mrb).expect("an Integer widens"), 3.0);
+
+        // A non-numeric value raises TypeError — surfaced as Err.
+        assert!(matches!(
+            mrb.str_new(b"x").as_value().as_float(&mrb),
+            Err(Error::Exception(_))
+        ));
     }
 }

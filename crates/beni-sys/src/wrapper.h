@@ -262,3 +262,29 @@ mrb_set_instance_tt_func(struct RClass *c, enum mrb_vtype tt)
 {
   MRB_SET_INSTANCE_TT(c, tt);
 }
+
+/* Integer conversion across the numeric types. Counterpart to the
+ * `mrb_as_int(mrb, val)` macro in <mruby.h>, which expands to
+ * `mrb_integer(mrb_ensure_int_type(mrb, val))`: an Integer reads directly
+ * and a Float truncates. The conversion runs no user `to_int`; it raises
+ * TypeError on a non-numeric value and RangeError on an infinite / NaN
+ * float, long-jumping to the caller's protect frame. bindgen does not
+ * expand the macro, so the C compiler folds the conversion and the
+ * boxing-aware unbox using the layout libmruby.a was built with. */
+static inline mrb_int
+mrb_as_int_func(mrb_state *mrb, mrb_value val)
+{
+  return mrb_as_int(mrb, val);
+}
+
+/* Float conversion across the numeric types. Counterpart to the
+ * `mrb_as_float(mrb, x)` macro in <mruby.h>, which expands to
+ * `mrb_float(mrb_ensure_float_type(mrb, x))`: a Float reads directly and
+ * an Integer widens. Runs no user `to_f`; raises TypeError on a
+ * non-numeric value. Same boxing-aware unbox concern as
+ * `mrb_as_int_func`. */
+static inline mrb_float
+mrb_as_float_func(mrb_state *mrb, mrb_value val)
+{
+  return mrb_as_float(mrb, val);
+}

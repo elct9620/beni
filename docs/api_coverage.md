@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 97 (28%) |
-| macro | 124 | 20 (16%) | 24 (19%) |
-| total | 466 | 349 (75%) | 121 (26%) |
+| function | 342 | 329 (96%) | 98 (29%) |
+| macro | 124 | 22 (18%) | 26 (21%) |
+| total | 466 | 351 (75%) | 124 (27%) |
 
 ## mruby.h
 
@@ -30,8 +30,8 @@ Legend: ✅ covered · — missing
 | `mrb_alloca` | macro | — | — |  |
 | `mrb_any_to_s` | fn | ✅ | — |  |
 | `mrb_argnum_error` | fn | ✅ | — |  |
-| `mrb_as_float` | macro | — | — |  |
-| `mrb_as_int` | macro | — | — |  |
+| `mrb_as_float` | macro | ✅ | ✅ | `Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast |
+| `mrb_as_int` | macro | ✅ | ✅ | `Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast |
 | `mrb_attr_get` | fn | ✅ | — |  |
 | `mrb_basic_alloc_func` | fn | ✅ | — |  |
 | `mrb_block_given_p` | fn | ✅ | — |  |
@@ -471,7 +471,7 @@ Legend: ✅ covered · — missing
 | `mrb_array_p` | macro | — | ✅ | `Value::is_array`, via the value tag |
 | `mrb_bigint_p` | macro | — | — |  |
 | `mrb_bool` | macro | ✅ | — |  |
-| `mrb_bool_value` | fn | ✅ | — |  |
+| `mrb_bool_value` | fn | ✅ | ✅ | `IntoValue for bool` — a Rust bool boxes to the true/false immediate (see convert extension) |
 | `mrb_break_p` | macro | ✅ | ✅ | `Value::as_break` |
 | `mrb_class_p` | macro | — | ✅ | `Value::is_class`, via the value tag |
 | `mrb_cptr_p` | macro | — | — |  |
