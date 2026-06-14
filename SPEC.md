@@ -287,7 +287,7 @@ The typed array carries Ruby `Array`'s surface:
 | clear | empty it |
 | duplicate | copy it |
 
-The typed hash carries Ruby `Hash`'s surface beyond construction:
+A typed hash constructs empty, or empty with a preallocated capacity that reserves room for the assignments that follow — the capacity is a hint, not content, and the hash starts empty. Beyond construction it carries Ruby `Hash`'s surface:
 
 | Operation | Behavior |
 |---|---|
