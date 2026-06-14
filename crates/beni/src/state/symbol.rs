@@ -46,7 +46,9 @@ impl Mrb {
     /// `mrb_sym_name(mrb, sym)` — return the C string name of `sym`,
     /// or `None` if mruby yields a NULL pointer (e.g. uninterned id).
     /// The returned slice points into mruby's interned string storage
-    /// and lives for the duration of the VM.
+    /// and lives for the duration of the VM. A name carrying an embedded
+    /// NUL comes back escaped to its quoted dump form; `Mrb::sym_name_len`
+    /// reads the raw bytes.
     #[inline]
     pub fn sym_name(&self, sym: sys::mrb_sym) -> Option<&'static str> {
         #[cfg(mruby_linked)]
@@ -60,6 +62,64 @@ impl Mrb {
             // duration of the VM; treating the slice as `'static` is
             // sound for that lifetime, which the caller upholds via the
             // owning `Mrb`.
+            Some(
+                unsafe { core::ffi::CStr::from_ptr(ptr) }
+                    .to_str()
+                    .unwrap_or(""),
+            )
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = sym;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_sym_name_len(mrb, sym, &len)` — return the raw name bytes of
+    /// `sym`, its true length carried out of band so an embedded NUL is
+    /// preserved unescaped rather than driving `Mrb::sym_name` to its
+    /// quoted dump form. `None` when mruby yields a NULL pointer (e.g.
+    /// uninterned id). The slice points into mruby's interned string
+    /// storage and lives for the duration of the VM.
+    #[inline]
+    pub fn sym_name_len(&self, sym: sys::mrb_sym) -> Option<&'static [u8]> {
+        #[cfg(mruby_linked)]
+        {
+            let mut len: sys::mrb_int = 0;
+            // SAFETY: `self` is alive; `&mut len` is a valid out-pointer.
+            let ptr = unsafe { sys::mrb_sym_name_len(self.as_ptr(), sym, &mut len) };
+            if ptr.is_null() {
+                return None;
+            }
+            // SAFETY: mruby reports a non-negative length for a live name
+            // and the storage lives for the VM's duration, which the
+            // caller upholds via the owning `Mrb`; the `'static` slice is
+            // sound for that lifetime.
+            Some(unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), len as usize) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = sym;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_sym_dump(mrb, sym)` — return the dump form of `sym`'s name:
+    /// the bare name for a plain identifier, otherwise the quoted and
+    /// escaped form (Ruby's `Symbol#inspect` without the leading colon).
+    /// `None` when mruby yields a NULL pointer (e.g. uninterned id).
+    /// Reads without dispatching and never raises.
+    #[inline]
+    pub fn sym_dump(&self, sym: sys::mrb_sym) -> Option<&'static str> {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive.
+            let ptr = unsafe { sys::mrb_sym_dump(self.as_ptr(), sym) };
+            if ptr.is_null() {
+                return None;
+            }
+            // SAFETY: the dump string lives for the VM's duration, which
+            // the caller upholds via the owning `Mrb`.
             Some(
                 unsafe { core::ffi::CStr::from_ptr(ptr) }
                     .to_str()
@@ -94,5 +154,32 @@ mod tests {
         let via_str = mrb.intern_str(mrb.str_new(b"beni_sym").as_value());
 
         assert_eq!(via_str, mrb.intern_cstr(c"beni_sym"));
+    }
+
+    #[test]
+    fn sym_name_len_carries_the_full_bytes_past_an_embedded_nul() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Intern a name with an embedded NUL through the bytes path; the
+        // C-string `sym_name` would stop at the NUL, the length-carrying
+        // read keeps the full bytes.
+        let sym = mrb.intern_str(mrb.str_new(b"a\0b").as_value());
+
+        // `sym_name` escapes a NUL-containing name to its dump form; only
+        // the length-carrying read returns the raw bytes.
+        assert_eq!(mrb.sym_name(sym), Some("\"a\\x00b\""));
+        assert_eq!(mrb.sym_name_len(sym), Some(&b"a\0b"[..]));
+    }
+
+    #[test]
+    fn sym_dump_quotes_a_non_identifier_name() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A plain identifier dumps bare; a name needing escaping is quoted.
+        assert_eq!(mrb.sym_dump(mrb.intern_cstr(c"fred")), Some("fred"));
+        assert_eq!(
+            mrb.sym_dump(mrb.intern_str(mrb.str_new(b"a b").as_value())),
+            Some("\"a b\"")
+        );
     }
 }

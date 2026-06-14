@@ -156,7 +156,9 @@ typed:
   mrb_str_new_cstr: Mrb::str_new_cstr
   mrb_str_resize: RString::resize
   mrb_str_substr: RString::substr
-  mrb_sym_name: Mrb::sym_name
+  mrb_sym_name: "`Mrb::sym_name`, `Symbol::name` — the C-string name, escaped to its quoted dump form when it carries an embedded NUL"
+  mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — the raw name bytes with the true length, embedded NUL preserved unescaped"
+  mrb_sym_dump: "`Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), never raises"
   mrb_symbol_value: Symbol::from_sym
   mrb_test: Value::to_bool
   mrb_top_run: Mrb::load_bytecode

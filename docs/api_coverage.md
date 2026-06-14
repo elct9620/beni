@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 111 (32%) |
+| function | 342 | 329 (96%) | 113 (33%) |
 | macro | 124 | 22 (18%) | 27 (22%) |
-| total | 466 | 351 (75%) | 138 (30%) |
+| total | 466 | 351 (75%) | 140 (30%) |
 
 ## mruby.h
 
@@ -201,9 +201,9 @@ Legend: ✅ covered · — missing
 | `mrb_sym2name` | macro | — | — |  |
 | `mrb_sym2name_len` | macro | — | — |  |
 | `mrb_sym2str` | macro | — | — |  |
-| `mrb_sym_dump` | fn | ✅ | — |  |
-| `mrb_sym_name` | fn | ✅ | ✅ | `Mrb::sym_name` |
-| `mrb_sym_name_len` | fn | ✅ | — |  |
+| `mrb_sym_dump` | fn | ✅ | ✅ | `Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), never raises |
+| `mrb_sym_name` | fn | ✅ | ✅ | `Mrb::sym_name`, `Symbol::name` — the C-string name, escaped to its quoted dump form when it carries an embedded NUL |
+| `mrb_sym_name_len` | fn | ✅ | ✅ | `Mrb::sym_name_len`, `Symbol::name_bytes` — the raw name bytes with the true length, embedded NUL preserved unescaped |
 | `mrb_sym_str` | fn | ✅ | — |  |
 | `mrb_temp_alloc` | fn | ✅ | — |  |
 | `mrb_to_float` | macro | — | — |  |

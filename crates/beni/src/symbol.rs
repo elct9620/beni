@@ -106,13 +106,48 @@ impl Symbol {
     }
 
     /// The symbol's name, via `to_sym` + `Mrb::sym_name`. `None` when
-    /// mruby yields a NULL name. The slice points into mruby's interned
-    /// storage, which lives for the VM's duration.
+    /// mruby yields a NULL name. A name carrying an embedded NUL comes
+    /// back escaped to its quoted dump form; `name_bytes` reads the raw
+    /// bytes. The slice points into mruby's interned storage, which lives
+    /// for the VM's duration.
     #[inline]
     pub fn name(self, mrb: &Mrb) -> Option<&'static str> {
         #[cfg(mruby_linked)]
         {
             mrb.sym_name(self.to_sym())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// The symbol's raw name bytes, via `to_sym` + `Mrb::sym_name_len` —
+    /// an embedded NUL preserved unescaped, where `name` returns the
+    /// quoted dump form. `None` when mruby yields a NULL name.
+    #[inline]
+    pub fn name_bytes(self, mrb: &Mrb) -> Option<&'static [u8]> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.sym_name_len(self.to_sym())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// The symbol's dump form, via `to_sym` + `Mrb::sym_dump` — the bare
+    /// name for a plain identifier, otherwise the quoted and escaped form
+    /// (Ruby's `Symbol#inspect` without the leading colon). `None` when
+    /// mruby yields a NULL name. Reads without dispatching and never raises.
+    #[inline]
+    pub fn dump(self, mrb: &Mrb) -> Option<&'static str> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.sym_dump(self.to_sym())
         }
         #[cfg(not(mruby_linked))]
         {
@@ -138,6 +173,26 @@ mod tests {
         assert_eq!(sym.to_sym(), mrb.intern_cstr(c"flags"));
         // Re-boxing the id yields an equal symbol.
         assert_eq!(Symbol::from_sym(sym.to_sym()).name(&mrb), Some("flags"));
+    }
+
+    #[test]
+    fn name_bytes_and_dump_read_the_symbol_name() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A plain identifier: bytes equal the name, dump is bare.
+        let plain = Symbol::new(&mrb, c"fred");
+        assert_eq!(plain.name_bytes(&mrb), Some(&b"fred"[..]));
+        assert_eq!(plain.dump(&mrb), Some("fred"));
+
+        // An embedded NUL: `name` escapes it to the dump form, only
+        // `name_bytes` returns the raw bytes.
+        let nul = Symbol::from_sym(mrb.intern_str(mrb.str_new(b"a\0b").as_value()));
+        assert_eq!(nul.name(&mrb), Some("\"a\\x00b\""));
+        assert_eq!(nul.name_bytes(&mrb), Some(&b"a\0b"[..]));
+
+        // A name needing escaping dumps quoted.
+        let spaced = Symbol::from_sym(mrb.intern_str(mrb.str_new(b"a b").as_value()));
+        assert_eq!(spaced.dump(&mrb), Some("\"a b\""));
     }
 
     #[test]
