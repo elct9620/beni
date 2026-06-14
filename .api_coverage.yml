@@ -115,7 +115,7 @@ typed:
   mrb_bool_value: "`IntoValue for bool` — a Rust bool boxes to the true/false immediate (see convert extension)"
   mrb_false_value: Value::false_
   mrb_float_value: Value::from_float
-  mrb_funcall_argv: "`Value::funcall` (by name), `Value::funcall_argv` (pre-interned sym)"
+  mrb_funcall_argv: "`Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym)"
   mrb_gc_arena_restore: "`ArenaScope::keep`/`drop` (see ArenaScope extension)"
   mrb_gc_arena_save: "`Mrb::arena_scope` (see ArenaScope extension)"
   mrb_gc_protect: "`ArenaScope::keep` (see ArenaScope extension)"

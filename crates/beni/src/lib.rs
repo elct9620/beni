@@ -181,7 +181,7 @@ mod tests {
         let _ = Value::classname;
         let _ = Value::to_string;
         let _ = Value::as_class_ptr;
-        let _ = Value::funcall;
+        let _ = Value::funcall::<&core::ffi::CStr>;
         let _ = Value::funcall_argv;
         let _ = Value::is_nil;
         let _ = Value::is_integer;

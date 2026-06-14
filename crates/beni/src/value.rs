@@ -525,23 +525,25 @@ impl Value {
         crate::not_linked()
     }
 
-    /// Invoke `self.<method>(args...)` by name, interning it through
-    /// `Mrb::intern_cstr`. The method runs arbitrary Ruby, so the call
-    /// runs under `Mrb::protect`: a normal return is the `Ok` value, any
-    /// raise is `Err` rather than a long-jump across FFI. Use
+    /// Invoke `self.<method>(args...)`, naming the method by a
+    /// symbol-or-name key (`IntoSym`): a string name interns through
+    /// `Mrb::intern_cstr`, an already-interned `Symbol` is reused without
+    /// re-interning. The method runs arbitrary Ruby, so the call runs
+    /// under `Mrb::protect`: a normal return is the `Ok` value, any raise
+    /// is `Err` rather than a long-jump across FFI. Use
     /// `Value::funcall_argv` when the caller already holds an interned
     /// `sys::mrb_sym` (e.g. a dispatch site that cached the sym across a
     /// `respond_to?` gate). Mirrors magnus's `funcall`.
     #[inline]
-    pub fn funcall(
+    pub fn funcall<K: crate::IntoSym>(
         self,
         mrb: &Mrb,
-        name: &core::ffi::CStr,
+        name: K,
         args: &[Value],
     ) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
-            let sym = mrb.intern_cstr(name);
+            let sym = name.into_sym(mrb);
             self.funcall_argv(mrb, sym, args)
         }
         #[cfg(not(mruby_linked))]
@@ -1403,7 +1405,7 @@ mod tests {
 mod linked_tests {
     use super::*;
     use crate::state::args::format;
-    use crate::{Ccontext, Error, FromValue, IntoValue, Module, Proc};
+    use crate::{Ccontext, Error, FromValue, IntoValue, Module, Proc, Symbol};
 
     /// Yielder method in the boundary-terminating shape kobako uses:
     /// read the captured (non-orphan) block, yield it, and on a real
@@ -1430,6 +1432,70 @@ mod linked_tests {
         assert!(42i32.into_value(&mrb).as_break().is_none());
         assert!(mrb.str_new(b"x").as_value().as_break().is_none());
         assert!(Value::nil().as_break().is_none());
+    }
+
+    #[test]
+    fn funcall_dispatches_a_method_and_returns_its_value() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // `42.to_s` dispatches `Integer#to_s` and hands back its String.
+        let got = 42i32
+            .into_value(&mrb)
+            .funcall(&mrb, c"to_s", &[])
+            .expect("a non-raising dispatch must come back Ok");
+        assert_eq!(got.to_string(&mrb), "42");
+    }
+
+    #[test]
+    fn funcall_passes_the_argument_slice_to_the_method() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // `40 + 2` proves the arg slice reaches the dispatched method.
+        let got = 40i32
+            .into_value(&mrb)
+            .funcall(&mrb, c"+", &[2i32.into_value(&mrb)])
+            .expect("a non-raising dispatch must come back Ok");
+        assert_eq!(i32::from_value(got), Some(42));
+    }
+
+    #[test]
+    fn funcall_surfaces_a_raised_exception_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Dispatching an undefined method raises `NoMethodError`, which the
+        // protect frame catches into `Err` rather than long-jumping.
+        let err = 42i32
+            .into_value(&mrb)
+            .funcall(&mrb, c"no_such_method", &[])
+            .expect_err("a raising dispatch must surface as Err");
+        match err {
+            Error::Exception(_) => {}
+            Error::Panic(_) => panic!("a Ruby raise must surface as Error::Exception"),
+        }
+        // The VM stays usable after the protected raise.
+        let again = 7i32
+            .into_value(&mrb)
+            .funcall(&mrb, c"to_s", &[])
+            .expect("the VM must survive the protected raise");
+        assert_eq!(again.to_string(&mrb), "7");
+    }
+
+    #[test]
+    fn funcall_accepts_a_symbol_key_identical_to_the_name() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // An interned `Symbol` key reaches the same dispatch as the
+        // equivalent name, proving the `IntoSym` generalization routes
+        // both through the same interned symbol.
+        let recv = 42i32.into_value(&mrb);
+        let by_name = recv
+            .funcall(&mrb, c"to_s", &[])
+            .expect("the name key must dispatch");
+        let by_sym = recv
+            .funcall(&mrb, Symbol::new(&mrb, c"to_s"), &[])
+            .expect("the symbol key must dispatch");
+        assert_eq!(by_name.to_string(&mrb), by_sym.to_string(&mrb));
+        assert_eq!(by_sym.to_string(&mrb), "42");
     }
 
     #[test]
