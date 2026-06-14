@@ -294,6 +294,7 @@ The typed hash carries Ruby `Hash`'s surface beyond construction:
 | `instance_of?` | a direct instance of a class |
 | class | the class the value belongs to |
 | freeze | freeze the value in place |
+| frozen check | a precondition guard that surfaces an `Err` when the value is frozen — an immediate counts as frozen — and `Ok` otherwise; runs no user Ruby |
 | instance variable | read a named instance variable — `nil` when unset — or assign one in place; the read never raises, the assignment surfaces an `Err` when the receiver is frozen or cannot hold instance variables |
 | constant | fetch a named constant from a module or class, or test its presence; the fetch surfaces an `Err` when the name resolves to no constant or its `const_missing` hook raises |
 | `respond_to?` | whether the value answers to a named method; a total predicate |
