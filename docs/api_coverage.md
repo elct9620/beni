@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 81 (24%) |
+| function | 342 | 329 (96%) | 88 (26%) |
 | macro | 124 | 20 (16%) | 24 (19%) |
-| total | 466 | 349 (75%) | 105 (23%) |
+| total | 466 | 349 (75%) | 112 (24%) |
 
 ## mruby.h
 
@@ -355,22 +355,22 @@ Legend: ✅ covered · — missing
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `mrb_hash_clear` | fn | ✅ | — |  |
-| `mrb_hash_delete_key` | fn | ✅ | — |  |
-| `mrb_hash_dup` | fn | ✅ | — |  |
+| `mrb_hash_delete_key` | fn | ✅ | ✅ | `Hash::delete` |
+| `mrb_hash_dup` | fn | ✅ | ✅ | `Hash::dup` |
 | `mrb_hash_empty_p` | fn | ✅ | — |  |
-| `mrb_hash_fetch` | fn | ✅ | — |  |
+| `mrb_hash_fetch` | fn | ✅ | ✅ | `Hash::fetch` |
 | `mrb_hash_foreach` | fn | ✅ | — |  |
 | `mrb_hash_get` | fn | ✅ | ✅ | `Hash::get` |
-| `mrb_hash_key_p` | fn | ✅ | — |  |
+| `mrb_hash_key_p` | fn | ✅ | ✅ | `Hash::contains_key` |
 | `mrb_hash_keys` | fn | ✅ | ✅ | `Hash::keys` |
-| `mrb_hash_merge` | fn | ✅ | — |  |
+| `mrb_hash_merge` | fn | ✅ | ✅ | `Hash::update` |
 | `mrb_hash_new` | fn | ✅ | ✅ | `Mrb::hash_new` |
 | `mrb_hash_new_capa` | fn | ✅ | — |  |
 | `mrb_hash_ptr` | macro | — | — |  |
 | `mrb_hash_set` | fn | ✅ | ✅ | `Hash::set` |
-| `mrb_hash_size` | fn | ✅ | — |  |
+| `mrb_hash_size` | fn | ✅ | ✅ | `Hash::len` |
 | `mrb_hash_value` | macro | — | — |  |
-| `mrb_hash_values` | fn | ✅ | — |  |
+| `mrb_hash_values` | fn | ✅ | ✅ | `Hash::values` |
 ## mruby/irep.h
 
 | Symbol | Kind | sys | typed | Note |

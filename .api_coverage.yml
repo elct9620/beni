@@ -96,10 +96,17 @@ typed:
   mrb_get_args: state::args
   mrb_gv_get: Mrb::gv_get
   mrb_gv_set: Mrb::gv_set
+  mrb_hash_delete_key: Hash::delete
+  mrb_hash_dup: Hash::dup
+  mrb_hash_fetch: Hash::fetch
   mrb_hash_get: Hash::get
+  mrb_hash_key_p: Hash::contains_key
   mrb_hash_keys: Hash::keys
+  mrb_hash_merge: Hash::update
   mrb_hash_new: Mrb::hash_new
   mrb_hash_set: Hash::set
+  mrb_hash_size: Hash::len
+  mrb_hash_values: Hash::values
   mrb_int_value: Value::from_int
   mrb_intern_cstr: Mrb::intern_cstr
   mrb_intern_str: Mrb::intern_str
