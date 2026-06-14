@@ -124,6 +124,126 @@ impl RString {
         }
     }
 
+    /// `mrb_str_concat(mrb, self, other)` — append `other` coerced to a
+    /// String, the dispatching counterpart of `cat_str`, the way Ruby's
+    /// `String#concat` accepts a non-string argument. A non-string
+    /// `other` runs the same coercion as `Value::obj_as_string` (a
+    /// Symbol/Integer/Class renders directly, anything else dispatches
+    /// `to_s`), which may raise; appending to a frozen receiver raises
+    /// `FrozenError`. The call runs under `Mrb::protect`, so either
+    /// surfaces as `Err` rather than long-jumping.
+    #[inline]
+    pub fn concat(self, mrb: &Mrb, other: Value) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `self` is String-tagged by the newtype
+                // contract; `mrb` is alive inside the protect frame;
+                // `other` shares the VM. `mrb_str_concat` coerces
+                // `other` to a String (dispatching `to_s` where needed)
+                // and calls `mrb_str_modify`; a frozen receiver or a
+                // raising coercion long-jumps — caught by `protect`.
+                unsafe {
+                    sys::mrb_str_concat(mrb.as_ptr(), self.0.as_raw(), other.as_raw());
+                }
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_str_resize(mrb, self, len)` — set this string's byte length
+    /// in place: shrinking drops the tail, growing leaves the new
+    /// trailing bytes undefined. The same handle keeps naming the
+    /// resized string. Resizing a frozen string raises `FrozenError`,
+    /// and a `len` mruby's integer cannot hold (including a length at its
+    /// maximum) raises `ArgumentError`; the call runs under
+    /// `Mrb::protect`, so either surfaces as `Err` rather than
+    /// long-jumping.
+    #[inline]
+    pub fn resize(self, mrb: &Mrb, len: usize) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                match sys::mrb_int::try_from(len) {
+                    // SAFETY: `self` is String-tagged by the newtype
+                    // contract; `mrb` is alive inside the protect frame.
+                    // `mrb_str_resize` calls `mrb_str_modify` (raises
+                    // `FrozenError` on a frozen receiver) and
+                    // `str_check_length` (raises `ArgumentError` on a
+                    // length at the integer maximum) — both long-jump,
+                    // caught by `protect`.
+                    Ok(len) => unsafe {
+                        sys::mrb_str_resize(mrb.as_ptr(), self.0.as_raw(), len);
+                    },
+                    // A `usize` past mruby's integer range can never be a
+                    // valid string length; raise the same `ArgumentError`
+                    // mruby raises for an overflowed length so the caller
+                    // sees one error shape regardless of where the bound
+                    // is hit.
+                    Err(_) => {
+                        // SAFETY: `mrb` is alive; `E_ARGUMENT_ERROR` is a
+                        // core class so the lookup cannot fail;
+                        // `mrb_raise` long-jumps to the protect frame.
+                        unsafe {
+                            let argerr =
+                                sys::mrb_class_get(mrb.as_ptr(), c"ArgumentError".as_ptr());
+                            sys::mrb_raise(mrb.as_ptr(), argerr, c"string size too large".as_ptr());
+                        }
+                    }
+                }
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, len);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_str_substr(mrb, self, beg, len)` — a substring by character
+    /// range, Ruby's `String#[beg, len]`. A negative `beg` counts from
+    /// the end and an over-long `len` clamps to the string; a range that
+    /// starts past the end yields `None`, matching the `nil` mruby
+    /// returns. It allocates a fresh String and dispatches nothing, so it
+    /// never raises. Mirrors magnus's `RString` substring read.
+    #[inline]
+    pub fn substr(self, mrb: &Mrb, beg: i64, len: i64) -> Option<RString> {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `mrb` is alive; `mrb_str_substr` clamps the range and reads
+            // only the byte buffer, returning a fresh String or `nil`.
+            let v = Value::from_raw(unsafe {
+                sys::mrb_str_substr(
+                    mrb.as_ptr(),
+                    self.0.as_raw(),
+                    beg as sys::mrb_int,
+                    len as sys::mrb_int,
+                )
+            });
+            if v.is_nil() {
+                None
+            } else {
+                // SAFETY: a non-nil `mrb_str_substr` result is
+                // String-tagged.
+                Some(unsafe { RString::from_value_unchecked(v) })
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, beg, len);
+            crate::not_linked()
+        }
+    }
+
     /// Borrow the raw bytes of this string. Routes through the
     /// `mrb_rstring_ptr` / `mrb_rstring_len` static-inline wrappers in
     /// `wrapper.h`, which expand the `RSTRING_PTR(s)` / `RSTRING_LEN(s)`
@@ -388,5 +508,84 @@ mod tests {
         // require valid UTF-8.
         let s = mrb.str_new(&[0xff, 0x00, 0xfe]);
         assert_eq!(s.to_bytes(), vec![0xff, 0x00, 0xfe]);
+    }
+
+    #[test]
+    fn concat_coerces_a_non_string_argument_in_place() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A plain String argument appends like cat_str.
+        let s = mrb.str_new(b"foo");
+        s.concat(&mrb, mrb.str_new(b"bar").as_value())
+            .expect("appending a string succeeds");
+        assert_eq!(s.to_bytes(), b"foobar".to_vec());
+
+        // A non-string argument is coerced before appending: an Integer
+        // renders to its decimal text.
+        s.concat(&mrb, crate::Value::from_int(&mrb, 42))
+            .expect("appending a coerced integer succeeds");
+        assert_eq!(s.to_bytes(), b"foobar42".to_vec());
+    }
+
+    #[test]
+    fn concat_surfaces_frozen_receiver_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
+
+        let frozen = RString::from_value(cxt.load_nstring(b"'fixed'.freeze"))
+            .expect("a frozen String literal is String-tagged");
+        let result = frozen.concat(&mrb, mrb.str_new(b"more").as_value());
+        assert!(matches!(result, Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn resize_truncates_and_extends_in_place() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Shrinking drops the tail; the same handle names the result.
+        let s = mrb.str_new(b"Hello, world!");
+        s.resize(&mrb, 5).expect("shrinking succeeds");
+        assert_eq!(s.to_bytes(), b"Hello".to_vec());
+
+        // Growing extends the length; the original prefix is preserved,
+        // the new tail's contents are unspecified, so only the length is
+        // asserted.
+        s.resize(&mrb, 8).expect("growing succeeds");
+        assert_eq!(s.len(), 8);
+        assert_eq!(&s.to_bytes()[..5], b"Hello");
+    }
+
+    #[test]
+    fn resize_surfaces_frozen_receiver_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
+
+        let frozen = RString::from_value(cxt.load_nstring(b"'fixed'.freeze"))
+            .expect("a frozen String literal is String-tagged");
+        assert!(matches!(frozen.resize(&mrb, 2), Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn substr_reads_a_range_and_clamps_out_of_range() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let s = mrb.str_new(b"Hello, world!");
+
+        // An in-range slice yields the substring.
+        let he = s.substr(&mrb, 0, 2).expect("an in-range slice is Some");
+        assert_eq!(he.to_bytes(), b"He".to_vec());
+
+        // A negative beg counts from the end.
+        let bang = s.substr(&mrb, -1, 1).expect("a tail slice is Some");
+        assert_eq!(bang.to_bytes(), b"!".to_vec());
+
+        // An over-long len clamps to the string's end.
+        let tail = s.substr(&mrb, 7, 100).expect("an over-long len clamps");
+        assert_eq!(tail.to_bytes(), b"world!".to_vec());
+
+        // A beg past the end yields None, the way mruby returns nil.
+        assert!(s.substr(&mrb, 100, 1).is_none());
     }
 }
