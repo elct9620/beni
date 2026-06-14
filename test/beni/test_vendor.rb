@@ -24,6 +24,18 @@ module Beni
       assert_includes checksums.keys, Vendor::WASI_SDK_PLATFORM
     end
 
+    def test_wasi_sdk_platform_maps_each_host_triple_to_its_token
+      # Both arm64 and aarch64 spellings resolve on each OS.
+      assert_equal "arm64-macos", Vendor.wasi_sdk_platform("arm64-darwin23")
+      assert_equal "arm64-macos", Vendor.wasi_sdk_platform("aarch64-darwin23")
+      assert_equal "x86_64-macos", Vendor.wasi_sdk_platform("x86_64-darwin22")
+      assert_equal "arm64-linux", Vendor.wasi_sdk_platform("aarch64-linux-gnu")
+      assert_equal "arm64-linux", Vendor.wasi_sdk_platform("arm64-linux")
+      assert_equal "x86_64-linux", Vendor.wasi_sdk_platform("x86_64-linux-gnu")
+      # Unrecognised triples fall back to the most common host.
+      assert_equal "x86_64-linux", Vendor.wasi_sdk_platform("riscv64-linux")
+    end
+
     def test_dependencies_registry_implies_mruby_for_wasi_sdk
       assert_equal %w[mruby], Vendor::DEPENDENCIES.fetch("wasi-sdk")
     end

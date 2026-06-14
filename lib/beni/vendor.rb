@@ -50,18 +50,21 @@ module Beni
     # task-definition time: referencing wasi-sdk implies mruby.
     DEPENDENCIES = { "wasi-sdk" => %w[mruby] }.freeze
 
-    # ---- Platform detection (wasi-sdk only; mruby tarball is host-agnostic).
-    # +x86_64-linux+ is both the most common host triple and the safest
-    # fallback for unrecognised ones, so we collapse both cases into the
-    # +else+ branch rather than carrying an explicit +when+ that would
-    # duplicate the default.
-    WASI_SDK_PLATFORM =
-      case RUBY_PLATFORM
+    # Map a host triple to the platform token wasi-sdk keys its per-platform
+    # tarballs by (wasi-sdk only; mruby's tarball is host-agnostic).
+    # +x86_64-linux+ is both the most common host and the safest fallback
+    # for unrecognised triples, so it is the +else+ branch.
+    def self.wasi_sdk_platform(platform = RUBY_PLATFORM)
+      case platform
       when /arm64-darwin|aarch64-darwin/ then "arm64-macos"
       when /x86_64-darwin/               then "x86_64-macos"
       when /aarch64-linux|arm64-linux/   then "arm64-linux"
       else "x86_64-linux"
       end
+    end
+
+    # The build platform's wasi-sdk token, resolved once at load.
+    WASI_SDK_PLATFORM = wasi_sdk_platform
 
     # Known toolchain names mapped to their factory methods — the name
     # domain the DSL validates against and +Beni::Tasks+ dispatches on.
