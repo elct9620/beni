@@ -275,6 +275,31 @@ impl Hash {
         }
     }
 
+    /// `mrb_hash_clear(mrb, self)` — remove all entries, Ruby's
+    /// `Hash#clear`. Clearing a frozen hash raises `FrozenError`,
+    /// surfaced here as `Err`.
+    #[inline]
+    pub fn clear(self, mrb: &Mrb) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self` is
+                // Hash-tagged by the `from_value_unchecked` contract.
+                // `mrb_hash_clear` calls `hash_modify`, which raises
+                // `FrozenError` on a frozen hash — caught by `protect` into
+                // `Err`.
+                unsafe { sys::mrb_hash_clear(mrb.as_ptr(), self.0.as_raw()) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_hash_dup(mrb, self)` — a shallow copy, Ruby's `Hash#dup`. It
     /// does not mutate the receiver, so it never fails.
     #[inline]
@@ -441,6 +466,37 @@ mod tests {
             hash.get(&mrb, mrb.str_new(b"a").as_value()).to_string(&mrb),
             "1"
         );
+    }
+
+    #[test]
+    fn clear_empties_the_hash() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let hash = mrb.hash_new();
+        hash.set(
+            &mrb,
+            mrb.str_new(b"k").as_value(),
+            mrb.str_new(b"v").as_value(),
+        )
+        .expect("set succeeds");
+        assert!(!hash.is_empty(&mrb));
+
+        hash.clear(&mrb).expect("clear succeeds");
+        assert!(hash.is_empty(&mrb));
+    }
+
+    #[test]
+    fn clear_surfaces_frozen_receiver_as_err() {
+        use crate::{Ccontext, FromValue, Hash};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_clear.rb").expect("allocating the context must succeed");
+
+        // clear checks frozen state before touching entries, so even a
+        // populated frozen hash surfaces FrozenError as Err.
+        let frozen = Hash::from_value(cxt.load_nstring(b"{a: 1}.freeze"))
+            .expect("a frozen Hash literal is Hash-tagged");
+        assert!(frozen.clear(&mrb).is_err());
     }
 
     #[test]

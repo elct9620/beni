@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 329 (96%) | 93 (27%) |
+| function | 342 | 329 (96%) | 94 (27%) |
 | macro | 124 | 20 (16%) | 24 (19%) |
-| total | 466 | 349 (75%) | 117 (25%) |
+| total | 466 | 349 (75%) | 118 (25%) |
 
 ## mruby.h
 
@@ -354,7 +354,7 @@ Legend: ✅ covered · — missing
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_hash_clear` | fn | ✅ | — |  |
+| `mrb_hash_clear` | fn | ✅ | ✅ | `Hash::clear` |
 | `mrb_hash_delete_key` | fn | ✅ | ✅ | `Hash::delete` |
 | `mrb_hash_dup` | fn | ✅ | ✅ | `Hash::dup` |
 | `mrb_hash_empty_p` | fn | ✅ | — |  |
