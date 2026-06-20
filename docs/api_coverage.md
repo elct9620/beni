@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 161 (47%) |
+| function | 342 | 332 (97%) | 162 (47%) |
 | macro | 124 | 25 (20%) | 37 (30%) |
-| total | 466 | 357 (77%) | 198 (42%) |
+| total | 466 | 357 (77%) | 199 (43%) |
 
 ## mruby.h
 
@@ -250,7 +250,7 @@ Legend: ✅ covered · — missing
 | `mrb_ary_ptr` | macro | — | — |  |
 | `mrb_ary_push` | fn | ✅ | ✅ | `Array::push` |
 | `mrb_ary_ref` | macro | — | — |  |
-| `mrb_ary_replace` | fn | ✅ | — |  |
+| `mrb_ary_replace` | fn | ✅ | ✅ | `Array::replace` |
 | `mrb_ary_resize` | fn | ✅ | ✅ | `Array::resize` |
 | `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
 | `mrb_ary_shift` | fn | ✅ | ✅ | `Array::shift` |

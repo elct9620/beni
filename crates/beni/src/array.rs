@@ -258,6 +258,29 @@ impl Array {
         }
     }
 
+    /// `mrb_ary_replace(mrb, self, other)` — make the receiver's contents
+    /// a copy of `other`'s, in place, Ruby's `Array#replace`. Replacing a
+    /// frozen receiver raises `FrozenError`, surfaced as `Err`.
+    #[inline]
+    pub fn replace(self, mrb: &Mrb, other: Array) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: as `concat`; `self` and `other` are Array-tagged
+                // and share the VM. `mrb_ary_replace` modifies `self` and
+                // may raise `FrozenError` — caught by `protect`.
+                unsafe { sys::mrb_ary_replace(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_ary_clear(mrb, self)` — remove all elements, Ruby's
     /// `Array#clear`. Clearing a frozen array raises `FrozenError`,
     /// surfaced as `Err`.
@@ -522,6 +545,31 @@ mod tests {
     }
 
     #[test]
+    fn replace_swaps_the_whole_contents_in_place() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        ary.push(&mrb, crate::Value::from_int(&mrb, 1))
+            .expect("push succeeds");
+        ary.push(&mrb, crate::Value::from_int(&mrb, 2))
+            .expect("push succeeds");
+
+        let other = mrb.ary_new();
+        for n in [3, 4, 5] {
+            other
+                .push(&mrb, crate::Value::from_int(&mrb, n))
+                .expect("push succeeds");
+        }
+
+        ary.replace(&mrb, other).expect("replace succeeds");
+
+        // The receiver now holds a copy of other's elements, in place.
+        assert_eq!(ary.len(), 3);
+        assert_eq!(ary.entry(0).to_string(&mrb), "3");
+        assert_eq!(ary.entry(1).to_string(&mrb), "4");
+        assert_eq!(ary.entry(2).to_string(&mrb), "5");
+    }
+
+    #[test]
     fn resize_grows_with_nil_and_truncates() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let ary = mrb.ary_new();
@@ -619,6 +667,10 @@ mod tests {
         ));
         assert!(matches!(
             frozen.concat(&mrb, other),
+            Err(Error::Exception(_))
+        ));
+        assert!(matches!(
+            frozen.replace(&mrb, other),
             Err(Error::Exception(_))
         ));
         assert!(matches!(frozen.shift(&mrb), Err(Error::Exception(_))));

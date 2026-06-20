@@ -45,6 +45,7 @@ typed:
   mrb_ary_new_from_values: Mrb::ary_new_from_values
   mrb_ary_pop: Array::pop
   mrb_ary_push: Array::push
+  mrb_ary_replace: Array::replace
   mrb_ary_resize: Array::resize
   mrb_ary_set: Array::store
   mrb_ary_shift: Array::shift
