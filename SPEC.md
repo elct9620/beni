@@ -434,6 +434,7 @@ raise/return contract:
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
+| Wraps a Rust value as a data carrier — allocating a fresh instance of a marked class to carry it | the class cannot carry a data carrier — it was never marked — so the allocation raises a `TypeError`; the unwrapped Rust value is reclaimed rather than leaked | `Result` |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
@@ -626,18 +627,23 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   mechanism (`CDATA`): a class is marked so its instances carry Rust data,
   a Rust value is wrapped as an instance of that class, and it is extracted
   back type-checked against the data type it was registered under — a value
-  carrying a different data type, or none, does not extract. A bare carrier
-  that holds no payload yet — the instance an mruby `dup` or `clone`
-  allocates before `initialize_copy` runs — can have a Rust value installed
-  into it. The install targets a bare carrier: it does not release any
-  payload the carrier already holds, and on a value that carries no data
-  type it does nothing — a total operation safe on any value. It is the
-  seam through which a typed object copies its Rust state. The mruby
-  garbage collector owns the wrapped value's lifetime, releasing it when
-  its carrier is collected. Mirrors
-  `magnus`'s typed-data wrapping, and meets the graduation bar — correct use
-  needs no reasoning about VM internals — so it lives on the typed surface
-  rather than behind `beni::sys`.
+  carrying a different data type, or none, does not extract. Wrapping is
+  fallible: a class that has been marked yields an `Ok` carrying the new
+  instance, while a class that cannot carry a data carrier — one never
+  marked — surfaces the `TypeError` mruby raises for that allocation as a
+  Rust `Err`, and the Rust value waiting to be handed to the carrier is
+  recovered rather than leaked. A bare carrier that holds no payload yet —
+  the instance an mruby `dup` or `clone` allocates before `initialize_copy`
+  runs — can have a Rust value installed into it. The install targets a
+  bare carrier: it does not release any payload the carrier already holds,
+  and on a value that carries no data type it does nothing — a total
+  operation safe on any value. It is the seam through which a typed object
+  copies its Rust state. The mruby garbage collector owns a successfully
+  wrapped value's lifetime, releasing it when its carrier is collected.
+  Mirrors `magnus`'s typed-data wrapping, and meets the graduation bar —
+  a wrapping that cannot succeed reports its failure as an `Err` instead of
+  unwinding across the boundary, and the unwrapped value is reclaimed — so
+  it lives on the typed surface rather than behind `beni::sys`.
 
 #### Gems, arena scopes, and blocks
 
@@ -752,6 +758,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable assignment to a frozen receiver, or a constant assignment or removal to a frozen receiver or one that is not a class or module | surfaced as a Rust `Err`, never unwinds across FFI |
 | A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
+| A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
 | mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
