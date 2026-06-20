@@ -246,7 +246,14 @@ radix. The radix is one of 2 through 36, or 0 to auto-detect a leading base
 prefix (`0x`, `0b`, `0o`), the same radixes Ruby's `String#to_i` accepts; a radix
 outside that domain is itself invalid input and surfaces the same `Err`. This
 parse anchors on mruby's own `mrb_str_to_integer`; it is the strict counterpart
-of Ruby's lenient `String#to_i`, which never raises. It likewise parses the bytes
+of Ruby's lenient `String#to_i`, which never raises. A lenient sibling reads the
+same radixes the way Ruby's `String#to_i` itself does: it consumes the leading
+integer and ignores any trailing characters, yielding `0` when no integer begins
+the bytes rather than rejecting them, so it returns the best-effort value directly
+without an `Err` for malformed content. A radix outside the 2-through-36 / 0-prefix
+domain is still rejected — the one input the lenient read cannot interpret — and
+surfaces an `Err` carrying the same `ArgumentError`. This sibling anchors on mruby's
+own `mrb_str_to_inum`. It likewise parses the bytes
 to a float — a strict parse that rejects any non-float input rather than ignoring
 trailing characters — which surfaces an `Err`, the `ArgumentError` mruby raises,
 when the bytes are not a valid float. This parse anchors on mruby's own
