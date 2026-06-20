@@ -479,7 +479,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | `object_id` | a unique integer identifier for the value; dispatches nothing and never raises, a total operation |
 | `==` / `eql?` | Ruby value and hash-key equality; may run a user-defined `==` or `eql?` |
 | comparison | three-way order by Ruby's `<=>` — less, equal, or greater — yielding nothing when the two values are incomparable; may run a user-defined `<=>`, and a raise inside it surfaces as an `Err`. Distinct from equality: it ranks rather than tests sameness |
-| dispatch | call a Ruby method named by a symbol-or-name key with an argument slice, receiving its return value |
+| dispatch | call a Ruby method named by a symbol-or-name key with an argument slice, receiving its return value; or call it passing an explicit block — a typed `Proc` the method yields to — alongside the argument slice. The plain dispatch is the no-block call; a caller wanting no block uses it rather than passing a nil block |
 | inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect`, and a raise inside it yields an empty string |
 | `dup` / `clone` | copy the object, running its `initialize_copy` — `dup` resets the frozen state and drops the singleton class, `clone` preserves both; an immediate returns itself; may raise |
 | string coercion | the value as a string — itself when already a string, otherwise its `to_s`; may raise when `to_s` does not return a string |
