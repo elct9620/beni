@@ -127,6 +127,22 @@ impl Mrb {
         crate::not_linked()
     }
 
+    /// Whether the current call was passed a block. A plain boolean
+    /// question about the current call — `true` when a block was given,
+    /// `false` otherwise. Total: it never raises. Mirrors magnus's
+    /// `Ruby::block_given_p`.
+    #[inline]
+    pub fn block_given(&self) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive by the `&self` borrow; the read is
+            // total — it inspects the current call and never raises.
+            unsafe { sys::mrb_block_given_p(self.as_ptr()) }
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// Read the number of arguments passed to the call frame, splat
     /// arguments counted as their expanded length. Does not raise.
     #[inline]
@@ -716,6 +732,14 @@ mod tests {
         mrb.arg1()
     }
 
+    /// Registered through `method!(block_report, -1)`: returns whether a
+    /// block was passed to the call as a Ruby boolean, read via
+    /// `Mrb::block_given`.
+    fn block_report(mrb: &Mrb, _self: Value) -> Value {
+        use crate::IntoValue;
+        mrb.block_given().into_value(mrb)
+    }
+
     /// Registered through `method!(argc_report, -1)`: returns the
     /// argument count read via `Mrb::argc` as an mruby Integer.
     fn argc_report(mrb: &Mrb, _self: Value) -> Value {
@@ -788,5 +812,41 @@ mod tests {
             .funcall(&mrb, c"argc_report", &args)
             .expect("the count read must not raise");
         assert_eq!(i32::from_value(got), Some(3));
+    }
+
+    #[test]
+    fn block_given_reports_whether_a_block_was_passed() {
+        use crate::{Ccontext, FromValue, Module};
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(&mrb, c"block_report", crate::method!(block_report, -1))
+            .expect("registering the bridge must succeed");
+
+        let recv = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let slot = mrb.intern_cstr(c"$beni_block_recv");
+        mrb.gv_set(slot, recv);
+
+        // A block is supplied from Ruby — the typed surface has no
+        // block-value constructor — so the call is driven through a
+        // compiled fragment, as the *& read test does.
+        let cxt = Ccontext::new(&mrb, c"block_given_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        // No block: the predicate reports false.
+        let without = cxt.load_nstring(b"$beni_block_recv.block_report");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the predicate must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(bool::from_value(without), Some(false));
+
+        // A block is given: the predicate reports true.
+        let with = cxt.load_nstring(b"$beni_block_recv.block_report { }");
+        assert_eq!(bool::from_value(with), Some(true));
     }
 }

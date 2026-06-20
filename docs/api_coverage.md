@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 145 (42%) |
+| function | 342 | 332 (97%) | 146 (43%) |
 | macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 181 (39%) |
+| total | 466 | 357 (77%) | 182 (39%) |
 
 ## mruby.h
 
@@ -34,7 +34,7 @@ Legend: ✅ covered · — missing
 | `mrb_as_int` | macro | ✅ | ✅ | `Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast |
 | `mrb_attr_get` | fn | ✅ | — |  |
 | `mrb_basic_alloc_func` | fn | ✅ | — |  |
-| `mrb_block_given_p` | fn | ✅ | — |  |
+| `mrb_block_given_p` | fn | ✅ | ✅ | `Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises |
 | `mrb_bug` | fn | ✅ | — |  |
 | `mrb_calloc` | fn | ✅ | — |  |
 | `mrb_check_array_type` | fn | ✅ | — |  |

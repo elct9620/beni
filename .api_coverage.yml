@@ -52,6 +52,7 @@ typed:
   mrb_assoc_new: Mrb::assoc_new
   mrb_as_float: "`Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast"
   mrb_as_int: "`Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast"
+  mrb_block_given_p: "`Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises"
   mrb_break_p: Value::as_break
   mrb_class_p: "`Value::is_class`, via the value tag"
   mrb_data_p: "`Value::is_data`, via the value tag"
