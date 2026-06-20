@@ -597,6 +597,66 @@ impl Value {
         }
     }
 
+    /// Coerce `self` by numeric type to an Integer `Value`, staying in
+    /// mruby's value domain rather than reading out a Rust scalar: an
+    /// Integer returns unchanged, a Float truncates toward zero, and the
+    /// result narrows to one that fits the configured integer width. It
+    /// coerces between the numeric types, unlike the exact-tag
+    /// `i32::from_value` downcast, and the `Value::as_int` sibling reads the
+    /// same coercion out as a Rust `mrb_int`. It runs no user Ruby — it
+    /// dispatches no `to_int` — so the `TypeError` mruby raises for a
+    /// non-numeric value, or the `RangeError` it raises for an infinite or
+    /// NaN Float, is caught by `Mrb::protect` into the returned `Err`.
+    /// Mirrors mruby's `mrb_ensure_int_type` (over `mrb_ensure_integer_type`,
+    /// which the width narrowing wraps).
+    #[inline]
+    pub fn ensure_int(self, mrb: &Mrb) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_ensure_int_type` raises
+                // `TypeError` on a non-numeric value and `RangeError` on an
+                // infinite or NaN Float — both caught by `protect` into
+                // `Err` — and otherwise returns an Integer value.
+                Value(unsafe { sys::mrb_ensure_int_type(mrb.as_ptr(), self.0) })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// Coerce `self` by numeric type to a Float `Value`, staying in mruby's
+    /// value domain rather than reading out a Rust scalar: a Float returns
+    /// unchanged and an Integer widens. It coerces between the numeric types,
+    /// unlike the exact-tag `f64::from_value` downcast, and the
+    /// `Value::as_float` sibling reads the same coercion out as a Rust
+    /// `mrb_float`. It runs no user Ruby — it dispatches no `to_f` — so the
+    /// `TypeError` mruby raises for a non-numeric value is caught by
+    /// `Mrb::protect` into the returned `Err`. Mirrors mruby's
+    /// `mrb_ensure_float_type`.
+    #[inline]
+    pub fn ensure_float(self, mrb: &Mrb) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_ensure_float_type` raises
+                // `TypeError` on a non-numeric value — caught by `protect`
+                // into `Err` — and otherwise returns a Float value.
+                Value(unsafe { sys::mrb_ensure_float_type(mrb.as_ptr(), self.0) })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// Coerce `self` into a typed `Symbol`: a Symbol value yields its own
     /// id, a String value interns its contents, and any other value
     /// surfaces an `Err`. It runs no user Ruby — it dispatches no
@@ -3025,6 +3085,70 @@ mod linked_tests {
             Value::from_int(&mrb, 7).float_to_int(&mrb),
             Err(Error::Exception(_))
         ));
+    }
+
+    #[test]
+    fn ensure_int_coerces_by_numeric_type_or_raises() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // An Integer coerces unchanged, staying an Integer value.
+        let same = Value::from_int(&mrb, 5)
+            .ensure_int(&mrb)
+            .expect("an Integer coerces without raising");
+        assert!(same.is_integer());
+        assert_eq!(i32::from_value(same), Some(5));
+
+        // A Float coerces by truncating toward zero, like Ruby's
+        // Integer(-3.9) == -3 — the cross-numeric case.
+        let truncated = Value::from_float(&mrb, -3.9)
+            .ensure_int(&mrb)
+            .expect("a Float coerces by truncation");
+        assert!(truncated.is_integer());
+        assert_eq!(i32::from_value(truncated), Some(-3));
+
+        // An infinite or NaN Float has no integer; mruby raises RangeError,
+        // caught into Err, and the VM stays usable.
+        assert!(matches!(
+            Value::from_float(&mrb, f64::INFINITY).ensure_int(&mrb),
+            Err(Error::Exception(_))
+        ));
+
+        // A non-numeric value raises the genuine TypeError class rather than
+        // coercing — no to_int dispatch.
+        match mrb.str_new(b"7").as_value().ensure_int(&mrb) {
+            Err(Error::Exception(exc)) => {
+                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+            }
+            _ => panic!("a non-numeric value surfaces a TypeError Err"),
+        }
+    }
+
+    #[test]
+    fn ensure_float_coerces_by_numeric_type_or_raises() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A Float coerces unchanged, staying a Float value.
+        let same = Value::from_float(&mrb, 2.5)
+            .ensure_float(&mrb)
+            .expect("a Float coerces without raising");
+        assert!(same.is_float());
+        assert_eq!(f64::from_value(same), Some(2.5));
+
+        // An Integer widens to a Float — the cross-numeric case.
+        let widened = Value::from_int(&mrb, 7)
+            .ensure_float(&mrb)
+            .expect("an Integer widens to a Float");
+        assert!(widened.is_float());
+        assert_eq!(f64::from_value(widened), Some(7.0));
+
+        // A non-numeric value raises the genuine TypeError class rather than
+        // coercing — no to_f dispatch.
+        match mrb.str_new(b"2.5").as_value().ensure_float(&mrb) {
+            Err(Error::Exception(exc)) => {
+                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+            }
+            _ => panic!("a non-numeric value surfaces a TypeError Err"),
+        }
     }
 
     #[test]
