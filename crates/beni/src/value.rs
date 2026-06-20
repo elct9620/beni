@@ -1260,6 +1260,24 @@ impl Value {
         }
     }
 
+    /// `mrb_cv_defined(mrb, self, sym)` — TRUE when class variable `sym`
+    /// is defined on `self` (the module or class value) or any ancestor.
+    /// The value-level analogue of the raw-`RClass*` `mrb_mod_cv_defined`,
+    /// which stays in `sys`.
+    #[inline]
+    pub fn cv_defined(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `iv_set`.
+            unsafe { sys::mrb_cv_defined(mrb.as_ptr(), self.0, sym) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_respond_to(mrb, self, mid)` — TRUE when `self` answers to
     /// the method named by `mid`.
     #[inline]
@@ -2251,6 +2269,27 @@ mod linked_tests {
             frozen.cv_set(&mrb, total, 6i32.into_value(&mrb)),
             Err(Error::Exception(_))
         ));
+    }
+
+    #[test]
+    fn cv_defined_tests_class_variable_presence_walking_the_ancestry() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"cv_defined_test.rb")
+            .expect("allocating the context must succeed");
+
+        let child = cxt.load_nstring(
+            b"class BeniCvParent; @@inherited = 1; end; \
+              class BeniCvChild < BeniCvParent; end; BeniCvChild",
+        );
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // A class variable defined on an ancestor is present on the
+        // child; an absent one is not — the predicate is total, raising
+        // for neither.
+        let inherited = mrb.intern_cstr(c"@@inherited");
+        let missing = mrb.intern_cstr(c"@@missing");
+        assert!(child.cv_defined(&mrb, inherited));
+        assert!(!child.cv_defined(&mrb, missing));
     }
 
     #[test]

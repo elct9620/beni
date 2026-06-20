@@ -91,6 +91,7 @@ typed:
   mrb_const_get: Value::const_get
   mrb_const_remove: "`Value::const_remove` — the value-level constant removal; discards the former value (the C API is `void`) and treats an absent constant as a no-op"
   mrb_const_set: Value::const_set
+  mrb_cv_defined: "`Value::cv_defined` — the value-level class-variable presence test, walking the ancestry; `mrb_mod_cv_defined` (the raw-`RClass*` form) stays in `sys`"
   mrb_cv_get: Value::cv_get
   mrb_cv_set: "`Value::cv_set` — the value-level class-variable write; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in `sys`"
   mrb_data_check_get_ptr: Value::data_get
