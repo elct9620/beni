@@ -364,21 +364,23 @@ user Ruby; it follows the raise/return contract like the other converting
 operations.
 
 Beyond the id, a symbol
-reads its name three ways into Rust-side views — all non-dispatching reads that
-never raise, each yielding nothing when mruby has no name for the id:
+reads its name three ways, each copying the name out into an owned Rust value —
+all non-dispatching reads that never raise, each yielding nothing when mruby has
+no name for the id. mruby has no storage a short symbol name can be borrowed
+from stably: a short name unpacks into a buffer that the next name read
+overwrites, so the typed surface copies the name out rather than aliasing it.
 
 | Read | Yields |
 |---|---|
-| name as `&str` | the name as UTF-8, escaped to its quoted dump form when it carries an embedded NUL |
-| name as bytes | the raw name bytes with their true length, embedded NUL bytes included and unescaped |
+| name as owned UTF-8 string | the name as UTF-8, escaped to its quoted dump form when it carries an embedded NUL |
+| name as owned bytes | the raw name bytes with their true length, embedded NUL bytes included and unescaped |
 | dump form | the name's symbol-literal representation, quoted and escaped when the name is not a plain identifier — Ruby's `Symbol#inspect` without the leading colon |
 
 A symbol also reifies its name as an mruby String value, the way Ruby's
-`Symbol#to_s` does — where the three reads above borrow into mruby's interned
-storage, this returns a distinct, mutable `RString` whose bytes are the symbol's
-name (unfrozen, unlike `Symbol#name`). It is the only symbol name read that
-produces a value rather than a borrowed view; like the others it dispatches
-nothing and never raises.
+`Symbol#to_s` does: where the three reads above produce owned Rust values (a
+string or bytes), this produces a distinct, mutable mruby `RString` value whose
+bytes are the symbol's name (unfrozen, unlike `Symbol#name`). Like the others it
+dispatches nothing and never raises.
 
 #### Ranges
 
