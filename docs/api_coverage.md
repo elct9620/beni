@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 141 (41%) |
+| function | 342 | 332 (97%) | 142 (42%) |
 | macro | 124 | 25 (20%) | 35 (28%) |
-| total | 466 | 357 (77%) | 176 (38%) |
+| total | 466 | 357 (77%) | 177 (38%) |
 
 ## mruby.h
 
@@ -95,7 +95,7 @@ Legend: ✅ covered · — missing
 | `mrb_eql` | fn | ✅ | ✅ | `Value::eql` |
 | `mrb_equal` | fn | ✅ | ✅ | `Value::equal` |
 | `mrb_exc_get` | macro | — | — |  |
-| `mrb_exc_get_id` | fn | ✅ | — |  |
+| `mrb_exc_get_id` | fn | ✅ | ✅ | `Mrb::exc_get` (the symbol-or-name key) — fetch a built-in exception class, guaranteed an `Exception` subclass; `mrb_exc_get` is a macro alias that interns the name and is reached by passing a name key |
 | `mrb_exc_new` | fn | ✅ | ✅ | `RClass::exc_new`, also via `Error::new` (see Error extension) |
 | `mrb_exc_raise` | fn | ✅ | ✅ | raised from `Err` by the dispatch bridge (see Error extension) |
 | `mrb_fiber_alive_p` | fn | ✅ | — |  |

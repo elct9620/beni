@@ -112,6 +112,7 @@ typed:
   mrb_eql: Value::eql
   mrb_equal: Value::equal
   mrb_obj_equal: Value::obj_equal
+  mrb_exc_get_id: "`Mrb::exc_get` (the symbol-or-name key) — fetch a built-in exception class, guaranteed an `Exception` subclass; `mrb_exc_get` is a macro alias that interns the name and is reached by passing a name key"
   mrb_exc_new: "`RClass::exc_new`, also via `Error::new` (see Error extension)"
   mrb_exc_raise: raised from `Err` by the dispatch bridge (see Error extension)
   mrb_false_p: Value::is_false

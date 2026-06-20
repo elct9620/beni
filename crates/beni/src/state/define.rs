@@ -7,6 +7,7 @@
 //!   * `mrb_define_module` / `mrb_define_class` — register a new
 //!     module or class at top level.
 //!   * `mrb_class_get` / `mrb_module_get` — look one up by name.
+//!   * `mrb_exc_get_id` — look up a built-in exception class by name.
 //!   * `mrb_define_global_const` — bind a top-level constant.
 //!   * `mrb_gv_set` / `mrb_gv_get` — assign or read a Ruby `$global`.
 //!
@@ -82,6 +83,32 @@ impl Mrb {
             crate::class::protect_class_ptr(self, |mrb| {
                 // SAFETY: as `define_module`.
                 unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) }
+            })
+            .map(RClass::from_raw)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = name;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_exc_get_id(mrb, name)` — fetch the built-in exception
+    /// class named `name`, guaranteed to descend from `Exception`. The
+    /// name is a symbol-or-name key (`IntoSym`). mruby raises when the
+    /// constant is missing, is not a class, or is a class that is not
+    /// an `Exception` subclass (vendored `src/class.c`), so the lookup
+    /// is fallible by contract. This is the typed path to a built-in
+    /// exception class — `RuntimeError`, `ArgumentError`, `TypeError` —
+    /// for raising from registered code.
+    #[inline]
+    pub fn exc_get<K: IntoSym>(&self, name: K) -> Result<RClass, Error> {
+        #[cfg(mruby_linked)]
+        {
+            let sym = name.into_sym(self);
+            crate::class::protect_class_ptr(self, |mrb| {
+                // SAFETY: as `define_module`.
+                unsafe { sys::mrb_exc_get_id(mrb.as_ptr(), sym) }
             })
             .map(RClass::from_raw)
         }
@@ -221,6 +248,47 @@ mod tests {
             err.message(&mrb).contains("BeniNoSuchModule"),
             "the NameError must name the missing constant: {}",
             err.message(&mrb)
+        );
+    }
+
+    #[test]
+    fn exc_get_fetches_a_builtin_exception_class() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A built-in exception class is reachable by name and by Symbol
+        // key — both forms route through `mrb_exc_get_id`.
+        let by_name = mrb
+            .exc_get(c"RuntimeError")
+            .expect("RuntimeError must resolve to its exception class");
+        assert_eq!(by_name.name(&mrb), Some("RuntimeError"));
+        let by_sym = mrb
+            .exc_get(crate::Symbol::new(&mrb, c"ArgumentError"))
+            .expect("a Symbol key must reach the exception class");
+        assert_eq!(by_sym.name(&mrb), Some("ArgumentError"));
+    }
+
+    #[test]
+    fn exc_get_surfaces_err_for_a_non_exception_class() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // `Object` is a class but not an Exception subclass; the
+        // Exception-subclass guarantee turns this into an Err instead of
+        // long-jumping.
+        assert!(
+            mrb.exc_get(c"Object").is_err(),
+            "a non-exception class must surface as Err"
+        );
+    }
+
+    #[test]
+    fn exc_get_surfaces_err_for_missing_constant() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // mruby raises NameError for a missing constant — the typed
+        // lookup must catch it instead of long-jumping.
+        assert!(
+            mrb.exc_get(c"BeniNoSuchError").is_err(),
+            "a missing constant must surface as Err"
         );
     }
 
