@@ -156,6 +156,31 @@ impl Mrb {
         #[cfg(not(mruby_linked))]
         crate::not_linked()
     }
+
+    /// Read the call frame's positional arguments as a borrowed slice,
+    /// the companion to `Mrb::argc`. The slice holds exactly `argc`
+    /// values and borrows the call frame's argument buffer: it is valid
+    /// only for the duration of the current call, a borrow the returned
+    /// lifetime ties to `&self`. Splat arguments appear expanded, as the
+    /// count read sees them. An empty argument list yields an empty
+    /// slice. Total: it never raises.
+    #[inline]
+    pub fn argv(&self) -> &[Value] {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive by the `&self` borrow. `mrb_get_argv`
+            // returns a pointer to `mrb_get_argc` consecutive `mrb_value`s
+            // in the current call frame, valid for its duration; both reads
+            // derive their length and pointer from the same callinfo so they
+            // agree. `slice_from_argv` folds the `argc == 0` case into an
+            // empty slice without forming one from the pointer.
+            let argv = unsafe { sys::mrb_get_argv(self.as_ptr()) };
+            let argc = unsafe { sys::mrb_get_argc(self.as_ptr()) };
+            slice_from_argv(argv, argc)
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
 }
 
 /// Zero-sized marker types implementing `Format`. Each marker maps
@@ -746,6 +771,22 @@ mod tests {
         Value::from_int(mrb, mrb.argc())
     }
 
+    /// Registered through `method!(argv_sum, -1)`: reads the whole
+    /// positional argument array via `Mrb::argv` and returns the sum of
+    /// the arguments, decoded as integers. Summing every slot — not just
+    /// the first — fails the assertion if the slice length or any element
+    /// is wrong, and the no-argument call exercises the empty-slice path
+    /// (sum 0).
+    fn argv_sum(mrb: &Mrb, _self: Value) -> Value {
+        use crate::FromValue;
+        let sum: sys::mrb_int = mrb
+            .argv()
+            .iter()
+            .map(|v| sys::mrb_int::from(i32::from_value(*v).unwrap_or(0)))
+            .sum();
+        Value::from_int(mrb, sum)
+    }
+
     #[test]
     fn arg1_reads_the_single_argument() {
         use crate::{FromValue, Module};
@@ -812,6 +853,41 @@ mod tests {
             .funcall(&mrb, c"argc_report", &args)
             .expect("the count read must not raise");
         assert_eq!(i32::from_value(got), Some(3));
+    }
+
+    #[test]
+    fn argv_reads_the_whole_argument_array() {
+        use crate::{FromValue, Module};
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(&mrb, c"argv_sum", crate::method!(argv_sum, -1))
+            .expect("registering the bridge must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+
+        // Several arguments: the body reads every slot and sums them, so
+        // a short or misread slice would not total 60.
+        let args = [
+            Value::from_int(&mrb, 10),
+            Value::from_int(&mrb, 20),
+            Value::from_int(&mrb, 30),
+        ];
+        let got = receiver
+            .funcall(&mrb, c"argv_sum", &args)
+            .expect("the array read must not raise");
+        assert_eq!(i32::from_value(got), Some(60));
+
+        // No arguments: `argv` yields an empty slice, summed to 0,
+        // exercising the `argc == 0` path without forming a slice from
+        // the call frame pointer.
+        let empty = receiver
+            .funcall(&mrb, c"argv_sum", &[])
+            .expect("the empty array read must not raise");
+        assert_eq!(i32::from_value(empty), Some(0));
     }
 
     #[test]

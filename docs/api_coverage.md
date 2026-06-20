@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 198 (58%) |
+| function | 342 | 338 (99%) | 199 (58%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 251 (54%) |
+| total | 466 | 366 (79%) | 252 (54%) |
 
 ## mruby.h
 
@@ -125,7 +125,7 @@ Legend: ✅ covered · — missing
 | `mrb_get_argc` | fn | ✅ | ✅ | `Mrb::argc` |
 | `mrb_get_args` | fn | ✅ | ✅ | `state::args` |
 | `mrb_get_args_a` | fn | ✅ | — |  |
-| `mrb_get_argv` | fn | ✅ | — |  |
+| `mrb_get_argv` | fn | ✅ | ✅ | `Mrb::argv` — the call frame's positional arguments as a borrowed slice, the companion to `Mrb::argc` |
 | `mrb_get_mid` | fn | ✅ | — |  |
 | `mrb_include_module` | fn | ✅ | ✅ | `Module::include_module` |
 | `mrb_incremental_gc` | fn | ✅ | ✅ | `Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive) |
