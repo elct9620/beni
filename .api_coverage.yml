@@ -81,6 +81,7 @@ typed:
   mrb_class_get_under_id: "`Module::class_get` with a `Symbol` key (the symbol-or-name key)"
   mrb_class_real: "`RClass::real` — resolve a class handle to its real class, skipping singleton / include classes; `mrb_class` (the raw class of a value, which may be a singleton or include class and needs VM-internal reasoning) stays in `sys`, and `Value::class` via `mrb_obj_class` already returns the real class of a value"
   mrb_class_name: Module::name
+  mrb_class_new: "`Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant"
   mrb_class_ptr: Value::as_class_ptr
   mrb_close: Mrb::drop
   mrb_const_defined: Value::const_defined
@@ -164,6 +165,7 @@ typed:
   mrb_module_get_id: "`Mrb::module_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
   mrb_module_get_under: "`Module::module_get` with a name key — interns and routes through `mrb_module_get_under_id`"
   mrb_module_get_under_id: "`Module::module_get` with a `Symbol` key (the symbol-or-name key)"
+  mrb_module_new: "`Mrb::module_new` — create an anonymous module, bound to no constant"
   mrb_nil_p: Value::is_nil
   mrb_nil_value: Value::nil
   mrb_obj_as_string: Value::obj_as_string

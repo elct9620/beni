@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 153 (45%) |
+| function | 342 | 332 (97%) | 155 (45%) |
 | macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 189 (41%) |
+| total | 466 | 357 (77%) | 191 (41%) |
 
 ## mruby.h
 
@@ -56,7 +56,7 @@ Legend: ✅ covered · — missing
 | `mrb_class_get_under` | fn | ✅ | ✅ | `Module::class_get` with a name key — interns and routes through `mrb_class_get_under_id` |
 | `mrb_class_get_under_id` | fn | ✅ | ✅ | `Module::class_get` with a `Symbol` key (the symbol-or-name key) |
 | `mrb_class_name` | fn | ✅ | ✅ | `Module::name` |
-| `mrb_class_new` | fn | ✅ | — |  |
+| `mrb_class_new` | fn | ✅ | ✅ | `Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant |
 | `mrb_class_new_instance` | fn | ✅ | — |  |
 | `mrb_class_path` | fn | ✅ | — |  |
 | `mrb_close` | fn | ✅ | ✅ | `Mrb::drop` |
@@ -148,7 +148,7 @@ Legend: ✅ covered · — missing
 | `mrb_module_get_id` | fn | ✅ | ✅ | `Mrb::module_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) |
 | `mrb_module_get_under` | fn | ✅ | ✅ | `Module::module_get` with a name key — interns and routes through `mrb_module_get_under_id` |
 | `mrb_module_get_under_id` | fn | ✅ | ✅ | `Module::module_get` with a `Symbol` key (the symbol-or-name key) |
-| `mrb_module_new` | fn | ✅ | — |  |
+| `mrb_module_new` | fn | ✅ | ✅ | `Mrb::module_new` — create an anonymous module, bound to no constant |
 | `mrb_name_error` | fn | ✅ | — |  |
 | `mrb_notimplement` | fn | ✅ | — |  |
 | `mrb_notimplement_m` | fn | ✅ | — |  |
