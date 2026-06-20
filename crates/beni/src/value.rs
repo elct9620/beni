@@ -448,6 +448,40 @@ impl Value {
         }
     }
 
+    /// Spread `self` into a new typed `Array`, Ruby's `*` splat coercion:
+    /// an array yields a copy of itself; a non-array that responds to
+    /// `to_a` runs it, taking the result when it is an array and wrapping
+    /// `self` in a one-element array when `to_a` returns `nil`; a value
+    /// that answers no `to_a` wraps in a one-element array. It dispatches
+    /// `to_a` and always yields an array, so it is the dispatching
+    /// counterpart to `ensure_array`, which coerces by the Array tag alone
+    /// and takes only an already-array value. A `TypeError` mruby raises
+    /// when `to_a` returns a non-array non-`nil` value, or a raise from
+    /// `to_a` itself, is caught by `Mrb::protect` into the returned `Err`.
+    /// Mirrors mruby's `mrb_ary_splat`.
+    #[inline]
+    pub fn to_ary(self, mrb: &Mrb) -> Result<crate::Array, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_ary_splat` dispatches
+                // `to_a` for a non-array — a raise inside it, or a non-array
+                // non-`nil` return, long-jumps a `TypeError` caught by
+                // `protect` into `Err` — and otherwise returns an array.
+                Value(unsafe { sys::mrb_ary_splat(mrb.as_ptr(), self.0) })
+            })
+            // SAFETY: `mrb_ary_splat` always returns an Array-tagged value
+            // on the `Ok` path, the tag the unchecked wrap requires.
+            .map(|v| unsafe { crate::Array::from_value_unchecked(v) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// Coerce `self` to a typed `Hash` handle by its Hash tag,
     /// surfacing a non-Hash as an `Err` rather than rejecting it to
     /// `None`: `Ok` with the handle when `self` is Hash-tagged, `Err`
@@ -2200,6 +2234,94 @@ mod linked_tests {
                 assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
             }
             _ => panic!("a non-Array value surfaces a TypeError Err"),
+        }
+    }
+
+    /// A `to_a` that returns a non-array non-`nil` value — the case that
+    /// makes `mrb_ary_splat` raise rather than wrap.
+    fn to_a_returns_int(_mrb: &Mrb, _self: Value) -> i32 {
+        42
+    }
+
+    /// A `to_a` that returns `nil` — the case `mrb_ary_splat` wraps in a
+    /// one-element array holding the receiver.
+    fn to_a_returns_nil(_mrb: &Mrb, _self: Value) -> Value {
+        Value::nil()
+    }
+
+    #[test]
+    fn to_ary_spreads_or_wraps_each_value_kind() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // An array spreads to a copy: same elements, distinct object.
+        let src = mrb.ary_new_from_values(&[1i32.into_value(&mrb), 2i32.into_value(&mrb)]);
+        let spread = src
+            .as_value()
+            .to_ary(&mrb)
+            .expect("an array spreads without raising");
+        assert_eq!(spread.len(), 2);
+        assert!(!src.as_value().obj_equal(&mrb, spread.as_value()));
+
+        // A scalar that does not respond to `to_a` wraps in `[scalar]`.
+        let wrapped = 7i32
+            .into_value(&mrb)
+            .to_ary(&mrb)
+            .expect("a scalar wraps without raising");
+        assert_eq!(wrapped.len(), 1);
+        assert_eq!(i32::from_value(wrapped.entry(0)), Some(7));
+
+        // `nil` answers `to_a` with an empty array here (mruby-object-ext
+        // defines `NilClass#to_a`), so it spreads to `[]` — the responder
+        // path, not a wrap.
+        let nil_spread = Value::nil()
+            .to_ary(&mrb)
+            .expect("nil spreads through its to_a");
+        assert_eq!(nil_spread.len(), 0);
+
+        // A `to_a` responder whose result is an array passes that array
+        // through: a Range yields its enumerated elements.
+        let range = mrb
+            .range_new(1i32.into_value(&mrb), 3i32.into_value(&mrb), false)
+            .expect("a Range over comparable bounds constructs");
+        let enumerated = range
+            .as_value()
+            .to_ary(&mrb)
+            .expect("a Range spreads through its to_a");
+        assert_eq!(enumerated.len(), 3);
+
+        // A `to_a` that returns `nil` falls back to wrapping the receiver
+        // in a one-element array.
+        let nil_class = mrb
+            .class_new(mrb.object_class())
+            .expect("an anonymous class under Object constructs");
+        nil_class
+            .define_method(&mrb, c"to_a", crate::method!(to_a_returns_nil, 0))
+            .expect("registering to_a must succeed");
+        let nil_obj = nil_class
+            .obj_new(&mrb, &[])
+            .expect("the class whose to_a returns nil instantiates");
+        let nil_returned = nil_obj
+            .to_ary(&mrb)
+            .expect("a nil-returning to_a wraps without raising");
+        assert_eq!(nil_returned.len(), 1);
+        assert!(nil_obj.obj_equal(&mrb, nil_returned.entry(0)));
+
+        // A `to_a` that returns a non-array non-`nil` value raises a
+        // genuine `TypeError`, caught into the `Err` rather than wrapping.
+        let class = mrb
+            .class_new(mrb.object_class())
+            .expect("an anonymous class under Object constructs");
+        class
+            .define_method(&mrb, c"to_a", crate::method!(to_a_returns_int, 0))
+            .expect("registering to_a must succeed");
+        let obj = class
+            .obj_new(&mrb, &[])
+            .expect("the class with a misbehaving to_a instantiates");
+        match obj.to_ary(&mrb) {
+            Err(Error::Exception(exc)) => {
+                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+            }
+            _ => panic!("a non-array non-nil to_a surfaces a TypeError Err"),
         }
     }
 

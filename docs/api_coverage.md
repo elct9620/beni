@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 178 (52%) |
+| function | 342 | 338 (99%) | 179 (52%) |
 | macro | 124 | 26 (21%) | 41 (33%) |
-| total | 466 | 364 (78%) | 219 (47%) |
+| total | 466 | 364 (78%) | 220 (47%) |
 
 ## mruby.h
 
@@ -254,7 +254,7 @@ Legend: ✅ covered · — missing
 | `mrb_ary_resize` | fn | ✅ | ✅ | `Array::resize` |
 | `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
 | `mrb_ary_shift` | fn | ✅ | ✅ | `Array::shift` |
-| `mrb_ary_splat` | fn | ✅ | — |  |
+| `mrb_ary_splat` | fn | ✅ | ✅ | `Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `Array`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `Array` downcast (the tag-test that reads a non-Array as absent) |
 | `mrb_ary_splice` | fn | ✅ | — |  |
 | `mrb_ary_unshift` | fn | ✅ | ✅ | `Array::unshift` |
 | `mrb_ary_value` | macro | — | — |  |
