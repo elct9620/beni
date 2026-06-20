@@ -216,6 +216,7 @@ mod tests {
         let _ = RClass::obj_new;
         let _ = RClass::raise;
         let _ = RClass::exc_new;
+        let _ = RClass::exc_new_str;
         let _ = RClass::is_null;
         let _ = RClass::set_instance_data_tt;
         let _ = RClass::data_wrap::<i32>;

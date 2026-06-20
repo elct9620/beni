@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 187 (55%) |
+| function | 342 | 338 (99%) | 188 (55%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 240 (52%) |
+| total | 466 | 366 (79%) | 241 (52%) |
 
 ## mruby.h
 
@@ -335,7 +335,7 @@ Legend: ✅ covered · — missing
 | `mrb_clear_error` | fn | ✅ | — |  |
 | `mrb_ensure` | fn | ✅ | — |  |
 | `mrb_exc_new_lit` | macro | — | — |  |
-| `mrb_exc_new_str` | fn | ✅ | — |  |
+| `mrb_exc_new_str` | fn | ✅ | ✅ | `RClass::exc_new_str` — build an exception carrying an existing mruby `RString` as-is; the static String tag means the underlying type guard never fires |
 | `mrb_exc_ptr` | macro | — | — |  |
 | `mrb_no_method_error` | fn | ✅ | — |  |
 | `mrb_protect` | fn | ✅ | — |  |

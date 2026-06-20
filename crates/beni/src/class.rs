@@ -28,7 +28,7 @@
 //! surfaces as `Err(Error::Exception)` instead of long-jumping across
 //! Rust frames.
 
-use crate::{Error, IntoSym, MethodDef, Mrb, Value};
+use crate::{Error, IntoSym, MethodDef, Mrb, RString, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby class. `#[repr(transparent)]` over
@@ -303,6 +303,31 @@ impl RClass {
         #[cfg(not(mruby_linked))]
         {
             let _ = (mrb, msg);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_exc_new_str(mrb, self, str)` — build an exception of this
+    /// class carrying an existing mruby string as its message, without
+    /// raising it. The counterpart to `RClass::exc_new` for a message a
+    /// consumer already holds as an `RString` (one it built, mutated, or
+    /// received), carried as-is with no Rust-side copy and no re-encoding
+    /// through bytes — distinct from `exc_new`, which allocates a fresh
+    /// string from Rust bytes. The `RString` is statically a string, so
+    /// the underlying type guard never fires: building never raises and
+    /// runs no user Ruby.
+    #[inline]
+    pub fn exc_new_str(self, mrb: &Mrb, str: RString) -> Value {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive; `self` and `str` originate from the
+            // same VM; `str` is a String-tagged value, so the call's
+            // string type guard cannot raise.
+            Value::from_raw(unsafe { sys::mrb_exc_new_str(mrb.as_ptr(), self.0, str.as_raw()) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, str);
             crate::not_linked()
         }
     }
@@ -1668,6 +1693,23 @@ mod tests {
         assert!(mrb.pending_exc().is_nil(), "exc_new must not raise");
         assert_eq!(exc.classname(&mrb), "RuntimeError");
         assert_eq!(Error::Exception(exc).message(&mrb), "something failed");
+    }
+
+    #[test]
+    fn exc_new_str_carries_an_existing_string_value_without_raising() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let runtime_error = mrb
+            .class_get(c"RuntimeError")
+            .expect("RuntimeError is present in every VM");
+
+        // A message the consumer already holds as an RString rides into
+        // the exception as-is — the String-valued counterpart of exc_new.
+        let message = mrb.str_new(b"already a string");
+        let exc = runtime_error.exc_new_str(&mrb, message);
+
+        assert!(mrb.pending_exc().is_nil(), "exc_new_str must not raise");
+        assert_eq!(exc.classname(&mrb), "RuntimeError");
+        assert_eq!(Error::Exception(exc).message(&mrb), "already a string");
     }
 
     #[test]
