@@ -232,11 +232,13 @@ embedded NUL, it surfaces an `Err`, the `ArgumentError` mruby raises, when the
 bytes contain an embedded NUL. magnus offers no direct C-string accessor, so the
 read anchors on mruby's own `mrb_string_cstr`.
 
-A registered method grows an `RString` in place by appending Rust bytes, or
-appending another mruby string's bytes, the way Ruby's `String#<<` extends its
-receiver. It also appends any value coerced to a string, the way Ruby's
-`String#concat` accepts a non-string argument — the dispatching counterpart to
-the byte and string appends. Beyond reading and appending, a
+A registered method grows an `RString` in place by appending Rust bytes,
+appending another mruby string's bytes, or appending a NUL-terminated C string's
+bytes — its content up to the terminating NUL, the C-boundary counterpart of the
+byte append, anchored on mruby's own `mrb_str_cat_cstr` — the way Ruby's
+`String#<<` extends its receiver. It also appends any value coerced to a string,
+the way Ruby's `String#concat` accepts a non-string argument — the dispatching
+counterpart to the byte and string appends. Beyond reading and appending, a
 string duplicates into an independent copy (Ruby's `String#dup`) and orders
 against another by byte content (Ruby's `String#<=>`) — a total comparison that
 dispatches nothing and never raises. A registered method also resizes a string's
