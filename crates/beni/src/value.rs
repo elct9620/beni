@@ -1959,30 +1959,39 @@ impl Value {
 
     /// `mrb_cmp(mrb, self, other)` — Ruby's `<=>` three-way comparison.
     /// Dispatches a user-defined `<=>`, so it runs under `Mrb::protect`:
-    /// `Ok(Some(ordering))` ranks the values, `Ok(None)` when they are
-    /// incomparable (Ruby `<=>` yielding `nil`), or `Err` when the
-    /// dispatched comparison raises. Distinct from `equal` / `eql`, which
-    /// test sameness rather than rank.
+    /// `Ok(Some(ordering))` ranks the values by the sign of the result —
+    /// negative, zero, or positive — following the `<=>` contract rather
+    /// than assuming a -1 / 0 / 1 magnitude. `Ok(None)` yields nothing when
+    /// the values are incomparable (Ruby `<=>` yielding `nil`), and `Err`
+    /// when the dispatched comparison raises. Distinct from `equal` /
+    /// `eql`, which test sameness rather than rank.
     #[inline]
     pub fn cmp(self, mrb: &Mrb, other: Value) -> Result<Option<core::cmp::Ordering>, Error> {
         #[cfg(mruby_linked)]
         {
+            // `mrb_cmp` reserves -2 to flag two incomparable values.
+            const INCOMPARABLE: sys::mrb_int = -2;
             mrb.protect(|mrb| {
                 // SAFETY: `mrb` is alive inside the protect frame; `self`
                 // and `other` share the VM. `mrb_cmp` may dispatch `<=>`
-                // and raise, caught by `protect`. It returns -1 / 0 / 1
-                // for less / equal / greater and -2 when incomparable;
-                // the small result re-boxes losslessly through `from_int`.
+                // and raise, caught by `protect`. It returns the sign of
+                // `<=>` for numeric / String receivers and passes a custom
+                // `<=>` result through unnormalized otherwise, reserving -2
+                // as the incomparable sentinel; the result re-boxes
+                // losslessly through `from_int`.
                 let n = unsafe { sys::mrb_cmp(mrb.as_ptr(), self.0, other.0) };
                 Value::from_int(mrb, n)
             })
             // SAFETY: the `Ok` value was boxed by `Value::from_int` just
             // above, so it carries an Integer tag the unbox accepts.
             .map(|v| match unsafe { v.unbox_integer() } {
-                -1 => Some(core::cmp::Ordering::Less),
+                // -2 is the dedicated incomparable sentinel; every other
+                // value ranks by its sign, since Ruby's `<=>` contract
+                // only promises negative / zero / positive.
+                INCOMPARABLE => None,
                 0 => Some(core::cmp::Ordering::Equal),
-                1 => Some(core::cmp::Ordering::Greater),
-                _ => None,
+                n if n < 0 => Some(core::cmp::Ordering::Less),
+                _ => Some(core::cmp::Ordering::Greater),
             })
         }
         #[cfg(not(mruby_linked))]
@@ -2501,6 +2510,32 @@ mod linked_tests {
         // string — yield nothing rather than an error.
         let s = mrb.str_new(b"x").as_value();
         assert!(matches!(one.cmp(&mrb, s), Ok(None)));
+    }
+
+    #[test]
+    fn cmp_ranks_a_custom_spaceship_by_sign_not_magnitude() {
+        use core::cmp::Ordering;
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"cmp_test.rb").expect("allocating the context must succeed");
+
+        // A `<=>` is only obliged to return negative / zero / positive, so
+        // a custom one can answer with any magnitude. `Wide#<=>` reports
+        // "greater" as 2 and "less" as -3 to prove ranking keys on sign.
+        let greater = cxt.load_nstring(b"class Wide; def <=>(o); 2; end; end; Wide.new");
+        let less = cxt.load_nstring(b"class Narrow; def <=>(o); -3; end; end; Narrow.new");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the classes must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        let other = mrb.str_new(b"x").as_value();
+        assert!(matches!(
+            greater.cmp(&mrb, other),
+            Ok(Some(Ordering::Greater))
+        ));
+        assert!(matches!(less.cmp(&mrb, other), Ok(Some(Ordering::Less))));
     }
 
     #[test]
