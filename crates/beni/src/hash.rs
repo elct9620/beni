@@ -354,19 +354,20 @@ impl Hash {
     /// `mrb_hash_foreach(mrb, self, …)` — visit each `(key, value)` pair
     /// in insertion order, handing both to `body`. Returning
     /// `ForEach::Stop` ends the walk before the remaining pairs;
-    /// `ForEach::Continue` proceeds. The walk dispatches no Ruby and so
-    /// never raises. Mirrors magnus's `RHash::foreach`, narrowed to the
-    /// continue/stop signal mruby's C foreach supports.
+    /// `ForEach::Continue` proceeds. Mirrors magnus's `RHash::foreach`,
+    /// narrowed to the continue/stop signal mruby's C foreach supports.
     ///
-    /// Mutating the receiver from within `body` is unsupported: mruby's
-    /// C foreach does not run the modification guard that the Ruby-level
-    /// `Hash#each` relies on.
+    /// The walk dispatches no Ruby of its own, but a `body` that
+    /// re-enters the VM to mutate this hash's table trips mruby's in-walk
+    /// modification guard, which surfaces here as `Err` carrying the
+    /// `RuntimeError` mruby raises — the call runs under `Mrb::protect`,
+    /// so that raise is caught rather than long-jumping.
     ///
     /// A panic in `body` is caught at the FFI boundary, stops the walk,
-    /// and resurfaces here once `mrb_hash_foreach` returns — it never
-    /// unwinds into mruby's C frames.
+    /// and resurfaces here once the walk unwinds — it never unwinds into
+    /// mruby's C frames.
     #[inline]
-    pub fn each<F>(self, mrb: &Mrb, body: F)
+    pub fn each<F>(self, mrb: &Mrb, body: F) -> Result<(), Error>
     where
         F: FnMut(Value, Value) -> ForEach,
     {
@@ -417,26 +418,36 @@ impl Hash {
             }
 
             let mut walk = Walk { body, panic: None };
-            // SAFETY: `self` is Hash-tagged by the `from_value_unchecked`
-            // contract, so the object pointer is an `RHash`; both
-            // `mrb_obj_ptr_func` and the C `mrb_hash_ptr` macro read the
-            // same union pointer, differing only in the cast. `mrb` is
-            // alive; `trampoline::<F>` upholds the `mrb_hash_foreach_func`
-            // ABI; `data` points to `walk` on this frame, which outlives
-            // the call. bindgen wraps the function-typedef parameter in
-            // `Option`, so the trampoline is passed via `Some`.
-            unsafe {
-                let hash = sys::mrb_obj_ptr_func(self.0.as_raw()) as *mut sys::RHash;
-                sys::mrb_hash_foreach(
-                    mrb.as_ptr(),
-                    hash,
-                    Some(trampoline::<F>),
-                    &mut walk as *mut Walk<F> as *mut core::ffi::c_void,
-                );
-            }
+            // Run the whole walk under `protect`: `H_CHECK_MODIFIED` raises
+            // `RuntimeError` when `body` re-enters the VM and mutates this
+            // hash mid-walk, and that raise long-jumps out of
+            // `mrb_hash_foreach`. The protect frame catches it into `Err`.
+            let walk_ptr = &mut walk as *mut Walk<F> as *mut core::ffi::c_void;
+            let result = mrb.protect(|mrb| {
+                // SAFETY: `self` is Hash-tagged by the
+                // `from_value_unchecked` contract, so the object pointer is
+                // an `RHash`; both `mrb_obj_ptr_func` and the C
+                // `mrb_hash_ptr` macro read the same union pointer,
+                // differing only in the cast. `mrb` is alive inside the
+                // protect frame; `trampoline::<F>` upholds the
+                // `mrb_hash_foreach_func` ABI; `walk_ptr` points to `walk`
+                // on this frame, which outlives the call. bindgen wraps the
+                // function-typedef parameter in `Option`, so the trampoline
+                // is passed via `Some`.
+                unsafe {
+                    let hash = sys::mrb_obj_ptr_func(self.0.as_raw()) as *mut sys::RHash;
+                    sys::mrb_hash_foreach(mrb.as_ptr(), hash, Some(trampoline::<F>), walk_ptr);
+                }
+                Value::nil()
+            });
+            // A `body` panic and an mruby raise cannot both fire in one
+            // callback, but each leaves its own channel: resurface a parked
+            // panic first (it preempts any `Err`), then return protect's
+            // Result for the modify-raise path.
             if let Some(payload) = walk.panic {
                 std::panic::resume_unwind(payload);
             }
+            result.map(|_| ())
         }
         #[cfg(not(mruby_linked))]
         {
@@ -777,7 +788,8 @@ mod tests {
         hash.each(&mrb, |key, val| {
             seen.push((key.to_string(&mrb), val.to_string(&mrb)));
             ForEach::Continue
-        });
+        })
+        .expect("a read-only walk does not raise");
 
         assert_eq!(
             seen,
@@ -807,9 +819,42 @@ mod tests {
         hash.each(&mrb, |_, _| {
             count += 1;
             ForEach::Stop
-        });
+        })
+        .expect("an early-stopping walk does not raise");
 
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn each_surfaces_an_in_walk_modification_as_err() {
+        use crate::{Error, ForEach, Value};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let hash = mrb.hash_new();
+        hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
+            .expect("set succeeds");
+        hash.set(&mrb, mrb.str_new(b"b").as_value(), Value::from_int(&mrb, 2))
+            .expect("set succeeds");
+
+        // A closure that re-enters the VM to clear the hash it is walking
+        // resets the entry table, so the guard mruby runs before the next
+        // callback raises RuntimeError. protect catches that into Err
+        // rather than letting it long-jump across mrb_hash_foreach's FFI
+        // frame.
+        let result = hash.each(&mrb, |_, _| {
+            hash.clear(&mrb)
+                .expect("the in-walk clear itself does not raise");
+            ForEach::Continue
+        });
+        assert!(matches!(result, Err(Error::Exception(_))));
+
+        // The VM survives the caught raise and stays usable: a fresh
+        // operation runs without crashing.
+        let other = mrb.hash_new();
+        other
+            .set(&mrb, mrb.str_new(b"x").as_value(), Value::from_int(&mrb, 9))
+            .expect("the VM is usable after the protected raise");
+        assert_eq!(other.len(&mrb), 1);
     }
 
     #[test]
@@ -829,7 +874,9 @@ mod tests {
         // resumed panic, proving it crossed back to the Rust side intact.
         let visited = std::cell::Cell::new(0u32);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            hash.each(&mrb, |_, _| {
+            // The closure panic resurfaces before `each` returns a Result,
+            // so the value is never produced — bind it to silence must_use.
+            let _ = hash.each(&mrb, |_, _| {
                 visited.set(visited.get() + 1);
                 panic!("boom in each closure");
             });

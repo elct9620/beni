@@ -359,7 +359,7 @@ Legend: ✅ covered · — missing
 | `mrb_hash_dup` | fn | ✅ | ✅ | `Hash::dup` |
 | `mrb_hash_empty_p` | fn | ✅ | ✅ | `Hash::is_empty` |
 | `mrb_hash_fetch` | fn | ✅ | ✅ | `Hash::fetch` |
-| `mrb_hash_foreach` | fn | ✅ | ✅ | `Hash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); the walk dispatches no Ruby, so no `Result` is needed |
+| `mrb_hash_foreach` | fn | ✅ | ✅ | `Hash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); returns a `Result` because a closure that re-enters the VM to mutate the hash trips mruby's in-walk modification guard, surfaced as `Err` |
 | `mrb_hash_get` | fn | ✅ | ✅ | `Hash::get` |
 | `mrb_hash_key_p` | fn | ✅ | ✅ | `Hash::contains_key` |
 | `mrb_hash_keys` | fn | ✅ | ✅ | `Hash::keys` |
