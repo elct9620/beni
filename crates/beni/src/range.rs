@@ -337,6 +337,15 @@ mod tests {
 
     #[test]
     fn beg_len_saturates_a_length_past_the_mrb_int_width() {
+        // A length past `mrb_int` is only representable when the host `i64`
+        // is wider than `mrb_int`, i.e. a 32-bit `mrb_int`. Under a 64-bit
+        // `mrb_int` no `i64` exceeds its range, so the saturation premise is
+        // vacuous and the case is skipped rather than asserted on a width it
+        // cannot reach.
+        if core::mem::size_of::<sys::mrb_int>() != 4 {
+            return;
+        }
+
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
 
