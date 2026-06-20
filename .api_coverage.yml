@@ -71,6 +71,10 @@ typed:
   mrb_ccontext_new: Ccontext::new
   mrb_check_error: Mrb::clear_exc
   mrb_check_frozen_value: "`Value::check_frozen` — the frozen-state precondition guard; `mrb_check_frozen` (the `void*` form) and `mrb_check_type` (a raw `mrb_vtype` tag, subsumed by the `FromValue` downcasts) stay in `sys`"
+  mrb_class_defined: "`Mrb::class_defined` with a name key — interns and routes through `mrb_class_defined_id`"
+  mrb_class_defined_id: "`Mrb::class_defined` with a `Symbol` key (the symbol-or-name key) — a total bool predicate, never raises"
+  mrb_class_defined_under: "`Module::class_defined` with a name key — interns and routes through `mrb_class_defined_under_id`"
+  mrb_class_defined_under_id: "`Module::class_defined` with a `Symbol` key (the symbol-or-name key) — a total bool predicate, never raises"
   mrb_class_get: "`Mrb::class_get` with a name key — interns and routes through `mrb_class_get_id`"
   mrb_class_get_id: "`Mrb::class_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
   mrb_class_get_under: "`Module::class_get` with a name key — interns and routes through `mrb_class_get_under_id`"

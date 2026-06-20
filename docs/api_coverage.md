@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 148 (43%) |
+| function | 342 | 332 (97%) | 152 (44%) |
 | macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 184 (39%) |
+| total | 466 | 357 (77%) | 188 (40%) |
 
 ## mruby.h
 
@@ -47,10 +47,10 @@ Legend: ✅ covered · — missing
 | `mrb_check_intern_str` | fn | ✅ | — |  |
 | `mrb_check_string_type` | fn | ✅ | — |  |
 | `mrb_check_type` | fn | ✅ | — |  |
-| `mrb_class_defined` | fn | ✅ | — |  |
-| `mrb_class_defined_id` | fn | ✅ | — |  |
-| `mrb_class_defined_under` | fn | ✅ | — |  |
-| `mrb_class_defined_under_id` | fn | ✅ | — |  |
+| `mrb_class_defined` | fn | ✅ | ✅ | `Mrb::class_defined` with a name key — interns and routes through `mrb_class_defined_id` |
+| `mrb_class_defined_id` | fn | ✅ | ✅ | `Mrb::class_defined` with a `Symbol` key (the symbol-or-name key) — a total bool predicate, never raises |
+| `mrb_class_defined_under` | fn | ✅ | ✅ | `Module::class_defined` with a name key — interns and routes through `mrb_class_defined_under_id` |
+| `mrb_class_defined_under_id` | fn | ✅ | ✅ | `Module::class_defined` with a `Symbol` key (the symbol-or-name key) — a total bool predicate, never raises |
 | `mrb_class_get` | fn | ✅ | ✅ | `Mrb::class_get` with a name key — interns and routes through `mrb_class_get_id` |
 | `mrb_class_get_id` | fn | ✅ | ✅ | `Mrb::class_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) |
 | `mrb_class_get_under` | fn | ✅ | ✅ | `Module::class_get` with a name key — interns and routes through `mrb_class_get_under_id` |

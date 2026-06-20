@@ -422,6 +422,29 @@ pub trait Module: private::ClassLike {
         }
     }
 
+    /// `mrb_class_defined_under_id(mrb, self, name)` — TRUE when a
+    /// class or module is defined under `self::name`. The name is a
+    /// symbol-or-name key (`IntoSym`), routed through the `_id` form
+    /// like `class_get`. A total predicate: an undefined name reads
+    /// `false` rather than raising, so it is the precondition test
+    /// before a namespaced fetching lookup that would raise on a
+    /// missing name.
+    fn class_defined<K: IntoSym>(self, mrb: &Mrb, name: K) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            let sym = name.into_sym(mrb);
+            // SAFETY: `mrb` is alive; `self` originates from the same
+            // VM; `sym` was interned against it. `mrb_class_defined_under_id`
+            // is a constant-existence lookup that does not raise.
+            unsafe { sys::mrb_class_defined_under_id(mrb.as_ptr(), self.raw(), sym) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_define_method_id(mrb, self, name, func, aspec)` — register
     /// an instance method from a `method!`-wrapped Rust function. The
     /// name is a symbol-or-name key (`IntoSym`). The aspec is derived
@@ -984,6 +1007,29 @@ mod tests {
             .module_get(&mrb, c"NotAModule")
             .expect_err("a non-module constant must surface as Err");
         assert!(matches!(not_module, Error::Exception(_)));
+    }
+
+    #[test]
+    fn class_defined_answers_a_total_bool_within_a_namespace() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let outer = mrb
+            .define_module(c"BeniDefinedNs")
+            .expect("defining the outer module must succeed");
+        outer
+            .define_class(&mrb, c"Inner", object)
+            .expect("defining the nested class must succeed");
+
+        // A defined nested name reads `true` by name and by Symbol key —
+        // both route through `mrb_class_defined_under_id`.
+        assert!(outer.class_defined(&mrb, c"Inner"));
+        assert!(outer.class_defined(&mrb, crate::Symbol::new(&mrb, c"Inner")));
+
+        // An undefined nested name reads `false` instead of raising — the
+        // predicate is total.
+        assert!(!outer.class_defined(&mrb, c"NoSuchInner"));
+        assert!(mrb.pending_exc().is_nil(), "the predicate must not raise");
     }
 
     #[test]

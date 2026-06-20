@@ -7,6 +7,7 @@
 //!   * `mrb_define_module` / `mrb_define_class` — register a new
 //!     module or class at top level.
 //!   * `mrb_class_get` / `mrb_module_get` — look one up by name.
+//!   * `mrb_class_defined` — test whether one is defined by name.
 //!   * `mrb_exc_get_id` — look up a built-in exception class by name.
 //!   * `mrb_define_global_const` — bind a top-level constant.
 //!   * `mrb_gv_set` / `mrb_gv_get` — assign or read a Ruby `$global`.
@@ -85,6 +86,29 @@ impl Mrb {
                 unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) }
             })
             .map(RClass::from_raw)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = name;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_class_defined_id(mrb, name)` — TRUE when a class or module
+    /// is defined under `name` at top level. The name is a
+    /// symbol-or-name key (`IntoSym`), routed through the `_id` form
+    /// like `class_get`. A total predicate: an undefined name reads
+    /// `false` rather than raising, so it is the precondition test
+    /// before a fetching lookup that would raise on a missing name.
+    #[inline]
+    pub fn class_defined<K: IntoSym>(&self, name: K) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            let sym = name.into_sym(self);
+            // SAFETY: `self` is alive; `sym` was interned against the
+            // same VM. `mrb_class_defined_id` is a constant-existence
+            // lookup that does not raise.
+            unsafe { sys::mrb_class_defined_id(self.as_ptr(), sym) }
         }
         #[cfg(not(mruby_linked))]
         {
@@ -249,6 +273,23 @@ mod tests {
             "the NameError must name the missing constant: {}",
             err.message(&mrb)
         );
+    }
+
+    #[test]
+    fn class_defined_answers_a_total_bool_for_top_level_names() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A defined top-level class reads `true` by name and by Symbol
+        // key — both route through `mrb_class_defined_id`.
+        mrb.define_class(c"BeniDefined", mrb.object_class())
+            .expect("defining the class must succeed");
+        assert!(mrb.class_defined(c"BeniDefined"));
+        assert!(mrb.class_defined(crate::Symbol::new(&mrb, c"BeniDefined")));
+
+        // An undefined name reads `false` instead of raising — the
+        // predicate is total.
+        assert!(!mrb.class_defined(c"BeniNeverDefined"));
+        assert!(mrb.pending_exc().is_nil(), "the predicate must not raise");
     }
 
     #[test]
