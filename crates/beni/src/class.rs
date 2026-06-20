@@ -752,26 +752,27 @@ pub trait Module: private::ClassLike {
         }
     }
 
-    /// `mrb_class_name(mrb, self)` — the handle's full Ruby name
-    /// (e.g. `"MyService::KV"`). Returns `None` when mruby yields
-    /// NULL. The returned slice points into mruby's interned
-    /// class-name storage which lives for the duration of the VM.
-    fn name(self, mrb: &Mrb) -> Option<&'static str> {
+    /// `mrb_class_name(mrb, self)` — the handle's full Ruby name as an
+    /// owned `String` (e.g. `"MyService::KV"`), synthesizing a
+    /// `#<Class:0x…>` form for an anonymous handle. mruby builds the
+    /// name into a GC-managed temporary, so the bytes are copied out at
+    /// once rather than borrowed.
+    fn name(self, mrb: &Mrb) -> String {
         #[cfg(mruby_linked)]
         {
             // SAFETY: `mrb` is alive by the borrow; `self` originates
             // from the same VM by the single-VM contract.
             let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.raw()) };
             if ptr.is_null() {
-                return None;
+                return String::new();
             }
-            // SAFETY: mruby's class-name storage lives for the duration
-            // of the VM.
-            Some(
-                unsafe { core::ffi::CStr::from_ptr(ptr) }
-                    .to_str()
-                    .unwrap_or(""),
-            )
+            // SAFETY: `ptr` is a valid C string for the duration of this
+            // call; copy its bytes before the temporary it points into
+            // can be collected.
+            unsafe { core::ffi::CStr::from_ptr(ptr) }
+                .to_str()
+                .unwrap_or("")
+                .to_owned()
         }
         #[cfg(not(mruby_linked))]
         {
@@ -785,10 +786,9 @@ pub trait Module: private::ClassLike {
     /// class, the bare name for a top-level one), or `None` when the
     /// handle is anonymous and has no place in any namespace. A total
     /// read that never raises. Unlike `name`, which always answers a name —
-    /// synthesizing a `#<Class:0x…>` form for an anonymous handle — and
-    /// borrows mruby's VM-lifetime class-name storage, `path` answers the
-    /// qualified path or nothing and returns an owned `String` copied out
-    /// of the freshly built path string.
+    /// synthesizing a `#<Class:0x…>` form for an anonymous handle — `path`
+    /// answers the qualified path or nothing; both return an owned `String`
+    /// copied out of mruby's freshly built string.
     fn path(self, mrb: &Mrb) -> Option<String> {
         #[cfg(mruby_linked)]
         {
@@ -943,7 +943,7 @@ mod tests {
         let fetched = mrb
             .class_get(crate::Symbol::new(&mrb, c"BeniSymKeyed"))
             .expect("fetching by a Symbol key must reach the defined class");
-        assert_eq!(fetched.name(&mrb), Some("BeniSymKeyed"));
+        assert_eq!(fetched.name(&mrb), "BeniSymKeyed");
 
         // The method and constant keyed by Symbol read back through the
         // equivalent name — both keys resolve to the same interned sym.
@@ -975,7 +975,7 @@ mod tests {
         let by_sym = mrb
             .class_get(crate::Symbol::new(&mrb, c"BeniByName"))
             .expect("a name-defined class is fetchable by Symbol key");
-        assert_eq!(by_sym.name(&mrb), Some("BeniByName"));
+        assert_eq!(by_sym.name(&mrb), "BeniByName");
     }
 
     #[test]
@@ -1055,12 +1055,12 @@ mod tests {
         let nested = outer
             .define_class(&mrb, crate::Symbol::new(&mrb, c"Inner"), object)
             .expect("defining the nested class under a Symbol key must succeed");
-        assert_eq!(nested.name(&mrb), Some("BeniSymNs::Inner"));
+        assert_eq!(nested.name(&mrb), "BeniSymNs::Inner");
 
         let fetched = outer
             .class_get(&mrb, crate::Symbol::new(&mrb, c"Inner"))
             .expect("fetching the nested class under a Symbol key must succeed");
-        assert_eq!(fetched.name(&mrb), Some("BeniSymNs::Inner"));
+        assert_eq!(fetched.name(&mrb), "BeniSymNs::Inner");
     }
 
     #[test]
@@ -1118,7 +1118,7 @@ mod tests {
         let nested = outer
             .define_module(&mrb, c"Inner")
             .expect("defining the nested module must succeed");
-        assert_eq!(nested.name(&mrb), Some("BeniModNs::Inner"));
+        assert_eq!(nested.name(&mrb), "BeniModNs::Inner");
 
         let by_name = outer
             .module_get(&mrb, c"Inner")
@@ -1126,7 +1126,7 @@ mod tests {
         let by_sym = outer
             .module_get(&mrb, crate::Symbol::new(&mrb, c"Inner"))
             .expect("fetching the nested module by Symbol key must succeed");
-        assert_eq!(by_name.name(&mrb), Some("BeniModNs::Inner"));
+        assert_eq!(by_name.name(&mrb), "BeniModNs::Inner");
         assert_eq!(by_name.as_raw(), by_sym.as_raw());
     }
 
@@ -1317,7 +1317,7 @@ mod tests {
         let class = outer
             .define_class(&mrb, c"Widget", object)
             .expect("defining the nested class must succeed");
-        assert_eq!(class.name(&mrb), Some("BeniTrait::Widget"));
+        assert_eq!(class.name(&mrb), "BeniTrait::Widget");
 
         class
             .define_method(&mrb, c"answer", crate::method!(answer_seven, 0))
@@ -1346,7 +1346,7 @@ mod tests {
         let fetched = outer
             .class_get(&mrb, c"Widget")
             .expect("fetching the nested class must succeed");
-        assert_eq!(fetched.name(&mrb), Some("BeniTrait::Widget"));
+        assert_eq!(fetched.name(&mrb), "BeniTrait::Widget");
     }
 
     #[test]
@@ -1748,13 +1748,38 @@ mod tests {
         let object = mrb.object_class();
         let resolved = object.real();
         assert_eq!(resolved.as_raw(), object.as_raw());
-        assert_eq!(resolved.name(&mrb), Some("Object"));
+        assert_eq!(resolved.name(&mrb), "Object");
 
         let runtime_error = mrb
             .class_get(c"RuntimeError")
             .expect("RuntimeError is present in every VM");
         assert_eq!(runtime_error.real().as_raw(), runtime_error.as_raw());
-        assert_eq!(runtime_error.real().name(&mrb), Some("RuntimeError"));
+        assert_eq!(runtime_error.real().name(&mrb), "RuntimeError");
+    }
+
+    #[test]
+    fn name_survives_a_gc_cycle() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // `name` owns its bytes: mruby builds the name into a GC-managed
+        // temporary, so a handle held across a collection — the anonymous
+        // case synthesizes a fresh `#<Class:0x..>` string each call — must
+        // keep reading correctly rather than dangle into freed storage.
+        let object = mrb.object_class();
+        let named = object.name(&mrb);
+        let anonymous = mrb
+            .class_new(object)
+            .expect("creating an anonymous class under Object must succeed");
+        let synthesized = anonymous.name(&mrb);
+
+        mrb.full_gc();
+
+        assert_eq!(named, "Object");
+        assert!(
+            synthesized.starts_with("#<Class:"),
+            "the synthesized name must survive collection: {synthesized:?}"
+        );
+        assert_eq!(anonymous.name(&mrb), synthesized);
     }
 
     #[test]
@@ -1795,7 +1820,7 @@ mod tests {
         // user-facing class.
         let resolved = sclass.real();
         assert_ne!(resolved.as_raw(), sclass.as_raw());
-        let name = resolved.name(&mrb).expect("the real class is named");
+        let name = resolved.name(&mrb);
         assert!(
             !name.starts_with("#<"),
             "real must skip the singleton class, got: {name}"

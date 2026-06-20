@@ -736,30 +736,27 @@ impl Value {
         }
     }
 
-    /// `mrb_obj_classname(mrb, self)` — return the Ruby class name of
-    /// `self` as a borrowed `&'static str`, or `""` when mruby
-    /// returns NULL.
-    ///
-    /// The returned slice points into mruby's interned class-name
-    /// storage, which lives for the duration of the `mrb_state`.
-    /// Callers that need to retain the name across a GC point should
-    /// `.to_string()` it.
+    /// `mrb_obj_classname(mrb, self)` — the Ruby class name of `self`
+    /// as an owned `String`, or `""` when mruby returns NULL. mruby
+    /// builds the name into a GC-managed temporary, so the bytes are
+    /// copied out at once rather than borrowed.
     #[inline]
-    pub fn classname(self, mrb: &Mrb) -> &'static str {
+    pub fn classname(self, mrb: &Mrb) -> String {
         #[cfg(mruby_linked)]
         {
             // SAFETY: `mrb` is alive by the borrow; `self` originates
             // from the same VM by the single-VM contract.
             let ptr = unsafe { sys::mrb_obj_classname(mrb.as_ptr(), self.0) };
             if ptr.is_null() {
-                return "";
+                return String::new();
             }
-            // SAFETY: mruby's class-name storage lives for the duration
-            // of the `mrb_state`; treating it as `'static` is sound for
-            // the lifetime of the VM.
+            // SAFETY: `ptr` is a valid C string for the duration of this
+            // call; copy its bytes before the temporary it points into
+            // can be collected.
             unsafe { core::ffi::CStr::from_ptr(ptr) }
                 .to_str()
                 .unwrap_or("")
+                .to_owned()
         }
         #[cfg(not(mruby_linked))]
         {
@@ -2617,7 +2614,7 @@ mod linked_tests {
         // some other exception.
         match 42i32.into_value(&mrb).ensure_string(&mrb) {
             Err(Error::Exception(exc)) => {
-                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+                assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
             }
             _ => panic!("a non-String value surfaces a TypeError Err"),
         }
@@ -2640,7 +2637,7 @@ mod linked_tests {
         // class, not some other exception.
         match 42i32.into_value(&mrb).ensure_array(&mrb) {
             Err(Error::Exception(exc)) => {
-                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+                assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
             }
             _ => panic!("a non-Array value surfaces a TypeError Err"),
         }
@@ -2728,7 +2725,7 @@ mod linked_tests {
             .expect("the class with a misbehaving to_a instantiates");
         match obj.to_ary(&mrb) {
             Err(Error::Exception(exc)) => {
-                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+                assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
             }
             _ => panic!("a non-array non-nil to_a surfaces a TypeError Err"),
         }
@@ -2751,7 +2748,7 @@ mod linked_tests {
         // class, not some other exception.
         match 42i32.into_value(&mrb).ensure_hash(&mrb) {
             Err(Error::Exception(exc)) => {
-                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+                assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
             }
             _ => panic!("a non-Hash value surfaces a TypeError Err"),
         }
@@ -3175,7 +3172,7 @@ mod linked_tests {
         let object_class = mrb.class_get(c"Object").expect("Object is defined");
 
         // class() names the receiver's direct class.
-        assert_eq!(s.class(&mrb).name(&mrb), Some("String"));
+        assert_eq!(s.class(&mrb).name(&mrb), "String");
 
         // is_kind_of holds for the direct class and its ancestors;
         // instance_of only for the direct class.
@@ -3217,7 +3214,7 @@ mod linked_tests {
         // mruby raises surfaces as Err.
         match Value::from_int(&mrb, 1).singleton_class(&mrb) {
             Err(Error::Exception(exc)) => {
-                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+                assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
             }
             other => panic!("expected a TypeError Err, got {other:?}"),
         }
@@ -3424,7 +3421,7 @@ mod linked_tests {
         // coercing — no to_int dispatch.
         match mrb.str_new(b"7").as_value().ensure_int(&mrb) {
             Err(Error::Exception(exc)) => {
-                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+                assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
             }
             _ => panic!("a non-numeric value surfaces a TypeError Err"),
         }
@@ -3452,7 +3449,7 @@ mod linked_tests {
         // coercing — no to_f dispatch.
         match mrb.str_new(b"2.5").as_value().ensure_float(&mrb) {
             Err(Error::Exception(exc)) => {
-                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+                assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
             }
             _ => panic!("a non-numeric value surfaces a TypeError Err"),
         }
@@ -3650,5 +3647,17 @@ mod linked_tests {
             i32::from_value(obj.iv_get(&mrb, mrb.intern_cstr(c"@b"))),
             Some(2)
         );
+    }
+
+    #[test]
+    fn classname_survives_a_gc_cycle() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // `classname` owns its bytes: mruby builds the name into a
+        // GC-managed temporary, so a name held across a collection must
+        // keep reading correctly rather than dangle into freed storage.
+        let name = mrb.str_new(b"hello").as_value().classname(&mrb);
+        mrb.full_gc();
+        assert_eq!(name, "String");
     }
 }

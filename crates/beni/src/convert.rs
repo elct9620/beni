@@ -363,7 +363,7 @@ mod tests {
         );
 
         let class = RClass::from_value(class_val).expect("a Class value carries MRB_TT_CLASS");
-        assert_eq!(class.name(&mrb), Some("String"));
+        assert_eq!(class.name(&mrb), "String");
 
         // Modules and non-class values reject — MRB_TT_MODULE is not
         // the class tag.

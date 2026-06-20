@@ -300,7 +300,7 @@ mod tests {
         // An unbound class has no constant path: mruby synthesizes an
         // `#<Class:0x..>` name rather than a real one.
         assert!(
-            class.name(&mrb).is_some_and(|n| n.starts_with("#<Class:")),
+            class.name(&mrb).starts_with("#<Class:"),
             "the class must be unnamed: {:?}",
             class.name(&mrb)
         );
@@ -341,9 +341,7 @@ mod tests {
         // An unbound module has no constant path: mruby synthesizes an
         // `#<Module:0x..>` name rather than a real one.
         assert!(
-            module
-                .name(&mrb)
-                .is_some_and(|n| n.starts_with("#<Module:")),
+            module.name(&mrb).starts_with("#<Module:"),
             "the module must be unnamed: {:?}",
             module.name(&mrb)
         );
@@ -376,11 +374,11 @@ mod tests {
         let by_name = mrb
             .module_get(c"BeniModGet")
             .expect("fetching by name must reach the defined module");
-        assert_eq!(by_name.name(&mrb), Some("BeniModGet"));
+        assert_eq!(by_name.name(&mrb), "BeniModGet");
         let by_sym = mrb
             .module_get(crate::Symbol::new(&mrb, c"BeniModGet"))
             .expect("fetching by Symbol key must reach the defined module");
-        assert_eq!(by_sym.name(&mrb), Some("BeniModGet"));
+        assert_eq!(by_sym.name(&mrb), "BeniModGet");
     }
 
     #[test]
@@ -426,11 +424,11 @@ mod tests {
         let by_name = mrb
             .exc_get(c"RuntimeError")
             .expect("RuntimeError must resolve to its exception class");
-        assert_eq!(by_name.name(&mrb), Some("RuntimeError"));
+        assert_eq!(by_name.name(&mrb), "RuntimeError");
         let by_sym = mrb
             .exc_get(crate::Symbol::new(&mrb, c"ArgumentError"))
             .expect("a Symbol key must reach the exception class");
-        assert_eq!(by_sym.name(&mrb), Some("ArgumentError"));
+        assert_eq!(by_sym.name(&mrb), "ArgumentError");
     }
 
     #[test]
