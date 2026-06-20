@@ -84,7 +84,7 @@ pub use gem::Gem;
 pub use hash::{ForEach, Hash};
 pub use method::{MethodDef, MethodReturn};
 pub use proc::Proc;
-pub use range::Range;
+pub use range::{Range, RangeBegLen};
 pub use string::RString;
 pub use symbol::{IntoSym, Symbol};
 pub use value::cstr_ptr;
@@ -289,6 +289,7 @@ mod tests {
         let _ = Range::begin;
         let _ = Range::end_;
         let _ = Range::is_exclusive;
+        let _ = Range::beg_len;
         let _ = Symbol::from_value_unchecked;
         let _ = Symbol::as_value;
         let _ = Symbol::as_raw;

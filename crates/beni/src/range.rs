@@ -9,8 +9,31 @@
 //! Mirrors magnus's `src/r_range.rs`: the `range_new` factory lives on
 //! `Mrb`, the begin / end / exclusive-end reads live here.
 
-use crate::{Mrb, Value};
+use crate::{Error, Mrb, Value};
 use beni_sys as sys;
+
+/// The three-way outcome of `Range::beg_len` — the normalized slice a
+/// `Range` covers of a collection of a given length, mruby's
+/// `mrb_range_beg_len`. `Out` and `TypeMismatch` are kept distinct (not
+/// collapsed into one absence) so a caller can tell an out-of-range
+/// Range from a non-Range receiver.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RangeBegLen {
+    /// The Range maps onto the collection: `beg` is the normalized
+    /// begin offset (negative bounds counted back from the length) and
+    /// `len` is the selected length.
+    Ok {
+        /// Normalized begin offset into the collection.
+        beg: sys::mrb_int,
+        /// Selected length from `beg`.
+        len: sys::mrb_int,
+    },
+    /// The begin offset falls outside the collection (before its start,
+    /// or — when truncating — past its end). Carries no offsets.
+    Out,
+    /// The receiver is not a Range. Carries no offsets.
+    TypeMismatch,
+}
 
 /// Typed handle on an mruby `Range`. `#[repr(transparent)]` over
 /// `Value` so the C ABI is preserved.
@@ -108,11 +131,77 @@ impl Range {
             crate::not_linked()
         }
     }
+
+    /// `mrb_range_beg_len(mrb, self, &beg, &len, len, trunc)` — the
+    /// normalized slice this Range covers of a collection `len` long, the
+    /// primitive behind slicing a collection by a Range (Ruby's
+    /// `Array#[range]` / `String#[range]`). Negative or missing bounds are
+    /// resolved against `len`; `trunc` treats a begin past the length as
+    /// out-of-range and clamps an over-long end to the length.
+    ///
+    /// Returns the three-way `RangeBegLen` outcome — in-range, out-of-range,
+    /// or non-Range mismatch — kept distinct so the caller can tell them
+    /// apart. It dispatches nothing, but coercing a non-integer bound raises
+    /// `TypeError`; the call runs under `Mrb::protect`, so that surfaces as
+    /// `Err` rather than long-jumping. Mirrors magnus's `Range::beg_len`,
+    /// which collapses the two non-`Ok` outcomes into one `Err`.
+    #[inline]
+    pub fn beg_len(self, mrb: &Mrb, len: i64, trunc: bool) -> Result<RangeBegLen, Error> {
+        #[cfg(mruby_linked)]
+        {
+            use core::cell::Cell;
+
+            // The outcome and out-params live on this frame so the protected
+            // closure only borrows them (all `Copy`); the raise long-jump,
+            // which does not run Rust drops, leaves them owned here.
+            let outcome: Cell<sys::mrb_range_beg_len> = Cell::new(sys::MRB_RANGE_TYPE_MISMATCH);
+            let begp: Cell<sys::mrb_int> = Cell::new(0);
+            let lenp: Cell<sys::mrb_int> = Cell::new(0);
+
+            mrb.protect(|mrb| {
+                let mut beg: sys::mrb_int = 0;
+                let mut sel: sys::mrb_int = 0;
+                // SAFETY: `self` is Range-tagged by the newtype contract (a
+                // non-Range receiver returns `MRB_RANGE_TYPE_MISMATCH` without
+                // a field read); `mrb` is alive inside the protect frame.
+                // `mrb_range_beg_len` writes `beg`/`sel` only on
+                // `MRB_RANGE_OK`. A non-integer bound raises `TypeError`,
+                // caught by `protect` into `Err`.
+                outcome.set(unsafe {
+                    sys::mrb_range_beg_len(
+                        mrb.as_ptr(),
+                        self.0.as_raw(),
+                        &mut beg,
+                        &mut sel,
+                        len as sys::mrb_int,
+                        trunc,
+                    )
+                });
+                begp.set(beg);
+                lenp.set(sel);
+                Value::nil()
+            })?;
+
+            Ok(match outcome.get() {
+                sys::MRB_RANGE_OK => RangeBegLen::Ok {
+                    beg: begp.get(),
+                    len: lenp.get(),
+                },
+                sys::MRB_RANGE_OUT => RangeBegLen::Out,
+                _ => RangeBegLen::TypeMismatch,
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, len, trunc);
+            crate::not_linked()
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use crate::{Ccontext, Error, FromValue, IntoValue, Mrb, Range};
+    use crate::{Ccontext, Error, FromValue, IntoValue, Mrb, Range, RangeBegLen};
 
     #[test]
     fn range_new_constructs_and_reads_back_its_bounds() {
@@ -179,5 +268,79 @@ mod tests {
         assert_eq!(i32::from_value(r.begin(&mrb)), Some(1));
         assert_eq!(i32::from_value(r.end_(&mrb)), Some(5));
         assert!(r.is_exclusive(&mrb));
+    }
+
+    #[test]
+    fn beg_len_maps_an_in_range_slice() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
+
+        // `2..7` against a length-10 collection selects 6 elements from
+        // offset 2 (inclusive end, so 7 - 2 + 1). A negative end counts
+        // back from the length.
+        let r = Range::from_value(cxt.load_nstring(b"(2..7)")).expect("a Range literal");
+        assert_eq!(
+            r.beg_len(&mrb, 10, false)
+                .expect("an integer range never raises"),
+            RangeBegLen::Ok { beg: 2, len: 6 }
+        );
+
+        let r = Range::from_value(cxt.load_nstring(b"(-3..-1)")).expect("a Range literal");
+        assert_eq!(
+            r.beg_len(&mrb, 10, false)
+                .expect("an integer range never raises"),
+            RangeBegLen::Ok { beg: 7, len: 3 }
+        );
+    }
+
+    #[test]
+    fn beg_len_reports_a_begin_before_the_start_as_out() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
+
+        // `-20` counts back past the start of a length-10 collection, so
+        // the begin offset is out of range.
+        let r = Range::from_value(cxt.load_nstring(b"(-20..-1)")).expect("a Range literal");
+        assert_eq!(
+            r.beg_len(&mrb, 10, false)
+                .expect("an integer range never raises"),
+            RangeBegLen::Out
+        );
+    }
+
+    #[test]
+    fn beg_len_truncates_an_over_long_end() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
+
+        // `2..100` overruns a length-10 collection. With truncation the end
+        // clamps to the length, selecting offsets 2 through 9; without it
+        // the raw bounds yield a longer span.
+        let r = Range::from_value(cxt.load_nstring(b"(2..100)")).expect("a Range literal");
+        assert_eq!(
+            r.beg_len(&mrb, 10, true)
+                .expect("an integer range never raises"),
+            RangeBegLen::Ok { beg: 2, len: 8 }
+        );
+        assert_eq!(
+            r.beg_len(&mrb, 10, false)
+                .expect("an integer range never raises"),
+            RangeBegLen::Ok { beg: 2, len: 99 }
+        );
+    }
+
+    #[test]
+    fn beg_len_rejects_a_non_range_as_mismatch() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A non-Range receiver wrapped through the unchecked cast reports a
+        // type mismatch rather than reading a malformed field.
+        let not_a_range = unsafe { Range::from_value_unchecked(42.into_value(&mrb)) };
+        assert_eq!(
+            not_a_range
+                .beg_len(&mrb, 10, false)
+                .expect("a mismatch is a return, not a raise"),
+            RangeBegLen::TypeMismatch
+        );
     }
 }

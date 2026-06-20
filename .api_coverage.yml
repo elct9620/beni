@@ -212,6 +212,7 @@ typed:
   mrb_protect_error: Mrb::protect
   mrb_raise: RClass::raise
   mrb_range_beg: Range::begin
+  mrb_range_beg_len: "`Range::beg_len` — the normalized slice a Range covers of a collection of a given length (Ruby's `Array#[range]` / `String#[range]`); returns the three-way `RangeBegLen` outcome (in-range, out-of-range, non-Range mismatch), raising TypeError on a non-integer bound, caught by `Mrb::protect` into `Err`"
   mrb_range_end: Range::end_
   mrb_range_excl_p: Range::is_exclusive
   mrb_range_new: Mrb::range_new

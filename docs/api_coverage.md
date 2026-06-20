@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 182 (53%) |
+| function | 342 | 338 (99%) | 183 (54%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 235 (50%) |
+| total | 466 | 366 (79%) | 236 (51%) |
 
 ## mruby.h
 
@@ -413,7 +413,7 @@ Legend: ✅ covered · — missing
 |--------|------|:---:|:-----:|------|
 | `mrb_gc_free_range` | macro | — | — |  |
 | `mrb_range_beg` | macro | ✅ | ✅ | `Range::begin` |
-| `mrb_range_beg_len` | fn | ✅ | — |  |
+| `mrb_range_beg_len` | fn | ✅ | ✅ | `Range::beg_len` — the normalized slice a Range covers of a collection of a given length (Ruby's `Array#[range]` / `String#[range]`); returns the three-way `RangeBegLen` outcome (in-range, out-of-range, non-Range mismatch), raising TypeError on a non-integer bound, caught by `Mrb::protect` into `Err` |
 | `mrb_range_end` | macro | ✅ | ✅ | `Range::end_` |
 | `mrb_range_excl_p` | macro | ✅ | ✅ | `Range::is_exclusive` |
 | `mrb_range_new` | fn | ✅ | ✅ | `Mrb::range_new` |
