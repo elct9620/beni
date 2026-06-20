@@ -234,6 +234,8 @@ typed:
   mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — the raw name bytes with the true length, embedded NUL preserved unescaped"
   mrb_sym2name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — the macro `mrb_sym2name_len(mrb, sym, len)` is a `#define` alias of `mrb_sym_name_len`, so the same Rust items graduate it; no separate item is needed"
   mrb_sym_dump: "`Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), never raises"
+  mrb_sym_str: "`Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises"
+  mrb_sym2str: "`Symbol::to_str` — the macro `mrb_sym2str(mrb, sym)` is a `#define` alias of `mrb_sym_str`, so the same Rust item graduates it; no separate item is needed"
   mrb_symbol_value: Symbol::from_sym
   mrb_test: Value::to_bool
   mrb_top_run: Mrb::load_bytecode

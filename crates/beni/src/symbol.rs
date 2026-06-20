@@ -155,6 +155,32 @@ impl Symbol {
             crate::not_linked()
         }
     }
+
+    /// The symbol's name reified as an mruby String, via `mrb_sym_str`
+    /// (Ruby's `Symbol#to_s`). Where `name`/`name_bytes`/`dump` borrow into
+    /// mruby's interned storage, this yields a distinct, mutable `RString`
+    /// the consumer owns — unfrozen, unlike `Symbol#name`. Builds the value
+    /// without dispatching and never raises.
+    #[inline]
+    pub fn to_str(self, mrb: &Mrb) -> crate::RString {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.to_sym()` is interned against `mrb`, whose
+            // pointer is live. `mrb_sym_str` reads the name and boxes a
+            // String value; the result is String-tagged by construction.
+            unsafe {
+                crate::RString::from_value_unchecked(Value::from_raw(sys::mrb_sym_str(
+                    mrb.as_ptr(),
+                    self.to_sym(),
+                )))
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
 }
 
 /// A definition or lookup name given as a symbol-or-name key — beni's
@@ -232,6 +258,24 @@ mod tests {
         // A name needing escaping dumps quoted.
         let spaced = Symbol::from_sym(mrb.intern_str(mrb.str_new(b"a b").as_value()));
         assert_eq!(spaced.dump(&mrb), Some("\"a b\""));
+    }
+
+    #[test]
+    fn to_str_reifies_the_name_as_a_mutable_string() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let sym = Symbol::new(&mrb, c"flags");
+
+        // The reified String carries the symbol's name bytes verbatim.
+        let str = sym.to_str(&mrb);
+        assert_eq!(str.to_bytes(), b"flags");
+
+        // It is `Symbol#to_s`, not `#name`: the value is unfrozen, so a
+        // consumer may mutate it — `Symbol#name` would come back frozen.
+        assert!(!str
+            .as_value()
+            .funcall(&mrb, c"frozen?", &[])
+            .expect("frozen? does not raise")
+            .to_bool());
     }
 
     #[test]
