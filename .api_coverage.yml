@@ -182,6 +182,7 @@ typed:
   mrb_intern_lit: "`Mrb::intern_static` — the literal macro `mrb_intern_lit(mrb, lit)` is `mrb_intern_static` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_intern_str: Mrb::intern_str
   mrb_iv_defined: "`Value::iv_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys`"
+  mrb_iv_foreach: "`Value::each_iv` — closure-based walk over a value's set instance variables, name as a typed `Symbol`; the closure returns `ForEach::{Continue,Stop}` mirroring the C `int` 0/non-zero stop signal, the walk dispatches no Ruby so no `Result` is needed (magnus binds no ivar foreach)"
   mrb_iv_get: Value::iv_get
   mrb_iv_remove: "`Value::iv_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None`"
   mrb_iv_set: Value::iv_set

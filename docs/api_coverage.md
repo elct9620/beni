@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 188 (55%) |
+| function | 342 | 338 (99%) | 189 (55%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 241 (52%) |
+| total | 466 | 366 (79%) | 242 (52%) |
 
 ## mruby.h
 
@@ -533,7 +533,7 @@ Legend: ✅ covered · — missing
 | `mrb_gv_set` | fn | ✅ | ✅ | `Mrb::gv_set` |
 | `mrb_iv_copy` | fn | ✅ | — |  |
 | `mrb_iv_defined` | fn | ✅ | ✅ | `Value::iv_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys` |
-| `mrb_iv_foreach` | fn | ✅ | — |  |
+| `mrb_iv_foreach` | fn | ✅ | ✅ | `Value::each_iv` — closure-based walk over a value's set instance variables, name as a typed `Symbol`; the closure returns `ForEach::{Continue,Stop}` mirroring the C `int` 0/non-zero stop signal, the walk dispatches no Ruby so no `Result` is needed (magnus binds no ivar foreach) |
 | `mrb_iv_get` | fn | ✅ | ✅ | `Value::iv_get` |
 | `mrb_iv_name_sym_check` | fn | ✅ | — |  |
 | `mrb_iv_name_sym_p` | fn | ✅ | — |  |
