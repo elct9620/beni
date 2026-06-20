@@ -271,7 +271,11 @@ nothing and never raises, returning the new string directly rather than a
 fallible result. A registered method also resizes a string's
 length in place — truncating, or extending with undefined trailing bytes — and
 reads a substring by character range, yielding the substring or nothing when the
-range falls outside the string.
+range falls outside the string. It also searches for a substring, yielding the
+byte index of the first match at or after a start offset, or nothing when the
+substring is absent — a total read that dispatches nothing and never raises. A
+negative offset counts from the string's end, an offset past the end finds
+nothing, and an empty substring is found at the offset itself.
 
 #### Symbols
 
@@ -330,7 +334,7 @@ raise/return contract:
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types, or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric, or an infinite / NaN float converts to integer; the coerced value carries no String / Array / Hash tag | `Result` |
 | Reads without dispatching but can still raise — a string's NUL-terminated C-string view, or a strict parse of a string to an integer in a given radix, or to a float | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float | `Result` |
-| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
+| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
 
