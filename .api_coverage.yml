@@ -192,6 +192,7 @@ typed:
   mrb_str_new_lit: "`Mrb::str_new_static` — the literal macro `mrb_str_new_lit(mrb, lit)` is `mrb_str_new_static` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_str_resize: RString::resize
   mrb_str_substr: RString::substr
+  mrb_str_to_integer: "`RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input"
   mrb_string_cstr: RString::to_cstr
   mrb_sym_name: "`Mrb::sym_name`, `Symbol::name` — the C-string name, escaped to its quoted dump form when it carries an embedded NUL"
   mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — the raw name bytes with the true length, embedded NUL preserved unescaped"

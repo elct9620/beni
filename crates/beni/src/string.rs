@@ -440,6 +440,44 @@ impl RString {
             crate::not_linked()
         }
     }
+
+    /// `mrb_str_to_integer(mrb, self, base, TRUE)` — parse the bytes to an
+    /// integer in `base`, the strict counterpart of Ruby's lenient
+    /// `String#to_i`. The `base` is 2 through 36, or 0 to auto-detect a
+    /// leading `0x` / `0b` / `0o` prefix. With strict checking on, any input
+    /// that is not a clean integer in the base — trailing junk, an empty
+    /// string, or a `base` outside that domain — raises `ArgumentError`; the
+    /// call runs under `Mrb::protect`, so that surfaces as `Err` rather than
+    /// long-jumping.
+    #[inline]
+    pub fn to_i(self, mrb: &Mrb, base: i32) -> Result<sys::mrb_int, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `self` is String-tagged by the newtype contract;
+                // `mrb` is alive inside the protect frame. `mrb_str_to_integer`
+                // with `badcheck` TRUE raises `ArgumentError` on any input that
+                // is not a clean integer in the base — caught by `protect` into
+                // `Err`. On success it returns an Integer-tagged value.
+                Value::from_raw(unsafe {
+                    sys::mrb_str_to_integer(
+                        mrb.as_ptr(),
+                        self.0.as_raw(),
+                        base as sys::mrb_int,
+                        true,
+                    )
+                })
+            })
+            // SAFETY: a successful `mrb_str_to_integer` returns an
+            // Integer-tagged value, so the unbox accepts it.
+            .map(|v| unsafe { v.unbox_integer() })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, base);
+            crate::not_linked()
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -703,5 +741,52 @@ mod tests {
 
         // A beg past the end yields None, the way mruby returns nil.
         assert!(s.substr(&mrb, 100, 1).is_none());
+    }
+
+    #[test]
+    fn to_i_parses_in_the_requested_base() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A clean decimal string parses to its value.
+        assert_eq!(
+            mrb.str_new(b"12345")
+                .to_i(&mrb, 10)
+                .expect("a decimal string parses"),
+            12345
+        );
+
+        // The same digits read in base 16 take their hexadecimal value.
+        assert_eq!(
+            mrb.str_new(b"ff")
+                .to_i(&mrb, 16)
+                .expect("a hex string parses"),
+            255
+        );
+
+        // Base 0 auto-detects a leading prefix.
+        assert_eq!(
+            mrb.str_new(b"0b101")
+                .to_i(&mrb, 0)
+                .expect("a prefixed string auto-detects its base"),
+            5
+        );
+    }
+
+    #[test]
+    fn to_i_surfaces_invalid_input_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Trailing junk is rejected by the strict parse — unlike Ruby's
+        // lenient String#to_i, which would stop at the first bad character.
+        assert!(matches!(
+            mrb.str_new(b"99 red balloons").to_i(&mrb, 10),
+            Err(Error::Exception(_))
+        ));
+
+        // Bytes with no valid integer at all raise too.
+        assert!(matches!(
+            mrb.str_new(b"hello").to_i(&mrb, 10),
+            Err(Error::Exception(_))
+        ));
     }
 }

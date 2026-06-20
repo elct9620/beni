@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 143 (42%) |
+| function | 342 | 332 (97%) | 144 (42%) |
 | macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 179 (38%) |
+| total | 466 | 357 (77%) | 180 (39%) |
 
 ## mruby.h
 
@@ -458,7 +458,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_substr` | fn | ✅ | ✅ | `RString::substr` |
 | `mrb_str_to_cstr` | fn | ✅ | — |  |
 | `mrb_str_to_dbl` | fn | ✅ | — |  |
-| `mrb_str_to_integer` | fn | ✅ | — |  |
+| `mrb_str_to_integer` | fn | ✅ | ✅ | `RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input |
 | `mrb_str_to_inum` | macro | — | — |  |
 | `mrb_string_cstr` | fn | ✅ | ✅ | `RString::to_cstr` |
 | `mrb_string_value_cstr` | fn | ✅ | — |  |
