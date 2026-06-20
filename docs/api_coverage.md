@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 167 (49%) |
+| function | 342 | 332 (97%) | 168 (49%) |
 | macro | 124 | 26 (21%) | 37 (30%) |
-| total | 466 | 358 (77%) | 204 (44%) |
+| total | 466 | 358 (77%) | 205 (44%) |
 
 ## mruby.h
 
@@ -520,8 +520,8 @@ Legend: ✅ covered · — missing
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_const_defined` | fn | ✅ | ✅ | `Value::const_defined` |
-| `mrb_const_defined_at` | fn | ✅ | — |  |
+| `mrb_const_defined` | fn | ✅ | ✅ | `Value::const_defined` — the constant presence test walking the ancestry; contrast `mrb_const_defined_at`/`Value::const_defined_at`, the direct own-table-only form |
+| `mrb_const_defined_at` | fn | ✅ | ✅ | `Value::const_defined_at` — the direct constant presence test, true only for the receiver's own constant; contrast `mrb_const_defined`/`Value::const_defined`, which walks the ancestry |
 | `mrb_const_get` | fn | ✅ | ✅ | `Value::const_get` |
 | `mrb_const_remove` | fn | ✅ | ✅ | `Value::const_remove` — the value-level constant removal; discards the former value (the C API is `void`) and treats an absent constant as a no-op |
 | `mrb_const_set` | fn | ✅ | ✅ | `Value::const_set` |

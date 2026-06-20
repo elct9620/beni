@@ -87,7 +87,8 @@ typed:
   mrb_class_path: "`Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous"
   mrb_class_ptr: Value::as_class_ptr
   mrb_close: Mrb::drop
-  mrb_const_defined: Value::const_defined
+  mrb_const_defined: "`Value::const_defined` — the constant presence test walking the ancestry; contrast `mrb_const_defined_at`/`Value::const_defined_at`, the direct own-table-only form"
+  mrb_const_defined_at: "`Value::const_defined_at` — the direct constant presence test, true only for the receiver's own constant; contrast `mrb_const_defined`/`Value::const_defined`, which walks the ancestry"
   mrb_const_get: Value::const_get
   mrb_const_remove: "`Value::const_remove` — the value-level constant removal; discards the former value (the C API is `void`) and treats an absent constant as a no-op"
   mrb_const_set: Value::const_set

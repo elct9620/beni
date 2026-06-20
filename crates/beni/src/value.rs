@@ -1120,13 +1120,31 @@ impl Value {
     }
 
     /// `mrb_const_defined(mrb, self, sym)` — TRUE when constant `sym`
-    /// is defined on `self` (the module or class value).
+    /// is defined on `self` (the module or class value), walking the
+    /// ancestry.
     #[inline]
     pub fn const_defined(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
         #[cfg(mruby_linked)]
         {
             // SAFETY: as `iv_set`.
             unsafe { sys::mrb_const_defined(mrb.as_ptr(), self.0, sym) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_const_defined_at(mrb, self, sym)` — TRUE when constant `sym`
+    /// is defined directly on `self` alone, never one inherited from an
+    /// ancestor; contrast `const_defined`, which walks the ancestry.
+    #[inline]
+    pub fn const_defined_at(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: as `iv_set`.
+            unsafe { sys::mrb_const_defined_at(mrb.as_ptr(), self.0, sym) }
         }
         #[cfg(not(mruby_linked))]
         {
@@ -2313,6 +2331,43 @@ mod linked_tests {
             42i32.into_value(&mrb).const_remove(&mrb, gone),
             Err(Error::Exception(_))
         ));
+    }
+
+    #[test]
+    fn const_defined_at_answers_only_for_the_receivers_own_constant() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"const_defined_at_test.rb")
+            .expect("allocating the context must succeed");
+
+        let child = cxt.load_nstring(
+            b"class BeniConstAtParent; OWNED = 1; end; \
+              class BeniConstAtChild < BeniConstAtParent; end; BeniConstAtChild",
+        );
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        let owned = mrb.intern_cstr(c"OWNED");
+        let absent = mrb.intern_cstr(c"ABSENT");
+
+        // A constant living only on the parent walks into reach for the
+        // ancestry-walking test but stays invisible to the direct test.
+        assert!(
+            child.const_defined(&mrb, owned),
+            "OWNED is reachable through the ancestry"
+        );
+        assert!(
+            !child.const_defined_at(&mrb, owned),
+            "OWNED is inherited, not on the child's own table"
+        );
+
+        // The constant on the receiver's own table is seen by the direct test.
+        let parent = cxt.load_nstring(b"BeniConstAtParent");
+        assert!(
+            parent.const_defined_at(&mrb, owned),
+            "OWNED is on the parent's own table"
+        );
+
+        // An absent constant is false either way — a total predicate.
+        assert!(!child.const_defined_at(&mrb, absent), "ABSENT is undefined");
     }
 
     #[test]
