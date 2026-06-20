@@ -230,6 +230,7 @@ typed:
   mrb_range_excl_p: Range::is_exclusive
   mrb_range_new: Mrb::range_new
   mrb_read_irep_buf: Mrb::load_bytecode
+  mrb_remove_method: "`Module::remove_method` — Ruby's `Module#remove_method`; deletes the method's own definition from the handle (the name reverts to an ancestor's method), distinct from `Module::undef_method` which masks ancestor lookups. The symbol-or-name key routes through this raising form, which takes a `mrb_sym` directly with no string variant"
   mrb_respond_to: Value::respond_to
   mrb_singleton_class: "`Value::singleton_class` — the value's per-instance eigenclass (Ruby's `singleton_class`), returning a typed `RClass`; nil/true/false yield their predefined classes and every other immediate raises a TypeError. The raw-`RClass*` form `mrb_singleton_class_ptr`, which hands back a possibly-null pointer and demands VM-internal reasoning, stays in `sys`"
   mrb_str_buf_cat: "`RString::cat` — the macro `mrb_str_buf_cat(mrb, str, ptr, len)` is a `#define` alias of `mrb_str_cat`, so the same Rust item graduates it; no separate item is needed"

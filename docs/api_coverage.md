@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 197 (58%) |
+| function | 342 | 338 (99%) | 198 (58%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 250 (54%) |
+| total | 466 | 366 (79%) | 251 (54%) |
 
 ## mruby.h
 
@@ -274,7 +274,7 @@ Legend: ✅ covered · — missing
 | `mrb_method_search` | fn | ✅ | — |  |
 | `mrb_method_search_vm` | fn | ✅ | — |  |
 | `mrb_mt_foreach` | fn | ✅ | — |  |
-| `mrb_remove_method` | fn | ✅ | — |  |
+| `mrb_remove_method` | fn | ✅ | ✅ | `Module::remove_method` — Ruby's `Module#remove_method`; deletes the method's own definition from the handle (the name reverts to an ancestor's method), distinct from `Module::undef_method` which masks ancestor lookups. The symbol-or-name key routes through this raising form, which takes a `mrb_sym` directly with no string variant |
 ## mruby/compile.h
 
 | Symbol | Kind | sys | typed | Note |

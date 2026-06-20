@@ -674,6 +674,36 @@ pub trait Module: private::ClassLike {
         }
     }
 
+    /// `mrb_remove_method(mrb, self, name)` — remove a method from this
+    /// class or module, Ruby's `Module#remove_method`: the method's own
+    /// definition is deleted from the handle, so the name reverts to any
+    /// ancestor's method — distinct from `undef_method`, which masks
+    /// ancestor lookups rather than stripping the definition. The name is a
+    /// symbol-or-name key (`IntoSym`). Removing a name not defined directly
+    /// on the handle raises `NameError`; under `Mrb::protect` it surfaces as
+    /// `Err(Error::Exception)` rather than long-jumping — the same contract
+    /// as the definition methods above.
+    fn remove_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            let sym = name.into_sym(mrb);
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` originates from the same VM; `sym` was interned
+                // against it. `mrb_remove_method` raises NameError when the
+                // method is not defined on the handle — caught by `protect`.
+                unsafe { sys::mrb_remove_method(mrb.as_ptr(), self.raw(), sym) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_include_module(mrb, self, module)` — mix `module` into this
     /// class or module, Ruby's `include`. A frozen receiver raises
     /// `FrozenError` and a cyclic include raises `ArgumentError`; both
@@ -1563,6 +1593,62 @@ mod tests {
         let err = class
             .undef_method(&mrb, c"no_such_method")
             .expect_err("undefining an absent method must surface as Err");
+        assert!(matches!(err, Error::Exception(_)));
+        assert!(
+            err.message(&mrb).contains("no_such_method"),
+            "the NameError must name the absent method: {}",
+            err.message(&mrb)
+        );
+    }
+
+    #[test]
+    fn remove_method_strips_a_method_defined_on_the_handle() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let class = mrb
+            .define_class(c"BeniRemove", object)
+            .expect("defining the class must succeed");
+        class
+            .define_method(&mrb, c"answer", crate::method!(answer_seven, 0))
+            .expect("registering the method must succeed");
+
+        // The method responds before removal.
+        let answer = c"answer".into_sym(&mrb);
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        assert!(
+            receiver.respond_to(&mrb, answer),
+            "the defined method must respond before removal"
+        );
+
+        class
+            .remove_method(&mrb, c"answer")
+            .expect("removing a defined method must succeed");
+
+        // After removal the definition is gone, so the receiver no longer
+        // responds to the name.
+        assert!(
+            !receiver.respond_to(&mrb, answer),
+            "the removed method must no longer respond"
+        );
+    }
+
+    #[test]
+    fn remove_method_surfaces_name_error_for_absent_method() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let class = mrb
+            .define_class(c"BeniRemoveMissing", object)
+            .expect("defining the class must succeed");
+
+        // Removing a name not defined directly on the handle raises
+        // NameError, caught by `protect` into Err rather than a longjmp.
+        let err = class
+            .remove_method(&mrb, c"no_such_method")
+            .expect_err("removing an absent method must surface as Err");
         assert!(matches!(err, Error::Exception(_)));
         assert!(
             err.message(&mrb).contains("no_such_method"),
