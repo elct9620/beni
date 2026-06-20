@@ -321,14 +321,21 @@ user Ruby; it follows the raise/return contract like the other converting
 operations.
 
 Beyond the id, a symbol
-reads its name three ways — all non-dispatching reads that never raise, each
-yielding nothing when mruby has no name for the id:
+reads its name three ways into Rust-side views — all non-dispatching reads that
+never raise, each yielding nothing when mruby has no name for the id:
 
 | Read | Yields |
 |---|---|
 | name as `&str` | the name as UTF-8, escaped to its quoted dump form when it carries an embedded NUL |
 | name as bytes | the raw name bytes with their true length, embedded NUL bytes included and unescaped |
 | dump form | the name's symbol-literal representation, quoted and escaped when the name is not a plain identifier — Ruby's `Symbol#inspect` without the leading colon |
+
+A symbol also reifies its name as an mruby String value, the way Ruby's
+`Symbol#to_s` does — where the three reads above borrow into mruby's interned
+storage, this returns a distinct, mutable `RString` whose bytes are the symbol's
+name (unfrozen, unlike `Symbol#name`). It is the only symbol name read that
+produces a value rather than a borrowed view; like the others it dispatches
+nothing and never raises.
 
 #### Ranges
 
