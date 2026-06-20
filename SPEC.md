@@ -433,6 +433,15 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   resolution. The raw class of a value before that normalization — which may be
   a singleton or include class and demands VM-internal reasoning to use — stays
   behind `beni::sys`.
+- A class or module handle reads its fully-qualified path — the namespace chain
+  leading to it, `A::B::C` for a class nested under modules `A` and `B`, the bare
+  name for a top-level handle. This is a total non-dispatching read that never
+  raises, the read a consumer reaches for to render a handle by its place in the
+  namespace. It yields nothing for an anonymous handle that has no place in any
+  namespace. The path is distinct from the handle's unqualified name read: the
+  name read always answers a name — synthesizing one for an anonymous handle —
+  whereas the path read answers the qualified path or nothing, never a
+  synthesized stand-in.
 - A method registered for any arity reads its own call frame instead of
   receiving converted positionals: a shape-typed read projects the frame
   against a format marker into a typed tuple, a single-argument read returns
