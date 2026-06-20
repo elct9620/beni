@@ -205,6 +205,7 @@ typed:
   mrb_str_cmp: RString::cmp
   mrb_str_concat: RString::concat
   mrb_str_dup: RString::dup
+  mrb_str_index: "`RString::index` — byte index of the first substring match at or after an offset, or None when absent; never raises"
   mrb_str_new: Mrb::str_new
   mrb_str_new_capa: Mrb::str_new_capa
   mrb_str_new_cstr: Mrb::str_new_cstr

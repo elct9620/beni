@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 165 (48%) |
+| function | 342 | 332 (97%) | 166 (49%) |
 | macro | 124 | 26 (21%) | 37 (30%) |
-| total | 466 | 358 (77%) | 202 (43%) |
+| total | 466 | 358 (77%) | 203 (44%) |
 
 ## mruby.h
 
@@ -445,7 +445,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_concat` | fn | ✅ | ✅ | `RString::concat` |
 | `mrb_str_dup` | fn | ✅ | ✅ | `RString::dup` |
 | `mrb_str_equal` | fn | ✅ | — |  |
-| `mrb_str_index` | fn | ✅ | — |  |
+| `mrb_str_index` | fn | ✅ | ✅ | `RString::index` — byte index of the first substring match at or after an offset, or None when absent; never raises |
 | `mrb_str_index_lit` | macro | — | — |  |
 | `mrb_str_intern` | fn | ✅ | — |  |
 | `mrb_str_modify` | fn | ✅ | — |  |

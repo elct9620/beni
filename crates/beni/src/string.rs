@@ -277,6 +277,44 @@ impl RString {
         }
     }
 
+    /// `mrb_str_index(mrb, self, needle, len, offset)` — search for
+    /// `needle`'s bytes, yielding the byte index of the first match at or
+    /// after `offset`, or `None` when the substring is absent, the byte
+    /// counterpart of Ruby's `String#index`. A negative `offset` counts
+    /// from the end, an `offset` past the end finds nothing, and an empty
+    /// `needle` is found at `offset` itself. It scans the byte buffers and
+    /// dispatches nothing, so it never raises; mruby's -1 maps to `None`.
+    /// The byte-index sibling of the character-range `substr` read.
+    #[inline]
+    pub fn index(self, mrb: &Mrb, needle: &[u8], offset: i64) -> Option<usize> {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `mrb` is alive; `needle` is read-only and only scanned for
+            // its `len` bytes. `mrb_str_index` does a pure `mrb_memsearch`
+            // over the byte buffers, returning the byte index or -1.
+            let pos = unsafe {
+                sys::mrb_str_index(
+                    mrb.as_ptr(),
+                    self.0.as_raw(),
+                    needle.as_ptr() as *const core::ffi::c_char,
+                    needle.len() as sys::mrb_int,
+                    offset as sys::mrb_int,
+                )
+            };
+            if pos < 0 {
+                None
+            } else {
+                Some(pos as usize)
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, needle, offset);
+            crate::not_linked()
+        }
+    }
+
     /// Borrow the raw bytes of this string. Routes through the
     /// `mrb_rstring_ptr` / `mrb_rstring_len` static-inline wrappers in
     /// `wrapper.h`, which expand the `RSTRING_PTR(s)` / `RSTRING_LEN(s)`
@@ -842,6 +880,32 @@ mod tests {
 
         // A beg past the end yields None, the way mruby returns nil.
         assert!(s.substr(&mrb, 100, 1).is_none());
+    }
+
+    #[test]
+    fn index_finds_the_first_match_at_or_after_the_offset() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let s = mrb.str_new(b"hello, hello");
+
+        // A present substring returns the byte index of its first match.
+        assert_eq!(s.index(&mrb, b"llo", 0), Some(2));
+
+        // An absent substring returns None.
+        assert!(s.index(&mrb, b"xyz", 0).is_none());
+
+        // The offset is respected: a match before it is skipped, and the
+        // next match's index is reported.
+        assert_eq!(s.index(&mrb, b"llo", 3), Some(9));
+
+        // A negative offset counts from the end.
+        assert_eq!(s.index(&mrb, b"hello", -5), Some(7));
+
+        // An empty needle is found at the offset itself.
+        assert_eq!(s.index(&mrb, b"", 4), Some(4));
+
+        // An offset past the end finds nothing.
+        assert!(s.index(&mrb, b"hello", 100).is_none());
     }
 
     #[test]
