@@ -276,6 +276,24 @@ and surfaces an `Err` carrying a `RangeError`. This stays in mruby's value domai
 — a Float value to an Integer value, not a value to a Rust scalar — and anchors
 on mruby's own `mrb_float_to_integer`.
 
+A value also coerces by numeric type to an `Integer` value or a `Float` value,
+each staying in mruby's value domain rather than reading out a Rust scalar. The
+Integer coercion takes an `Integer` unchanged and converts a `Float` to the
+Integer it truncates toward zero; the Float coercion takes a `Float` unchanged
+and widens an `Integer`. Both surface an `Err` carrying a `TypeError` for a value
+of any non-numeric type — and the Integer coercion, going through the same Float
+truncation, surfaces an `Err` carrying a `RangeError` for an infinite or NaN
+`Float`. They coerce between the numeric types, unlike the exact-tag `FromValue`
+-> integer / float downcasts, which reject any other tag outright; and they run
+no user Ruby — they dispatch no `to_int` or `to_f`. The Integer coercion also
+narrows an arbitrary-width Integer to one that fits the configured integer width,
+mruby's distinction between the two; under beni's pinned word-boxing config every
+Integer already fits, so the narrowing never changes the result. magnus offers no
+numeric-tag coercion — its conversions either downcast on the exact tag or
+dispatch the full Ruby `to_int` / `to_f` protocol — so these anchor on mruby's own
+`mrb_ensure_int_type` (over `mrb_ensure_integer_type`, which the width narrowing
+wraps) and `mrb_ensure_float_type`.
+
 Two numeric values add, subtract, or multiply into a new numeric value, the way
 Ruby's `+`, `-`, and `*` do on `Integer` and `Float` — `2 + 3` to `5`, `2 + 3.5`
 to `5.5`. The result stays in mruby's value domain, an `Integer` when both

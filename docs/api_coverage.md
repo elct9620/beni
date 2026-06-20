@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 183 (54%) |
+| function | 342 | 338 (99%) | 186 (54%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 236 (51%) |
+| total | 466 | 366 (79%) | 239 (51%) |
 
 ## mruby.h
 
@@ -87,10 +87,10 @@ Legend: ✅ covered · — missing
 | `mrb_define_singleton_method` | fn | ✅ | ✅ | `Object::define_singleton_method` with a name key — interns and routes through `mrb_define_singleton_method_id` |
 | `mrb_define_singleton_method_id` | fn | ✅ | ✅ | `Object::define_singleton_method` with a `Symbol` key (the symbol-or-name key) |
 | `mrb_ensure_array_type` | fn | ✅ | ✅ | `Value::ensure_array` — the raising Array-tag coercion to an `Array` handle; `mrb_check_array_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `Array` downcast and stays in `sys` |
-| `mrb_ensure_float_type` | fn | ✅ | — |  |
+| `mrb_ensure_float_type` | fn | ✅ | ✅ | `Value::ensure_float` — the raising numeric-tag coercion to a Float `Value` (Float unchanged, Integer widened); distinct from the exact-tag `FromValue` -> float downcast, which coerces nothing |
 | `mrb_ensure_hash_type` | fn | ✅ | ✅ | `Value::ensure_hash` — the raising Hash-tag coercion to a `Hash` handle; `mrb_check_hash_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `Hash` downcast and stays in `sys` |
-| `mrb_ensure_int_type` | fn | ✅ | — |  |
-| `mrb_ensure_integer_type` | fn | ✅ | — |  |
+| `mrb_ensure_int_type` | fn | ✅ | ✅ | `Value::ensure_int` — the raising numeric-tag coercion to an Integer `Value` (Integer unchanged, Float truncated toward zero), narrowing to one that fits the configured integer width; distinct from the exact-tag `FromValue` -> integer downcast, which coerces nothing |
+| `mrb_ensure_integer_type` | fn | ✅ | ✅ | `Value::ensure_int` — the un-narrowed Integer coercion that `mrb_ensure_int_type` wraps; same raising numeric-tag coercion, surfaced through the single `Value::ensure_int` |
 | `mrb_ensure_string_type` | fn | ✅ | ✅ | `Value::ensure_string` — the raising String-tag coercion to an `RString` handle; `mrb_check_string_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `RString` downcast and stays in `sys` |
 | `mrb_eql` | fn | ✅ | ✅ | `Value::eql` |
 | `mrb_equal` | fn | ✅ | ✅ | `Value::equal` |
