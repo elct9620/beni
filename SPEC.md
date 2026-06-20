@@ -292,6 +292,11 @@ pointer and never frees it. This intern anchors on mruby's own
 `mrb_intern_static`, with `mrb_intern_lit` the convenience that borrows a string
 literal.
 
+Those interns all create the symbol when none exists yet. A name also checks for
+an already-interned `Symbol` without creating one: the bytes resolve to the
+symbol they name when mruby has interned it before, and to nothing when no such
+symbol exists. The check dispatches nothing and never raises.
+
 Where those interns take Rust bytes, an existing mruby value also coerces into a
 typed `Symbol`: a symbol value yields its own id, a string value interns its
 contents, and any other value surfaces an `Err` — the `TypeError` mruby raises
