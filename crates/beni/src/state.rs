@@ -251,6 +251,35 @@ impl Mrb {
         crate::not_linked()
     }
 
+    /// Run one complete GC cycle, reclaiming every object unreachable
+    /// from the live roots and the GC arena. Total: it returns nothing,
+    /// never raises, and is safe whenever the VM is alive — a disabled or
+    /// mid-collection collector ignores the request.
+    pub fn full_gc(&self) {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.state` is alive by the `&self` borrow;
+            // `mrb_full_gc` only triggers collection on it.
+            unsafe { sys::mrb_full_gc(self.as_ptr()) };
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
+    /// Advance the incremental collector by a single step. Total: it
+    /// returns nothing, never raises, and is safe whenever the VM is
+    /// alive — a disabled or mid-collection collector ignores the request.
+    pub fn incremental_gc(&self) {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self.state` is alive by the `&self` borrow;
+            // `mrb_incremental_gc` only advances collection on it.
+            unsafe { sys::mrb_incremental_gc(self.as_ptr()) };
+        }
+        #[cfg(not(mruby_linked))]
+        crate::not_linked()
+    }
+
     /// Return `mrb->object_class` as a typed `RClass` handle.
     /// Replaces direct field access — the `object_class` field on
     /// the `crate::mrb_state` struct is `pub(crate)` so this
@@ -302,6 +331,33 @@ mod tests {
         // (bindings + trampolines + libmruby.a).
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         drop(mrb);
+    }
+
+    #[cfg(mruby_linked)]
+    #[test]
+    fn gc_triggers_keep_a_reachable_value_valid() {
+        use crate::{FromValue, RString};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Anchor one survivor through a global so it stays reachable
+        // across collection; pile up unreachable garbage around it.
+        mrb.gv_set(
+            mrb.intern_static(b"$survivor"),
+            mrb.str_new(b"survivor").as_value(),
+        );
+        for _ in 0..64 {
+            let _ = mrb.str_new(b"garbage");
+        }
+
+        // Both triggers run without raising; the VM survives.
+        mrb.full_gc();
+        mrb.incremental_gc();
+
+        // The reachable survivor is still a valid String afterwards.
+        let kept = mrb.gv_get(mrb.intern_static(b"$survivor"));
+        let kept = RString::from_value(kept).expect("the survivor is String-tagged");
+        assert_eq!(kept.to_bytes(), b"survivor");
     }
 
     #[cfg(not(mruby_linked))]

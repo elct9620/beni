@@ -146,6 +146,7 @@ typed:
   mrb_float_to_integer: "`Value::float_to_int` — convert a Float value to the Integer value it truncates toward zero (Ruby's Float#to_i / Float#to_int); guards the Float tag (TypeError) and raises RangeError on an infinite or NaN float"
   mrb_float_value: Value::from_float
   mrb_fixnum_to_str: "`Value::int_to_str` — the macro `mrb_fixnum_to_str(mrb, x, base)` is a `#define` alias of `mrb_integer_to_str`, so the same Rust item graduates it; no separate item is needed"
+  mrb_full_gc: "`Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive)"
   mrb_funcall_argv: "`Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym)"
   mrb_funcall_with_block: "`Value::funcall_with_block` — dispatch passing an explicit typed `Proc` block"
   mrb_gc_arena_restore: "`ArenaScope::keep`/`drop` (see ArenaScope extension)"
@@ -173,6 +174,7 @@ typed:
   mrb_hash_size: Hash::len
   mrb_hash_values: Hash::values
   mrb_include_module: Module::include_module
+  mrb_incremental_gc: "`Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive)"
   mrb_inspect: Value::inspect
   mrb_int_value: Value::from_int
   mrb_integer_to_str: "`Value::int_to_str` — render an Integer value to an RString in a radix (Ruby's Integer#to_s(base)); guards the Integer tag (TypeError) and raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys`"

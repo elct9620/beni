@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 194 (57%) |
+| function | 342 | 338 (99%) | 196 (57%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 247 (53%) |
+| total | 466 | 366 (79%) | 249 (53%) |
 
 ## mruby.h
 
@@ -107,7 +107,7 @@ Legend: ✅ covered · — missing
 | `mrb_format` | fn | ✅ | — |  |
 | `mrb_free` | fn | ✅ | — |  |
 | `mrb_frozen_error` | fn | ✅ | — |  |
-| `mrb_full_gc` | fn | ✅ | — |  |
+| `mrb_full_gc` | fn | ✅ | ✅ | `Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive) |
 | `mrb_func_basic_p` | fn | ✅ | — |  |
 | `mrb_funcall` | fn | ✅ | — |  |
 | `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym) |
@@ -128,7 +128,7 @@ Legend: ✅ covered · — missing
 | `mrb_get_argv` | fn | ✅ | — |  |
 | `mrb_get_mid` | fn | ✅ | — |  |
 | `mrb_include_module` | fn | ✅ | ✅ | `Module::include_module` |
-| `mrb_incremental_gc` | fn | ✅ | — |  |
+| `mrb_incremental_gc` | fn | ✅ | ✅ | `Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive) |
 | `mrb_inspect` | fn | ✅ | ✅ | `Value::inspect` |
 | `mrb_int` | macro | ✅ | — |  |
 | `mrb_intern` | fn | ✅ | ✅ | `Mrb::intern` — the general byte-taking creating intern: interns the exact bytes a borrowed slice spans (length-based, so a name embedding a NUL or not NUL-terminated interns whole), creating the Symbol when absent where `mrb_intern_check` only tests |
