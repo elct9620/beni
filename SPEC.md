@@ -260,9 +260,10 @@ byte append, anchored on mruby's own `mrb_str_cat_cstr` — the way Ruby's
 `String#<<` extends its receiver. It also appends any value coerced to a string,
 the way Ruby's `String#concat` accepts a non-string argument — the dispatching
 counterpart to the byte and string appends. Beyond reading and appending, a
-string duplicates into an independent copy (Ruby's `String#dup`) and orders
-against another by byte content (Ruby's `String#<=>`) — a total comparison that
-dispatches nothing and never raises. It also concatenates with another string
+string duplicates into an independent copy (Ruby's `String#dup`). It tests
+another for byte equality (Ruby's `String#==`) and orders against another by byte
+content (Ruby's `String#<=>`) — total reads that dispatch nothing and never
+raise. It also concatenates with another string
 into a new string (Ruby's `String#+`), anchored on mruby's own `mrb_str_plus`:
 the result is a freshly allocated string holding both operands' bytes, and
 neither operand is mutated — the non-mutating counterpart of the in-place append,
