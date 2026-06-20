@@ -71,14 +71,20 @@ impl<T> DataType<T> {
 
     /// mruby's release hook for this type: drop the boxed `T` the
     /// carrier owned. Registered in the `mrb_data_type` and invoked by
-    /// the GC when the carrier is collected.
+    /// the GC (a C frame) when the carrier is collected — so a panic in
+    /// `T`'s `Drop` is caught here, since unwinding across that frame is
+    /// undefined. The drop has no error channel, so the payload is
+    /// discarded.
     #[cfg(mruby_linked)]
     unsafe extern "C" fn dfree(_mrb: *mut sys::mrb_state, ptr: *mut core::ffi::c_void) {
         if !ptr.is_null() {
             // SAFETY: `ptr` was produced by `Box::into_raw::<T>` in
             // `RClass::data_wrap` against this same descriptor, so it
-            // is a live `Box<T>` the GC is now releasing.
-            drop(unsafe { Box::from_raw(ptr as *mut T) });
+            // is a live `Box<T>` the GC is now releasing. The box is the
+            // hook's only state, so `AssertUnwindSafe` holds.
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                drop(unsafe { Box::from_raw(ptr as *mut T) });
+            }));
         }
     }
 
@@ -351,6 +357,46 @@ mod tests {
             PROBE_DROPS.load(Ordering::SeqCst),
             1,
             "the release hook must drop the boxed payload exactly once"
+        );
+    }
+
+    /// Records that its `Drop` ran, then panics — a consumer payload
+    /// whose destructor unwinds while the GC sweeps it from a C frame.
+    static PANIC_DROPS: AtomicUsize = AtomicUsize::new(0);
+
+    struct PanicOnDrop;
+    impl Drop for PanicOnDrop {
+        fn drop(&mut self) {
+            PANIC_DROPS.fetch_add(1, Ordering::SeqCst);
+            panic!("payload drop panics from the GC sweep");
+        }
+    }
+
+    static PANIC_TYPE: DataType<PanicOnDrop> = DataType::new(c"BeniPanicOnDrop");
+
+    #[test]
+    fn release_hook_contains_a_panicking_drop_on_close() {
+        PANIC_DROPS.store(0, Ordering::SeqCst);
+        {
+            let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+            let class = mrb
+                .define_class(c"BeniPanicHolder", mrb.object_class())
+                .expect("defining the carrier class must succeed");
+            class.set_instance_data_tt(&mrb);
+
+            // Root the carrier so `mrb_close` sweeps it and invokes the
+            // release hook, which drops a payload whose `Drop` panics.
+            let obj = class.data_wrap(&mrb, PanicOnDrop, &PANIC_TYPE);
+            let slot = mrb.intern_cstr(c"$beni_data_panic");
+            mrb.gv_set(slot, obj);
+        }
+        // Reaching here proves the panic was contained at the hook: had
+        // it unwound across mruby's C sweep frame the process would have
+        // aborted instead. The drop still ran.
+        assert_eq!(
+            PANIC_DROPS.load(Ordering::SeqCst),
+            1,
+            "the release hook must run the payload's drop even when it panics"
         );
     }
 }

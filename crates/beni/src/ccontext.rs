@@ -66,6 +66,13 @@ impl<'mrb> Ccontext<'mrb> {
 
     /// Compile and evaluate `source` under this context. `source` is
     /// raw bytes (ptr + len), not NUL-terminated.
+    ///
+    /// On a parse, codegen, or runtime failure the exception is parked on
+    /// the handle (`Mrb::pending_exc`) and a nil-ish `Value` returned —
+    /// unlike `Mrb::load_string`, which clears the exception into an
+    /// `Err`. Error reporting is deliberately deferred to the handle so
+    /// the parked exception keeps the filename stamp and its source-line
+    /// backtrace.
     pub fn load_nstring(&self, source: &[u8]) -> Value {
         #[cfg(mruby_linked)]
         {
