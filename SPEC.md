@@ -384,6 +384,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | duplicate | copy it |
 | keys / values | read as typed arrays |
 | size / emptiness | the entry count, and whether it holds no entries |
+| iterate | visit each key-value pair in insertion order, handing both to a closure that signals whether to continue or stop — stopping ends the walk before the remaining pairs. The walk dispatches no Ruby and surfaces no `Err`; mutating the hash from within the closure is unsupported. A closure panic stops the walk and resurfaces on the Rust side once the walk unwinds, never crossing into mruby's frames |
 
 #### Value operations
 
