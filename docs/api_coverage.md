@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 173 (51%) |
-| macro | 124 | 26 (21%) | 39 (31%) |
-| total | 466 | 358 (77%) | 212 (45%) |
+| function | 342 | 338 (99%) | 174 (51%) |
+| macro | 124 | 26 (21%) | 40 (32%) |
+| total | 466 | 364 (78%) | 214 (46%) |
 
 ## mruby.h
 
@@ -386,15 +386,15 @@ Legend: ✅ covered · — missing
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_fixnum_to_str` | macro | — | — |  |
-| `mrb_float_to_integer` | fn | — | — |  |
-| `mrb_int_to_cstr` | fn | — | — |  |
-| `mrb_integer_to_str` | fn | — | — |  |
-| `mrb_num_add` | fn | — | — |  |
+| `mrb_fixnum_to_str` | macro | — | ✅ | `Value::int_to_str` — the macro `mrb_fixnum_to_str(mrb, x, base)` is a `#define` alias of `mrb_integer_to_str`, so the same Rust item graduates it; no separate item is needed |
+| `mrb_float_to_integer` | fn | ✅ | — |  |
+| `mrb_int_to_cstr` | fn | ✅ | — |  |
+| `mrb_integer_to_str` | fn | ✅ | ✅ | `Value::int_to_str` — render an Integer value to an RString in a radix (Ruby's Integer#to_s(base)); guards the Integer tag (TypeError) and raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys` |
+| `mrb_num_add` | fn | ✅ | — |  |
 | `mrb_num_minus` | macro | — | — |  |
-| `mrb_num_mul` | fn | — | — |  |
+| `mrb_num_mul` | fn | ✅ | — |  |
 | `mrb_num_plus` | macro | — | — |  |
-| `mrb_num_sub` | fn | — | — |  |
+| `mrb_num_sub` | fn | ✅ | — |  |
 ## mruby/proc.h
 
 | Symbol | Kind | sys | typed | Note |

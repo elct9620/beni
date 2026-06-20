@@ -277,6 +277,55 @@ impl Value {
         }
     }
 
+    /// Render this Integer value to a new `RString` in `base`, the way
+    /// Ruby's `Integer#to_s(base)` does — `12345` to `"3039"` in base 16.
+    /// `base` is 2 through 36; a base outside that domain raises
+    /// `ArgumentError`. The render guards its receiver on the Integer tag
+    /// rather than trusting it, raising `TypeError` for any other tag so a
+    /// non-Integer never reaches `mrb_integer_to_str`'s unchecked unbox.
+    /// Both raises run under `Mrb::protect`, so either surfaces as `Err`
+    /// rather than long-jumping. magnus offers no direct radix render, so
+    /// this anchors on mruby's own `mrb_integer_to_str`.
+    #[inline]
+    pub fn int_to_str(self, mrb: &Mrb, base: i32) -> Result<crate::RString, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                if !self.is_integer() {
+                    // SAFETY: `mrb` is alive inside the protect frame;
+                    // `TypeError` is a core class so the lookup cannot fail;
+                    // `mrb_raise` long-jumps to the protect frame. The guard
+                    // is strict — a Float is rejected, not coerced — because
+                    // `mrb_integer_to_str` unboxes its receiver without a tag
+                    // check.
+                    unsafe {
+                        let typeerr = sys::mrb_class_get(mrb.as_ptr(), c"TypeError".as_ptr());
+                        sys::mrb_raise(
+                            mrb.as_ptr(),
+                            typeerr,
+                            c"no implicit conversion to Integer".as_ptr(),
+                        );
+                    }
+                }
+                // SAFETY: `self` is Integer-tagged past the guard; `mrb` is
+                // alive inside the protect frame. `mrb_integer_to_str` raises
+                // `ArgumentError` on a base outside 2 through 36 — caught by
+                // `protect` into `Err` — and otherwise returns a String value.
+                Value::from_raw(unsafe {
+                    sys::mrb_integer_to_str(mrb.as_ptr(), self.0, base as sys::mrb_int)
+                })
+            })
+            // SAFETY: a successful `mrb_integer_to_str` returns a
+            // String-tagged value, so the unchecked wrap accepts it.
+            .map(|v| unsafe { RString::from_value_unchecked(v) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, base);
+            crate::not_linked()
+        }
+    }
+
     /// Coerce `self` to a string value — `self` unchanged when it is
     /// already a string, otherwise the result of its `to_s`. Runs under
     /// `Mrb::protect`: `Ok` with the string value, or `Err` when `to_s`
@@ -2641,6 +2690,56 @@ mod linked_tests {
         // A non-numeric value raises TypeError — surfaced as Err.
         assert!(matches!(
             mrb.str_new(b"x").as_value().as_float(&mrb),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn int_to_str_renders_in_base_ten_and_other_radixes() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let n = Value::from_int(&mrb, 12345);
+        // Base 10 is the plain decimal rendering.
+        assert_eq!(
+            n.int_to_str(&mrb, 10).expect("base 10 renders").to_bytes(),
+            b"12345".to_vec()
+        );
+        // A non-decimal radix renders in that base, like Ruby's
+        // 12345.to_s(16) == "3039".
+        assert_eq!(
+            n.int_to_str(&mrb, 16).expect("base 16 renders").to_bytes(),
+            b"3039".to_vec()
+        );
+    }
+
+    #[test]
+    fn int_to_str_surfaces_an_invalid_radix_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A radix outside 2 through 36 raises ArgumentError, caught into
+        // Err rather than long-jumping; the VM stays usable afterward.
+        assert!(matches!(
+            Value::from_int(&mrb, 12345).int_to_str(&mrb, 1),
+            Err(Error::Exception(_))
+        ));
+        assert_eq!(
+            Value::from_int(&mrb, 42)
+                .int_to_str(&mrb, 10)
+                .expect("the VM survives the protected raise")
+                .to_bytes(),
+            b"42".to_vec()
+        );
+    }
+
+    #[test]
+    fn int_to_str_rejects_a_non_integer_receiver() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // The guard is strict on the Integer tag: a Float is rejected with
+        // TypeError, not coerced, because mrb_integer_to_str unboxes its
+        // receiver without a tag check.
+        assert!(matches!(
+            1.5f64.into_value(&mrb).int_to_str(&mrb, 10),
             Err(Error::Exception(_))
         ));
     }
