@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 186 (54%) |
+| function | 342 | 338 (99%) | 187 (55%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 239 (51%) |
+| total | 466 | 366 (79%) | 240 (52%) |
 
 ## mruby.h
 
@@ -183,7 +183,7 @@ Legend: ✅ covered · — missing
 | `mrb_respond_to` | fn | ✅ | ✅ | `Value::respond_to` |
 | `mrb_show_copyright` | fn | ✅ | — |  |
 | `mrb_show_version` | fn | ✅ | — |  |
-| `mrb_singleton_class` | fn | ✅ | — |  |
+| `mrb_singleton_class` | fn | ✅ | ✅ | `Value::singleton_class` — the value's per-instance eigenclass (Ruby's `singleton_class`), returning a typed `RClass`; nil/true/false yield their predefined classes and every other immediate raises a TypeError. The raw-`RClass*` form `mrb_singleton_class_ptr`, which hands back a possibly-null pointer and demands VM-internal reasoning, stays in `sys` |
 | `mrb_singleton_class_ptr` | fn | ✅ | — |  |
 | `mrb_stack_extend` | fn | ✅ | — |  |
 | `mrb_state_atexit` | fn | ✅ | — |  |

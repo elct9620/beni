@@ -1581,6 +1581,41 @@ impl Value {
         }
     }
 
+    /// `mrb_singleton_class(mrb, self)` — the value's own singleton class,
+    /// Ruby's `singleton_class`: the per-instance eigenclass that holds
+    /// methods defined on that one object, distinct from the regular class
+    /// `Value::class` returns and shared with its peers. It is created on
+    /// first read and stable across re-reads of the same object. `nil`,
+    /// `true`, and `false` yield their predefined classes, which act as
+    /// their singleton classes; every other immediate — an integer, a
+    /// symbol, a float — has no singleton class, and the `TypeError` mruby
+    /// raises is caught by `Mrb::protect` into the returned `Err`. The raw
+    /// `RClass*` form (`mrb_singleton_class_ptr`), which hands back a
+    /// possibly-null pointer and demands VM-internal reasoning, stays behind
+    /// `beni::sys`. Mirrors magnus's `Object::singleton_class`.
+    #[inline]
+    pub fn singleton_class(self, mrb: &Mrb) -> Result<RClass, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_singleton_class` raises
+                // `TypeError` for an immediate that has no singleton class —
+                // caught by `protect` into `Err` — and otherwise returns a
+                // class-tagged value.
+                Value::from_raw(unsafe { sys::mrb_singleton_class(mrb.as_ptr(), self.0) })
+            })
+            // SAFETY: an `Ok` result is the class-tagged value
+            // `mrb_singleton_class` returns, so the pointer recovery accepts it.
+            .map(|v| RClass::from_raw(unsafe { v.as_class_ptr() }))
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_obj_is_kind_of(mrb, self, class)` — whether `self` is an
     /// instance of `class` or any of its subclasses, Ruby's `is_a?`. A
     /// pure ancestry walk that dispatches nothing, so it never raises.
@@ -2914,6 +2949,44 @@ mod linked_tests {
         assert!(s.is_kind_of(&mrb, object_class));
         assert!(s.is_instance_of(&mrb, string_class));
         assert!(!s.is_instance_of(&mrb, object_class));
+    }
+
+    #[test]
+    fn singleton_class_reads_a_stable_eigenclass_and_rejects_immediates() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let s = mrb.str_new(b"hi").as_value();
+
+        // An ordinary object's singleton class is its own per-instance
+        // eigenclass — distinct from the regular class it shares with peers.
+        let sclass = s
+            .singleton_class(&mrb)
+            .expect("a string has a singleton class");
+        assert_ne!(sclass.as_raw(), s.class(&mrb).as_raw());
+
+        // Re-reading the same object yields the same singleton class.
+        let again = s
+            .singleton_class(&mrb)
+            .expect("a string has a singleton class");
+        assert_eq!(sclass.as_raw(), again.as_raw());
+
+        // nil yields its predefined class, which acts as its singleton
+        // class, so the read succeeds.
+        assert_eq!(
+            Value::nil()
+                .singleton_class(&mrb)
+                .expect("nil has a singleton class")
+                .as_raw(),
+            Value::nil().class(&mrb).as_raw()
+        );
+
+        // Every other immediate has no singleton class: the TypeError
+        // mruby raises surfaces as Err.
+        match Value::from_int(&mrb, 1).singleton_class(&mrb) {
+            Err(Error::Exception(exc)) => {
+                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+            }
+            other => panic!("expected a TypeError Err, got {other:?}"),
+        }
     }
 
     #[test]
