@@ -696,9 +696,9 @@ pub trait Module: private::ClassLike {
 
     /// `mrb_class_path(mrb, self)` — the handle's fully-qualified path,
     /// the namespace chain leading to it (`"Outer::Inner"` for a nested
-    /// class, the bare name for a top-level one). Returns `None` for an
-    /// anonymous handle that has no place in any namespace. A total read
-    /// that never raises. Unlike `name`, which always answers a name —
+    /// class, the bare name for a top-level one), or `None` when the
+    /// handle is anonymous and has no place in any namespace. A total
+    /// read that never raises. Unlike `name`, which always answers a name —
     /// synthesizing a `#<Class:0x…>` form for an anonymous handle — and
     /// borrows mruby's VM-lifetime class-name storage, `path` answers the
     /// qualified path or nothing and returns an owned `String` copied out
