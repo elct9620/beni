@@ -685,6 +685,25 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   that distinguish those cases are mruby VM internals with no stable public
   accessor; the typed surface does not expose them, so a consumer that must
   classify reaches them through the `beni::sys` escape hatch.
+- `Mrb::rescue` runs a body closure under exception protection and recovers a
+  caught exception with a handler closure, mirroring a Ruby `begin`/`rescue`
+  over a chosen set of exception classes. It takes a class list as a slice of
+  typed `RClass` handles, a body, and a handler. The body's normal completion
+  is the `Ok` value. If the body raises an exception that is an instance of any
+  class in the list, the handler runs and its result — `Ok` or `Err` — is the
+  outcome; the handler receives the caught exception as a `Value` and runs on a
+  handle whose pending exception is already cleared, so it operates on a clean
+  VM. An exception that is an instance of no class in the list is not rescued:
+  it propagates as the body's `Err` unchanged. An empty class list therefore
+  matches nothing and rescues nothing — every exception propagates — and a
+  caller wanting the bare-`rescue` default names the `StandardError` class in
+  the list. A Rust panic raised inside the body is not an exception and is never
+  rescued: it surfaces as the panic `Err` regardless of the class list, the same
+  no-long-jump contract `Mrb::protect` carries. `rescue` is a Rust-native
+  composition of the already-graduated `Mrb::protect` and `Value::is_kind_of`,
+  not a new bound C symbol; the safe `RClass` slice replaces mruby's raw class
+  array, so the capability needs no VM-internal reasoning and lives on the typed
+  surface.
 - `Mrb` compiles and runs a slice of Ruby source with no compile context,
   yielding the program's result value as a Rust `Ok`. A failure on any path —
   a parse error, a codegen error, or an exception raised while the program
@@ -763,6 +782,9 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
+| A `Mrb::rescue` body raising an exception instance of a class in the list | the handler runs on a handle with no pending exception and receives the caught exception; its result is the outcome |
+| A `Mrb::rescue` body raising an exception instance of no class in the list | not rescued; surfaced as the body's Rust `Err` unchanged, never unwinds across FFI |
+| A `Mrb::rescue` handler itself raising | surfaced as the handler's Rust `Err`, never unwinds across FFI |
 | mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
