@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 170 (50%) |
+| function | 342 | 332 (97%) | 173 (51%) |
 | macro | 124 | 26 (21%) | 37 (30%) |
-| total | 466 | 358 (77%) | 207 (44%) |
+| total | 466 | 358 (77%) | 210 (45%) |
 
 ## mruby.h
 
@@ -132,9 +132,9 @@ Legend: ✅ covered · — missing
 | `mrb_inspect` | fn | ✅ | ✅ | `Value::inspect` |
 | `mrb_int` | macro | ✅ | — |  |
 | `mrb_intern` | fn | ✅ | — |  |
-| `mrb_intern_check` | fn | ✅ | — |  |
-| `mrb_intern_check_cstr` | fn | ✅ | — |  |
-| `mrb_intern_check_str` | fn | ✅ | — |  |
+| `mrb_intern_check` | fn | ✅ | ✅ | `Mrb::intern_check` — the non-creating presence test over name bytes, `Some` Symbol when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to |
+| `mrb_intern_check_cstr` | fn | ✅ | ✅ | `Mrb::intern_check` — a NUL-terminated name is bytes passed to the check primitive this convenience wrapper forwards to |
+| `mrb_intern_check_str` | fn | ✅ | ✅ | `Mrb::intern_check` — an mruby String value's bytes pass to the check primitive this convenience wrapper forwards to |
 | `mrb_intern_cstr` | fn | ✅ | ✅ | `Mrb::intern_cstr` |
 | `mrb_intern_lit` | macro | — | ✅ | `Mrb::intern_static` — the literal macro `mrb_intern_lit(mrb, lit)` is `mrb_intern_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_intern_static` | fn | ✅ | ✅ | `Mrb::intern_static` |

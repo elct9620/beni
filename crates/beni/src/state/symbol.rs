@@ -4,7 +4,7 @@
 //! arbitrary bytes via an `mrb_value` String) into an `mrb_sym`, or
 //! read the C-string name back from a symbol id.
 
-use crate::{Mrb, Value};
+use crate::{Mrb, Symbol, Value};
 use beni_sys as sys;
 
 impl Mrb {
@@ -62,6 +62,36 @@ impl Mrb {
                     name.len(),
                 )
             }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = name;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_intern_check(mrb, name, len)` — the non-creating counterpart
+    /// of the interns: `Some` Symbol when `name`'s bytes are already
+    /// interned, `None` when no such symbol exists. A presence test that
+    /// dispatches nothing and never raises, leaving the symbol table
+    /// untouched. mruby reserves id 0 for "not interned", so a zero result
+    /// maps to `None`. This is the byte-taking primitive mruby's
+    /// `mrb_intern_check_cstr` (NUL-terminated) and `mrb_intern_check_str`
+    /// (an mruby String value) both forward to.
+    #[inline]
+    pub fn intern_check(&self, name: &[u8]) -> Option<Symbol> {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive; `name` is a valid byte slice and its
+            // length is passed alongside, so the borrow need not be NUL-safe.
+            let sym = unsafe {
+                sys::mrb_intern_check(
+                    self.as_ptr(),
+                    name.as_ptr() as *const core::ffi::c_char,
+                    name.len(),
+                )
+            };
+            (sym != 0).then(|| Symbol::from_sym(sym))
         }
         #[cfg(not(mruby_linked))]
         {
@@ -163,7 +193,7 @@ impl Mrb {
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use crate::Mrb;
+    use crate::{Mrb, Symbol};
 
     #[test]
     fn intern_cstr_roundtrips_through_sym_name() {
@@ -209,6 +239,19 @@ mod tests {
         // the length-carrying read returns the raw bytes.
         assert_eq!(mrb.sym_name(sym), Some("\"a\\x00b\""));
         assert_eq!(mrb.sym_name_len(sym), Some(&b"a\0b"[..]));
+    }
+
+    #[test]
+    fn intern_check_finds_an_interned_name_and_misses_an_uninterned_one() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A name no one has interned yet has no symbol, so the check misses.
+        assert!(mrb.intern_check(b"beni_unseen").is_none());
+
+        // Once the name is interned, the check finds it and reports the
+        // same id the creating intern produced.
+        let id = mrb.intern_cstr(c"beni_seen");
+        assert_eq!(mrb.intern_check(b"beni_seen").map(Symbol::to_sym), Some(id));
     }
 
     #[test]
