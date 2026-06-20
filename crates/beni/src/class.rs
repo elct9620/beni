@@ -823,8 +823,8 @@ pub trait Object: private::ClassLike {
     /// `method!`-wrapped Rust function. The name is a symbol-or-name
     /// key (`IntoSym`). The receiver is treated as `RObject *` so the
     /// singleton-class shim attaches to the metaclass (matching mruby's
-    /// own contract). mruby rejects receivers that cannot carry a
-    /// singleton class.
+    /// own contract). A class or module always carries a singleton class,
+    /// so the registration installs the method on its metaclass.
     fn define_singleton_method<K: IntoSym>(
         self,
         mrb: &Mrb,
@@ -835,10 +835,10 @@ pub trait Object: private::ClassLike {
         {
             let sym = name.into_sym(mrb);
             protect_register(mrb, method, |mrb, raw, aspec| {
-                // SAFETY: as `Module::define_method`; `RClass *` and
-                // `RObject *` are both `c_void *` aliases in this
-                // crate's binding, and the cast matches what
-                // `mrbgems/mruby-singleton-class` does inline.
+                // SAFETY: as `Module::define_method`; the `RClass *` →
+                // `RObject *` cast mirrors mruby's own
+                // `mrb_define_class_method_id`, which casts `(struct
+                // RObject*)c` before this same call.
                 unsafe {
                     sys::mrb_define_singleton_method_id(
                         mrb.as_ptr(),

@@ -133,7 +133,10 @@ impl Mrb {
     /// The returned slice points into mruby's interned string storage
     /// and lives for the duration of the VM. A name carrying an embedded
     /// NUL comes back escaped to its quoted dump form; `Mrb::sym_name_len`
-    /// reads the raw bytes.
+    /// reads the raw bytes. mruby escapes non-identifier names into a
+    /// quoted ASCII form, so a name is always valid UTF-8; the empty-string
+    /// fallback on a non-UTF-8 name is defensive — reach for
+    /// `Mrb::sym_name_len` to read raw bytes.
     #[inline]
     pub fn sym_name(&self, sym: sys::mrb_sym) -> Option<&'static str> {
         #[cfg(mruby_linked)]
@@ -193,7 +196,9 @@ impl Mrb {
     /// the bare name for a plain identifier, otherwise the quoted and
     /// escaped form (Ruby's `Symbol#inspect` without the leading colon).
     /// `None` when mruby yields a NULL pointer (e.g. uninterned id).
-    /// Reads without dispatching and never raises.
+    /// Reads without dispatching and never raises. The dump form is always
+    /// ASCII, so the empty-string fallback on a non-UTF-8 name is
+    /// defensive and unreachable.
     #[inline]
     pub fn sym_dump(&self, sym: sys::mrb_sym) -> Option<&'static str> {
         #[cfg(mruby_linked)]

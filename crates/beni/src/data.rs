@@ -153,6 +153,10 @@ impl Value {
     /// lives as long as its carrier stays reachable, which the consumer
     /// upholds under the GC validity rule (as for any borrowed mruby
     /// payload).
+    ///
+    /// The borrow is read-only — mutating the payload goes through
+    /// interior mutability (`RefCell`/`Cell`) inside `T`, as in magnus's
+    /// typed data.
     #[inline]
     pub fn data_get<'a, T>(self, mrb: &'a Mrb, ty: &'static DataType<T>) -> Option<&'a T> {
         #[cfg(mruby_linked)]

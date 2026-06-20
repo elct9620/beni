@@ -108,8 +108,9 @@ impl Symbol {
     /// The symbol's name, via `to_sym` + `Mrb::sym_name`. `None` when
     /// mruby yields a NULL name. A name carrying an embedded NUL comes
     /// back escaped to its quoted dump form; `name_bytes` reads the raw
-    /// bytes. The slice points into mruby's interned storage, which lives
-    /// for the VM's duration.
+    /// bytes — also the path for any non-UTF-8 name, which mruby's escaping
+    /// keeps unreachable here. The slice points into mruby's interned
+    /// storage, which lives for the VM's duration.
     #[inline]
     pub fn name(self, mrb: &Mrb) -> Option<&'static str> {
         #[cfg(mruby_linked)]
