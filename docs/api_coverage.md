@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 175 (51%) |
+| function | 342 | 338 (99%) | 176 (51%) |
 | macro | 124 | 26 (21%) | 40 (32%) |
-| total | 466 | 364 (78%) | 215 (46%) |
+| total | 466 | 364 (78%) | 216 (46%) |
 
 ## mruby.h
 
@@ -432,7 +432,7 @@ Legend: ✅ covered · — missing
 | `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes` |
 | `mrb_obj_as_string` | fn | ✅ | ✅ | `Value::obj_as_string` |
 | `mrb_ptr_to_str` | fn | ✅ | — |  |
-| `mrb_str_append` | fn | ✅ | — |  |
+| `mrb_str_append` | fn | ✅ | ✅ | `RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed |
 | `mrb_str_buf_append` | macro | — | — |  |
 | `mrb_str_buf_cat` | macro | — | — |  |
 | `mrb_str_buf_new` | macro | — | — |  |

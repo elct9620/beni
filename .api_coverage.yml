@@ -210,6 +210,7 @@ typed:
   mrb_str_cat_lit: "`RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_str_cat_cstr: RString::cat_cstr
   mrb_str_cat_str: RString::cat_str
+  mrb_str_append: "`RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed"
   mrb_str_cmp: RString::cmp
   mrb_str_concat: RString::concat
   mrb_str_dup: RString::dup
