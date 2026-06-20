@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 158 (46%) |
+| function | 342 | 332 (97%) | 159 (46%) |
 | macro | 124 | 25 (20%) | 37 (30%) |
-| total | 466 | 357 (77%) | 195 (42%) |
+| total | 466 | 357 (77%) | 196 (42%) |
 
 ## mruby.h
 
@@ -457,7 +457,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_strlen` | macro | — | — |  |
 | `mrb_str_substr` | fn | ✅ | ✅ | `RString::substr` |
 | `mrb_str_to_cstr` | fn | ✅ | — |  |
-| `mrb_str_to_dbl` | fn | ✅ | — |  |
+| `mrb_str_to_dbl` | fn | ✅ | ✅ | `RString::to_f` — strict float parse (badcheck on); raises ArgumentError on non-float input |
 | `mrb_str_to_integer` | fn | ✅ | ✅ | `RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input |
 | `mrb_str_to_inum` | macro | — | — |  |
 | `mrb_string_cstr` | fn | ✅ | ✅ | `RString::to_cstr` |

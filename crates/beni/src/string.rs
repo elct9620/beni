@@ -478,6 +478,37 @@ impl RString {
             crate::not_linked()
         }
     }
+
+    /// `mrb_str_to_dbl(mrb, self, TRUE)` — parse the bytes to a float, the
+    /// strict counterpart of Ruby's lenient `String#to_f`. With strict
+    /// checking on, any input that is not a clean float — trailing junk or
+    /// bytes with no valid float at all — raises `ArgumentError`; the call
+    /// runs under `Mrb::protect`, so that surfaces as `Err` rather than
+    /// long-jumping. The `to_i` sibling for the integer parse.
+    #[inline]
+    pub fn to_f(self, mrb: &Mrb) -> Result<sys::mrb_float, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `self` is String-tagged by the newtype contract;
+                // `mrb` is alive inside the protect frame. `mrb_str_to_dbl`
+                // with `badcheck` TRUE raises `ArgumentError` on any input
+                // that is not a clean float — caught by `protect` into `Err`.
+                // The C `double` is boxed into a Float value so it rides the
+                // protect frame's `Value` return.
+                let d = unsafe { sys::mrb_str_to_dbl(mrb.as_ptr(), self.0.as_raw(), true) };
+                Value::from_float(mrb, d)
+            })
+            // SAFETY: the `Ok` value was boxed by `Value::from_float`, so
+            // the unbox accepts it.
+            .map(|v| unsafe { v.unbox_float() })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -797,6 +828,45 @@ mod tests {
         // Bytes with no valid integer at all raise too.
         assert!(matches!(
             mrb.str_new(b"hello").to_i(&mrb, 10),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn to_f_parses_a_float_string() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A clean float string parses to its value.
+        assert_eq!(
+            mrb.str_new(b"2.5")
+                .to_f(&mrb)
+                .expect("a float string parses"),
+            2.5
+        );
+
+        // Scientific notation parses too.
+        assert_eq!(
+            mrb.str_new(b"123.45e1")
+                .to_f(&mrb)
+                .expect("a scientific-notation string parses"),
+            1234.5
+        );
+    }
+
+    #[test]
+    fn to_f_surfaces_invalid_input_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Trailing junk is rejected by the strict parse — unlike Ruby's
+        // lenient String#to_f, which would ignore the trailing characters.
+        assert!(matches!(
+            mrb.str_new(b"45.67 degrees").to_f(&mrb),
+            Err(Error::Exception(_))
+        ));
+
+        // Bytes with no valid float at all raise too.
+        assert!(matches!(
+            mrb.str_new(b"thx1138").to_f(&mrb),
             Err(Error::Exception(_))
         ));
     }
