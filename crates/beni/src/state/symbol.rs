@@ -43,6 +43,33 @@ impl Mrb {
         }
     }
 
+    /// `mrb_intern_static(mrb, name, len)` — intern `name` as a Symbol
+    /// without copying its bytes, the no-copy counterpart of `intern_cstr`
+    /// / `intern_str`. mruby keeps the borrowed pointer and never frees it,
+    /// so the buffer must outlive the VM; the `'static` bound is what makes
+    /// this safe. A `b"..."` literal is a `&'static [u8]`, so this also
+    /// serves mruby's `mrb_intern_lit` convenience.
+    #[inline]
+    pub fn intern_static(&self, name: &'static [u8]) -> sys::mrb_sym {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive; `name` is `'static`, so the borrowed
+            // buffer outlives the VM as mruby's no-free intern requires.
+            unsafe {
+                sys::mrb_intern_static(
+                    self.as_ptr(),
+                    name.as_ptr() as *const core::ffi::c_char,
+                    name.len(),
+                )
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = name;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_sym_name(mrb, sym)` — return the C string name of `sym`,
     /// or `None` if mruby yields a NULL pointer (e.g. uninterned id).
     /// The returned slice points into mruby's interned string storage
@@ -154,6 +181,19 @@ mod tests {
         let via_str = mrb.intern_str(mrb.str_new(b"beni_sym").as_value());
 
         assert_eq!(via_str, mrb.intern_cstr(c"beni_sym"));
+    }
+
+    #[test]
+    fn intern_static_yields_the_same_id_as_the_copying_intern() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A `b"..."` literal is the `&'static [u8]` the no-copy intern
+        // borrows; the name must read back and resolve to the same id the
+        // copying intern produces, proving it's the same interned symbol.
+        let sym = mrb.intern_static(b"beni_sym");
+
+        assert_eq!(mrb.sym_name(sym), Some("beni_sym"));
+        assert_eq!(sym, mrb.intern_cstr(c"beni_sym"));
     }
 
     #[test]

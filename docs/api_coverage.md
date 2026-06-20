@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 142 (42%) |
-| macro | 124 | 25 (20%) | 35 (28%) |
-| total | 466 | 357 (77%) | 177 (38%) |
+| function | 342 | 332 (97%) | 143 (42%) |
+| macro | 124 | 25 (20%) | 36 (29%) |
+| total | 466 | 357 (77%) | 179 (38%) |
 
 ## mruby.h
 
@@ -136,8 +136,8 @@ Legend: ✅ covered · — missing
 | `mrb_intern_check_cstr` | fn | ✅ | — |  |
 | `mrb_intern_check_str` | fn | ✅ | — |  |
 | `mrb_intern_cstr` | fn | ✅ | ✅ | `Mrb::intern_cstr` |
-| `mrb_intern_lit` | macro | — | — |  |
-| `mrb_intern_static` | fn | ✅ | — |  |
+| `mrb_intern_lit` | macro | — | ✅ | `Mrb::intern_static` — the literal macro `mrb_intern_lit(mrb, lit)` is `mrb_intern_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
+| `mrb_intern_static` | fn | ✅ | ✅ | `Mrb::intern_static` |
 | `mrb_intern_str` | fn | ✅ | ✅ | `Mrb::intern_str` |
 | `mrb_locale_free` | macro | — | — |  |
 | `mrb_locale_from_utf8` | fn | — | — |  |

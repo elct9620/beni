@@ -147,6 +147,8 @@ typed:
   mrb_inspect: Value::inspect
   mrb_int_value: Value::from_int
   mrb_intern_cstr: Mrb::intern_cstr
+  mrb_intern_static: Mrb::intern_static
+  mrb_intern_lit: "`Mrb::intern_static` — the literal macro `mrb_intern_lit(mrb, lit)` is `mrb_intern_static` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_intern_str: Mrb::intern_str
   mrb_iv_defined: "`Value::iv_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys`"
   mrb_iv_get: Value::iv_get
