@@ -7,7 +7,7 @@
 //! boundary and surfaced as `Err(Error::Panic)` instead of unwinding
 //! into mruby's C frames.
 
-use crate::{Error, Mrb, Value};
+use crate::{Error, Mrb, RClass, Value};
 #[cfg(mruby_linked)]
 use beni_sys as sys;
 
@@ -143,6 +143,50 @@ impl Mrb {
             Ok(value)
         }
     }
+
+    /// Run `body` under exception protection and recover a caught
+    /// exception with `handler`, mirroring a Ruby `begin`/`rescue` over
+    /// the exception classes in `classes`. A Rust-native composition of
+    /// `Mrb::protect` and `Value::is_kind_of` — no new bound C symbol.
+    ///
+    /// `body`'s normal completion is the `Ok` value. When `body` raises
+    /// an exception that is an instance of any class in `classes`,
+    /// `handler` runs and its result — `Ok` or `Err` — is the outcome;
+    /// `handler` receives the caught exception as a `Value` and runs on
+    /// a clean VM (`protect` already cleared the pending exception as it
+    /// surfaced the `Err`). Because `handler` also runs under `protect`,
+    /// a raise inside it surfaces as the handler's `Err` rather than
+    /// long-jumping past the caller.
+    ///
+    /// What `rescue` does **not** catch:
+    ///
+    /// - An exception that is an instance of no class in `classes`
+    ///   propagates unchanged as `body`'s `Err`. An empty `classes`
+    ///   therefore rescues nothing; a caller wanting the bare-`rescue`
+    ///   default names `StandardError` in the list.
+    /// - A Rust panic inside `body` is not a Ruby exception: it
+    ///   surfaces as the panic `Err` regardless of `classes`, honoring
+    ///   the same no-long-jump contract `Mrb::protect` carries.
+    ///
+    /// The same "capture `Copy` values only" caveat as `Mrb::protect`
+    /// applies to `body`: a raised exception long-jumps out before the
+    /// closure returns, so non-`Copy` captures are not dropped on that
+    /// path.
+    pub fn rescue<F, G>(&self, classes: &[RClass], body: F, handler: G) -> Result<Value, Error>
+    where
+        F: FnOnce(&Mrb) -> Value,
+        G: FnOnce(&Mrb, Value) -> Value,
+    {
+        match self.protect(body) {
+            Ok(value) => Ok(value),
+            Err(Error::Exception(exc))
+                if classes.iter().any(|class| exc.is_kind_of(self, *class)) =>
+            {
+                self.protect(|mrb| handler(mrb, exc))
+            }
+            Err(other) => Err(other),
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -196,6 +240,161 @@ mod tests {
         let err = mrb
             .protect(|_| panic!("boom from rust"))
             .expect_err("a panic inside the body must surface as Err");
+
+        match err {
+            Error::Panic(msg) => assert!(msg.contains("boom from rust")),
+            Error::Exception(_) => panic!("a Rust panic must surface as Error::Panic"),
+        }
+        // The VM stays usable after the caught panic.
+        let again = mrb
+            .protect(|m| m.str_new(b"alive").as_value())
+            .expect("the VM must survive the caught panic");
+        assert_eq!(again.to_string(&mrb), "alive");
+    }
+
+    /// Raise an instance of the named core exception class inside a
+    /// protected body, long-jumping to the protect frame the way a real
+    /// Ruby raise does (mirrors the `protect` raise test).
+    #[cfg(mruby_linked)]
+    fn raise_named(m: &Mrb, class: &core::ffi::CStr, message: &core::ffi::CStr) -> Value {
+        // SAFETY: `m` is the live VM; the named classes are core so the
+        // lookup cannot fail; `mrb_raise` long-jumps and never returns.
+        unsafe {
+            let class = sys::mrb_class_get(m.as_ptr(), class.as_ptr());
+            sys::mrb_raise(m.as_ptr(), class, message.as_ptr());
+        }
+        Value::zeroed()
+    }
+
+    #[test]
+    fn rescue_returns_the_body_value_when_it_does_not_raise() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let standard_error = mrb
+            .class_get(c"StandardError")
+            .expect("StandardError is a core class");
+
+        let got = mrb
+            .rescue(
+                &[standard_error],
+                |m| m.str_new(b"body ok").as_value(),
+                |_, _| panic!("the handler must not run when the body succeeds"),
+            )
+            .expect("a non-raising body comes back Ok");
+
+        assert_eq!(got.to_string(&mrb), "body ok");
+    }
+
+    #[test]
+    fn rescue_runs_the_handler_on_a_clean_vm_for_a_matching_exception() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let runtime_error = mrb
+            .class_get(c"RuntimeError")
+            .expect("RuntimeError is a core class");
+
+        // RuntimeError is a StandardError, so a StandardError filter matches it.
+        let standard_error = mrb
+            .class_get(c"StandardError")
+            .expect("StandardError is a core class");
+
+        let got = mrb
+            .rescue(
+                &[standard_error],
+                |m| raise_named(m, c"RuntimeError", c"boom"),
+                |m, exc| {
+                    // The handler receives the caught exception itself.
+                    assert!(exc.is_kind_of(m, runtime_error));
+                    assert!(exc.to_string(m).contains("boom"));
+                    // The handler runs on a clean VM: no pending exception
+                    // remains on the handle, and a fresh allocation works.
+                    assert!(m.pending_exc().is_nil());
+                    m.str_new(b"handled").as_value()
+                },
+            )
+            .expect("a matching exception is rescued by the handler");
+
+        assert_eq!(got.to_string(&mrb), "handled");
+        // The VM stays usable afterwards.
+        let again = mrb
+            .protect(|m| m.str_new(b"alive").as_value())
+            .expect("the VM must survive a rescued exception");
+        assert_eq!(again.to_string(&mrb), "alive");
+    }
+
+    #[test]
+    fn rescue_propagates_an_exception_outside_the_class_list() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        // TypeError is not a kind of ArgumentError, so the filter misses.
+        let argument_error = mrb
+            .class_get(c"ArgumentError")
+            .expect("ArgumentError is a core class");
+
+        let err = mrb
+            .rescue(
+                &[argument_error],
+                |m| raise_named(m, c"TypeError", c"wrong type"),
+                |_, _| panic!("the handler must not run for an unmatched exception"),
+            )
+            .expect_err("an unmatched exception propagates as the body's Err");
+
+        match err {
+            Error::Exception(_) => assert!(err.message(&mrb).contains("wrong type")),
+            Error::Panic(_) => panic!("an unmatched Ruby raise stays Error::Exception"),
+        }
+    }
+
+    #[test]
+    fn rescue_surfaces_a_handler_raise_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let standard_error = mrb
+            .class_get(c"StandardError")
+            .expect("StandardError is a core class");
+
+        let err = mrb
+            .rescue(
+                &[standard_error],
+                |m| raise_named(m, c"RuntimeError", c"boom"),
+                |m, _| raise_named(m, c"RuntimeError", c"handler boom"),
+            )
+            .expect_err("a handler that raises surfaces as Err");
+
+        match err {
+            Error::Exception(_) => assert!(err.message(&mrb).contains("handler boom")),
+            Error::Panic(_) => panic!("a handler Ruby raise stays Error::Exception"),
+        }
+    }
+
+    #[test]
+    fn rescue_with_an_empty_class_list_rescues_nothing() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let err = mrb
+            .rescue(
+                &[],
+                |m| raise_named(m, c"RuntimeError", c"boom"),
+                |_, _| panic!("an empty class list never rescues"),
+            )
+            .expect_err("an empty class list lets every exception propagate");
+
+        match err {
+            Error::Exception(_) => assert!(err.message(&mrb).contains("boom")),
+            Error::Panic(_) => panic!("the raise stays Error::Exception"),
+        }
+    }
+
+    #[test]
+    fn rescue_does_not_catch_a_body_panic() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let standard_error = mrb
+            .class_get(c"StandardError")
+            .expect("StandardError is a core class");
+
+        let err = mrb
+            .rescue(
+                &[standard_error],
+                |_| panic!("boom from rust"),
+                |_, _| panic!("a panic is not a Ruby exception and is never rescued"),
+            )
+            .expect_err("a body panic surfaces as Err, not rescued");
 
         match err {
             Error::Panic(msg) => assert!(msg.contains("boom from rust")),

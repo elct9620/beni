@@ -307,3 +307,10 @@ extensions:
     the value box/unbox primitives, including `FromValue for String` and
     `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as
     arbitrary owned bytes).
+  Mrb::rescue: >-
+    `begin`/`rescue` combinator composing `Mrb::protect` (`mrb_protect_error`)
+    with a `Value::is_kind_of` (`mrb_obj_is_kind_of`) class-list filter — the
+    safe typed-surface equivalent of mruby's `mrb_rescue` /
+    `mrb_rescue_exceptions`, with a `&[RClass]` slice replacing the raw class
+    array and the caught exception handed to the handler on a clean VM. Binds
+    no new C symbol; a Rust panic is never rescued.
