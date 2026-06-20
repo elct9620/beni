@@ -651,6 +651,16 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   that distinguish those cases are mruby VM internals with no stable public
   accessor; the typed surface does not expose them, so a consumer that must
   classify reaches them through the `beni::sys` escape hatch.
+- `Mrb` compiles and runs a slice of Ruby source with no compile context,
+  yielding the program's result value as a Rust `Ok`. A failure on any path —
+  a parse error, a codegen error, or an exception raised while the program
+  runs — surfaces as a Rust `Err` carrying the exception, the pending
+  exception cleared from the handle as it crosses out. The source is a byte
+  slice carrying its own length, so it needs no terminating NUL; the bytes
+  need not be valid UTF-8. This is the context-free counterpart to compiling
+  under a `Ccontext`: it stamps no filename, so the program's exceptions carry
+  no source-line backtrace, and it surfaces a failure as an `Err` rather than
+  leaving the pending exception on the handle for the caller to inspect.
 
 #### Graduation, safety, and coverage
 
