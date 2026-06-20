@@ -421,6 +421,12 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   the one required argument, and a count read returns the number of arguments
   passed. The single-argument read raises `ArgumentError` to the Ruby caller
   unless exactly one positional argument is present.
+- A registered method asks whether it was called with a block through a total
+  predicate on the `Mrb` handle, mirroring magnus's `Ruby::block_given_p`: it
+  reads the current call and answers `true` when a block was passed, `false`
+  otherwise. It never raises. The predicate is a plain boolean question about
+  the current call — it does not surface the call frame's block slot or any
+  other VM-internal structure to the caller.
 - Constructing an instance of a class handle runs Ruby's `Class.new` —
   allocating the object and running its `initialize` with an argument slice; a
   raising `initialize` surfaces as a Rust `Err`. Mirrors `magnus`'s
