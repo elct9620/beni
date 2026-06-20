@@ -235,6 +235,28 @@ mod tests {
     }
 
     #[test]
+    fn to_sym_coerces_symbol_string_and_rejects_others() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A symbol value coerces to the same symbol.
+        let sym = Symbol::new(&mrb, c"key");
+        let from_sym = sym.as_value().to_sym(&mrb).expect("a symbol value coerces");
+        assert_eq!(from_sym.to_sym(), sym.to_sym());
+
+        // A string value interns to the symbol of its contents — the id
+        // matches interning the same name directly.
+        let from_str = mrb
+            .str_new(b"key")
+            .as_value()
+            .to_sym(&mrb)
+            .expect("a string value coerces");
+        assert_eq!(from_str.to_sym(), mrb.intern_cstr(c"key"));
+
+        // A value that is neither a symbol nor a string rejects.
+        assert!(42i32.into_value(&mrb).to_sym(&mrb).is_err());
+    }
+
+    #[test]
     fn from_value_discriminates_the_symbol_tag() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let sym_val = Symbol::new(&mrb, c"k").into_value(&mrb);

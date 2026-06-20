@@ -335,6 +335,38 @@ impl Value {
         }
     }
 
+    /// Coerce `self` into a typed `Symbol`: a Symbol value yields its own
+    /// id, a String value interns its contents, and any other value
+    /// surfaces an `Err`. It runs no user Ruby — it dispatches no
+    /// `to_sym` — so the `TypeError` mruby raises for a value that is
+    /// neither a symbol nor a string is caught by `Mrb::protect` into the
+    /// returned `Err`. Unlike `Symbol::new`, which interns Rust bytes,
+    /// this coerces an existing mruby value. Mirrors mruby's
+    /// `mrb_obj_to_sym`.
+    #[inline]
+    pub fn to_sym(self, mrb: &Mrb) -> Result<crate::Symbol, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_obj_to_sym` raises
+                // `TypeError` for a value that is neither a symbol nor a
+                // string — caught by `protect` into `Err` — and otherwise
+                // returns the interned id.
+                let sym = unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) };
+                crate::Symbol::from_sym(sym).as_value()
+            })
+            // SAFETY: an `Ok` result came from `Symbol::from_sym`, so it
+            // carries the Symbol tag the unchecked wrap requires.
+            .map(|v| unsafe { crate::Symbol::from_value_unchecked(v) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// `obj.dup` — a shallow copy of `self`: its instance variables are
     /// copied (not the objects they reference), the copy is unfrozen and
     /// carries no singleton class, and the class's `initialize_copy`

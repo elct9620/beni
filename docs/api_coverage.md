@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 144 (42%) |
+| function | 342 | 332 (97%) | 145 (42%) |
 | macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 180 (39%) |
+| total | 466 | 357 (77%) | 181 (39%) |
 
 ## mruby.h
 
@@ -167,7 +167,7 @@ Legend: ✅ covered · — missing
 | `mrb_obj_itself` | fn | ✅ | — |  |
 | `mrb_obj_new` | fn | ✅ | ✅ | `RClass::obj_new` |
 | `mrb_obj_respond_to` | fn | ✅ | — |  |
-| `mrb_obj_to_sym` | fn | ✅ | — |  |
+| `mrb_obj_to_sym` | fn | ✅ | ✅ | `Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path |
 | `mrb_open` | fn | ✅ | ✅ | `Mrb::open` |
 | `mrb_open_core` | fn | ✅ | — |  |
 | `mrb_p` | fn | ✅ | — |  |

@@ -169,6 +169,7 @@ typed:
   mrb_obj_is_instance_of: Value::is_instance_of
   mrb_obj_is_kind_of: Value::is_kind_of
   mrb_obj_new: RClass::obj_new
+  mrb_obj_to_sym: "`Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path"
   mrb_obj_value: "`RClass::to_value`, `RClass::data_wrap`"
   mrb_open: Mrb::open
   mrb_protect_error: Mrb::protect
