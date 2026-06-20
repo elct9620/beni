@@ -11,7 +11,11 @@
 //! crossing:
 //!
 //!   1. read the call-frame arguments via `mrb_get_args` (the `"o"`
-//!      format repeated per arity),
+//!      format repeated per arity) — for a fixed-arity (`n>0`) cfunc
+//!      this is also the argument-count enforcement point: a
+//!      mismatched count raises `ArgumentError` (via a longjmp that
+//!      crosses the bridge's `catch_unwind`) before any `FromValue`
+//!      conversion runs,
 //!   2. convert each through `FromValue` — a failed conversion
 //!      raises `TypeError` to the Ruby caller **before** the wrapped
 //!      function runs,
@@ -849,6 +853,51 @@ mod tests {
         let got = receiver
             .funcall(&mrb, c"add", &args)
             .expect("the call must not raise");
+        assert_eq!(i32::from_value(got), Some(3));
+    }
+
+    #[test]
+    fn fixed_arity_raises_argument_error_on_wrong_count() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = fresh_class(&mrb, c"BeniArityAdder");
+        class
+            .define_method(&mrb, c"add", method!(add, 2))
+            .expect("registering the fixed-arity method must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+
+        // `mrb_get_args` enforces the `MRB_ARGS_REQ(2)` count before any
+        // `FromValue` conversion runs, raising `ArgumentError` whose
+        // longjmp crosses the bridge's `catch_unwind` — both too few and
+        // too many positionals take that path.
+        for wrong in [
+            vec![Value::from_int(&mrb, 1)],
+            vec![
+                Value::from_int(&mrb, 1),
+                Value::from_int(&mrb, 2),
+                Value::from_int(&mrb, 3),
+            ],
+        ] {
+            let err = receiver
+                .funcall(&mrb, c"add", &wrong)
+                .expect_err("a wrong argument count must surface as Err");
+            match err {
+                Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
+                Error::Panic(_) => panic!("a wrong argument count must raise, not panic"),
+            }
+        }
+
+        // The count-error longjmp left the VM intact: a correctly-counted
+        // call still dispatches and returns.
+        let got = receiver
+            .funcall(
+                &mrb,
+                c"add",
+                &[Value::from_int(&mrb, 1), Value::from_int(&mrb, 2)],
+            )
+            .expect("the VM survives the count-error longjmp and the next call runs");
         assert_eq!(i32::from_value(got), Some(3));
     }
 
