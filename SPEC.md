@@ -358,9 +358,13 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   through the `Module` and `Object` traits (mirroring `magnus::Module` and
   `magnus::Object`), accepting Rust closures whose arguments and return
   values cross the boundary through `IntoValue` / `FromValue`; the `Module`
-  trait also binds constants, aliases existing methods, and mixes another module
-  into the handle. A definition, registration, alias, or module inclusion mruby
-  rejects — including a cyclic include — surfaces as a Rust `Err`.
+  trait also binds constants, aliases existing methods, mixes another module
+  into the handle, and undefines a method — Ruby's `Module#undef_method` —
+  marking the name as not defined on the handle even when an ancestor defines
+  it, with a class-method form that undefines a singleton method. A definition,
+  registration, alias, module inclusion, or undefinition mruby rejects —
+  including a cyclic include, or undefining a name absent from the handle and
+  its ancestors — surfaces as a Rust `Err`.
 - Every definition and lookup keyed by a name — class, module, method, private
   method, module function, class method, constant, the class/module lookups
   on `Mrb` and within a namespace, and method dispatch on a value — accepts the
