@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 163 (48%) |
+| function | 342 | 332 (97%) | 164 (48%) |
 | macro | 124 | 26 (21%) | 37 (30%) |
-| total | 466 | 358 (77%) | 200 (43%) |
+| total | 466 | 358 (77%) | 201 (43%) |
 
 ## mruby.h
 
@@ -523,7 +523,7 @@ Legend: ✅ covered · — missing
 | `mrb_const_defined` | fn | ✅ | ✅ | `Value::const_defined` |
 | `mrb_const_defined_at` | fn | ✅ | — |  |
 | `mrb_const_get` | fn | ✅ | ✅ | `Value::const_get` |
-| `mrb_const_remove` | fn | ✅ | — |  |
+| `mrb_const_remove` | fn | ✅ | ✅ | `Value::const_remove` — the value-level constant removal; discards the former value (the C API is `void`) and treats an absent constant as a no-op |
 | `mrb_const_set` | fn | ✅ | ✅ | `Value::const_set` |
 | `mrb_cv_defined` | fn | ✅ | — |  |
 | `mrb_cv_get` | fn | ✅ | ✅ | `Value::cv_get` |

@@ -1186,6 +1186,32 @@ impl Value {
         }
     }
 
+    /// `mrb_const_remove(mrb, self, sym)` — remove constant `sym` from
+    /// `self` (the module or class value), discarding its former value.
+    /// An absent constant is a no-op; surfaces an `Err` when `self` is
+    /// not a class or module, or when it is frozen.
+    #[inline]
+    pub fn const_remove(self, mrb: &Mrb, sym: sys::mrb_sym) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` originates from the same VM. `mrb_const_remove`
+                // raises `TypeError` when `self` is not a class or
+                // module and `FrozenError` when it is frozen — both
+                // caught by `protect`.
+                unsafe { sys::mrb_const_remove(mrb.as_ptr(), self.0, sym) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_cv_get(mrb, self, sym)` — read class variable `sym` from
     /// `self` (the module or class value), walking the ancestry.
     /// Surfaces an `Err` when `sym` resolves to no class variable.
@@ -2160,6 +2186,40 @@ mod linked_tests {
         // instead of unwinding across the call.
         assert!(matches!(
             42i32.into_value(&mrb).const_set(&mrb, bar, Value::nil()),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn const_remove_removes_a_constant_and_surfaces_a_non_module_receiver_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"const_remove_test.rb")
+            .expect("allocating the context must succeed");
+
+        let module =
+            cxt.load_nstring(b"module BeniConstRemoveHost; GONE = 5; end; BeniConstRemoveHost");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // Removing a defined constant succeeds and clears its presence.
+        let gone = mrb.intern_cstr(c"GONE");
+        assert!(module.const_defined(&mrb, gone), "GONE is defined");
+        module
+            .const_remove(&mrb, gone)
+            .expect("removing a defined constant must succeed");
+        assert!(
+            !module.const_defined(&mrb, gone),
+            "GONE is gone after removal"
+        );
+
+        // Removing an absent constant is a no-op, not an error.
+        module
+            .const_remove(&mrb, gone)
+            .expect("removing an absent constant is a no-op");
+
+        // A non-module receiver raises TypeError — surfaced as Err
+        // instead of unwinding across the call.
+        assert!(matches!(
+            42i32.into_value(&mrb).const_remove(&mrb, gone),
             Err(Error::Exception(_))
         ));
     }
