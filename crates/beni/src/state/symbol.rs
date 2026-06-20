@@ -43,6 +43,34 @@ impl Mrb {
         }
     }
 
+    /// `mrb_intern(mrb, name, len)` — intern a borrowed byte slice as a
+    /// Symbol, creating it when absent. The general byte-taking intern:
+    /// it interns the exact bytes the slice spans, so a name that embeds
+    /// a NUL or is not NUL-terminated interns whole where `intern_cstr`
+    /// would stop at the first NUL. mruby copies the bytes, so the borrow
+    /// need not outlive the call (unlike `intern_static`).
+    #[inline]
+    pub fn intern(&self, name: &[u8]) -> Symbol {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive; `name` is a valid byte slice and its
+            // length is passed alongside, so the borrow need not be NUL-safe.
+            let sym = unsafe {
+                sys::mrb_intern(
+                    self.as_ptr(),
+                    name.as_ptr() as *const core::ffi::c_char,
+                    name.len(),
+                )
+            };
+            Symbol::from_sym(sym)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = name;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_intern_static(mrb, name, len)` — intern `name` as a Symbol
     /// without copying its bytes, the no-copy counterpart of `intern_cstr`
     /// / `intern_str`. mruby keeps the borrowed pointer and never frees it,
@@ -211,6 +239,33 @@ mod tests {
         let via_str = mrb.intern_str(mrb.str_new(b"beni_sym").as_value());
 
         assert_eq!(via_str, mrb.intern_cstr(c"beni_sym"));
+    }
+
+    #[test]
+    fn intern_interns_a_byte_slice_by_length_creating_the_symbol() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A runtime byte slice interns to a Symbol whose name round-trips,
+        // and whose id equals interning the same name through the C-string
+        // path — proving it's the same interned symbol.
+        let sym = mrb.intern(b"beni_sym");
+        assert_eq!(sym.name(&mrb), Some("beni_sym"));
+        assert_eq!(sym.to_sym(), mrb.intern_cstr(c"beni_sym"));
+
+        // It's length-based, not NUL-terminated: a slice carrying trailing
+        // bytes past where a C string would stop interns those bytes too,
+        // yielding a distinct symbol from the truncated name.
+        let exact = b"abc";
+        let padded = b"abc\0xyz";
+        assert_eq!(mrb.intern(&exact[..]).name_bytes(&mrb), Some(&b"abc"[..]));
+        assert_eq!(
+            mrb.intern(&padded[..]).name_bytes(&mrb),
+            Some(&b"abc\0xyz"[..])
+        );
+        assert_ne!(
+            mrb.intern(&exact[..]).to_sym(),
+            mrb.intern(&padded[..]).to_sym()
+        );
     }
 
     #[test]

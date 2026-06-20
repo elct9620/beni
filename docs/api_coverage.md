@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 192 (56%) |
+| function | 342 | 338 (99%) | 193 (56%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 245 (53%) |
+| total | 466 | 366 (79%) | 246 (53%) |
 
 ## mruby.h
 
@@ -131,7 +131,7 @@ Legend: ✅ covered · — missing
 | `mrb_incremental_gc` | fn | ✅ | — |  |
 | `mrb_inspect` | fn | ✅ | ✅ | `Value::inspect` |
 | `mrb_int` | macro | ✅ | — |  |
-| `mrb_intern` | fn | ✅ | — |  |
+| `mrb_intern` | fn | ✅ | ✅ | `Mrb::intern` — the general byte-taking creating intern: interns the exact bytes a borrowed slice spans (length-based, so a name embedding a NUL or not NUL-terminated interns whole), creating the Symbol when absent where `mrb_intern_check` only tests |
 | `mrb_intern_check` | fn | ✅ | ✅ | `Mrb::intern_check` — the non-creating presence test over name bytes, `Some` Symbol when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to |
 | `mrb_intern_check_cstr` | fn | ✅ | ✅ | `Mrb::intern_check` — a NUL-terminated name is bytes passed to the check primitive this convenience wrapper forwards to |
 | `mrb_intern_check_str` | fn | ✅ | ✅ | `Mrb::intern_check` — an mruby String value's bytes pass to the check primitive this convenience wrapper forwards to |

@@ -175,6 +175,7 @@ typed:
   mrb_inspect: Value::inspect
   mrb_int_value: Value::from_int
   mrb_integer_to_str: "`Value::int_to_str` — render an Integer value to an RString in a radix (Ruby's Integer#to_s(base)); guards the Integer tag (TypeError) and raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys`"
+  mrb_intern: "`Mrb::intern` — the general byte-taking creating intern: interns the exact bytes a borrowed slice spans (length-based, so a name embedding a NUL or not NUL-terminated interns whole), creating the Symbol when absent where `mrb_intern_check` only tests"
   mrb_intern_check: "`Mrb::intern_check` — the non-creating presence test over name bytes, `Some` Symbol when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to"
   mrb_intern_check_cstr: "`Mrb::intern_check` — a NUL-terminated name is bytes passed to the check primitive this convenience wrapper forwards to"
   mrb_intern_check_str: "`Mrb::intern_check` — an mruby String value's bytes pass to the check primitive this convenience wrapper forwards to"
