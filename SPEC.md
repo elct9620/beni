@@ -538,7 +538,8 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   already-interned `Symbol` key is reused without re-interning. A consumer
   holding a `Symbol` reaches the definition or lookup without a redundant
   intern; the result is identical to passing the equivalent name, since both
-  resolve to the same interned symbol.
+  resolve to the same interned symbol. A method alias keys both the new and the
+  original name this way — each accepted as a symbol-or-name key independently.
 - A built-in exception-class lookup on `Mrb` guarantees its result is a class
   descending from `Exception`: it surfaces a Rust `Err` when the name resolves
   to no constant, when the constant is not a class, and when the resolved class
