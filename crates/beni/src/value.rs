@@ -952,6 +952,55 @@ impl Value {
         }
     }
 
+    /// `mrb_funcall_with_block(mrb, self, sym, argc, argv, block)` —
+    /// invoke the method named by `name` with `args`, handing it `block`
+    /// for the method to yield to, under `Mrb::protect`. The block-passing
+    /// counterpart to `Value::funcall`: a method wanting no block uses
+    /// `funcall`/`funcall_argv` rather than this with a nil block. The
+    /// dispatched method runs arbitrary Ruby and may raise, which `protect`
+    /// catches into `Err` rather than long-jumping across FFI. Mirrors
+    /// magnus's `funcall_with_block`.
+    #[inline]
+    pub fn funcall_with_block<K: crate::IntoSym>(
+        self,
+        mrb: &Mrb,
+        name: K,
+        args: &[Value],
+        block: crate::Proc,
+    ) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            let sym = name.into_sym(mrb);
+            let block_raw = block.as_raw();
+            mrb.protect(|mrb| {
+                // `Value` is `#[repr(transparent)]` over `mrb_value`, so the
+                // slice layout matches mruby's argv exactly — the cast is a
+                // no-op at codegen level.
+                let argv = args.as_ptr() as *const sys::mrb_value;
+                // SAFETY: `mrb` is alive inside the protect frame; `self`,
+                // every `args` entry, and `block` originate from the same VM
+                // by the single-VM contract; `sym` was interned against the
+                // same VM. `mrb_funcall_with_block` dispatches arbitrary Ruby
+                // and may raise — caught by `protect`.
+                Value(unsafe {
+                    sys::mrb_funcall_with_block(
+                        mrb.as_ptr(),
+                        self.0,
+                        sym,
+                        args.len() as sys::mrb_int,
+                        argv,
+                        block_raw,
+                    )
+                })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name, args, block);
+            crate::not_linked()
+        }
+    }
+
     /// TRUE when `self` is `nil`. Pure tag predicate via mruby's
     /// `mrb_nil_p(v)`, reached through bindgen's static-fn trampoline
     /// — the `wrapper.h` shim wraps the macro so the C compiler reads
@@ -2165,6 +2214,55 @@ mod linked_tests {
             .expect("the symbol key must dispatch");
         assert_eq!(by_name.to_string(&mrb), by_sym.to_string(&mrb));
         assert_eq!(by_sym.to_string(&mrb), "42");
+    }
+
+    #[test]
+    fn funcall_with_block_yields_to_the_passed_block() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A block that records each doubled element into a global array.
+        // `Array#each` yields every element to it; reading `$seen` back
+        // proves the block reached the dispatched method and ran.
+        let cxt = Ccontext::new(&mrb, c"funcall_block.rb")
+            .expect("allocating the compile context must succeed");
+        cxt.load_nstring(b"$seen = []");
+        let block = Proc::from_value(cxt.load_nstring(b"proc { |x| $seen << x * 2 }"))
+            .expect("a proc literal carries MRB_TT_PROC");
+
+        let receiver = cxt.load_nstring(b"[1, 2, 3]");
+        receiver
+            .funcall_with_block(&mrb, c"each", &[], block)
+            .expect("yielding through each must come back Ok");
+
+        assert_eq!(cxt.load_nstring(b"$seen").to_string(&mrb), "[2, 4, 6]");
+    }
+
+    #[test]
+    fn funcall_with_block_surfaces_a_raised_exception_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let cxt = Ccontext::new(&mrb, c"funcall_block_raise.rb")
+            .expect("allocating the compile context must succeed");
+        let block = Proc::from_value(cxt.load_nstring(b"proc { raise 'boom from block' }"))
+            .expect("a proc literal carries MRB_TT_PROC");
+
+        // The block raises while `each` yields to it; the protect frame
+        // catches the raise into `Err` rather than long-jumping across FFI.
+        let receiver = cxt.load_nstring(b"[1]");
+        let err = receiver
+            .funcall_with_block(&mrb, c"each", &[], block)
+            .expect_err("a raising block must surface as Err");
+        match err {
+            Error::Exception(_) => assert!(err.message(&mrb).contains("boom from block")),
+            Error::Panic(_) => panic!("a Ruby raise must surface as Error::Exception"),
+        }
+
+        // The VM stays usable after the protected raise.
+        let again = 7i32
+            .into_value(&mrb)
+            .funcall(&mrb, c"to_s", &[])
+            .expect("the VM must survive the protected raise");
+        assert_eq!(again.to_string(&mrb), "7");
     }
 
     #[test]

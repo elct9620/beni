@@ -147,6 +147,7 @@ typed:
   mrb_float_value: Value::from_float
   mrb_fixnum_to_str: "`Value::int_to_str` — the macro `mrb_fixnum_to_str(mrb, x, base)` is a `#define` alias of `mrb_integer_to_str`, so the same Rust item graduates it; no separate item is needed"
   mrb_funcall_argv: "`Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym)"
+  mrb_funcall_with_block: "`Value::funcall_with_block` — dispatch passing an explicit typed `Proc` block"
   mrb_gc_arena_restore: "`ArenaScope::keep`/`drop` (see ArenaScope extension)"
   mrb_gc_arena_save: "`Mrb::arena_scope` (see ArenaScope extension)"
   mrb_gc_protect: "`ArenaScope::keep` (see ArenaScope extension)"

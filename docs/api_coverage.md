@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 193 (56%) |
+| function | 342 | 338 (99%) | 194 (57%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 246 (53%) |
+| total | 466 | 366 (79%) | 247 (53%) |
 
 ## mruby.h
 
@@ -112,7 +112,7 @@ Legend: ✅ covered · — missing
 | `mrb_funcall` | fn | ✅ | — |  |
 | `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym) |
 | `mrb_funcall_id` | fn | ✅ | — |  |
-| `mrb_funcall_with_block` | fn | ✅ | — |  |
+| `mrb_funcall_with_block` | fn | ✅ | ✅ | `Value::funcall_with_block` — dispatch passing an explicit typed `Proc` block |
 | `mrb_garbage_collect` | fn | ✅ | — |  |
 | `mrb_gc_arena_restore` | macro | ✅ | ✅ | `ArenaScope::keep`/`drop` (see ArenaScope extension) |
 | `mrb_gc_arena_save` | macro | ✅ | ✅ | `Mrb::arena_scope` (see ArenaScope extension) |
