@@ -496,6 +496,33 @@ impl RString {
         }
     }
 
+    /// `mrb_str_intern(mrb, self)` — the typed `Symbol` naming this
+    /// string's own bytes, Ruby's `String#intern`, creating the symbol
+    /// when it does not yet exist. It interns the receiver's bytes
+    /// directly (`mrb_symbol_value(mrb_intern_str(..))`), dispatching
+    /// nothing and never raising. Distinct from `Value::to_sym`, which
+    /// coerces an arbitrary value and can raise.
+    #[inline]
+    pub fn intern(self, mrb: &Mrb) -> crate::Symbol {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is String-tagged by the newtype contract and
+            // shares the VM; `mrb_str_intern` reads its bytes and returns a
+            // Symbol-tagged value, so the unchecked wrap is sound.
+            unsafe {
+                crate::Symbol::from_value_unchecked(Value::from_raw(sys::mrb_str_intern(
+                    mrb.as_ptr(),
+                    self.0.as_raw(),
+                )))
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_string_cstr(mrb, self)` — the bytes as an owned, NUL-terminated
     /// `CString` for a C boundary. A C string cannot carry an embedded NUL,
     /// so this read is fallible: an embedded NUL raises `ArgumentError`, and
@@ -812,6 +839,19 @@ mod tests {
         // check rejects it before the byte compare.
         let ab = mrb.str_new(b"ab");
         assert!(!ab.eq(&mrb, abc));
+    }
+
+    #[test]
+    fn intern_names_the_symbol_for_the_receiver_bytes() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // The interned symbol names the string's own bytes.
+        let sym = mrb.str_new(b"flags").intern(&mrb);
+        assert_eq!(sym.name(&mrb), Some("flags"));
+
+        // Its id equals interning the same name directly — a wrong tag or
+        // boxing in the unchecked wrap would diverge here.
+        assert_eq!(sym.to_sym(), mrb.intern_cstr(c"flags"));
     }
 
     #[test]

@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 169 (49%) |
+| function | 342 | 332 (97%) | 170 (50%) |
 | macro | 124 | 26 (21%) | 37 (30%) |
-| total | 466 | 358 (77%) | 206 (44%) |
+| total | 466 | 358 (77%) | 207 (44%) |
 
 ## mruby.h
 
@@ -447,7 +447,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_equal` | fn | ✅ | ✅ | `RString::eq` — total byte equality of two strings (length check then memcmp); dispatches nothing and never raises |
 | `mrb_str_index` | fn | ✅ | ✅ | `RString::index` — byte index of the first substring match at or after an offset, or None when absent; never raises |
 | `mrb_str_index_lit` | macro | — | — |  |
-| `mrb_str_intern` | fn | ✅ | — |  |
+| `mrb_str_intern` | fn | ✅ | ✅ | `RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns directly and never raises. Distinct from `mrb_obj_to_sym` → `Value::to_sym`, which coerces an arbitrary value and can raise, and from `Symbol::new`, which interns Rust bytes |
 | `mrb_str_modify` | fn | ✅ | — |  |
 | `mrb_str_modify_keep_ascii` | fn | ✅ | — |  |
 | `mrb_str_new_capa` | fn | ✅ | ✅ | `Mrb::str_new_capa` |
