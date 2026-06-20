@@ -405,6 +405,13 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   does not descend from `Exception`. This is the typed path to a built-in
   exception class — `RuntimeError`, `ArgumentError`, `TypeError` — for raising
   from registered code.
+- The class/module lookup family also answers, as a total boolean predicate,
+  whether a class or module is defined under a given name — top-level on the
+  `Mrb` handle and within a namespace through the `Module` trait, both
+  symbol-or-name keyed. Unlike the fetching lookups, the predicate never raises:
+  a name bound in that scope answers `true`, an unbound one `false` rather than
+  surfacing an `Err`. It is the precondition test a consumer runs before a
+  fetching lookup that would otherwise raise on a missing name.
 - A class handle resolves to its real class — its singleton-class and
   include-class links skipped — yielding the first user-facing class in the
   chain. A handle that is already a real class returns itself; the resolution
