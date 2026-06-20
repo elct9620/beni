@@ -11,7 +11,7 @@
 //! `entry`) live here. Named-value constructors that magnus places on
 //! the type itself stay there too (`Symbol::new`).
 
-use crate::{Error, Mrb, Value};
+use crate::{Error, Mrb, RString, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
@@ -280,6 +280,36 @@ impl Array {
         }
     }
 
+    /// `mrb_ary_join(mrb, self, sep)` — render the elements into one
+    /// string with `sep` between them, Ruby's `Array#join`. Each element's
+    /// `to_s` runs, so a raise inside it surfaces as `Err`; the call runs
+    /// under `Mrb::protect`. A `None` separator joins with nothing between,
+    /// the way Ruby's `join` treats a `nil` argument.
+    #[inline]
+    pub fn join(self, mrb: &Mrb, sep: Option<RString>) -> Result<RString, Error> {
+        #[cfg(mruby_linked)]
+        {
+            let sep = sep.map_or_else(Value::nil, RString::as_value);
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // is Array-tagged by the `from_value_unchecked` contract;
+                // `sep` is nil or a String-tagged value from the same VM.
+                // `mrb_ary_join` dispatches each element's `to_s`, which may
+                // raise — caught by `protect` into `Err`.
+                Value::from_raw(unsafe {
+                    sys::mrb_ary_join(mrb.as_ptr(), self.0.as_raw(), sep.as_raw())
+                })
+            })
+            // SAFETY: `mrb_ary_join` returns a String-tagged value.
+            .map(|v| unsafe { RString::from_value_unchecked(v) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sep);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_ary_dup(mrb, self)` — a shallow copy, Ruby's `Array#dup`. It
     /// does not mutate the receiver, so it never fails.
     #[inline]
@@ -509,6 +539,48 @@ mod tests {
         ary.resize(&mrb, 1).expect("truncate succeeds");
         assert_eq!(ary.len(), 1);
         assert_eq!(ary.entry(0).to_string(&mrb), "a");
+    }
+
+    #[test]
+    fn join_renders_elements_with_a_separator() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        ary.push(&mrb, crate::Value::from_int(&mrb, 1))
+            .expect("push succeeds");
+        ary.push(&mrb, crate::Value::from_int(&mrb, 2))
+            .expect("push succeeds");
+        ary.push(&mrb, crate::Value::from_int(&mrb, 3))
+            .expect("push succeeds");
+
+        // Each element's to_s runs and the separator sits between adjacent
+        // renderings.
+        let joined = ary
+            .join(&mrb, Some(mrb.str_new(b",")))
+            .expect("join with a separator succeeds");
+        assert_eq!(joined.to_bytes(), b"1,2,3".to_vec());
+
+        // A None separator concatenates the renderings with nothing between.
+        let glued = ary
+            .join(&mrb, None)
+            .expect("join without a separator succeeds");
+        assert_eq!(glued.to_bytes(), b"123".to_vec());
+    }
+
+    #[test]
+    fn join_surfaces_a_raising_element_to_s_as_err() {
+        use crate::{Array, Ccontext, FromValue};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"join_raise.rb").expect("allocating the context must succeed");
+
+        // An element whose to_s raises long-jumps out of mrb_ary_join;
+        // protect catches it into Err rather than unwinding across FFI.
+        let ary = Array::from_value(
+            cxt.load_nstring(b"o = Object.new; def o.to_s; raise 'boom'; end; [o]"),
+        )
+        .expect("an Array literal is Array-tagged");
+        assert!(matches!(ary.join(&mrb, None), Err(Error::Exception(_))));
     }
 
     #[test]

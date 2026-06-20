@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 159 (46%) |
+| function | 342 | 332 (97%) | 160 (47%) |
 | macro | 124 | 25 (20%) | 37 (30%) |
-| total | 466 | 357 (77%) | 196 (42%) |
+| total | 466 | 357 (77%) | 197 (42%) |
 
 ## mruby.h
 
@@ -240,7 +240,7 @@ Legend: ✅ covered · — missing
 | `mrb_ary_concat` | fn | ✅ | ✅ | `Array::concat` |
 | `mrb_ary_dup` | fn | ✅ | ✅ | `Array::dup` |
 | `mrb_ary_entry` | fn | ✅ | ✅ | `Array::entry`, `Value::ary_entry` |
-| `mrb_ary_join` | fn | ✅ | — |  |
+| `mrb_ary_join` | fn | ✅ | ✅ | `Array::join` |
 | `mrb_ary_make_shared_copy` | fn | ✅ | — |  |
 | `mrb_ary_modify` | fn | ✅ | — |  |
 | `mrb_ary_new` | fn | ✅ | ✅ | `Mrb::ary_new` |
