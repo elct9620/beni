@@ -251,16 +251,25 @@ impl RString {
     pub fn substr(self, mrb: &Mrb, beg: i64, len: i64) -> Option<RString> {
         #[cfg(mruby_linked)]
         {
+            // An offset or length outside the archive's `mrb_int` width
+            // names no position; saturate it to the nearest bound so the
+            // clamp still sees "past the beginning" / "past the end" rather
+            // than a truncated value landing on a wrong in-range position.
+            let beg = sys::mrb_int::try_from(beg).unwrap_or(if beg < 0 {
+                sys::mrb_int::MIN
+            } else {
+                sys::mrb_int::MAX
+            });
+            let len = sys::mrb_int::try_from(len).unwrap_or(if len < 0 {
+                sys::mrb_int::MIN
+            } else {
+                sys::mrb_int::MAX
+            });
             // SAFETY: `self` is String-tagged by the newtype contract;
             // `mrb` is alive; `mrb_str_substr` clamps the range and reads
             // only the byte buffer, returning a fresh String or `nil`.
             let v = Value::from_raw(unsafe {
-                sys::mrb_str_substr(
-                    mrb.as_ptr(),
-                    self.0.as_raw(),
-                    beg as sys::mrb_int,
-                    len as sys::mrb_int,
-                )
+                sys::mrb_str_substr(mrb.as_ptr(), self.0.as_raw(), beg, len)
             });
             if v.is_nil() {
                 None
@@ -289,6 +298,19 @@ impl RString {
     pub fn index(self, mrb: &Mrb, needle: &[u8], offset: i64) -> Option<usize> {
         #[cfg(mruby_linked)]
         {
+            // An offset outside the archive's `mrb_int` width names no
+            // position; saturate it to the nearest bound so the scan still
+            // sees "past the beginning" / "past the end" rather than a
+            // truncated value landing on a wrong in-range offset. The needle
+            // length is non-negative; a length past `mrb_int::MAX` cannot fit
+            // before the end either, so it saturates upward to stay "not
+            // found".
+            let offset = sys::mrb_int::try_from(offset).unwrap_or(if offset < 0 {
+                sys::mrb_int::MIN
+            } else {
+                sys::mrb_int::MAX
+            });
+            let slen = sys::mrb_int::try_from(needle.len()).unwrap_or(sys::mrb_int::MAX);
             // SAFETY: `self` is String-tagged by the newtype contract;
             // `mrb` is alive; `needle` is read-only and only scanned for
             // its `len` bytes. `mrb_str_index` does a pure `mrb_memsearch`
@@ -298,8 +320,8 @@ impl RString {
                     mrb.as_ptr(),
                     self.0.as_raw(),
                     needle.as_ptr() as *const core::ffi::c_char,
-                    needle.len() as sys::mrb_int,
-                    offset as sys::mrb_int,
+                    slen,
+                    offset,
                 )
             };
             if pos < 0 {
@@ -562,9 +584,10 @@ impl RString {
     /// `String#to_i`. The `base` is 2 through 36, or 0 to auto-detect a
     /// leading `0x` / `0b` / `0o` prefix. With strict checking on, any input
     /// that is not a clean integer in the base — trailing junk, an empty
-    /// string, or a `base` outside that domain — raises `ArgumentError`; the
-    /// call runs under `Mrb::protect`, so that surfaces as `Err` rather than
-    /// long-jumping.
+    /// string, or a positive `base` outside 2 through 36 — raises
+    /// `ArgumentError`; the call runs under `Mrb::protect`, so that surfaces
+    /// as `Err` rather than long-jumping. A negative `base` is not an error:
+    /// `-n` aliases the radix `n` with prefix detection disabled.
     #[inline]
     pub fn to_i(self, mrb: &Mrb, base: i32) -> Result<sys::mrb_int, Error> {
         #[cfg(mruby_linked)]
@@ -602,9 +625,11 @@ impl RString {
     /// integer begins the bytes rather than rejecting them — so `"12abc"` reads
     /// `12`, `"hello"` and `""` read `0`, and malformed content never surfaces
     /// an `Err`. The `base` is 2 through 36, or 0 to auto-detect a leading `0x`
-    /// / `0b` / `0o` prefix; a `base` outside that domain is the one input the
-    /// lenient parse cannot interpret and raises `ArgumentError`, which the
-    /// surrounding `Mrb::protect` surfaces as `Err` rather than long-jumping.
+    /// / `0b` / `0o` prefix; a positive `base` outside 2 through 36 is the one
+    /// input the lenient parse cannot interpret and raises `ArgumentError`,
+    /// which the surrounding `Mrb::protect` surfaces as `Err` rather than
+    /// long-jumping. A negative `base` is not an error: `-n` aliases the radix
+    /// `n` with prefix detection disabled.
     #[inline]
     pub fn to_inum(self, mrb: &Mrb, base: i32) -> Result<sys::mrb_int, Error> {
         #[cfg(mruby_linked)]
@@ -1006,6 +1031,19 @@ mod tests {
     }
 
     #[test]
+    fn substr_saturates_an_out_of_width_beg_rather_than_wrapping() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let s = mrb.str_new(b"Hello");
+
+        // 0x1_0000_0002 is out of an MRB_INT32 archive's `mrb_int` range; a
+        // truncating `as` cast would wrap it to the in-range beg 2 and slice
+        // "llo". Saturating to the upper bound keeps it "past the end", so
+        // the read is None — the same as any genuinely out-of-range beg.
+        assert!(s.substr(&mrb, 0x1_0000_0002, 1).is_none());
+    }
+
+    #[test]
     fn index_finds_the_first_match_at_or_after_the_offset() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
@@ -1029,6 +1067,20 @@ mod tests {
 
         // An offset past the end finds nothing.
         assert!(s.index(&mrb, b"hello", 100).is_none());
+    }
+
+    #[test]
+    fn index_saturates_an_out_of_width_offset_rather_than_wrapping() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let s = mrb.str_new(b"hello, hello");
+
+        // 0x1_0000_0003 is out of an MRB_INT32 archive's `mrb_int` range; a
+        // truncating `as` cast would wrap it to the in-range offset 3 and
+        // report the second "hello" at byte 7. Saturating to the upper bound
+        // keeps it "past the end", so nothing is found — the same as any
+        // genuinely out-of-range offset.
+        assert!(s.index(&mrb, b"hello", 0x1_0000_0003).is_none());
     }
 
     #[test]
@@ -1076,6 +1128,21 @@ mod tests {
             mrb.str_new(b"hello").to_i(&mrb, 10),
             Err(Error::Exception(_))
         ));
+    }
+
+    #[test]
+    fn to_i_aliases_a_negative_base_to_its_radix_without_raising() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A negative base is not an illegal radix: -16 aliases radix 16 with
+        // prefix detection disabled, so the bytes parse in base 16 instead of
+        // raising ArgumentError.
+        assert_eq!(
+            mrb.str_new(b"ff")
+                .to_i(&mrb, -16)
+                .expect("a negative base aliases its radix"),
+            255
+        );
     }
 
     #[test]
