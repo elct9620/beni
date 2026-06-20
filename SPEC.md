@@ -325,7 +325,7 @@ raise/return contract:
 
 | Operation kind | Surfaces `Err` | Returns |
 |---|---|---|
-| Mutates a receiver — array append/remove/extend/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment, class-variable assignment, constant assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables; a constant assignment also when the receiver is not a class or module | `Result` |
+| Mutates a receiver — array append/remove/extend/replace/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment, class-variable assignment, constant assignment | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables; a constant assignment also when the receiver is not a class or module | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an array join rendering each element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types, or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric, or an infinite / NaN float converts to integer; the coerced value carries no String / Array / Hash tag | `Result` |
@@ -345,6 +345,7 @@ The typed array carries Ruby `Array`'s surface:
 | resize | set the length — growing with `nil` to reach a longer length, truncating to a shorter one |
 | remove | take a value from either end |
 | extend | append another array's elements |
+| replace | make its contents a copy of another array's, in place — the receiver is mutated to hold those elements, not returned as a new array |
 | join | the elements rendered into one string, separated by a given separator — each element's `to_s` runs and a raise inside it surfaces as an `Err`; an absent separator concatenates the renderings with nothing between them |
 | clear | empty it |
 | duplicate | copy it |
