@@ -574,9 +574,15 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 - A method registered for any arity reads its own call frame instead of
   receiving converted positionals: a shape-typed read projects the frame
   against a format marker into a typed tuple, a single-argument read returns
-  the one required argument, and a count read returns the number of arguments
-  passed. The single-argument read raises `ArgumentError` to the Ruby caller
-  unless exactly one positional argument is present.
+  the one required argument, a count read returns the number of arguments
+  passed, and an argument-array read returns all positional arguments as a
+  borrowed slice. The single-argument read raises `ArgumentError` to the Ruby
+  caller unless exactly one positional argument is present. The count read and
+  the argument-array read are total — they never raise. The argument-array
+  slice has exactly the count read's length and borrows the call frame's
+  argument buffer: it is valid only for the duration of the current call, a
+  borrow the typed surface ties to the `Mrb` handle the body holds. An empty
+  argument list yields an empty slice.
 - A typed method registration declares a fixed count of required positionals
   and, after them, a count of optional positionals: each required positional
   crosses through `FromValue`, and each optional positional crosses as an
