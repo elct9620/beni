@@ -913,7 +913,7 @@ mod tests {
 
         // The interned symbol names the string's own bytes.
         let sym = mrb.str_new(b"flags").intern(&mrb);
-        assert_eq!(sym.name(&mrb), Some("flags"));
+        assert_eq!(sym.name(&mrb).as_deref(), Some("flags"));
 
         // Its id equals interning the same name directly — a wrong tag or
         // boxing in the unchecked wrap would diverge here.

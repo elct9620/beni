@@ -105,14 +105,15 @@ impl Symbol {
         crate::not_linked()
     }
 
-    /// The symbol's name, via `to_sym` + `Mrb::sym_name`. `None` when
-    /// mruby yields a NULL name. A name carrying an embedded NUL comes
-    /// back escaped to its quoted dump form; `name_bytes` reads the raw
-    /// bytes — also the path for any non-UTF-8 name, which mruby's escaping
-    /// keeps unreachable here. The slice points into mruby's interned
-    /// storage, which lives for the VM's duration.
+    /// The symbol's name as an owned `String`, via `to_sym` +
+    /// `Mrb::sym_name`. `None` when mruby yields a NULL name. A name
+    /// carrying an embedded NUL comes back escaped to its quoted dump form;
+    /// `name_bytes` reads the raw bytes — also the path for any non-UTF-8
+    /// name, which mruby's escaping keeps unreachable here. A short name
+    /// unpacks into a per-read scratch buffer the next name read overwrites,
+    /// so the name is copied out rather than borrowed.
     #[inline]
-    pub fn name(self, mrb: &Mrb) -> Option<&'static str> {
+    pub fn name(self, mrb: &Mrb) -> Option<String> {
         #[cfg(mruby_linked)]
         {
             mrb.sym_name(self.to_sym())
@@ -124,11 +125,14 @@ impl Symbol {
         }
     }
 
-    /// The symbol's raw name bytes, via `to_sym` + `Mrb::sym_name_len` —
-    /// an embedded NUL preserved unescaped, where `name` returns the
-    /// quoted dump form. `None` when mruby yields a NULL name.
+    /// The symbol's raw name bytes as an owned `Vec<u8>`, via `to_sym` +
+    /// `Mrb::sym_name_len` — an embedded NUL preserved unescaped, where
+    /// `name` returns the quoted dump form. `None` when mruby yields a NULL
+    /// name. A short name unpacks into a per-read scratch buffer the next
+    /// name read overwrites, so the bytes are copied out rather than
+    /// borrowed.
     #[inline]
-    pub fn name_bytes(self, mrb: &Mrb) -> Option<&'static [u8]> {
+    pub fn name_bytes(self, mrb: &Mrb) -> Option<Vec<u8>> {
         #[cfg(mruby_linked)]
         {
             mrb.sym_name_len(self.to_sym())
@@ -140,12 +144,15 @@ impl Symbol {
         }
     }
 
-    /// The symbol's dump form, via `to_sym` + `Mrb::sym_dump` — the bare
-    /// name for a plain identifier, otherwise the quoted and escaped form
-    /// (Ruby's `Symbol#inspect` without the leading colon). `None` when
-    /// mruby yields a NULL name. Reads without dispatching and never raises.
+    /// The symbol's dump form as an owned `String`, via `to_sym` +
+    /// `Mrb::sym_dump` — the bare name for a plain identifier, otherwise the
+    /// quoted and escaped form (Ruby's `Symbol#inspect` without the leading
+    /// colon). `None` when mruby yields a NULL name. Reads without
+    /// dispatching and never raises. A short name unpacks into a per-read
+    /// scratch buffer the next name read overwrites, so the dump form is
+    /// copied out rather than borrowed.
     #[inline]
-    pub fn dump(self, mrb: &Mrb) -> Option<&'static str> {
+    pub fn dump(self, mrb: &Mrb) -> Option<String> {
         #[cfg(mruby_linked)]
         {
             mrb.sym_dump(self.to_sym())
@@ -158,10 +165,10 @@ impl Symbol {
     }
 
     /// The symbol's name reified as an mruby String, via `mrb_sym_str`
-    /// (Ruby's `Symbol#to_s`). Where `name`/`name_bytes`/`dump` borrow into
-    /// mruby's interned storage, this yields a distinct, mutable `RString`
-    /// the consumer owns — unfrozen, unlike `Symbol#name`. Builds the value
-    /// without dispatching and never raises.
+    /// (Ruby's `Symbol#to_s`). Where `name`/`name_bytes`/`dump` copy the
+    /// name into an owned Rust value, this yields a distinct, mutable
+    /// `RString` the consumer owns — unfrozen, unlike `Symbol#name`. Builds
+    /// the value without dispatching and never raises.
     #[inline]
     pub fn to_str(self, mrb: &Mrb) -> crate::RString {
         #[cfg(mruby_linked)]
@@ -233,12 +240,15 @@ mod tests {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let sym = Symbol::new(&mrb, c"flags");
 
-        assert_eq!(sym.name(&mrb), Some("flags"));
+        assert_eq!(sym.name(&mrb).as_deref(), Some("flags"));
         // The unboxed id must equal interning the same name — a wrong
         // boxing shift in the unbox shim would diverge here.
         assert_eq!(sym.to_sym(), mrb.intern_cstr(c"flags"));
         // Re-boxing the id yields an equal symbol.
-        assert_eq!(Symbol::from_sym(sym.to_sym()).name(&mrb), Some("flags"));
+        assert_eq!(
+            Symbol::from_sym(sym.to_sym()).name(&mrb).as_deref(),
+            Some("flags")
+        );
     }
 
     #[test]
@@ -247,18 +257,34 @@ mod tests {
 
         // A plain identifier: bytes equal the name, dump is bare.
         let plain = Symbol::new(&mrb, c"fred");
-        assert_eq!(plain.name_bytes(&mrb), Some(&b"fred"[..]));
-        assert_eq!(plain.dump(&mrb), Some("fred"));
+        assert_eq!(plain.name_bytes(&mrb).as_deref(), Some(&b"fred"[..]));
+        assert_eq!(plain.dump(&mrb).as_deref(), Some("fred"));
 
         // An embedded NUL: `name` escapes it to the dump form, only
         // `name_bytes` returns the raw bytes.
         let nul = Symbol::from_sym(mrb.intern_str(mrb.str_new(b"a\0b").as_value()));
-        assert_eq!(nul.name(&mrb), Some("\"a\\x00b\""));
-        assert_eq!(nul.name_bytes(&mrb), Some(&b"a\0b"[..]));
+        assert_eq!(nul.name(&mrb).as_deref(), Some("\"a\\x00b\""));
+        assert_eq!(nul.name_bytes(&mrb).as_deref(), Some(&b"a\0b"[..]));
 
         // A name needing escaping dumps quoted.
         let spaced = Symbol::from_sym(mrb.intern_str(mrb.str_new(b"a b").as_value()));
-        assert_eq!(spaced.dump(&mrb), Some("\"a b\""));
+        assert_eq!(spaced.dump(&mrb).as_deref(), Some("\"a b\""));
+    }
+
+    #[test]
+    fn name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Two short names pack inline (<=4 packable chars), so mruby unpacks
+        // each into one shared per-VM scratch buffer that the next name read
+        // overwrites. Read both, holding the first across the second read.
+        // A borrowed return would alias the buffer and show the first name
+        // mutated to the second; the owned copy must stay intact.
+        let first = Symbol::new(&mrb, c"aa").name(&mrb).expect("aa has a name");
+        let second = Symbol::new(&mrb, c"bb").name(&mrb).expect("bb has a name");
+
+        assert_eq!(first, "aa");
+        assert_eq!(second, "bb");
     }
 
     #[test]

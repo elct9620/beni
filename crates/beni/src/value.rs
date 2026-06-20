@@ -3599,9 +3599,7 @@ mod linked_tests {
         let mut seen = Vec::new();
         obj.each_iv(&mrb, |name: Symbol, val| {
             seen.push((
-                name.name(&mrb)
-                    .expect("an ivar name interns to a name")
-                    .to_owned(),
+                name.name(&mrb).expect("an ivar name interns to a name"),
                 i32::from_value(val).expect("the seeded values are integers"),
             ));
             ForEach::Continue

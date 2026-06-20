@@ -266,9 +266,9 @@ typed:
   mrb_str_to_inum: "`RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError"
   mrb_str_to_str: "`Value::obj_as_string` — the macro `mrb_str_to_str(mrb, str)` is a `#define` alias of `mrb_obj_as_string`, so the same Rust item graduates it; no separate item is needed"
   mrb_string_cstr: RString::to_cstr
-  mrb_sym_name: "`Mrb::sym_name`, `Symbol::name` — the C-string name, escaped to its quoted dump form when it carries an embedded NUL"
+  mrb_sym_name: "`Mrb::sym_name`, `Symbol::name` — the name copied out into an owned UTF-8 string, escaped to its quoted dump form when it carries an embedded NUL"
   mrb_sym2name: "`Mrb::sym_name`, `Symbol::name` — the macro `mrb_sym2name(mrb, sym)` is a `#define` alias of `mrb_sym_name`, so the same Rust items graduate it; no separate item is needed"
-  mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — the raw name bytes with the true length, embedded NUL preserved unescaped"
+  mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — the raw name bytes copied out as an owned vector with the true length, embedded NUL preserved unescaped"
   mrb_sym2name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — the macro `mrb_sym2name_len(mrb, sym, len)` is a `#define` alias of `mrb_sym_name_len`, so the same Rust items graduate it; no separate item is needed"
   mrb_sym_dump: "`Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), never raises"
   mrb_sym_str: "`Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises"

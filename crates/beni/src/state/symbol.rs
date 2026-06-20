@@ -128,17 +128,18 @@ impl Mrb {
         }
     }
 
-    /// `mrb_sym_name(mrb, sym)` — return the C string name of `sym`,
-    /// or `None` if mruby yields a NULL pointer (e.g. uninterned id).
-    /// The returned slice points into mruby's interned string storage
-    /// and lives for the duration of the VM. A name carrying an embedded
-    /// NUL comes back escaped to its quoted dump form; `Mrb::sym_name_len`
-    /// reads the raw bytes. mruby escapes non-identifier names into a
-    /// quoted ASCII form, so a name is always valid UTF-8; the empty-string
-    /// fallback on a non-UTF-8 name is defensive — reach for
-    /// `Mrb::sym_name_len` to read raw bytes.
+    /// `mrb_sym_name(mrb, sym)` — return the name of `sym` as an owned
+    /// `String`, or `None` if mruby yields a NULL pointer (e.g. uninterned
+    /// id). A short symbol name unpacks into a per-read scratch buffer the
+    /// next name read overwrites, so the bytes are copied out before this
+    /// returns rather than borrowed. A name carrying an embedded NUL comes
+    /// back escaped to its quoted dump form; `Mrb::sym_name_len` reads the
+    /// raw bytes. mruby escapes non-identifier names into a quoted ASCII
+    /// form, so a name is always valid UTF-8; the empty-string fallback on
+    /// a non-UTF-8 name is defensive — reach for `Mrb::sym_name_len` to
+    /// read raw bytes.
     #[inline]
-    pub fn sym_name(&self, sym: sys::mrb_sym) -> Option<&'static str> {
+    pub fn sym_name(&self, sym: sys::mrb_sym) -> Option<String> {
         #[cfg(mruby_linked)]
         {
             // SAFETY: `self` is alive.
@@ -146,14 +147,14 @@ impl Mrb {
             if ptr.is_null() {
                 return None;
             }
-            // SAFETY: mruby's interned symbol storage lives for the
-            // duration of the VM; treating the slice as `'static` is
-            // sound for that lifetime, which the caller upholds via the
-            // owning `Mrb`.
+            // SAFETY: `ptr` is a valid C string for the duration of this
+            // call; copy its bytes out at once, before the next name read
+            // can overwrite the scratch buffer a short name unpacks into.
             Some(
                 unsafe { core::ffi::CStr::from_ptr(ptr) }
                     .to_str()
-                    .unwrap_or(""),
+                    .unwrap_or("")
+                    .to_owned(),
             )
         }
         #[cfg(not(mruby_linked))]
@@ -164,13 +165,14 @@ impl Mrb {
     }
 
     /// `mrb_sym_name_len(mrb, sym, &len)` — return the raw name bytes of
-    /// `sym`, its true length carried out of band so an embedded NUL is
-    /// preserved unescaped rather than driving `Mrb::sym_name` to its
-    /// quoted dump form. `None` when mruby yields a NULL pointer (e.g.
-    /// uninterned id). The slice points into mruby's interned string
-    /// storage and lives for the duration of the VM.
+    /// `sym` as an owned `Vec<u8>`, its true length carried out of band so
+    /// an embedded NUL is preserved unescaped rather than driving
+    /// `Mrb::sym_name` to its quoted dump form. `None` when mruby yields a
+    /// NULL pointer (e.g. uninterned id). A short symbol name unpacks into
+    /// a per-read scratch buffer the next name read overwrites, so the
+    /// bytes are copied out before this returns rather than borrowed.
     #[inline]
-    pub fn sym_name_len(&self, sym: sys::mrb_sym) -> Option<&'static [u8]> {
+    pub fn sym_name_len(&self, sym: sys::mrb_sym) -> Option<Vec<u8>> {
         #[cfg(mruby_linked)]
         {
             let mut len: sys::mrb_int = 0;
@@ -179,11 +181,11 @@ impl Mrb {
             if ptr.is_null() {
                 return None;
             }
-            // SAFETY: mruby reports a non-negative length for a live name
-            // and the storage lives for the VM's duration, which the
-            // caller upholds via the owning `Mrb`; the `'static` slice is
-            // sound for that lifetime.
-            Some(unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), len as usize) })
+            // SAFETY: mruby reports a non-negative length for a live name,
+            // and `ptr` spans that many valid bytes for the duration of
+            // this call; copy them out at once, before the next name read
+            // can overwrite the scratch buffer a short name unpacks into.
+            Some(unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), len as usize) }.to_vec())
         }
         #[cfg(not(mruby_linked))]
         {
@@ -192,15 +194,17 @@ impl Mrb {
         }
     }
 
-    /// `mrb_sym_dump(mrb, sym)` — return the dump form of `sym`'s name:
-    /// the bare name for a plain identifier, otherwise the quoted and
-    /// escaped form (Ruby's `Symbol#inspect` without the leading colon).
-    /// `None` when mruby yields a NULL pointer (e.g. uninterned id).
-    /// Reads without dispatching and never raises. The dump form is always
-    /// ASCII, so the empty-string fallback on a non-UTF-8 name is
-    /// defensive and unreachable.
+    /// `mrb_sym_dump(mrb, sym)` — return the dump form of `sym`'s name as
+    /// an owned `String`: the bare name for a plain identifier, otherwise
+    /// the quoted and escaped form (Ruby's `Symbol#inspect` without the
+    /// leading colon). `None` when mruby yields a NULL pointer (e.g.
+    /// uninterned id). Reads without dispatching and never raises. The dump
+    /// form draws on the same per-read scratch buffer a short name unpacks
+    /// into, so the bytes are copied out before this returns rather than
+    /// borrowed. The dump form is always ASCII, so the empty-string
+    /// fallback on a non-UTF-8 name is defensive and unreachable.
     #[inline]
-    pub fn sym_dump(&self, sym: sys::mrb_sym) -> Option<&'static str> {
+    pub fn sym_dump(&self, sym: sys::mrb_sym) -> Option<String> {
         #[cfg(mruby_linked)]
         {
             // SAFETY: `self` is alive.
@@ -208,12 +212,14 @@ impl Mrb {
             if ptr.is_null() {
                 return None;
             }
-            // SAFETY: the dump string lives for the VM's duration, which
-            // the caller upholds via the owning `Mrb`.
+            // SAFETY: `ptr` is a valid C string for the duration of this
+            // call; copy its bytes out at once, before the next name read
+            // can overwrite the scratch buffer a short name unpacks into.
             Some(
                 unsafe { core::ffi::CStr::from_ptr(ptr) }
                     .to_str()
-                    .unwrap_or(""),
+                    .unwrap_or("")
+                    .to_owned(),
             )
         }
         #[cfg(not(mruby_linked))]
@@ -234,7 +240,7 @@ mod tests {
 
         let sym = mrb.intern_cstr(c"beni_sym");
 
-        assert_eq!(mrb.sym_name(sym), Some("beni_sym"));
+        assert_eq!(mrb.sym_name(sym).as_deref(), Some("beni_sym"));
     }
 
     #[test]
@@ -254,7 +260,7 @@ mod tests {
         // and whose id equals interning the same name through the C-string
         // path — proving it's the same interned symbol.
         let sym = mrb.intern(b"beni_sym");
-        assert_eq!(sym.name(&mrb), Some("beni_sym"));
+        assert_eq!(sym.name(&mrb).as_deref(), Some("beni_sym"));
         assert_eq!(sym.to_sym(), mrb.intern_cstr(c"beni_sym"));
 
         // It's length-based, not NUL-terminated: a slice carrying trailing
@@ -262,9 +268,12 @@ mod tests {
         // yielding a distinct symbol from the truncated name.
         let exact = b"abc";
         let padded = b"abc\0xyz";
-        assert_eq!(mrb.intern(&exact[..]).name_bytes(&mrb), Some(&b"abc"[..]));
         assert_eq!(
-            mrb.intern(&padded[..]).name_bytes(&mrb),
+            mrb.intern(&exact[..]).name_bytes(&mrb).as_deref(),
+            Some(&b"abc"[..])
+        );
+        assert_eq!(
+            mrb.intern(&padded[..]).name_bytes(&mrb).as_deref(),
             Some(&b"abc\0xyz"[..])
         );
         assert_ne!(
@@ -282,7 +291,7 @@ mod tests {
         // copying intern produces, proving it's the same interned symbol.
         let sym = mrb.intern_static(b"beni_sym");
 
-        assert_eq!(mrb.sym_name(sym), Some("beni_sym"));
+        assert_eq!(mrb.sym_name(sym).as_deref(), Some("beni_sym"));
         assert_eq!(sym, mrb.intern_cstr(c"beni_sym"));
     }
 
@@ -297,8 +306,8 @@ mod tests {
 
         // `sym_name` escapes a NUL-containing name to its dump form; only
         // the length-carrying read returns the raw bytes.
-        assert_eq!(mrb.sym_name(sym), Some("\"a\\x00b\""));
-        assert_eq!(mrb.sym_name_len(sym), Some(&b"a\0b"[..]));
+        assert_eq!(mrb.sym_name(sym).as_deref(), Some("\"a\\x00b\""));
+        assert_eq!(mrb.sym_name_len(sym).as_deref(), Some(&b"a\0b"[..]));
     }
 
     #[test]
@@ -319,10 +328,30 @@ mod tests {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
         // A plain identifier dumps bare; a name needing escaping is quoted.
-        assert_eq!(mrb.sym_dump(mrb.intern_cstr(c"fred")), Some("fred"));
         assert_eq!(
-            mrb.sym_dump(mrb.intern_str(mrb.str_new(b"a b").as_value())),
+            mrb.sym_dump(mrb.intern_cstr(c"fred")).as_deref(),
+            Some("fred")
+        );
+        assert_eq!(
+            mrb.sym_dump(mrb.intern_str(mrb.str_new(b"a b").as_value()))
+                .as_deref(),
             Some("\"a b\"")
         );
+    }
+
+    #[test]
+    fn sym_name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Two short names pack inline (<=4 packable chars), so mruby unpacks
+        // each into one shared per-VM scratch buffer that the next name read
+        // overwrites. Read both, holding the first across the second read.
+        // A borrowed return would alias the buffer and show the first name
+        // mutated to the second; the owned copy must stay intact.
+        let first = mrb.sym_name(mrb.intern_cstr(c"aa")).expect("aa has a name");
+        let second = mrb.sym_name(mrb.intern_cstr(c"bb")).expect("bb has a name");
+
+        assert_eq!(first, "aa");
+        assert_eq!(second, "bb");
     }
 }
