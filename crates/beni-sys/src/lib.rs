@@ -270,6 +270,15 @@ pub fn mrb_args_arg(req: u32, opt: u32) -> mrb_aspec {
     unsafe { mrb_args_arg_func(req, opt) }
 }
 
+/// `MRB_ARGS_BLOCK()` — the method accepts a block. OR this into a
+/// positional aspec to declare both.
+#[cfg(mruby_linked)]
+#[inline]
+pub fn mrb_args_block() -> mrb_aspec {
+    // SAFETY: as `mrb_args_none`.
+    unsafe { mrb_args_block_func() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

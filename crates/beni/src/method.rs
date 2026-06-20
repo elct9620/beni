@@ -45,11 +45,14 @@ use crate::error::panic_message;
 /// `Object::define_singleton_method`, which derives the mruby aspec
 /// from the arity: `-1` is any, `arity` is the required positional
 /// count, and `opt` the optional positional count that follows them.
+/// `block` declares the method accepts a block, which the bridge
+/// reads into an `Option<Proc>` trailing parameter.
 #[derive(Copy, Clone)]
 pub struct MethodDef {
     pub(crate) func: crate::mrb_func_t,
     pub(crate) arity: i8,
     pub(crate) opt: i8,
+    pub(crate) block: bool,
 }
 
 impl MethodDef {
@@ -62,6 +65,7 @@ impl MethodDef {
             func,
             arity,
             opt: 0,
+            block: false,
         }
     }
 
@@ -70,7 +74,25 @@ impl MethodDef {
     /// expands to.
     #[doc(hidden)]
     pub const fn new_with_opt(func: crate::mrb_func_t, arity: i8, opt: i8) -> Self {
-        Self { func, arity, opt }
+        Self {
+            func,
+            arity,
+            opt,
+            block: false,
+        }
+    }
+
+    /// As `new`, declaring the method accepts a block after its
+    /// required positionals — the constructor the `method!(f, req, &)`
+    /// form expands to.
+    #[doc(hidden)]
+    pub const fn new_with_block(func: crate::mrb_func_t, arity: i8) -> Self {
+        Self {
+            func,
+            arity,
+            opt: 0,
+            block: true,
+        }
     }
 }
 
@@ -413,6 +435,126 @@ define_method_req_opt_trait!(
     [(b, O0)]
 );
 
+/// Generate one `MethodReqBlock` trait: the typed crossing for a
+/// registered function with `$req` required positionals followed by a
+/// block parameter. The block is an `Option<Proc>` trailing parameter
+/// on the wrapped function — `Some` when the caller passed a block,
+/// `None` when none was passed. The format string ends in `&`,
+/// mruby's block marker, which reads the call's block slot.
+///
+/// mruby leaves the block slot nil when no block is passed, so a nil
+/// slot is the `None` case; any other value is a `Proc` the slot is
+/// guaranteed to carry, wrapped through the unchecked downcast.
+macro_rules! define_method_req_block_trait {
+    (
+        $(#[$attr:meta])* $name:ident, $fmt:literal,
+        [$(($req:ident, $rt:ident)),*]
+    ) => {
+        $(#[$attr])*
+        pub trait $name<$($rt,)* Res>
+        where
+            Self: Sized + Fn(&Mrb, Value $(, $rt)*, Option<crate::Proc>) -> Res,
+            $($rt: FromValue,)*
+            Res: MethodReturn,
+        {
+            /// Read and convert the call-frame arguments and the block,
+            /// run the wrapped function, and project its return. A
+            /// failed required-argument conversion returns `Err` before
+            /// the wrapped function runs.
+            #[doc(hidden)]
+            fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
+                #[cfg(mruby_linked)]
+                {
+                    $(let mut $req = sys::mrb_value::zeroed();)*
+                    let mut block = sys::mrb_value::zeroed();
+                    // SAFETY: `mrb` is alive; each out-parameter is a
+                    // valid `*mut mrb_value`; the format string holds
+                    // one `o` per required out-parameter and a trailing
+                    // `&` for the block slot.
+                    unsafe {
+                        sys::mrb_get_args(
+                            mrb.as_ptr(),
+                            $fmt.as_ptr()
+                            $(, &mut $req as *mut sys::mrb_value)*,
+                            &mut block as *mut sys::mrb_value,
+                        );
+                    }
+                    $(
+                        let $req = $rt::from_value(Value::from_raw($req))
+                            .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
+                    )*
+                    // SAFETY: `mrb` is alive; `block` is a valid value.
+                    let block = if unsafe { sys::mrb_nil_p_func(block) } {
+                        None
+                    } else {
+                        // The block slot carries a Proc whenever it is
+                        // not nil, so the unchecked downcast is sound.
+                        // SAFETY: the non-nil block slot is Proc-tagged
+                        // by mruby's call convention.
+                        Some(unsafe { crate::Proc::from_value_unchecked(Value::from_raw(block)) })
+                    };
+                    (self)(mrb, self_ $(, $req)*, block).into_method_return(mrb)
+                }
+                #[cfg(not(mruby_linked))]
+                {
+                    let _ = (mrb, self_);
+                    crate::not_linked()
+                }
+            }
+
+            /// Bridge entry: `call_convert_value` inside the panic
+            /// boundary, raising any error to the Ruby caller.
+            ///
+            /// # Safety
+            ///
+            /// Bridge frame only — the raise long-jumps out.
+            #[doc(hidden)]
+            unsafe fn call_handle_error(self, mrb: &Mrb, self_: Value) -> Value {
+                #[cfg(mruby_linked)]
+                {
+                    // SAFETY: forwarded from the caller.
+                    unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
+                }
+                #[cfg(not(mruby_linked))]
+                {
+                    let _ = (mrb, self_);
+                    crate::not_linked()
+                }
+            }
+        }
+
+        impl<Func, $($rt,)* Res> $name<$($rt,)* Res> for Func
+        where
+            Func: Fn(&Mrb, Value $(, $rt)*, Option<crate::Proc>) -> Res,
+            $($rt: FromValue,)*
+            Res: MethodReturn,
+        {
+        }
+    };
+}
+
+define_method_req_block_trait!(
+    /// Typed crossing for a method that accepts a block and no
+    /// required positionals.
+    Method0Block,
+    c"&",
+    []
+);
+define_method_req_block_trait!(
+    /// Typed crossing for a method with one required positional and a
+    /// block.
+    Method1Block,
+    c"o&",
+    [(a, T0)]
+);
+define_method_req_block_trait!(
+    /// Typed crossing for a method with two required positionals and a
+    /// block.
+    Method2Block,
+    c"oo&",
+    [(a, T0), (b, T1)]
+);
+
 /// Typed crossing for an any-arity method (`method!(f, -1)`): the
 /// wrapped function reads the call frame itself via
 /// `Mrb::get_args` (`format::Rest` and friends), and registration
@@ -481,6 +623,21 @@ where
 /// }
 /// class.define_method(&mrb, c"add", method!(add, 1, 1))?;
 /// ```
+///
+/// A trailing `&` declares the method accepts a block, read into a
+/// final `Option<Proc>` parameter — `Some` when the caller passed a
+/// block, `None` otherwise — that the body invokes through
+/// `Proc::call`.
+///
+/// ```ignore
+/// fn each(mrb: &Mrb, _self: Value, a: i32, block: Option<Proc>) -> Result<Value, Error> {
+///     match block {
+///         Some(b) => b.call(mrb, &[a.into_value(mrb)]),
+///         None => Ok(Value::nil()),
+///     }
+/// }
+/// class.define_method(&mrb, c"each", method!(each, 1, &))?;
+/// ```
 #[macro_export]
 macro_rules! method {
     ($f:expr, -1) => {{
@@ -522,6 +679,15 @@ macro_rules! method {
     };
     ($f:expr, 1, 1) => {
         $crate::__method_req_opt!($f, 1, 1, Method1Opt1)
+    };
+    ($f:expr, 0, &) => {
+        $crate::__method_block!($f, 0, Method0Block)
+    };
+    ($f:expr, 1, &) => {
+        $crate::__method_block!($f, 1, Method1Block)
+    };
+    ($f:expr, 2, &) => {
+        $crate::__method_block!($f, 2, Method2Block)
     };
 }
 
@@ -579,6 +745,33 @@ macro_rules! __method_req_opt {
     }};
 }
 
+/// Shared expansion behind `method!`'s block-accepting arities. As
+/// `__method_arity!`, but marks the def block-accepting so the aspec
+/// ORs in the block flag. Not part of the public surface —
+/// `#[macro_export]` is only required so the `method!` expansion can
+/// reach it from consumer crates.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __method_block {
+    ($f:expr, $req:literal, $trait_:ident) => {{
+        unsafe extern "C" fn bridge(
+            mrb: *mut $crate::sys::mrb_state,
+            self_: $crate::Value,
+        ) -> $crate::Value {
+            // Evaluated outside the unsafe block so caller-supplied
+            // code is never silently wrapped in it.
+            let f = $f;
+            // SAFETY: mruby invokes the bridge with a live state
+            // pointer that outlives the call frame.
+            let mrb = unsafe { $crate::Mrb::borrow_raw(&mrb) };
+            // SAFETY: this is the bridge frame the raise contract
+            // names.
+            unsafe { $crate::method::$trait_::call_handle_error(f, mrb, self_) }
+        }
+        $crate::method::MethodDef::new_with_block(bridge, $req)
+    }};
+}
+
 #[cfg(all(test, mruby_linked))]
 mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -611,6 +804,21 @@ mod tests {
     // form reads the lone optional slot.
     fn opt_only(_mrb: &Mrb, _self: Value, a: Option<i32>) -> i32 {
         a.unwrap_or(-1)
+    }
+
+    // Block-accepting method: yields the required argument to the block
+    // when one was passed, returning the block's value; with no block
+    // the slot binds `None` and the body returns the argument unchanged.
+    fn apply_block(
+        mrb: &Mrb,
+        _self: Value,
+        a: i32,
+        block: Option<crate::Proc>,
+    ) -> Result<Value, Error> {
+        match block {
+            Some(b) => b.call(mrb, &[a.into_value(mrb)]),
+            None => Ok(a.into_value(mrb)),
+        }
     }
 
     fn fallible(mrb: &Mrb, _self: Value) -> Result<i32, Error> {
@@ -752,6 +960,46 @@ mod tests {
             "the TypeError must name the expected Rust type: {}",
             err.message(&mrb)
         );
+    }
+
+    #[test]
+    fn block_accepting_method_yields_to_a_passed_block() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = fresh_class(&mrb, c"BeniBlockApply");
+        class
+            .define_method(&mrb, c"apply", method!(apply_block, 1, &))
+            .expect("registering the block-accepting method must succeed");
+
+        // Calling with a block: the registered method receives it as
+        // `Some(Proc)` and yields the argument to it, here doubling it.
+        let cxt = crate::Ccontext::new(&mrb, c"block_method_test.rb")
+            .expect("allocating the compile context must succeed");
+        let got = cxt.load_nstring(b"BeniBlockApply.new.apply(21) { |x| x * 2 }");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the block-yielding call must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(i32::from_value(got), Some(42));
+    }
+
+    #[test]
+    fn block_accepting_method_binds_none_without_a_block() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = fresh_class(&mrb, c"BeniBlockOptional");
+        class
+            .define_method(&mrb, c"apply", method!(apply_block, 1, &))
+            .expect("registering the block-accepting method must succeed");
+
+        // No block passed: the slot is nil, the parameter binds `None`,
+        // and the body returns the argument unchanged.
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let got = receiver
+            .funcall(&mrb, c"apply", &[Value::from_int(&mrb, 7)])
+            .expect("the call without a block must not raise");
+        assert_eq!(i32::from_value(got), Some(7));
     }
 
     #[test]

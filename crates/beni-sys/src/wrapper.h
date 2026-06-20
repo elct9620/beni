@@ -269,6 +269,12 @@ mrb_args_arg_func(uint32_t req, uint32_t opt)
   return MRB_ARGS_ARG(req, opt);
 }
 
+static inline mrb_aspec
+mrb_args_block_func(void)
+{
+  return MRB_ARGS_BLOCK();
+}
+
 /* The `mrb_undef_value()` sentinel, used to seed an optional-argument
  * out-parameter before `mrb_get_args`: an omitted optional leaves its
  * slot untouched, so the bridge reads back the undef tag to tell an

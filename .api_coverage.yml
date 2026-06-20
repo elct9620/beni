@@ -29,6 +29,7 @@ typed:
   MRB_ARGS_ANY: a typed method's `-1` arity, derived by `Module::define_method`
   MRB_ARGS_NONE: a typed method's `0` arity, derived by `Module::define_method` (the no-argument aspec a zero-arity definition declares)
   MRB_ARGS_ARG: a typed method's required-and-optional arity, derived by `Module::define_method` (the `method!(f, req, opt)` form's aspec)
+  MRB_ARGS_BLOCK: a typed method's block-accepting flag, derived by `Module::define_method` (the `method!(f, req, &)` form's aspec, OR-ed into the positional aspec)
   MRB_ARGS_OPT: a typed method's optional positional arity, derived by `Module::define_method` (the optional component of the `method!(f, req, opt)` aspec)
   MRB_ARGS_REQ: a typed method's positional arity, derived by `Module::define_method`
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt

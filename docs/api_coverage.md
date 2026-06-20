@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 338 (99%) | 179 (52%) |
-| macro | 124 | 27 (22%) | 44 (35%) |
-| total | 466 | 365 (78%) | 223 (48%) |
+| macro | 124 | 28 (23%) | 45 (36%) |
+| total | 466 | 366 (79%) | 224 (48%) |
 
 ## mruby.h
 
@@ -19,7 +19,7 @@ Legend: ✅ covered · — missing
 |--------|------|:---:|:-----:|------|
 | `MRB_ARGS_ANY` | macro | ✅ | ✅ | a typed method's `-1` arity, derived by `Module::define_method` |
 | `MRB_ARGS_ARG` | macro | ✅ | ✅ | a typed method's required-and-optional arity, derived by `Module::define_method` (the `method!(f, req, opt)` form's aspec) |
-| `MRB_ARGS_BLOCK` | macro | — | — |  |
+| `MRB_ARGS_BLOCK` | macro | ✅ | ✅ | a typed method's block-accepting flag, derived by `Module::define_method` (the `method!(f, req, &)` form's aspec, OR-ed into the positional aspec) |
 | `MRB_ARGS_KEY` | macro | — | — |  |
 | `MRB_ARGS_NOBLOCK` | macro | — | — |  |
 | `MRB_ARGS_NONE` | macro | ✅ | ✅ | a typed method's `0` arity, derived by `Module::define_method` (the no-argument aspec a zero-arity definition declares) |

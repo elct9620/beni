@@ -79,14 +79,22 @@ mod private {
 /// `-1` accepts any arguments (the wrapped function reads the call
 /// frame itself), `0..` requires that many positionals, and a
 /// non-zero `opt` adds that many optional positionals after them.
+/// `block` ORs in the block-accepting flag, which composes with the
+/// positional aspec the way mruby's own `MRB_ARGS_ARG` composes its
+/// required and optional parts.
 #[cfg(mruby_linked)]
-fn method_aspec(arity: i8, opt: i8) -> sys::mrb_aspec {
-    if arity < 0 {
+fn method_aspec(arity: i8, opt: i8, block: bool) -> sys::mrb_aspec {
+    let positional = if arity < 0 {
         sys::mrb_args_any()
     } else if opt > 0 {
         sys::mrb_args_arg(arity as u32, opt as u32)
     } else {
         sys::mrb_args_req(arity as u32)
+    };
+    if block {
+        positional | sys::mrb_args_block()
+    } else {
+        positional
     }
 }
 
@@ -100,7 +108,7 @@ where
     F: FnOnce(&Mrb, sys::mrb_func_t, sys::mrb_aspec),
 {
     mrb.protect(|mrb| {
-        let aspec = method_aspec(method.arity, method.opt);
+        let aspec = method_aspec(method.arity, method.opt, method.block);
         // SAFETY: `Value` is `#[repr(transparent)]` over
         // `sys::mrb_value` (pinned by
         // `value::tests::value_shares_abi_with_mrb_value`), so
@@ -467,7 +475,14 @@ pub trait Module: private::ClassLike {
         }
         #[cfg(not(mruby_linked))]
         {
-            let _ = (mrb, name, method.func, method.arity, method.opt);
+            let _ = (
+                mrb,
+                name,
+                method.func,
+                method.arity,
+                method.opt,
+                method.block,
+            );
             crate::not_linked()
         }
     }
@@ -496,7 +511,14 @@ pub trait Module: private::ClassLike {
         }
         #[cfg(not(mruby_linked))]
         {
-            let _ = (mrb, name, method.func, method.arity, method.opt);
+            let _ = (
+                mrb,
+                name,
+                method.func,
+                method.arity,
+                method.opt,
+                method.block,
+            );
             crate::not_linked()
         }
     }
@@ -527,7 +549,14 @@ pub trait Module: private::ClassLike {
         }
         #[cfg(not(mruby_linked))]
         {
-            let _ = (mrb, name, method.func, method.arity, method.opt);
+            let _ = (
+                mrb,
+                name,
+                method.func,
+                method.arity,
+                method.opt,
+                method.block,
+            );
             crate::not_linked()
         }
     }
@@ -769,7 +798,14 @@ pub trait Object: private::ClassLike {
         }
         #[cfg(not(mruby_linked))]
         {
-            let _ = (mrb, name, method.func, method.arity, method.opt);
+            let _ = (
+                mrb,
+                name,
+                method.func,
+                method.arity,
+                method.opt,
+                method.block,
+            );
             crate::not_linked()
         }
     }
