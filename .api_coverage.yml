@@ -151,6 +151,8 @@ typed:
   mrb_iv_set: Value::iv_set
   mrb_load_irep_buf: Mrb::load_irep_buf
   mrb_load_nstring_cxt: Ccontext::load_nstring
+  mrb_module_get: "`Mrb::module_get` with a name key — interns and routes through `mrb_module_get_id`"
+  mrb_module_get_id: "`Mrb::module_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
   mrb_nil_p: Value::is_nil
   mrb_nil_value: Value::nil
   mrb_obj_as_string: Value::obj_as_string

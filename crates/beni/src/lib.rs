@@ -147,6 +147,7 @@ mod tests {
         let _ = Mrb::define_module::<&core::ffi::CStr>;
         let _ = Mrb::define_class::<&core::ffi::CStr>;
         let _ = Mrb::class_get::<&core::ffi::CStr>;
+        let _ = Mrb::module_get::<&core::ffi::CStr>;
         let _ = Mrb::define_global_const;
         let _ = Mrb::gv_set;
         let _ = Mrb::gv_get;

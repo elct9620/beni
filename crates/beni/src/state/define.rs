@@ -6,7 +6,7 @@
 //!
 //!   * `mrb_define_module` / `mrb_define_class` — register a new
 //!     module or class at top level.
-//!   * `mrb_class_get` — look one up by name.
+//!   * `mrb_class_get` / `mrb_module_get` — look one up by name.
 //!   * `mrb_define_global_const` — bind a top-level constant.
 //!   * `mrb_gv_set` / `mrb_gv_get` — assign or read a Ruby `$global`.
 //!
@@ -92,6 +92,29 @@ impl Mrb {
         }
     }
 
+    /// `mrb_module_get_id(mrb, name)` — fetch the top-level module
+    /// named `name`. The name is a symbol-or-name key (`IntoSym`).
+    /// mruby raises `NameError` when the constant is missing and
+    /// `TypeError` when it is not a module (vendored `src/class.c`
+    /// documents both), so the lookup is fallible by contract.
+    #[inline]
+    pub fn module_get<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
+        #[cfg(mruby_linked)]
+        {
+            let sym = name.into_sym(self);
+            crate::class::protect_class_ptr(self, |mrb| {
+                // SAFETY: as `define_module`.
+                unsafe { sys::mrb_module_get_id(mrb.as_ptr(), sym) }
+            })
+            .map(RModule::from_raw)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = name;
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_define_global_const(mrb, name, val)` — bind a top-level
     /// constant. Reachable as `name` and as `Object::name`.
     #[inline]
@@ -164,7 +187,42 @@ impl Mrb {
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use crate::{FromValue, Mrb, Value};
+    use crate::{FromValue, Module, Mrb, Value};
+
+    #[test]
+    fn module_get_fetches_a_defined_module() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A top-level module is fetchable by name and by Symbol key —
+        // both forms route through `mrb_module_get_id`.
+        mrb.define_module(c"BeniModGet")
+            .expect("defining the module must succeed");
+        let by_name = mrb
+            .module_get(c"BeniModGet")
+            .expect("fetching by name must reach the defined module");
+        assert_eq!(by_name.name(&mrb), Some("BeniModGet"));
+        let by_sym = mrb
+            .module_get(crate::Symbol::new(&mrb, c"BeniModGet"))
+            .expect("fetching by Symbol key must reach the defined module");
+        assert_eq!(by_sym.name(&mrb), Some("BeniModGet"));
+    }
+
+    #[test]
+    fn module_get_surfaces_name_error_for_missing_module() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // mruby raises NameError for a missing constant (vendored
+        // src/class.c documents the lookup contract) — the typed
+        // lookup must catch it instead of long-jumping.
+        let err = mrb
+            .module_get(c"BeniNoSuchModule")
+            .expect_err("missing module must surface as Err");
+        assert!(
+            err.message(&mrb).contains("BeniNoSuchModule"),
+            "the NameError must name the missing constant: {}",
+            err.message(&mrb)
+        );
+    }
 
     #[test]
     fn gv_get_reads_nil_for_unset_global() {
