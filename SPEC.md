@@ -253,6 +253,14 @@ when the bytes are not a valid float. This parse anchors on mruby's own
 `mrb_str_to_dbl`; it is the strict counterpart of Ruby's lenient `String#to_f`,
 which never raises.
 
+The inverse direction renders an Integer value to a new `RString` in a given
+radix, the way Ruby's `Integer#to_s(base)` does — `12345` to `"3039"` in base 16.
+The radix is one of 2 through 36; a radix outside that domain surfaces an `Err`,
+the `ArgumentError` mruby raises. The render guards its receiver on the Integer
+tag rather than trusting it, so a non-Integer value surfaces an `Err` carrying a
+`TypeError` instead of reading a malformed value. magnus offers no direct radix
+render, so this anchors on mruby's own `mrb_integer_to_str`.
+
 A registered method grows an `RString` in place by appending Rust bytes,
 appending another mruby string's bytes, or appending a NUL-terminated C string's
 bytes — its content up to the terminating NUL, the C-boundary counterpart of the
@@ -341,7 +349,7 @@ raise/return contract:
 | Dispatches Ruby — a method call, `==` / `eql?`, a `<=>` comparison, an object `dup` / `clone` or string coercion, an array join rendering each element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` (a `<=>` comparison yields nothing when the two values are incomparable) |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types, or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric, or an infinite / NaN float converts to integer; the coerced value carries no String / Array / Hash tag | `Result` |
-| Reads without dispatching but can still raise — a string's NUL-terminated C-string view, or a strict parse of a string to an integer in a given radix, or to a float | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float | `Result` |
+| Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, or rendering an integer to a string in a given radix | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer | `Result` |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
