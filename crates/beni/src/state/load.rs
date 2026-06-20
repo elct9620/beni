@@ -1,13 +1,55 @@
-//! RITE bytecode loaders on `Mrb`.
+//! Source and RITE bytecode loaders on `Mrb`.
 //!
-//! Inherent methods that drop a compiled blob into the live mruby VM
-//! and run its top-level Proc.
+//! Inherent methods that compile Ruby source — or drop a compiled
+//! blob — into the live mruby VM and run its top-level Proc.
 
-use crate::{Mrb, Value};
+use crate::{Error, Mrb, Value};
 #[cfg(mruby_linked)]
 use beni_sys as sys;
 
 impl Mrb {
+    /// Compile and run a slice of Ruby `source` with no compile
+    /// context, yielding the program's result value. A failure on any
+    /// path — a parse error, a codegen error, or an exception raised
+    /// while the program runs — comes back `Err(Error::Exception)`
+    /// with the pending exception cleared from the handle.
+    ///
+    /// The source carries its own length, so it needs no terminating
+    /// NUL and the bytes need not be valid UTF-8. The context-free
+    /// counterpart to `Ccontext::load_nstring`: it stamps no filename
+    /// (so a raised exception carries no source-line backtrace) and
+    /// surfaces a failure as an `Err` rather than leaving the pending
+    /// exception on the handle.
+    pub fn load_string(&self, source: &[u8]) -> Result<Value, Error> {
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = source;
+            crate::not_linked()
+        }
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` is alive by the &self borrow; `source` is
+            // borrowed for the synchronous call and `mrb_load_nstring`
+            // retains no reference past return. The load path runs
+            // Ruby but parks any failure in `mrb->exc` rather than
+            // long-jumping, so no `protect` frame is needed.
+            let value = Value::from_raw(unsafe {
+                sys::mrb_load_nstring(
+                    self.as_ptr(),
+                    source.as_ptr() as *const core::ffi::c_char,
+                    source.len(),
+                )
+            });
+            let exc = self.pending_exc();
+            if exc.is_nil() {
+                Ok(value)
+            } else {
+                self.clear_exc();
+                Err(Error::Exception(exc))
+            }
+        }
+    }
+
     /// `mrb_load_irep_buf(mrb, buf, size)` — load and evaluate a
     /// precompiled RITE bytecode blob. On a malformed blob mruby
     /// sets `mrb->exc`; callers should inspect via
@@ -163,10 +205,58 @@ fn classify_structural_failure(bytes: &[u8]) -> &'static str {
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use crate::Mrb;
+    use crate::{Error, FromValue, Mrb};
     use beni_sys as sys;
 
     const HEADER_LEN: usize = core::mem::size_of::<sys::rite_binary_header>();
+
+    #[test]
+    fn load_string_evaluates_a_valid_expression_to_its_value() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let got = mrb
+            .load_string(b"1 + 2")
+            .expect("a valid expression must come back Ok");
+
+        assert_eq!(i32::from_value(got), Some(3));
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "a successful eval must leave no pending exception"
+        );
+    }
+
+    #[test]
+    fn load_string_surfaces_a_raising_script_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let err = mrb
+            .load_string(b"raise 'kaboom'")
+            .expect_err("a raising script must come back Err");
+
+        match err {
+            Error::Exception(_) => assert!(err.message(&mrb).contains("kaboom")),
+            Error::Panic(_) => panic!("a Ruby raise must surface as Error::Exception"),
+        }
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the pending exception must be cleared as the Err crosses out"
+        );
+    }
+
+    #[test]
+    fn load_string_surfaces_a_syntax_error_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let err = mrb
+            .load_string(b"def (")
+            .expect_err("unparseable source must come back Err");
+
+        assert!(matches!(err, Error::Exception(_)));
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the pending exception must be cleared as the Err crosses out"
+        );
+    }
 
     /// The synthesised `RuntimeError` parked under `mrb->exc`, rendered.
     fn exc_message(mrb: &Mrb) -> String {

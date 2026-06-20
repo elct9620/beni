@@ -187,7 +187,9 @@ typed:
   mrb_iv_remove: "`Value::iv_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None`"
   mrb_iv_set: Value::iv_set
   mrb_load_irep_buf: Mrb::load_irep_buf
+  mrb_load_nstring: Mrb::load_string
   mrb_load_nstring_cxt: Ccontext::load_nstring
+  mrb_load_string: "`Mrb::load_string` — the cstr `mrb_load_string(mrb, s)` is `mrb_load_nstring` over `strlen(s)`; a Rust `&[u8]` carries its own length, so the length-carrying call subsumes it and no separate item is needed"
   mrb_module_get: "`Mrb::module_get` with a name key — interns and routes through `mrb_module_get_id`"
   mrb_module_get_id: "`Mrb::module_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
   mrb_module_get_under: "`Module::module_get` with a name key — interns and routes through `mrb_module_get_under_id`"

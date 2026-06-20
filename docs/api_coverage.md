@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 189 (55%) |
+| function | 342 | 338 (99%) | 191 (56%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 242 (52%) |
+| total | 466 | 366 (79%) | 244 (52%) |
 
 ## mruby.h
 
@@ -289,9 +289,9 @@ Legend: ✅ covered · — missing
 | `mrb_load_exec` | fn | ✅ | — |  |
 | `mrb_load_file` | fn | ✅ | — |  |
 | `mrb_load_file_cxt` | fn | ✅ | — |  |
-| `mrb_load_nstring` | fn | ✅ | — |  |
+| `mrb_load_nstring` | fn | ✅ | ✅ | `Mrb::load_string` |
 | `mrb_load_nstring_cxt` | fn | ✅ | ✅ | `Ccontext::load_nstring` |
-| `mrb_load_string` | fn | ✅ | — |  |
+| `mrb_load_string` | fn | ✅ | ✅ | `Mrb::load_string` — the cstr `mrb_load_string(mrb, s)` is `mrb_load_nstring` over `strlen(s)`; a Rust `&[u8]` carries its own length, so the length-carrying call subsumes it and no separate item is needed |
 | `mrb_load_string_cxt` | fn | ✅ | — |  |
 | `mrb_parse_file` | fn | ✅ | — |  |
 | `mrb_parse_nstring` | fn | ✅ | — |  |
