@@ -474,6 +474,28 @@ impl RString {
         }
     }
 
+    /// `mrb_str_equal(mrb, self, other)` — TRUE when the two strings hold the
+    /// same bytes, Ruby's `String#==`. A length check then a `memcmp` that
+    /// dispatches nothing, so it never raises. The `RString` type on both sides
+    /// guarantees the String layout `mrb_str_equal` assumes, so its non-String
+    /// guard never fires — this is total byte equality. The equality sibling of
+    /// the ordering `cmp`.
+    #[inline]
+    pub fn eq(self, mrb: &Mrb, other: RString) -> bool {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` and `other` are String-tagged by the newtype
+            // contract and share the VM; `mrb_str_equal` reads only their byte
+            // buffers and returns a boolean.
+            unsafe { sys::mrb_str_equal(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_string_cstr(mrb, self)` — the bytes as an owned, NUL-terminated
     /// `CString` for a C boundary. A C string cannot carry an embedded NUL,
     /// so this read is fallible: an embedded NUL raises `ArgumentError`, and
@@ -770,6 +792,26 @@ mod tests {
         // A prefix orders before the longer string it begins.
         let ab = mrb.str_new(b"ab");
         assert_eq!(ab.cmp(&mrb, abc), Ordering::Less);
+    }
+
+    #[test]
+    fn eq_tests_byte_equality() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let abc = mrb.str_new(b"abc");
+        let abc2 = mrb.str_new(b"abc");
+        let abd = mrb.str_new(b"abd");
+
+        // Same bytes in distinct objects are equal.
+        assert!(abc.eq(&mrb, abc2));
+
+        // Differing bytes of equal length are unequal.
+        assert!(!abc.eq(&mrb, abd));
+
+        // A prefix is unequal to the longer string it begins — the length
+        // check rejects it before the byte compare.
+        let ab = mrb.str_new(b"ab");
+        assert!(!ab.eq(&mrb, abc));
     }
 
     #[test]
