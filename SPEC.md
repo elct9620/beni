@@ -383,12 +383,15 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   `magnus::Object`), accepting Rust closures whose arguments and return
   values cross the boundary through `IntoValue` / `FromValue`; the `Module`
   trait also binds constants, aliases existing methods, mixes another module
-  into the handle, and undefines a method — Ruby's `Module#undef_method` —
+  into the handle two ways — including it after the receiver in the ancestry
+  (Ruby's `Module#include`, the receiver's own methods win) and prepending it
+  ahead of the receiver (Ruby's `Module#prepend`, the module's methods override
+  the receiver's own) — and undefines a method — Ruby's `Module#undef_method` —
   marking the name as not defined on the handle even when an ancestor defines
   it, with a class-method form that undefines a singleton method. A definition,
-  registration, alias, module inclusion, or undefinition mruby rejects —
-  including a cyclic include, or undefining a name absent from the handle and
-  its ancestors — surfaces as a Rust `Err`.
+  registration, alias, module inclusion or prepend, or undefinition mruby
+  rejects — including a cyclic include or prepend, or undefining a name absent
+  from the handle and its ancestors — surfaces as a Rust `Err`.
 - Every definition and lookup keyed by a name — class, module, method, private
   method, module function, class method, constant, the class/module and
   built-in exception-class lookups on `Mrb` and the class/module lookups within
@@ -555,7 +558,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
-| mruby raising during class or module definition, method registration, method aliasing, or module inclusion (including a cyclic include) | surfaced as a Rust `Err`, never unwinds across FFI |
+| mruby raising during class or module definition, method registration, method aliasing, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
 | A registered method body's single-argument read receiving other than one positional argument | raised as an `ArgumentError` to the Ruby caller |
