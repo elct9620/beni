@@ -216,8 +216,16 @@ downcast hands back the handle to operate on it.
 
 Rust bytes convert to a new mruby string, returned as a typed `RString`; a
 string also constructs empty with a preallocated capacity, the buffer Ruby's
-`String.new(capacity:)` reserves for appends that follow. From an mruby string
-Rust reads the bytes three ways:
+`String.new(capacity:)` reserves for appends that follow. A string also
+constructs over a borrowed static buffer without copying its bytes — the no-copy
+counterpart of the copying conversion, where the string aliases the caller's
+bytes instead of owning a copy. The borrowed buffer must stay valid for the whole
+run of the program (a `'static` requirement the construction enforces, making a
+dangling alias impossible), since mruby never frees it; mruby treats such a string
+copy-on-write, so an in-place append or resize reallocates first and then behaves
+like any other string. magnus has no direct analogue, so this construction anchors
+on mruby's own `mrb_str_new_static`, with `mrb_str_new_lit` the convenience that
+borrows a string literal. From an mruby string Rust reads the bytes three ways:
 
 | Read | Yields | Rejects |
 |---|---|---|
