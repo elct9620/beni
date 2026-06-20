@@ -366,14 +366,21 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   including a cyclic include, or undefining a name absent from the handle and
   its ancestors — surfaces as a Rust `Err`.
 - Every definition and lookup keyed by a name — class, module, method, private
-  method, module function, class method, constant, the class/module lookups
-  on `Mrb` and within a namespace, and method dispatch on a value — accepts the
+  method, module function, class method, constant, the class/module and
+  built-in exception-class lookups on `Mrb` and the class/module lookups within
+  a namespace, and method dispatch on a value — accepts the
   name as a symbol-or-name key, mirroring `magnus`'s `IntoId`: a string key
   interns to a symbol, an
   already-interned `Symbol` key is reused without re-interning. A consumer
   holding a `Symbol` reaches the definition or lookup without a redundant
   intern; the result is identical to passing the equivalent name, since both
   resolve to the same interned symbol.
+- A built-in exception-class lookup on `Mrb` guarantees its result is a class
+  descending from `Exception`: it surfaces a Rust `Err` when the name resolves
+  to no constant, when the constant is not a class, and when the resolved class
+  does not descend from `Exception`. This is the typed path to a built-in
+  exception class — `RuntimeError`, `ArgumentError`, `TypeError` — for raising
+  from registered code.
 - A class handle resolves to its real class — its singleton-class and
   include-class links skipped — yielding the first user-facing class in the
   chain. A handle that is already a real class returns itself; the resolution
