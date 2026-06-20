@@ -392,6 +392,14 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   registration, alias, module inclusion or prepend, or undefinition mruby
   rejects — including a cyclic include or prepend, or undefining a name absent
   from the handle and its ancestors — surfaces as a Rust `Err`.
+- The live `Mrb` handle also creates an anonymous class — given a superclass —
+  and an anonymous module, mirroring `magnus`'s anonymous class and module
+  creation. The result is an unnamed `RClass` or `RModule` reachable only
+  through the returned handle, never registered under a name in any namespace;
+  it gains a name only when a consumer later binds it to a constant. Anonymous
+  class creation surfaces a Rust `Err` when mruby rejects the superclass — a
+  non-class, a singleton class, or `Class` itself; anonymous module creation
+  always succeeds.
 - Every definition and lookup keyed by a name — class, module, method, private
   method, module function, class method, constant, the class/module and
   built-in exception-class lookups on `Mrb` and the class/module lookups within
