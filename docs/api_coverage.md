@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 166 (49%) |
+| function | 342 | 332 (97%) | 167 (49%) |
 | macro | 124 | 26 (21%) | 37 (30%) |
-| total | 466 | 358 (77%) | 203 (44%) |
+| total | 466 | 358 (77%) | 204 (44%) |
 
 ## mruby.h
 
@@ -60,7 +60,7 @@ Legend: ✅ covered · — missing
 | `mrb_class_new_instance` | fn | ✅ | — |  |
 | `mrb_class_path` | fn | ✅ | ✅ | `Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous |
 | `mrb_close` | fn | ✅ | ✅ | `Mrb::drop` |
-| `mrb_cmp` | fn | ✅ | — |  |
+| `mrb_cmp` | fn | ✅ | ✅ | `Value::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable |
 | `mrb_context_run` | macro | — | — |  |
 | `mrb_convert_type` | macro | — | — |  |
 | `mrb_define_alias` | fn | ✅ | ✅ | `Module::alias_method` |

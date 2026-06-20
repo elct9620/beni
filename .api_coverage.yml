@@ -122,6 +122,7 @@ typed:
   mrb_ensure_array_type: "`Value::ensure_array` — the raising Array-tag coercion to an `Array` handle; `mrb_check_array_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `Array` downcast and stays in `sys`"
   mrb_ensure_hash_type: "`Value::ensure_hash` — the raising Hash-tag coercion to a `Hash` handle; `mrb_check_hash_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `Hash` downcast and stays in `sys`"
   mrb_ensure_string_type: "`Value::ensure_string` — the raising String-tag coercion to an `RString` handle; `mrb_check_string_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `RString` downcast and stays in `sys`"
+  mrb_cmp: "`Value::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable"
   mrb_eql: Value::eql
   mrb_equal: Value::equal
   mrb_obj_equal: Value::obj_equal

@@ -1489,6 +1489,41 @@ impl Value {
         }
     }
 
+    /// `mrb_cmp(mrb, self, other)` — Ruby's `<=>` three-way comparison.
+    /// Dispatches a user-defined `<=>`, so it runs under `Mrb::protect`:
+    /// `Ok(Some(ordering))` ranks the values, `Ok(None)` when they are
+    /// incomparable (Ruby `<=>` yielding `nil`), or `Err` when the
+    /// dispatched comparison raises. Distinct from `equal` / `eql`, which
+    /// test sameness rather than rank.
+    #[inline]
+    pub fn cmp(self, mrb: &Mrb, other: Value) -> Result<Option<core::cmp::Ordering>, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // and `other` share the VM. `mrb_cmp` may dispatch `<=>`
+                // and raise, caught by `protect`. It returns -1 / 0 / 1
+                // for less / equal / greater and -2 when incomparable;
+                // the small result re-boxes losslessly through `from_int`.
+                let n = unsafe { sys::mrb_cmp(mrb.as_ptr(), self.0, other.0) };
+                Value::from_int(mrb, n)
+            })
+            // SAFETY: the `Ok` value was boxed by `Value::from_int` just
+            // above, so it carries an Integer tag the unbox accepts.
+            .map(|v| match unsafe { v.unbox_integer() } {
+                -1 => Some(core::cmp::Ordering::Less),
+                0 => Some(core::cmp::Ordering::Equal),
+                1 => Some(core::cmp::Ordering::Greater),
+                _ => None,
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_as_int(mrb, self)` — convert `self` to a Rust integer across
     /// the numeric types: an Integer reads directly and a Float truncates
     /// toward zero. A non-numeric value raises `TypeError` and a Float
@@ -1910,6 +1945,44 @@ mod linked_tests {
         // counterpart to the `==` path above.
         let other = mrb.str_new(b"x").as_value();
         assert!(matches!(obj.eql(&mrb, other), Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn cmp_ranks_comparable_values_and_yields_none_for_incomparable() {
+        use core::cmp::Ordering;
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let one = 1i32.into_value(&mrb);
+        let two = 2i32.into_value(&mrb);
+
+        // `<=>` ranks the three orderings.
+        assert!(matches!(one.cmp(&mrb, two), Ok(Some(Ordering::Less))));
+        assert!(matches!(one.cmp(&mrb, one), Ok(Some(Ordering::Equal))));
+        assert!(matches!(two.cmp(&mrb, one), Ok(Some(Ordering::Greater))));
+
+        // Values with no ordering between them — an integer against a
+        // string — yield nothing rather than an error.
+        let s = mrb.str_new(b"x").as_value();
+        assert!(matches!(one.cmp(&mrb, s), Ok(None)));
+    }
+
+    #[test]
+    fn cmp_surfaces_a_raising_user_method_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"cmp_test.rb").expect("allocating the context must succeed");
+
+        let obj = cxt.load_nstring(b"class BoomCmp; def <=>(o); raise 'no'; end; end; BoomCmp.new");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "defining the class must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+
+        // Comparing dispatches the user `<=>`, which raises — the raise
+        // surfaces as Err rather than unwinding across the call.
+        let other = mrb.str_new(b"x").as_value();
+        assert!(matches!(obj.cmp(&mrb, other), Err(Error::Exception(_))));
     }
 
     #[test]
