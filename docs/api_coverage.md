@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 338 (99%) | 182 (53%) |
-| macro | 124 | 28 (23%) | 52 (42%) |
-| total | 466 | 366 (79%) | 234 (50%) |
+| macro | 124 | 28 (23%) | 53 (43%) |
+| total | 466 | 366 (79%) | 235 (50%) |
 
 ## mruby.h
 
@@ -459,7 +459,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_to_cstr` | fn | ✅ | — |  |
 | `mrb_str_to_dbl` | fn | ✅ | ✅ | `RString::to_f` — strict float parse (badcheck on); raises ArgumentError on non-float input |
 | `mrb_str_to_integer` | fn | ✅ | ✅ | `RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input |
-| `mrb_str_to_inum` | macro | — | — |  |
+| `mrb_str_to_inum` | macro | — | ✅ | `RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError |
 | `mrb_string_cstr` | fn | ✅ | ✅ | `RString::to_cstr` |
 | `mrb_string_value_cstr` | fn | ✅ | — |  |
 | `mrb_string_value_len` | macro | — | — |  |

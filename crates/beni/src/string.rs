@@ -595,6 +595,47 @@ impl RString {
         }
     }
 
+    /// `mrb_str_to_inum(mrb, self, base, FALSE)` — parse the bytes to an
+    /// integer in `base` the lenient way Ruby's `String#to_i` itself does, the
+    /// best-effort counterpart of the strict `to_i`. It consumes the leading
+    /// integer and ignores any trailing characters, and yields `0` when no
+    /// integer begins the bytes rather than rejecting them — so `"12abc"` reads
+    /// `12`, `"hello"` and `""` read `0`, and malformed content never surfaces
+    /// an `Err`. The `base` is 2 through 36, or 0 to auto-detect a leading `0x`
+    /// / `0b` / `0o` prefix; a `base` outside that domain is the one input the
+    /// lenient parse cannot interpret and raises `ArgumentError`, which the
+    /// surrounding `Mrb::protect` surfaces as `Err` rather than long-jumping.
+    #[inline]
+    pub fn to_inum(self, mrb: &Mrb, base: i32) -> Result<sys::mrb_int, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `self` is String-tagged by the newtype contract;
+                // `mrb` is alive inside the protect frame. `mrb_str_to_integer`
+                // with `badcheck` FALSE never raises on malformed content — it
+                // returns the leading integer or 0 — but still raises
+                // `ArgumentError` on an out-of-domain radix, caught by `protect`
+                // into `Err`. On success it returns an Integer-tagged value.
+                Value::from_raw(unsafe {
+                    sys::mrb_str_to_integer(
+                        mrb.as_ptr(),
+                        self.0.as_raw(),
+                        base as sys::mrb_int,
+                        false,
+                    )
+                })
+            })
+            // SAFETY: a successful `mrb_str_to_integer` returns an
+            // Integer-tagged value, so the unbox accepts it.
+            .map(|v| unsafe { v.unbox_integer() })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, base);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_str_to_dbl(mrb, self, TRUE)` — parse the bytes to a float, the
     /// strict counterpart of Ruby's lenient `String#to_f`. With strict
     /// checking on, any input that is not a clean float — trailing junk or
@@ -1033,6 +1074,58 @@ mod tests {
         // Bytes with no valid integer at all raise too.
         assert!(matches!(
             mrb.str_new(b"hello").to_i(&mrb, 10),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn to_inum_parses_leniently_without_raising_on_malformed_content() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A clean decimal string parses to its value.
+        assert_eq!(
+            mrb.str_new(b"12345")
+                .to_inum(&mrb, 10)
+                .expect("a decimal string parses"),
+            12345
+        );
+
+        // Trailing junk is ignored — unlike strict to_i, the lenient parse
+        // consumes the leading integer and stops, the way Ruby's String#to_i
+        // does.
+        assert_eq!(
+            mrb.str_new(b"12abc")
+                .to_inum(&mrb, 10)
+                .expect("a malformed-prefix string reads its leading integer"),
+            12
+        );
+
+        // Bytes with no integer at the start yield 0 rather than an Err.
+        assert_eq!(
+            mrb.str_new(b"hello")
+                .to_inum(&mrb, 10)
+                .expect("non-numeric bytes read 0"),
+            0
+        );
+
+        // A non-decimal base parses in that radix.
+        assert_eq!(
+            mrb.str_new(b"ff")
+                .to_inum(&mrb, 16)
+                .expect("a hex string parses"),
+            255
+        );
+    }
+
+    #[test]
+    fn to_inum_surfaces_an_illegal_radix_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A radix outside the 2-through-36 / 0-prefix domain is the one input
+        // the lenient parse cannot interpret, so it raises ArgumentError even
+        // with strict checking off — protect catches it into Err.
+        assert!(matches!(
+            mrb.str_new(b"10").to_inum(&mrb, 99),
             Err(Error::Exception(_))
         ));
     }
