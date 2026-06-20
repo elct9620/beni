@@ -199,6 +199,8 @@ typed:
   mrb_top_self: Mrb::load_bytecode
   mrb_true_p: Value::is_true
   mrb_true_value: Value::true_
+  mrb_undef_class_method_id: "`Object::undef_singleton_method` — undefine a class method (a class's singleton method); routes both the symbol-or-name key through the raising `_id` form, so the `mrb_undef_class_method` string variant stays in `sys`"
+  mrb_undef_method_id: "`Module::undef_method` — Ruby's `Module#undef_method`; both the symbol-or-name key route through the raising `_id` form, so the `mrb_undef_method` string variant (which does not raise) stays in `sys`"
   mrb_yield_argv: Proc::call
 
 extensions:

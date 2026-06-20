@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 139 (41%) |
+| function | 342 | 332 (97%) | 141 (41%) |
 | macro | 124 | 25 (20%) | 35 (28%) |
-| total | 466 | 357 (77%) | 174 (37%) |
+| total | 466 | 357 (77%) | 176 (38%) |
 
 ## mruby.h
 
@@ -217,9 +217,9 @@ Legend: ✅ covered · — missing
 | `mrb_type_convert` | fn | ✅ | — |  |
 | `mrb_type_convert_check` | fn | ✅ | — |  |
 | `mrb_undef_class_method` | fn | ✅ | — |  |
-| `mrb_undef_class_method_id` | fn | ✅ | — |  |
+| `mrb_undef_class_method_id` | fn | ✅ | ✅ | `Object::undef_singleton_method` — undefine a class method (a class's singleton method); routes both the symbol-or-name key through the raising `_id` form, so the `mrb_undef_class_method` string variant stays in `sys` |
 | `mrb_undef_method` | fn | ✅ | — |  |
-| `mrb_undef_method_id` | fn | ✅ | — |  |
+| `mrb_undef_method_id` | fn | ✅ | ✅ | `Module::undef_method` — Ruby's `Module#undef_method`; both the symbol-or-name key route through the raising `_id` form, so the `mrb_undef_method` string variant (which does not raise) stays in `sys` |
 | `mrb_utf8_free` | macro | — | — |  |
 | `mrb_utf8_from_locale` | fn | — | — |  |
 | `mrb_vformat` | fn | ✅ | — |  |

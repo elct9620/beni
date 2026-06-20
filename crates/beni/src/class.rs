@@ -541,6 +541,36 @@ pub trait Module: private::ClassLike {
         }
     }
 
+    /// `mrb_undef_method_id(mrb, self, name)` — undefine a method on
+    /// this class or module, Ruby's `Module#undef_method`: the name is
+    /// marked as not defined on the handle even when an ancestor defines
+    /// it. The name is a symbol-or-name key (`IntoSym`); both forms
+    /// resolve to the same interned symbol and route through the raising
+    /// `_id` C function, so undefining a name absent from the handle and
+    /// its ancestors surfaces as `Err(Error::Exception)` (mruby's
+    /// `NameError`) rather than long-jumping — the same contract as the
+    /// definition methods above.
+    fn undef_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            let sym = name.into_sym(mrb);
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` originates from the same VM; `sym` was interned
+                // against it. `mrb_undef_method_id` raises NameError when
+                // the method is absent — caught by `protect`.
+                unsafe { sys::mrb_undef_method_id(mrb.as_ptr(), self.raw(), sym) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_include_module(mrb, self, module)` — mix `module` into this
     /// class or module, Ruby's `include`. A frozen receiver raises
     /// `FrozenError` and a cyclic include raises `ArgumentError`; both
@@ -636,6 +666,35 @@ pub trait Object: private::ClassLike {
         #[cfg(not(mruby_linked))]
         {
             let _ = (mrb, name, method.func, method.arity);
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_undef_class_method_id(mrb, self, name)` — undefine a
+    /// singleton method on this handle: the class-method counterpart of
+    /// `Module::undef_method`'s instance form, since a class's singleton
+    /// method is its class method. The name is a symbol-or-name
+    /// key (`IntoSym`), routed through the raising `_id` C function, so
+    /// undefining a singleton name absent from the handle surfaces as
+    /// `Err(Error::Exception)` (mruby's `NameError`).
+    fn undef_singleton_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            let sym = name.into_sym(mrb);
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` originates from the same VM; `sym` was interned
+                // against it. `mrb_undef_class_method_id` resolves the
+                // singleton class and raises NameError when the method is
+                // absent — caught by `protect`.
+                unsafe { sys::mrb_undef_class_method_id(mrb.as_ptr(), self.raw(), sym) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name);
             crate::not_linked()
         }
     }
@@ -1160,6 +1219,112 @@ mod tests {
             "the NameError must name the missing method: {}",
             err.message(&mrb)
         );
+    }
+
+    #[test]
+    fn undef_method_marks_a_method_undefined_on_the_handle() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let class = mrb
+            .define_class(c"BeniUndef", object)
+            .expect("defining the class must succeed");
+        class
+            .define_method(&mrb, c"answer", crate::method!(answer_seven, 0))
+            .expect("registering the method must succeed");
+
+        // The method responds before undefinition.
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let got = receiver
+            .funcall(&mrb, c"answer", &[])
+            .expect("the defined method must be callable before undefinition");
+        assert_eq!(unsafe { got.unbox_integer() }, 7);
+
+        class
+            .undef_method(&mrb, c"answer")
+            .expect("undefining a defined method must succeed");
+
+        // After undefinition, VM dispatch raises NoMethodError — the
+        // consumer-visible point of marking the name as not defined.
+        let cxt = crate::Ccontext::new(&mrb, c"undef_test.rb")
+            .expect("allocating the compile context must succeed");
+        let _ = cxt.load_nstring(b"BeniUndef.new.answer");
+        let exc = mrb.pending_exc();
+        assert!(!exc.is_nil(), "dispatching an undefined method must raise");
+        let message = Error::Exception(exc).message(&mrb);
+        assert!(
+            message.contains("answer"),
+            "the NoMethodError must name the undefined method: {message}"
+        );
+        mrb.clear_exc();
+    }
+
+    #[test]
+    fn undef_method_surfaces_name_error_for_absent_method() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let class = mrb
+            .define_class(c"BeniUndefMissing", object)
+            .expect("defining the class must succeed");
+
+        // The name key routes through the raising `_id` form (the string
+        // C function does not raise), so undefining a name absent from the
+        // handle and its ancestors surfaces as Err, not a longjmp.
+        let err = class
+            .undef_method(&mrb, c"no_such_method")
+            .expect_err("undefining an absent method must surface as Err");
+        assert!(matches!(err, Error::Exception(_)));
+        assert!(
+            err.message(&mrb).contains("no_such_method"),
+            "the NameError must name the absent method: {}",
+            err.message(&mrb)
+        );
+    }
+
+    #[test]
+    fn undef_singleton_method_marks_a_class_method_undefined() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let class = mrb
+            .define_class(c"BeniUndefClassMethod", object)
+            .expect("defining the class must succeed");
+        class
+            .define_singleton_method(&mrb, c"class_answer", crate::method!(answer_nine, 0))
+            .expect("registering the class method must succeed");
+
+        // The class method responds before undefinition.
+        // SAFETY: `class` is a live handle from this VM.
+        let class_value = unsafe { class.to_value(&mrb) };
+        let got = class_value
+            .funcall(&mrb, c"class_answer", &[])
+            .expect("the class method must be callable before undefinition");
+        assert_eq!(unsafe { got.unbox_integer() }, 9);
+
+        class
+            .undef_singleton_method(&mrb, c"class_answer")
+            .expect("undefining a defined class method must succeed");
+
+        // After undefinition, dispatching the class method raises
+        // NoMethodError — the singleton-method form of the contract.
+        let cxt = crate::Ccontext::new(&mrb, c"undef_class_test.rb")
+            .expect("allocating the compile context must succeed");
+        let _ = cxt.load_nstring(b"BeniUndefClassMethod.class_answer");
+        let exc = mrb.pending_exc();
+        assert!(
+            !exc.is_nil(),
+            "dispatching an undefined class method must raise"
+        );
+        mrb.clear_exc();
+
+        // Undefining an absent class method surfaces as Err.
+        let err = class
+            .undef_singleton_method(&mrb, c"never_defined")
+            .expect_err("undefining an absent class method must surface as Err");
+        assert!(matches!(err, Error::Exception(_)));
     }
 
     #[test]
