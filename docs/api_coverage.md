@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 199 (58%) |
+| function | 342 | 338 (99%) | 200 (58%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 252 (54%) |
+| total | 466 | 366 (79%) | 253 (54%) |
 
 ## mruby.h
 
@@ -32,7 +32,7 @@ Legend: ✅ covered · — missing
 | `mrb_argnum_error` | fn | ✅ | ✅ | `Error::argnum` |
 | `mrb_as_float` | macro | ✅ | ✅ | `Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast |
 | `mrb_as_int` | macro | ✅ | ✅ | `Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast |
-| `mrb_attr_get` | fn | ✅ | — |  |
+| `mrb_attr_get` | fn | ✅ | ✅ | `Value::iv_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `iv_get` already takes a raw `mrb_sym`, so it yields an identical value for every key a typed caller can form and no separate item is needed |
 | `mrb_basic_alloc_func` | fn | ✅ | — |  |
 | `mrb_block_given_p` | fn | ✅ | ✅ | `Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises |
 | `mrb_bug` | fn | ✅ | — |  |
