@@ -189,6 +189,11 @@ typed:
   mrb_module_new: "`Mrb::module_new` — create an anonymous module, bound to no constant"
   mrb_nil_p: Value::is_nil
   mrb_nil_value: Value::nil
+  mrb_num_add: "`Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width. The obsolete macro `mrb_num_plus(mrb, x, y)` is a `#define` alias of `mrb_num_add`, so the same Rust item graduates it"
+  mrb_num_plus: "`Value::add` — the macro `mrb_num_plus(mrb, x, y)` is a `#define` alias of `mrb_num_add`, so the same Rust item graduates it; no separate item is needed"
+  mrb_num_sub: "`Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width). The obsolete macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it"
+  mrb_num_minus: "`Value::sub` — the macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it; no separate item is needed"
+  mrb_num_mul: "`Value::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width)"
   mrb_obj_as_string: Value::obj_as_string
   mrb_obj_class: Value::class
   mrb_obj_classname: Value::classname

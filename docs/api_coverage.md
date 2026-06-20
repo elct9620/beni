@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 179 (52%) |
-| macro | 124 | 28 (23%) | 45 (36%) |
-| total | 466 | 366 (79%) | 224 (48%) |
+| function | 342 | 338 (99%) | 182 (53%) |
+| macro | 124 | 28 (23%) | 47 (38%) |
+| total | 466 | 366 (79%) | 229 (49%) |
 
 ## mruby.h
 
@@ -390,11 +390,11 @@ Legend: ✅ covered · — missing
 | `mrb_float_to_integer` | fn | ✅ | ✅ | `Value::float_to_int` — convert a Float value to the Integer value it truncates toward zero (Ruby's Float#to_i / Float#to_int); guards the Float tag (TypeError) and raises RangeError on an infinite or NaN float |
 | `mrb_int_to_cstr` | fn | ✅ | — |  |
 | `mrb_integer_to_str` | fn | ✅ | ✅ | `Value::int_to_str` — render an Integer value to an RString in a radix (Ruby's Integer#to_s(base)); guards the Integer tag (TypeError) and raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys` |
-| `mrb_num_add` | fn | ✅ | — |  |
-| `mrb_num_minus` | macro | — | — |  |
-| `mrb_num_mul` | fn | ✅ | — |  |
-| `mrb_num_plus` | macro | — | — |  |
-| `mrb_num_sub` | fn | ✅ | — |  |
+| `mrb_num_add` | fn | ✅ | ✅ | `Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width. The obsolete macro `mrb_num_plus(mrb, x, y)` is a `#define` alias of `mrb_num_add`, so the same Rust item graduates it |
+| `mrb_num_minus` | macro | — | ✅ | `Value::sub` — the macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it; no separate item is needed |
+| `mrb_num_mul` | fn | ✅ | ✅ | `Value::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
+| `mrb_num_plus` | macro | — | ✅ | `Value::add` — the macro `mrb_num_plus(mrb, x, y)` is a `#define` alias of `mrb_num_add`, so the same Rust item graduates it; no separate item is needed |
+| `mrb_num_sub` | fn | ✅ | ✅ | `Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width). The obsolete macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it |
 ## mruby/proc.h
 
 | Symbol | Kind | sys | typed | Note |

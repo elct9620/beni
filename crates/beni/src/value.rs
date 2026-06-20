@@ -355,6 +355,86 @@ impl Value {
         }
     }
 
+    /// Add `other` to `self`, Ruby's `+` on `Integer` and `Float` — `2 + 3`
+    /// to `5`, `2 + 3.5` to `5.5`. The result stays an mruby `Value`: an
+    /// Integer when both operands are integers and the result fits the
+    /// configured integer width, a Float when either operand is a float, the
+    /// mixed case widening the integer operand. `mrb_num_add` dispatches its
+    /// receiver on the numeric tag, so a non-numeric operand raises `TypeError`
+    /// and an integer result past the configured width raises `RangeError`;
+    /// both run under `Mrb::protect`, surfacing as `Err` rather than
+    /// long-jumping. magnus's `coerce_bin` routes through the full Ruby
+    /// coercion protocol, which mruby has no counterpart to, so this anchors on
+    /// mruby's own `mrb_num_add` (the obsolete macro `mrb_num_plus` aliases it).
+    #[inline]
+    pub fn add(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self` and
+                // `other` originate from the same VM. `mrb_num_add` raises
+                // `TypeError` on a non-numeric operand and `RangeError` on an
+                // integer result past the configured width — both caught by
+                // `protect` into `Err`.
+                Value(unsafe { sys::mrb_num_add(mrb.as_ptr(), self.0, other.0) })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
+    /// Subtract `other` from `self`, Ruby's `-` on `Integer` and `Float`. The
+    /// result type and raises mirror `Value::add`: an Integer when both
+    /// operands are integers and the result fits the configured width, a Float
+    /// when either is a float; a non-numeric operand raises `TypeError` and an
+    /// integer result past the configured width raises `RangeError`, both
+    /// caught by `Mrb::protect`. Anchors on mruby's own `mrb_num_sub` (the
+    /// obsolete macro `mrb_num_minus` aliases it).
+    #[inline]
+    pub fn sub(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: as `Value::add`. `mrb_num_sub` raises `TypeError` on
+                // a non-numeric operand and `RangeError` on an integer result
+                // past the configured width — both caught by `protect`.
+                Value(unsafe { sys::mrb_num_sub(mrb.as_ptr(), self.0, other.0) })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
+    /// Multiply `self` by `other`, Ruby's `*` on `Integer` and `Float`. The
+    /// result type and raises mirror `Value::add`: an Integer when both
+    /// operands are integers and the result fits the configured width, a Float
+    /// when either is a float; a non-numeric operand raises `TypeError` and an
+    /// integer result past the configured width raises `RangeError`, both
+    /// caught by `Mrb::protect`. Anchors on mruby's own `mrb_num_mul`.
+    #[inline]
+    pub fn mul(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: as `Value::add`. `mrb_num_mul` raises `TypeError` on
+                // a non-numeric operand and `RangeError` on an integer result
+                // past the configured width — both caught by `protect`.
+                Value(unsafe { sys::mrb_num_mul(mrb.as_ptr(), self.0, other.0) })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
     /// Coerce `self` to a string value — `self` unchanged when it is
     /// already a string, otherwise the result of its `to_s`. Runs under
     /// `Mrb::protect`: `Ok` with the string value, or `Err` when `to_s`
@@ -2943,6 +3023,84 @@ mod linked_tests {
         // Integer is rejected with TypeError, not passed through.
         assert!(matches!(
             Value::from_int(&mrb, 7).float_to_int(&mrb),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn arithmetic_computes_on_integers_and_floats() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Integer operands yield an Integer result, like Ruby's 2 + 3 == 5.
+        let sum = Value::from_int(&mrb, 2)
+            .add(&mrb, Value::from_int(&mrb, 3))
+            .expect("2 + 3 computes");
+        assert_eq!(i32::from_value(sum), Some(5));
+        // Subtraction and multiplication follow the same Integer path.
+        let diff = Value::from_int(&mrb, 10)
+            .sub(&mrb, Value::from_int(&mrb, 4))
+            .expect("10 - 4 computes");
+        assert_eq!(i32::from_value(diff), Some(6));
+        let product = Value::from_int(&mrb, 6)
+            .mul(&mrb, Value::from_int(&mrb, 7))
+            .expect("6 * 7 computes");
+        assert_eq!(i32::from_value(product), Some(42));
+    }
+
+    #[test]
+    fn arithmetic_widens_a_mixed_operand_to_float() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A float operand widens the result to a Float, like Ruby's
+        // 2 + 3.5 == 5.5; f64::from_value reads only the Float tag, so a Some
+        // confirms the result is a Float, not an Integer.
+        let sum = Value::from_int(&mrb, 2)
+            .add(&mrb, Value::from_float(&mrb, 3.5))
+            .expect("2 + 3.5 computes");
+        assert_eq!(f64::from_value(sum), Some(5.5));
+        // The float receiver path widens the same way.
+        let product = Value::from_float(&mrb, 1.5)
+            .mul(&mrb, Value::from_int(&mrb, 4))
+            .expect("1.5 * 4 computes");
+        assert_eq!(f64::from_value(product), Some(6.0));
+    }
+
+    #[test]
+    fn arithmetic_rejects_a_non_numeric_operand() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // mrb_num_add dispatches on the numeric tag: a non-numeric right
+        // operand raises TypeError, caught into Err rather than long-jumping.
+        assert!(matches!(
+            Value::from_int(&mrb, 1).add(&mrb, Value::nil()),
+            Err(Error::Exception(_))
+        ));
+        // A non-numeric receiver is rejected the same way.
+        assert!(matches!(
+            Value::nil().add(&mrb, Value::from_int(&mrb, 1)),
+            Err(Error::Exception(_))
+        ));
+        // The VM stays usable after the protected raise.
+        assert_eq!(
+            i32::from_value(
+                Value::from_int(&mrb, 1)
+                    .add(&mrb, Value::from_int(&mrb, 1))
+                    .expect("the VM survives the protected raise")
+            ),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn arithmetic_surfaces_integer_overflow_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // An integer result past the configured width raises RangeError under
+        // the validation config (no bigint promotion), caught into Err. The
+        // bound is read from sys::mrb_int so the test holds at any width.
+        let max = Value::from_int(&mrb, sys::mrb_int::MAX);
+        assert!(matches!(
+            max.add(&mrb, Value::from_int(&mrb, 1)),
             Err(Error::Exception(_))
         ));
     }
