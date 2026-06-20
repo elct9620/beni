@@ -3558,14 +3558,28 @@ mod linked_tests {
     fn arithmetic_surfaces_integer_overflow_as_err() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-        // An integer result past the configured width raises RangeError under
-        // the validation config (no bigint promotion), caught into Err. The
-        // bound is read from sys::mrb_int so the test holds at any width.
+        // An integer result past the configured width has two lawful
+        // outcomes, branched on the build's integer model rather than a
+        // compile-time flag: a fixed-width config (no bigint) raises
+        // RangeError, caught into Err; a bigint config promotes the result to
+        // a BigInt and returns it. The bound is read from sys::mrb_int so the
+        // overflow is forced at any width.
         let max = Value::from_int(&mrb, sys::mrb_int::MAX);
-        assert!(matches!(
-            max.add(&mrb, Value::from_int(&mrb, 1)),
-            Err(Error::Exception(_))
-        ));
+        match max.add(&mrb, Value::from_int(&mrb, 1)) {
+            Err(Error::Exception(exc)) => {
+                // The fixed-width lane stays strict: the surfaced exception is
+                // exactly the RangeError the SPEC mandates for that config.
+                assert_eq!(exc.classname(&mrb), "RangeError");
+            }
+            Ok(promoted) => {
+                // The bigint lane lawfully promotes instead of raising; the
+                // result keeps the Integer class (a BigInt is allocated on
+                // mruby's integer_class), so the value stays a numeric
+                // Integer rather than degrading to another type.
+                assert_eq!(promoted.classname(&mrb), "Integer");
+            }
+            Err(other) => panic!("overflow must surface as a RangeError, got {other:?}"),
+        }
     }
 
     #[test]
