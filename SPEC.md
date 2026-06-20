@@ -644,6 +644,14 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   ends, and the scope's end releases it. `keep` ends the scope and
   re-protects the one value it names; dropping the scope ends it with no
   survivor.
+- `Mrb::full_gc` and `Mrb::incremental_gc` drive collection directly:
+  `full_gc` runs one complete collection cycle, `incremental_gc` advances
+  the collector by a single step. Both are total — they return nothing,
+  never raise, and are safe to call whenever the VM is alive (a disabled or
+  mid-collection collector ignores the request). This is the collection-timing
+  concern, distinct from `arena_scope`: the arena governs which values stay
+  reachable, these methods govern when the collector reclaims the unreachable
+  rest. Both graduate because correct use needs no reasoning about VM internals.
 - A typed `Proc` handle wraps an mruby block. `Proc::call` invokes it with
   an argument slice under the same exception protection as closure-based
   `protect`: the block's normal return is the `Ok` value, and any non-local
