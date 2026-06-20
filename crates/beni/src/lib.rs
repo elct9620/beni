@@ -225,6 +225,7 @@ mod tests {
         let _ = <RClass as Module>::define_class::<&core::ffi::CStr>;
         let _ = <RClass as Module>::define_module::<&core::ffi::CStr>;
         let _ = <RClass as Module>::class_get::<&core::ffi::CStr>;
+        let _ = <RClass as Module>::module_get::<&core::ffi::CStr>;
         let _ = <RClass as Module>::define_method::<&core::ffi::CStr>;
         let _ = <RClass as Module>::define_private_method::<&core::ffi::CStr>;
         let _ = <RClass as Module>::define_module_function::<&core::ffi::CStr>;

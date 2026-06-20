@@ -399,6 +399,29 @@ pub trait Module: private::ClassLike {
         }
     }
 
+    /// `mrb_module_get_under_id(mrb, self, name)` — fetch the nested
+    /// module `self::name`. The name is a symbol-or-name key
+    /// (`IntoSym`). mruby raises `NameError` when the constant is
+    /// missing and `TypeError` when it is not a module (vendored
+    /// `src/class.c` documents both), so the lookup is fallible by
+    /// contract.
+    fn module_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
+        #[cfg(mruby_linked)]
+        {
+            let sym = name.into_sym(mrb);
+            protect_class_ptr(mrb, |mrb| {
+                // SAFETY: as `define_class`.
+                unsafe { sys::mrb_module_get_under_id(mrb.as_ptr(), self.raw(), sym) }
+            })
+            .map(RModule::from_raw)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, name);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_define_method_id(mrb, self, name, func, aspec)` — register
     /// an instance method from a `method!`-wrapped Rust function. The
     /// name is a symbol-or-name key (`IntoSym`). The aspec is derived
@@ -909,6 +932,58 @@ mod tests {
             "the NameError must name the missing constant: {}",
             err.message(&mrb)
         );
+    }
+
+    #[test]
+    fn module_get_fetches_a_nested_module_by_either_key() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // The namespaced module lookup mirrors the nested class_get:
+        // a name key and a Symbol key both route through
+        // `mrb_module_get_under_id` and resolve to the same module.
+        let outer = mrb
+            .define_module(c"BeniModNs")
+            .expect("defining the outer module must succeed");
+        let nested = outer
+            .define_module(&mrb, c"Inner")
+            .expect("defining the nested module must succeed");
+        assert_eq!(nested.name(&mrb), Some("BeniModNs::Inner"));
+
+        let by_name = outer
+            .module_get(&mrb, c"Inner")
+            .expect("fetching the nested module by name must succeed");
+        let by_sym = outer
+            .module_get(&mrb, crate::Symbol::new(&mrb, c"Inner"))
+            .expect("fetching the nested module by Symbol key must succeed");
+        assert_eq!(by_name.name(&mrb), Some("BeniModNs::Inner"));
+        assert_eq!(by_name.as_raw(), by_sym.as_raw());
+    }
+
+    #[test]
+    fn module_get_surfaces_err_for_missing_and_non_module() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let outer = mrb
+            .define_module(c"BeniModNsErr")
+            .expect("defining the outer module must succeed");
+
+        // mruby raises NameError for a missing constant — caught into
+        // Err instead of long-jumping.
+        let missing = outer
+            .module_get(&mrb, c"BeniNoSuchModule")
+            .expect_err("a missing nested module must surface as Err");
+        assert!(matches!(missing, Error::Exception(_)));
+
+        // A nested class is not a module: mruby raises TypeError, also
+        // surfaced as Err.
+        outer
+            .define_class(&mrb, c"NotAModule", object)
+            .expect("defining the nested class must succeed");
+        let not_module = outer
+            .module_get(&mrb, c"NotAModule")
+            .expect_err("a non-module constant must surface as Err");
+        assert!(matches!(not_module, Error::Exception(_)));
     }
 
     #[test]

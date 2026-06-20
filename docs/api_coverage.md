@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 146 (43%) |
+| function | 342 | 332 (97%) | 148 (43%) |
 | macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 182 (39%) |
+| total | 466 | 357 (77%) | 184 (39%) |
 
 ## mruby.h
 
@@ -146,8 +146,8 @@ Legend: ✅ covered · — missing
 | `mrb_method_cache_clear` | fn | ✅ | — |  |
 | `mrb_module_get` | fn | ✅ | ✅ | `Mrb::module_get` with a name key — interns and routes through `mrb_module_get_id` |
 | `mrb_module_get_id` | fn | ✅ | ✅ | `Mrb::module_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) |
-| `mrb_module_get_under` | fn | ✅ | — |  |
-| `mrb_module_get_under_id` | fn | ✅ | — |  |
+| `mrb_module_get_under` | fn | ✅ | ✅ | `Module::module_get` with a name key — interns and routes through `mrb_module_get_under_id` |
+| `mrb_module_get_under_id` | fn | ✅ | ✅ | `Module::module_get` with a `Symbol` key (the symbol-or-name key) |
 | `mrb_module_new` | fn | ✅ | — |  |
 | `mrb_name_error` | fn | ✅ | — |  |
 | `mrb_notimplement` | fn | ✅ | — |  |
