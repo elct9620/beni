@@ -693,6 +693,36 @@ pub trait Module: private::ClassLike {
             crate::not_linked()
         }
     }
+
+    /// `mrb_class_path(mrb, self)` — the handle's fully-qualified path,
+    /// the namespace chain leading to it (`"Outer::Inner"` for a nested
+    /// class, the bare name for a top-level one). Returns `None` for an
+    /// anonymous handle that has no place in any namespace. A total read
+    /// that never raises. Unlike `name`, which always answers a name —
+    /// synthesizing a `#<Class:0x…>` form for an anonymous handle — and
+    /// borrows mruby's VM-lifetime class-name storage, `path` answers the
+    /// qualified path or nothing and returns an owned `String` copied out
+    /// of the freshly built path string.
+    fn path(self, mrb: &Mrb) -> Option<String> {
+        #[cfg(mruby_linked)]
+        {
+            use crate::FromValue;
+            // SAFETY: `mrb` is alive by the borrow; `self` originates
+            // from the same VM by the single-VM contract. `mrb_class_path`
+            // walks the namespace chain and never raises; it answers nil
+            // for an anonymous handle and a String otherwise.
+            let value = Value::from_raw(unsafe { sys::mrb_class_path(mrb.as_ptr(), self.raw()) });
+            if value.is_nil() {
+                return None;
+            }
+            String::from_value(value)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
 }
 
 impl Module for RClass {}
@@ -1599,5 +1629,44 @@ mod tests {
         assert!(mrb.pending_exc().is_nil(), "exc_new must not raise");
         assert_eq!(exc.classname(&mrb), "RuntimeError");
         assert_eq!(Error::Exception(exc).message(&mrb), "something failed");
+    }
+
+    #[test]
+    fn path_reads_the_qualified_namespace_chain() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        // A nested class reads its full namespace path, not just its leaf
+        // name — the consumer-visible point of the path read.
+        let outer = mrb
+            .define_module(c"BeniPathNs")
+            .expect("defining the outer module must succeed");
+        let inner = outer
+            .define_class(&mrb, c"Inner", object)
+            .expect("defining the nested class must succeed");
+        assert_eq!(inner.path(&mrb), Some("BeniPathNs::Inner".to_string()));
+
+        // A top-level handle's path is its bare name.
+        let top = mrb
+            .define_class(c"BeniPathTop", object)
+            .expect("defining the top-level class must succeed");
+        assert_eq!(top.path(&mrb), Some("BeniPathTop".to_string()));
+
+        // The read is total — it leaves no pending exception behind.
+        assert!(mrb.pending_exc().is_nil(), "path must not raise");
+    }
+
+    #[test]
+    fn path_yields_none_for_an_anonymous_class() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        // An anonymous class has no place in any namespace, so its path is
+        // nothing — distinct from `name`, which synthesizes a stand-in.
+        let anon = mrb
+            .class_new(object)
+            .expect("creating an anonymous class under Object must succeed");
+        assert_eq!(anon.path(&mrb), None);
+        assert!(mrb.pending_exc().is_nil(), "path must not raise");
     }
 }

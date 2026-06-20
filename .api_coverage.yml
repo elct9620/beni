@@ -82,6 +82,7 @@ typed:
   mrb_class_real: "`RClass::real` — resolve a class handle to its real class, skipping singleton / include classes; `mrb_class` (the raw class of a value, which may be a singleton or include class and needs VM-internal reasoning) stays in `sys`, and `Value::class` via `mrb_obj_class` already returns the real class of a value"
   mrb_class_name: Module::name
   mrb_class_new: "`Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant"
+  mrb_class_path: "`Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous"
   mrb_class_ptr: Value::as_class_ptr
   mrb_close: Mrb::drop
   mrb_const_defined: Value::const_defined

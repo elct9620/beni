@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 157 (46%) |
+| function | 342 | 332 (97%) | 158 (46%) |
 | macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 193 (41%) |
+| total | 466 | 357 (77%) | 194 (42%) |
 
 ## mruby.h
 
@@ -58,7 +58,7 @@ Legend: ✅ covered · — missing
 | `mrb_class_name` | fn | ✅ | ✅ | `Module::name` |
 | `mrb_class_new` | fn | ✅ | ✅ | `Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant |
 | `mrb_class_new_instance` | fn | ✅ | — |  |
-| `mrb_class_path` | fn | ✅ | — |  |
+| `mrb_class_path` | fn | ✅ | ✅ | `Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous |
 | `mrb_close` | fn | ✅ | ✅ | `Mrb::drop` |
 | `mrb_cmp` | fn | ✅ | — |  |
 | `mrb_context_run` | macro | — | — |  |
