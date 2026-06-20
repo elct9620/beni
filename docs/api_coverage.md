@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 191 (56%) |
+| function | 342 | 338 (99%) | 192 (56%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 244 (52%) |
+| total | 466 | 366 (79%) | 245 (53%) |
 
 ## mruby.h
 
@@ -255,7 +255,7 @@ Legend: ✅ covered · — missing
 | `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
 | `mrb_ary_shift` | fn | ✅ | ✅ | `Array::shift` |
 | `mrb_ary_splat` | fn | ✅ | ✅ | `Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `Array`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `Array` downcast (the tag-test that reads a non-Array as absent) |
-| `mrb_ary_splice` | fn | ✅ | — |  |
+| `mrb_ary_splice` | fn | ✅ | ✅ | `Array::splice` |
 | `mrb_ary_unshift` | fn | ✅ | ✅ | `Array::unshift` |
 | `mrb_ary_value` | macro | — | — |  |
 | `mrb_assoc_new` | fn | ✅ | ✅ | `Mrb::assoc_new` |

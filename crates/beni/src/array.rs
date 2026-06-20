@@ -281,6 +281,53 @@ impl Array {
         }
     }
 
+    /// `mrb_ary_splice(mrb, self, head, len, rpl)` — replace the `len`
+    /// elements starting at `head` with `rpl`, in place, Ruby's
+    /// `ary[head, len] = rpl`: the primitive behind indexed assignment,
+    /// insertion, and deletion. An Array `rpl` splices in its elements;
+    /// any other value is inserted as the single element it is — pass an
+    /// empty array to delete without inserting. A `head` past the end
+    /// grows the array with `nil` to reach it; a negative `head` counts
+    /// from the tail. A frozen receiver, a negative `len`, or a `head`
+    /// past the beginning raises, surfaced here as `Err`. Returns the
+    /// receiver. `head` and `len` saturate to the archive's `mrb_int`
+    /// width, so an out-of-width `head` keeps mruby's range check raising
+    /// rather than a truncated index hitting the wrong slot.
+    #[inline]
+    pub fn splice(self, mrb: &Mrb, head: i64, len: i64, rpl: Value) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            let head = sys::mrb_int::try_from(head).unwrap_or(if head < 0 {
+                sys::mrb_int::MIN
+            } else {
+                sys::mrb_int::MAX
+            });
+            let len = sys::mrb_int::try_from(len).unwrap_or(if len < 0 {
+                sys::mrb_int::MIN
+            } else {
+                sys::mrb_int::MAX
+            });
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // is Array-tagged by the `from_value_unchecked` contract;
+                // `rpl` shares the VM by the single-VM contract and is
+                // handled for any tag (an array splices its elements, any
+                // other value inserts as one — no unsafe unbox).
+                // `mrb_ary_splice` routes through `mrb_ary_modify` and
+                // range-checks `head`/`len`, raising `FrozenError` or
+                // `IndexError` — caught by `protect` into `Err`.
+                Value::from_raw(unsafe {
+                    sys::mrb_ary_splice(mrb.as_ptr(), self.0.as_raw(), head, len, rpl.as_raw())
+                })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, head, len, rpl);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_ary_clear(mrb, self)` — remove all elements, Ruby's
     /// `Array#clear`. Clearing a frozen array raises `FrozenError`,
     /// surfaced as `Err`.
@@ -587,6 +634,91 @@ mod tests {
         ary.resize(&mrb, 1).expect("truncate succeeds");
         assert_eq!(ary.len(), 1);
         assert_eq!(ary.entry(0).to_string(&mrb), "a");
+    }
+
+    #[test]
+    fn splice_inserts_replaces_and_deletes_in_place() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        for n in [1, 2, 3] {
+            ary.push(&mrb, crate::Value::from_int(&mrb, n))
+                .expect("push succeeds");
+        }
+
+        // A zero-length splice inserts the replacement's elements without
+        // removing any: [1,2,3] -> [1,10,11,2,3].
+        let ins = mrb.ary_new();
+        for n in [10, 11] {
+            ins.push(&mrb, crate::Value::from_int(&mrb, n))
+                .expect("push succeeds");
+        }
+        ary.splice(&mrb, 1, 0, ins.as_value())
+            .expect("a zero-length splice succeeds");
+        assert_eq!(ary.len(), 5);
+        assert_eq!(ary.entry(1).to_string(&mrb), "10");
+        assert_eq!(ary.entry(2).to_string(&mrb), "11");
+
+        // A non-array replacement is inserted as the single element it is,
+        // replacing the run in place: [1,10,11,2,3] -> [1,10,99,2,3].
+        ary.splice(&mrb, 2, 1, crate::Value::from_int(&mrb, 99))
+            .expect("an in-place single-element replace succeeds");
+        assert_eq!(ary.len(), 5);
+        assert_eq!(ary.entry(2).to_string(&mrb), "99");
+
+        // Replacing with fewer elements than removed shrinks the array;
+        // an empty replacement deletes outright: removing the two slots at
+        // index 2 leaves [1,10,3].
+        ary.splice(&mrb, 2, 2, mrb.ary_new().as_value())
+            .expect("a shrinking delete-and-replace succeeds");
+        assert_eq!(ary.len(), 3);
+        assert_eq!(ary.entry(0).to_string(&mrb), "1");
+        assert_eq!(ary.entry(1).to_string(&mrb), "10");
+        assert_eq!(ary.entry(2).to_string(&mrb), "3");
+
+        // The return value is the receiver itself.
+        let returned = ary
+            .splice(&mrb, 0, 0, mrb.ary_new().as_value())
+            .expect("a no-op splice succeeds");
+        assert_eq!(returned.to_string(&mrb), ary.as_value().to_string(&mrb));
+    }
+
+    #[test]
+    fn splice_surfaces_raising_edges_as_err() {
+        use crate::{Array, Ccontext, FromValue};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        ary.push(&mrb, crate::Value::from_int(&mrb, 1))
+            .expect("push succeeds");
+
+        // A head reaching past the beginning raises IndexError.
+        assert!(matches!(
+            ary.splice(&mrb, -5, 0, mrb.ary_new().as_value()),
+            Err(Error::Exception(_))
+        ));
+        // A negative length raises IndexError.
+        assert!(matches!(
+            ary.splice(&mrb, 0, -1, mrb.ary_new().as_value()),
+            Err(Error::Exception(_))
+        ));
+        // A head beyond the archive's mrb_int width saturates so mruby's
+        // own range check rejects it as out of array, rather than a
+        // truncated index hitting the wrong slot.
+        assert!(matches!(
+            ary.splice(&mrb, i64::MAX, 0, mrb.ary_new().as_value()),
+            Err(Error::Exception(_))
+        ));
+
+        // A frozen receiver raises FrozenError before any work — splice
+        // routes through mrb_ary_modify like the other mutators.
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_splice.rb").expect("allocating the context must succeed");
+        let frozen = Array::from_value(cxt.load_nstring(b"[1].freeze"))
+            .expect("a frozen Array literal is Array-tagged");
+        assert!(matches!(
+            frozen.splice(&mrb, 0, 1, mrb.ary_new().as_value()),
+            Err(Error::Exception(_))
+        ));
     }
 
     #[test]

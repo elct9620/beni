@@ -54,6 +54,7 @@ typed:
   mrb_ary_set: Array::store
   mrb_ary_shift: Array::shift
   mrb_ary_splat: "`Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `Array`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `Array` downcast (the tag-test that reads a non-Array as absent)"
+  mrb_ary_splice: Array::splice
   mrb_ary_unshift: Array::unshift
   mrb_array_p: "`Value::is_array`, via the value tag"
   mrb_assoc_new: Mrb::assoc_new
