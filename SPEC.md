@@ -366,6 +366,28 @@ the two bounds cannot be compared — the `ArgumentError` mruby raises for a bad
 range. A Range reads its begin value, its end value, and whether it excludes its
 end — three non-dispatching reads that never raise.
 
+Given a collection length, a Range computes the normalized slice it covers of a
+collection that long — the primitive behind slicing a collection by a Range, the
+way Ruby's `Array#[range]` / `String#[range]` resolve a Range index. The result
+is one of three outcomes the caller distinguishes: an in-range slice carrying a
+begin offset and a selected length; out-of-range, when the begin offset falls
+before the collection start; or a mismatch, when the receiver is not a Range. A
+negative begin or end counts back from the collection length, and a missing begin
+or end stands in for the collection's first or last index. The begin offset and
+selected length are meaningful only on the in-range outcome; the out-of-range and
+mismatch outcomes carry no offsets. A truncation flag governs the over-long
+range: when set, a begin offset past the collection length is also out-of-range
+and an end past the length is clamped to it; when clear, the end is taken as
+given and a slice that runs past the collection length is reported in-range with
+whatever length the bounds yield. This computation runs no user Ruby and does not dispatch, so it
+surfaces an `Err` carrying a `TypeError` only when a present (non-missing) bound
+is neither an integer nor integer-convertible — the same `TypeError` mruby's
+implicit integer coercion raises; the three outcomes are returns, not errors.
+magnus exposes the same primitive as its `Range::beg_len`, which collapses
+out-of-range and mismatch into one `Err` because CRuby's own primitive raises on
+both; mruby returns the three-way outcome instead, and the typed surface
+preserves all three.
+
 #### Errors and the raise/return contract
 
 A registered method or protected closure raises its own exception: it builds one
@@ -385,7 +407,7 @@ raise/return contract:
 | Dispatches Ruby — a method call, `==` / `eql?`, a `<=>` comparison, an object `dup` / `clone` or string coercion, a splat coercion to an array running a non-array's `to_a`, an array join rendering each element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` (a `<=>` comparison yields nothing when the two values are incomparable) |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
-| Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, or rendering an integer to a string in a given radix | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer | `Result` |
+| Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, or computing a Range's normalized slice of a collection length | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
