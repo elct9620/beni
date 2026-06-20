@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 174 (51%) |
+| function | 342 | 338 (99%) | 175 (51%) |
 | macro | 124 | 26 (21%) | 40 (32%) |
-| total | 466 | 364 (78%) | 214 (46%) |
+| total | 466 | 364 (78%) | 215 (46%) |
 
 ## mruby.h
 
@@ -359,7 +359,7 @@ Legend: ✅ covered · — missing
 | `mrb_hash_dup` | fn | ✅ | ✅ | `Hash::dup` |
 | `mrb_hash_empty_p` | fn | ✅ | ✅ | `Hash::is_empty` |
 | `mrb_hash_fetch` | fn | ✅ | ✅ | `Hash::fetch` |
-| `mrb_hash_foreach` | fn | ✅ | — |  |
+| `mrb_hash_foreach` | fn | ✅ | ✅ | `Hash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); the walk dispatches no Ruby, so no `Result` is needed |
 | `mrb_hash_get` | fn | ✅ | ✅ | `Hash::get` |
 | `mrb_hash_key_p` | fn | ✅ | ✅ | `Hash::contains_key` |
 | `mrb_hash_keys` | fn | ✅ | ✅ | `Hash::keys` |

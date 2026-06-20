@@ -150,6 +150,7 @@ typed:
   mrb_hash_dup: Hash::dup
   mrb_hash_empty_p: Hash::is_empty
   mrb_hash_fetch: Hash::fetch
+  mrb_hash_foreach: "`Hash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); the walk dispatches no Ruby, so no `Result` is needed"
   mrb_hash_get: Hash::get
   mrb_hash_key_p: Hash::contains_key
   mrb_hash_keys: Hash::keys

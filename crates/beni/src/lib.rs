@@ -81,7 +81,7 @@ pub use convert::{FromValue, IntoValue};
 pub use data::DataType;
 pub use error::Error;
 pub use gem::Gem;
-pub use hash::Hash;
+pub use hash::{ForEach, Hash};
 pub use method::{MethodDef, MethodReturn};
 pub use proc::Proc;
 pub use range::Range;

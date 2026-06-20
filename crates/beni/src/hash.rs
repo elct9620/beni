@@ -12,6 +12,17 @@
 use crate::{Array, Error, Mrb, Value};
 use beni_sys as sys;
 
+/// Signal a `Hash::each` closure returns to steer the walk. Mirrors
+/// magnus's `ForEach`, minus its CRuby-only `Delete` (mruby's
+/// `mrb_hash_foreach` has no delete-and-continue path).
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum ForEach {
+    /// Visit the remaining pairs.
+    Continue,
+    /// End the walk before the remaining pairs.
+    Stop,
+}
+
 /// Typed handle on an mruby `Hash`. `#[repr(transparent)]` over
 /// `Value` so the C ABI is preserved.
 ///
@@ -339,6 +350,100 @@ impl Hash {
             crate::not_linked()
         }
     }
+
+    /// `mrb_hash_foreach(mrb, self, …)` — visit each `(key, value)` pair
+    /// in insertion order, handing both to `body`. Returning
+    /// `ForEach::Stop` ends the walk before the remaining pairs;
+    /// `ForEach::Continue` proceeds. The walk dispatches no Ruby and so
+    /// never raises. Mirrors magnus's `RHash::foreach`, narrowed to the
+    /// continue/stop signal mruby's C foreach supports.
+    ///
+    /// Mutating the receiver from within `body` is unsupported: mruby's
+    /// C foreach does not run the modification guard that the Ruby-level
+    /// `Hash#each` relies on.
+    ///
+    /// A panic in `body` is caught at the FFI boundary, stops the walk,
+    /// and resurfaces here once `mrb_hash_foreach` returns — it never
+    /// unwinds into mruby's C frames.
+    #[inline]
+    pub fn each<F>(self, mrb: &Mrb, body: F)
+    where
+        F: FnMut(Value, Value) -> ForEach,
+    {
+        #[cfg(mruby_linked)]
+        {
+            // Park the closure beside a panic slot in a stack local. The
+            // trampoline borrows it per pair; on a panic it stashes the
+            // unwind payload here and reports `Stop`, so the C walk ends
+            // without a panic crossing its frames. The payload resumes
+            // below once control is back on the Rust side.
+            struct Walk<F> {
+                body: F,
+                panic: Option<Box<dyn std::any::Any + Send>>,
+            }
+
+            unsafe extern "C" fn trampoline<F>(
+                _mrb: *mut sys::mrb_state,
+                key: sys::mrb_value,
+                val: sys::mrb_value,
+                data: *mut core::ffi::c_void,
+            ) -> core::ffi::c_int
+            where
+                F: FnMut(Value, Value) -> ForEach,
+            {
+                // SAFETY: `data` is the `&mut Walk<F>` handed to
+                // `mrb_hash_foreach` below; the foreach call borrows it
+                // for the duration of the walk on this same thread.
+                let walk: &mut Walk<F> = unsafe { &mut *(data as *mut Walk<F>) };
+                let key = Value::from_raw(key);
+                let val = Value::from_raw(val);
+                // Catch here so a `body` panic stops the walk instead of
+                // unwinding through `mrb_hash_foreach`'s C frame.
+                // AssertUnwindSafe matches the crate's other panic
+                // boundaries: the parked payload is the only state that
+                // survives the catch. A non-zero return stops the C walk,
+                // so the trampoline is not re-entered after `Stop` or a
+                // parked panic.
+                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    (walk.body)(key, val)
+                })) {
+                    Ok(ForEach::Continue) => 0,
+                    Ok(ForEach::Stop) => 1,
+                    Err(payload) => {
+                        walk.panic = Some(payload);
+                        1
+                    }
+                }
+            }
+
+            let mut walk = Walk { body, panic: None };
+            // SAFETY: `self` is Hash-tagged by the `from_value_unchecked`
+            // contract, so the object pointer is an `RHash`; both
+            // `mrb_obj_ptr_func` and the C `mrb_hash_ptr` macro read the
+            // same union pointer, differing only in the cast. `mrb` is
+            // alive; `trampoline::<F>` upholds the `mrb_hash_foreach_func`
+            // ABI; `data` points to `walk` on this frame, which outlives
+            // the call. bindgen wraps the function-typedef parameter in
+            // `Option`, so the trampoline is passed via `Some`.
+            unsafe {
+                let hash = sys::mrb_obj_ptr_func(self.0.as_raw()) as *mut sys::RHash;
+                sys::mrb_hash_foreach(
+                    mrb.as_ptr(),
+                    hash,
+                    Some(trampoline::<F>),
+                    &mut walk as *mut Walk<F> as *mut core::ffi::c_void,
+                );
+            }
+            if let Some(payload) = walk.panic {
+                std::panic::resume_unwind(payload);
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, body);
+            crate::not_linked()
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -653,5 +758,93 @@ mod tests {
             frozen.update(&mrb, other),
             Err(Error::Exception(_))
         ));
+    }
+
+    #[test]
+    fn each_visits_every_pair_in_insertion_order() {
+        use crate::{ForEach, Value};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let hash = mrb.hash_new();
+        hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
+            .expect("set succeeds");
+        hash.set(&mrb, mrb.str_new(b"b").as_value(), Value::from_int(&mrb, 2))
+            .expect("set succeeds");
+        hash.set(&mrb, mrb.str_new(b"c").as_value(), Value::from_int(&mrb, 3))
+            .expect("set succeeds");
+
+        let mut seen = Vec::new();
+        hash.each(&mrb, |key, val| {
+            seen.push((key.to_string(&mrb), val.to_string(&mrb)));
+            ForEach::Continue
+        });
+
+        assert_eq!(
+            seen,
+            vec![
+                ("a".to_owned(), "1".to_owned()),
+                ("b".to_owned(), "2".to_owned()),
+                ("c".to_owned(), "3".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn each_stops_early_on_stop() {
+        use crate::{ForEach, Value};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let hash = mrb.hash_new();
+        hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
+            .expect("set succeeds");
+        hash.set(&mrb, mrb.str_new(b"b").as_value(), Value::from_int(&mrb, 2))
+            .expect("set succeeds");
+        hash.set(&mrb, mrb.str_new(b"c").as_value(), Value::from_int(&mrb, 3))
+            .expect("set succeeds");
+
+        // Stopping at the first pair leaves the rest unvisited.
+        let mut count = 0;
+        hash.each(&mrb, |_, _| {
+            count += 1;
+            ForEach::Stop
+        });
+
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn each_resurfaces_a_closure_panic_on_the_rust_side() {
+        use crate::Value;
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let hash = mrb.hash_new();
+        hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
+            .expect("set succeeds");
+        hash.set(&mrb, mrb.str_new(b"b").as_value(), Value::from_int(&mrb, 2))
+            .expect("set succeeds");
+
+        // A panic in the closure is caught at the FFI boundary, stops the
+        // walk, and resumes here once mrb_hash_foreach returns — never
+        // unwinding through mruby's C frames. catch_unwind sees the
+        // resumed panic, proving it crossed back to the Rust side intact.
+        let visited = std::cell::Cell::new(0u32);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            hash.each(&mrb, |_, _| {
+                visited.set(visited.get() + 1);
+                panic!("boom in each closure");
+            });
+        }));
+
+        let payload = result.expect_err("the closure panic must resurface Rust-side");
+        let msg = payload
+            .downcast_ref::<&str>()
+            .copied()
+            .expect("the original panic payload survives the round-trip");
+        assert_eq!(msg, "boom in each closure");
+        // The walk stopped at the first pair rather than running on.
+        assert_eq!(visited.get(), 1);
+
+        // The VM survives the caught panic.
+        assert_eq!(hash.len(&mrb), 2);
     }
 }
