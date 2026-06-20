@@ -31,6 +31,7 @@ typed:
   MRB_ARGS_REQ: a typed method's positional arity, derived by `Module::define_method`
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
   RARRAY_LEN: Array::len
+  RSTRING_CSTR: RString::to_cstr
   RSTRING_LEN: "`RString::as_bytes`, `RString::to_bytes`, `RString::len`"
   RSTRING_PTR: "`RString::as_bytes`, `RString::to_bytes`"
   mrb_argnum_error: Error::argnum
@@ -185,6 +186,7 @@ typed:
   mrb_str_new_cstr: Mrb::str_new_cstr
   mrb_str_resize: RString::resize
   mrb_str_substr: RString::substr
+  mrb_string_cstr: RString::to_cstr
   mrb_sym_name: "`Mrb::sym_name`, `Symbol::name` — the C-string name, escaped to its quoted dump form when it carries an embedded NUL"
   mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — the raw name bytes with the true length, embedded NUL preserved unescaped"
   mrb_sym_dump: "`Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), never raises"

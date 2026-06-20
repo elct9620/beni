@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 136 (40%) |
-| macro | 124 | 25 (20%) | 33 (27%) |
-| total | 466 | 357 (77%) | 169 (36%) |
+| function | 342 | 332 (97%) | 137 (40%) |
+| macro | 124 | 25 (20%) | 34 (27%) |
+| total | 466 | 357 (77%) | 171 (37%) |
 
 ## mruby.h
 
@@ -425,7 +425,7 @@ Legend: ✅ covered · — missing
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `RSTRING_CAPA` | macro | — | — |  |
-| `RSTRING_CSTR` | macro | — | — |  |
+| `RSTRING_CSTR` | macro | — | ✅ | `RString::to_cstr` |
 | `RSTRING_EMBED_LEN` | macro | — | — |  |
 | `RSTRING_END` | macro | — | — |  |
 | `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes`, `RString::len` |
@@ -460,7 +460,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_to_dbl` | fn | ✅ | — |  |
 | `mrb_str_to_integer` | fn | ✅ | — |  |
 | `mrb_str_to_inum` | macro | — | — |  |
-| `mrb_string_cstr` | fn | ✅ | — |  |
+| `mrb_string_cstr` | fn | ✅ | ✅ | `RString::to_cstr` |
 | `mrb_string_value_cstr` | fn | ✅ | — |  |
 | `mrb_string_value_len` | macro | — | — |  |
 | `mrb_string_value_ptr` | macro | — | — |  |

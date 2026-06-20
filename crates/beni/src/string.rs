@@ -373,6 +373,40 @@ impl RString {
             crate::not_linked()
         }
     }
+
+    /// `mrb_string_cstr(mrb, self)` — the bytes as an owned, NUL-terminated
+    /// `CString` for a C boundary. A C string cannot carry an embedded NUL,
+    /// so this read is fallible: an embedded NUL raises `ArgumentError`, and
+    /// the call runs under `Mrb::protect` so that surfaces as `Err` rather
+    /// than long-jumping. magnus has no direct C-string accessor, so this
+    /// anchors on mruby's own `mrb_string_cstr`.
+    #[inline]
+    pub fn to_cstr(self, mrb: &Mrb) -> Result<std::ffi::CString, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `self` is String-tagged by the newtype contract;
+                // `mrb` is alive inside the protect frame. `mrb_string_cstr`
+                // NUL-terminates the buffer in place, raising `ArgumentError`
+                // on an embedded NUL — caught by `protect` into `Err`. The
+                // returned pointer is discarded; the CString is rebuilt from
+                // the receiver's now-NUL-free bytes after protect returns.
+                unsafe {
+                    sys::mrb_string_cstr(mrb.as_ptr(), self.0.as_raw());
+                }
+                Value::nil()
+            })?;
+            // On the success path `mrb_string_cstr` proved the bytes hold no
+            // NUL, so the CString build cannot fail.
+            Ok(std::ffi::CString::new(self.to_bytes())
+                .expect("mrb_string_cstr rejected any embedded NUL"))
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
 }
 
 #[cfg(all(test, mruby_linked))]
@@ -565,6 +599,27 @@ mod tests {
         let frozen = RString::from_value(cxt.load_nstring(b"'fixed'.freeze"))
             .expect("a frozen String literal is String-tagged");
         assert!(matches!(frozen.resize(&mrb, 2), Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn to_cstr_yields_a_nul_terminated_view() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let s = mrb.str_new(b"hello");
+        let cstr = s.to_cstr(&mrb).expect("a NUL-free string yields a CString");
+        assert_eq!(cstr.to_bytes(), b"hello");
+        // The view carries the terminating NUL the C boundary expects.
+        assert_eq!(cstr.to_bytes_with_nul(), b"hello\0");
+    }
+
+    #[test]
+    fn to_cstr_surfaces_an_embedded_nul_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A C string cannot carry an embedded NUL, so the read raises
+        // ArgumentError, which protect catches into Err.
+        let s = mrb.str_new(b"a\0b");
+        assert!(matches!(s.to_cstr(&mrb), Err(Error::Exception(_))));
     }
 
     #[test]
