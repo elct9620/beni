@@ -225,6 +225,13 @@ Rust reads the bytes three ways:
 | owned `String` | the bytes when valid UTF-8 | a non-string tag, or non-UTF-8 bytes |
 | owned `Vec<u8>` | arbitrary bytes | a non-string tag |
 
+The three reads above never raise. Rust also reads the bytes as a
+NUL-terminated C-string view — the bytes guaranteed to end in a `\0`, suitable
+for a C boundary — and this read is fallible: because a C string cannot carry an
+embedded NUL, it surfaces an `Err`, the `ArgumentError` mruby raises, when the
+bytes contain an embedded NUL. magnus offers no direct C-string accessor, so the
+read anchors on mruby's own `mrb_string_cstr`.
+
 A registered method grows an `RString` in place by appending Rust bytes, or
 appending another mruby string's bytes, the way Ruby's `String#<<` extends its
 receiver. It also appends any value coerced to a string, the way Ruby's
@@ -277,6 +284,7 @@ raise/return contract:
 | Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types, or coercing a value to an `RString` handle by its String tag | the value is non-numeric, or an infinite / NaN float converts to integer; the coerced value carries no String tag | `Result` |
+| Reads without dispatching but can still raise — a string's NUL-terminated C-string view | the bytes contain an embedded NUL | `Result` |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
