@@ -269,6 +269,20 @@ and surfaces an `Err` carrying a `RangeError`. This stays in mruby's value domai
 — a Float value to an Integer value, not a value to a Rust scalar — and anchors
 on mruby's own `mrb_float_to_integer`.
 
+Two numeric values add, subtract, or multiply into a new numeric value, the way
+Ruby's `+`, `-`, and `*` do on `Integer` and `Float` — `2 + 3` to `5`, `2 + 3.5`
+to `5.5`. The result stays in mruby's value domain, an `Integer` when both
+operands are integers and the result fits the configured integer width, a `Float`
+when either operand is a float — the mixed case widens the integer operand. Each
+operation dispatches its receiver on the numeric tag rather than trusting it, so a
+non-numeric left operand surfaces an `Err` carrying a `TypeError`, and a
+non-numeric right operand likewise surfaces an `Err` carrying a `TypeError`.
+Integer arithmetic that exceeds the configured integer width surfaces an `Err`
+carrying a `RangeError`. magnus
+offers no mruby-native arithmetic — its `coerce_bin` routes through the full Ruby
+coercion protocol with no mruby counterpart — so these anchor on mruby's own
+`mrb_num_add` / `mrb_num_sub` / `mrb_num_mul`.
+
 A registered method grows an `RString` in place by appending Rust bytes,
 appending another mruby string's bytes, or appending a NUL-terminated C string's
 bytes — its content up to the terminating NUL, the C-boundary counterpart of the
@@ -363,7 +377,7 @@ raise/return contract:
 | Mutates a receiver — array append/remove/extend/replace/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment and removal, class-variable assignment, constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables; a constant assignment or removal also when the receiver is not a class or module | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, a `<=>` comparison, an object `dup` / `clone` or string coercion, a splat coercion to an array running a non-array's `to_a`, an array join rendering each element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` (a `<=>` comparison yields nothing when the two values are incomparable) |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
-| Converts without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion raises a `TypeError`), or an infinite / NaN float converts to integer (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
+| Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, or rendering an integer to a string in a given radix | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer | `Result` |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
@@ -414,6 +428,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | `dup` / `clone` | copy the object, running its `initialize_copy` — `dup` resets the frozen state and drops the singleton class, `clone` preserves both; an immediate returns itself; may raise |
 | string coercion | the value as a string — itself when already a string, otherwise its `to_s`; may raise when `to_s` does not return a string |
 | numeric conversion | the value as a Rust integer or float, converted across the numeric types — to integer, an Integer reads directly and a Float truncates; to float, a Float reads directly and an Integer widens; surfaces an `Err` when the value is non-numeric, or when an infinite or NaN float converts to integer. Runs no user Ruby. Unlike the exact-tag `FromValue` downcast, which rejects any other tag outright, this converts between numeric types |
+| arithmetic | add, subtract, or multiply two numeric values into a new numeric value, Ruby's `+` / `-` / `*` on `Integer` and `Float` — an `Integer` when both operands are integers and the result fits the configured integer width, a `Float` when either operand is a float. Surfaces an `Err` carrying a `TypeError` when either operand is non-numeric, or a `RangeError` when an integer arithmetic exceeds the configured integer width. Stays in mruby's value domain; runs no user Ruby |
 | splat coercion | the value spread to a new typed `Array`, Ruby's `*` coercion: an array yields a copy of itself; a non-array that responds to `to_a` runs it, taking the result when it is an array and wrapping the value in a one-element array when `to_a` returns `nil`; a value that answers no `to_a` wraps in a one-element array. Surfaces an `Err` when `to_a` raises or returns a non-array non-`nil` value. Unlike the tag-coercion to an `Array` handle, which dispatches nothing and takes only an already-array-tagged value, this runs `to_a` and always yields an array |
 | `is_a?` | an instance of a class or any of its subclasses |
 | `instance_of?` | a direct instance of a class |
