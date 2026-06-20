@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 338 (99%) | 182 (53%) |
-| macro | 124 | 28 (23%) | 47 (38%) |
-| total | 466 | 366 (79%) | 229 (49%) |
+| macro | 124 | 28 (23%) | 52 (42%) |
+| total | 466 | 366 (79%) | 234 (50%) |
 
 ## mruby.h
 
@@ -249,7 +249,7 @@ Legend: ✅ covered · — missing
 | `mrb_ary_pop` | fn | ✅ | ✅ | `Array::pop` |
 | `mrb_ary_ptr` | macro | — | — |  |
 | `mrb_ary_push` | fn | ✅ | ✅ | `Array::push` |
-| `mrb_ary_ref` | macro | — | — |  |
+| `mrb_ary_ref` | macro | — | ✅ | `Array::entry`, `Value::ary_entry` — the macro `mrb_ary_ref(mrb, ary, n)` is a `#define` alias of `mrb_ary_entry`, so the same Rust items graduate it; no separate item is needed |
 | `mrb_ary_replace` | fn | ✅ | ✅ | `Array::replace` |
 | `mrb_ary_resize` | fn | ✅ | ✅ | `Array::resize` |
 | `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
@@ -434,10 +434,10 @@ Legend: ✅ covered · — missing
 | `mrb_ptr_to_str` | fn | ✅ | — |  |
 | `mrb_str_append` | fn | ✅ | ✅ | `RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed |
 | `mrb_str_buf_append` | macro | — | — |  |
-| `mrb_str_buf_cat` | macro | — | — |  |
-| `mrb_str_buf_new` | macro | — | — |  |
+| `mrb_str_buf_cat` | macro | — | ✅ | `RString::cat` — the macro `mrb_str_buf_cat(mrb, str, ptr, len)` is a `#define` alias of `mrb_str_cat`, so the same Rust item graduates it; no separate item is needed |
+| `mrb_str_buf_new` | macro | — | ✅ | `Mrb::str_new_capa` — the macro `mrb_str_buf_new(mrb, capa)` is a `#define` alias of `mrb_str_new_capa`, so the same Rust item graduates it; no separate item is needed |
 | `mrb_str_cat` | fn | ✅ | ✅ | `RString::cat` |
-| `mrb_str_cat2` | macro | — | — |  |
+| `mrb_str_cat2` | macro | — | ✅ | `RString::cat_cstr` — the macro `mrb_str_cat2(mrb, str, ptr)` is a `#define` alias of `mrb_str_cat_cstr`, so the same Rust item graduates it; no separate item is needed |
 | `mrb_str_cat_cstr` | fn | ✅ | ✅ | `RString::cat_cstr` |
 | `mrb_str_cat_lit` | macro | — | ✅ | `RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_str_cat_str` | fn | ✅ | ✅ | `RString::cat_str` |
@@ -446,7 +446,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_dup` | fn | ✅ | ✅ | `RString::dup` |
 | `mrb_str_equal` | fn | ✅ | ✅ | `RString::eq` — total byte equality of two strings (length check then memcmp); dispatches nothing and never raises |
 | `mrb_str_index` | fn | ✅ | ✅ | `RString::index` — byte index of the first substring match at or after an offset, or None when absent; never raises |
-| `mrb_str_index_lit` | macro | — | — |  |
+| `mrb_str_index_lit` | macro | — | ✅ | `RString::index` — the literal macro `mrb_str_index_lit(mrb, str, lit, off)` is `mrb_str_index` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_str_intern` | fn | ✅ | ✅ | `RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns directly and never raises. Distinct from `mrb_obj_to_sym` → `Value::to_sym`, which coerces an arbitrary value and can raise, and from `Symbol::new`, which interns Rust bytes |
 | `mrb_str_modify` | fn | ✅ | — |  |
 | `mrb_str_modify_keep_ascii` | fn | ✅ | — |  |
