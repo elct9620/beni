@@ -185,6 +185,8 @@ typed:
   mrb_str_new: Mrb::str_new
   mrb_str_new_capa: Mrb::str_new_capa
   mrb_str_new_cstr: Mrb::str_new_cstr
+  mrb_str_new_static: Mrb::str_new_static
+  mrb_str_new_lit: "`Mrb::str_new_static` — the literal macro `mrb_str_new_lit(mrb, lit)` is `mrb_str_new_static` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_str_resize: RString::resize
   mrb_str_substr: RString::substr
   mrb_string_cstr: RString::to_cstr

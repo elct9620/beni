@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 138 (40%) |
-| macro | 124 | 25 (20%) | 34 (27%) |
-| total | 466 | 357 (77%) | 172 (37%) |
+| function | 342 | 332 (97%) | 139 (41%) |
+| macro | 124 | 25 (20%) | 35 (28%) |
+| total | 466 | 357 (77%) | 174 (37%) |
 
 ## mruby.h
 
@@ -191,9 +191,9 @@ Legend: ✅ covered · — missing
 | `mrb_str_new_cstr` | fn | ✅ | ✅ | `Mrb::str_new_cstr` |
 | `mrb_str_new_cstr_frozen` | macro | — | — |  |
 | `mrb_str_new_frozen` | macro | — | — |  |
-| `mrb_str_new_lit` | macro | — | — |  |
+| `mrb_str_new_lit` | macro | — | ✅ | `Mrb::str_new_static` — the literal macro `mrb_str_new_lit(mrb, lit)` is `mrb_str_new_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_str_new_lit_frozen` | macro | — | — |  |
-| `mrb_str_new_static` | fn | ✅ | — |  |
+| `mrb_str_new_static` | fn | ✅ | ✅ | `Mrb::str_new_static` |
 | `mrb_str_new_static_frozen` | macro | — | — |  |
 | `mrb_str_to_str` | macro | — | — |  |
 | `mrb_string_type` | macro | — | — |  |

@@ -1,7 +1,8 @@
 //! String / Array / Hash / Range factories on `Mrb`.
 //!
 //! `str_new` / `str_new_cstr` construct mruby Strings from Rust byte
-//! slices or a NUL-terminated `&CStr`. `ary_new` / `hash_new` return
+//! slices or a NUL-terminated `&CStr`; `str_new_static` aliases a
+//! `'static` buffer without copying. `ary_new` / `hash_new` return
 //! typed `Array` / `Hash` newtypes, and `range_new` returns a typed
 //! `Range` — per-collection operations (`push`, `set`, `get`, `keys`,
 //! the range bound reads) live on the value newtype rather than on
@@ -90,6 +91,41 @@ impl Mrb {
         #[cfg(not(mruby_linked))]
         {
             let _ = capa;
+            crate::not_linked()
+        }
+    }
+
+    /// `mrb_str_new_static(mrb, p, len)` — construct an mruby `String`
+    /// that aliases `bytes` without copying them, the no-copy counterpart
+    /// of `str_new`. The `'static` bound is what makes this safe: mruby
+    /// never frees the borrowed buffer, so it must outlive the VM, which a
+    /// `'static` slice guarantees. The string is copy-on-write — an
+    /// in-place append or resize reallocates first, leaving the borrowed
+    /// bytes untouched. A `b"..."` literal is a `&'static [u8]`, so this
+    /// also serves mruby's `mrb_str_new_lit` convenience.
+    ///
+    /// `bytes.len()` saturates to `sys::mrb_int::MAX` (the archive's
+    /// configured integer width). Real callers stay far below that.
+    #[inline]
+    pub fn str_new_static(&self, bytes: &'static [u8]) -> RString {
+        #[cfg(mruby_linked)]
+        {
+            let len = bytes.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+            // SAFETY: `self` is alive by the `&self` borrow; `bytes` is
+            // `'static`, so the aliased buffer outlives the VM as mruby's
+            // NOFREE contract requires. `mrb_str_new_static` always returns
+            // a String-tagged value, so the unchecked wrap is sound.
+            unsafe {
+                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_static(
+                    self.as_ptr(),
+                    bytes.as_ptr() as *const core::ffi::c_char,
+                    len,
+                )))
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = bytes;
             crate::not_linked()
         }
     }
@@ -288,6 +324,36 @@ mod tests {
         s.cat(&mrb, b"reserved")
             .expect("append to a fresh string succeeds");
         assert_eq!(s.to_bytes(), b"reserved".to_vec());
+    }
+
+    #[test]
+    fn str_new_static_aliases_a_static_buffer_without_copying() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A byte-string literal is a `&'static [u8]`, the same path mruby's
+        // `mrb_str_new_lit` macro takes.
+        let s = mrb.str_new_static(b"borrowed");
+        assert_eq!(s.len(), 8);
+        assert_eq!(s.to_bytes(), b"borrowed".to_vec());
+    }
+
+    #[test]
+    fn str_new_static_copies_on_in_place_write() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Appending reallocates the copy-on-write string before mutating,
+        // so the in-place op yields the grown result without touching the
+        // borrowed buffer.
+        let s = mrb.str_new_static(b"static");
+        s.cat(&mrb, b"+more")
+            .expect("appending to a static-backed string succeeds after copy");
+        assert_eq!(s.to_bytes(), b"static+more".to_vec());
+
+        // Resize likewise reallocates first; shrinking drops the tail.
+        let r = mrb.str_new_static(b"Hello, world!");
+        r.resize(&mrb, 5)
+            .expect("resizing a static-backed string succeeds");
+        assert_eq!(r.to_bytes(), b"Hello".to_vec());
     }
 
     #[test]
