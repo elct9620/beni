@@ -158,6 +158,12 @@ impl Range {
             let begp: Cell<sys::mrb_int> = Cell::new(0);
             let lenp: Cell<sys::mrb_int> = Cell::new(0);
 
+            // A length wider than the archive's `mrb_int` names no
+            // reachable extent; saturate it up (length is non-negative) so
+            // the clamp sees "as large as representable" rather than a
+            // wrapped value landing on a wrong span.
+            let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
+
             mrb.protect(|mrb| {
                 let mut beg: sys::mrb_int = 0;
                 let mut sel: sys::mrb_int = 0;
@@ -173,7 +179,7 @@ impl Range {
                         self.0.as_raw(),
                         &mut beg,
                         &mut sel,
-                        len as sys::mrb_int,
+                        len,
                         trunc,
                     )
                 });
@@ -201,7 +207,7 @@ impl Range {
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use crate::{Ccontext, Error, FromValue, IntoValue, Mrb, Range, RangeBegLen};
+    use crate::{sys, Ccontext, Error, FromValue, IntoValue, Mrb, Range, RangeBegLen};
 
     #[test]
     fn range_new_constructs_and_reads_back_its_bounds() {
@@ -326,6 +332,24 @@ mod tests {
             r.beg_len(&mrb, 10, false)
                 .expect("an integer range never raises"),
             RangeBegLen::Ok { beg: 2, len: 99 }
+        );
+    }
+
+    #[test]
+    fn beg_len_saturates_a_length_past_the_mrb_int_width() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
+
+        // A length wider than `mrb_int` saturates up to the widest
+        // representable extent, so truncating `2..7` still selects offsets
+        // 2 through 7. A wrapping cast would land on a negative length, and
+        // truncation against it would report the begin as out of range.
+        let huge = i64::from(sys::mrb_int::MAX) + 1;
+        let r = Range::from_value(cxt.load_nstring(b"(2..7)")).expect("a Range literal");
+        assert_eq!(
+            r.beg_len(&mrb, huge, true)
+                .expect("an integer range never raises"),
+            RangeBegLen::Ok { beg: 2, len: 6 }
         );
     }
 
