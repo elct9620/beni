@@ -262,7 +262,13 @@ the way Ruby's `String#concat` accepts a non-string argument — the dispatching
 counterpart to the byte and string appends. Beyond reading and appending, a
 string duplicates into an independent copy (Ruby's `String#dup`) and orders
 against another by byte content (Ruby's `String#<=>`) — a total comparison that
-dispatches nothing and never raises. A registered method also resizes a string's
+dispatches nothing and never raises. It also concatenates with another string
+into a new string (Ruby's `String#+`), anchored on mruby's own `mrb_str_plus`:
+the result is a freshly allocated string holding both operands' bytes, and
+neither operand is mutated — the non-mutating counterpart of the in-place append,
+which grows its receiver. With both operands already strings it dispatches
+nothing and never raises, returning the new string directly rather than a
+fallible result. A registered method also resizes a string's
 length in place — truncating, or extending with undefined trailing bytes — and
 reads a substring by character range, yielding the substring or nothing when the
 range falls outside the string.
