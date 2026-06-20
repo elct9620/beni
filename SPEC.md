@@ -263,7 +263,9 @@ counterpart to the byte and string appends. Beyond reading and appending, a
 string duplicates into an independent copy (Ruby's `String#dup`). It tests
 another for byte equality (Ruby's `String#==`) and orders against another by byte
 content (Ruby's `String#<=>`) — total reads that dispatch nothing and never
-raise. It also concatenates with another string
+raise. It also interns its own bytes into the typed `Symbol` they name, creating
+that symbol when it does not yet exist (Ruby's `String#intern`), dispatching
+nothing and never raising. It also concatenates with another string
 into a new string (Ruby's `String#+`), anchored on mruby's own `mrb_str_plus`:
 the result is a freshly allocated string holding both operands' bytes, and
 neither operand is mutated — the non-mutating counterpart of the in-place append,
