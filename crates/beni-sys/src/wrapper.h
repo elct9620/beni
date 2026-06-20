@@ -152,6 +152,17 @@ mrb_nil_p_func(mrb_value v)
   return mrb_nil_p(v);
 }
 
+/* `mrb_undef_p(v)` expands via `mrb_type(v) == MRB_TT_UNDEF`; the tag
+ * read depends on the boxing config, so reaching it from Rust must go
+ * through the C compiler to match libmruby.a's layout. Tells an
+ * `mrb_undef_value()` sentinel — e.g. the absent-variable result of
+ * `mrb_iv_remove` — apart from a real value. */
+static inline mrb_bool
+mrb_undef_p_func(mrb_value v)
+{
+  return mrb_undef_p(v);
+}
+
 /* `mrb_true_p(v)` / `mrb_false_p(v)` expand per boxing config: under
  * word-boxing they compare the immediate word against MRB_Qtrue /
  * MRB_Qfalse, while other boxings tag both `nil` and `false` as

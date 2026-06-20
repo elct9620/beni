@@ -1086,6 +1086,39 @@ impl Value {
         }
     }
 
+    /// `mrb_iv_remove(mrb, self, sym)` — remove instance variable `sym`
+    /// from `self`, returning `Some` of its former value. Yields `None`
+    /// when the variable is absent or `self` cannot hold instance
+    /// variables, distinguishing either case from a variable removed
+    /// while holding `nil`. Surfaces an `Err` only when a frozen `self`
+    /// can hold instance variables.
+    #[inline]
+    pub fn iv_remove(self, mrb: &Mrb, sym: sys::mrb_sym) -> Result<Option<Value>, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `self` originates from the same VM. `mrb_iv_remove`
+                // raises `FrozenError` on a frozen instance-variable
+                // holder — caught by `protect`.
+                Value(unsafe { sys::mrb_iv_remove(mrb.as_ptr(), self.0, sym) })
+            })
+            .map(|removed| {
+                // SAFETY: a total tag read on the protected result.
+                if unsafe { sys::mrb_undef_p_func(removed.0) } {
+                    None
+                } else {
+                    Some(removed)
+                }
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, sym);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_const_defined(mrb, self, sym)` — TRUE when constant `sym`
     /// is defined on `self` (the module or class value).
     #[inline]
@@ -2175,6 +2208,70 @@ mod linked_tests {
         let y = mrb.intern_cstr(c"@y");
         assert!(obj.iv_defined(&mrb, x));
         assert!(!obj.iv_defined(&mrb, y));
+    }
+
+    #[test]
+    fn iv_remove_yields_the_former_value_and_clears_presence() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"iv_remove_test.rb").expect("allocating the context must succeed");
+
+        let obj = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // Removing a set variable hands back its former value and leaves
+        // the variable undefined.
+        let x = mrb.intern_cstr(c"@x");
+        let removed = obj.iv_remove(&mrb, x).expect("removal does not raise");
+        assert_eq!(removed.and_then(i32::from_value), Some(1));
+        assert!(!obj.iv_defined(&mrb, x));
+    }
+
+    #[test]
+    fn iv_remove_distinguishes_absent_from_a_removed_nil() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"iv_remove_absent_test.rb")
+            .expect("allocating the context must succeed");
+
+        let obj = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, nil); o");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        // An absent variable yields None — distinct from a variable that
+        // held nil, which yields Some(nil).
+        let y = mrb.intern_cstr(c"@y");
+        assert!(obj
+            .iv_remove(&mrb, y)
+            .expect("absent removal does not raise")
+            .is_none());
+
+        let x = mrb.intern_cstr(c"@x");
+        let removed = obj.iv_remove(&mrb, x).expect("removal does not raise");
+        assert!(removed.is_some_and(Value::is_nil));
+
+        // An immediate cannot hold instance variables — also None, not Err.
+        assert!(42i32
+            .into_value(&mrb)
+            .iv_remove(&mrb, x)
+            .expect("a non-holder removal does not raise")
+            .is_none());
+    }
+
+    #[test]
+    fn iv_remove_surfaces_a_frozen_holder_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"iv_remove_frozen_test.rb")
+            .expect("allocating the context must succeed");
+
+        // A frozen instance-variable holder rejects removal — surfaced as
+        // Err instead of unwinding across the call.
+        let frozen =
+            cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o.freeze; o");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+        let x = mrb.intern_cstr(c"@x");
+        assert!(matches!(
+            frozen.iv_remove(&mrb, x),
+            Err(Error::Exception(_))
+        ));
     }
 
     #[test]

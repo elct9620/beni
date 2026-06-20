@@ -163,6 +163,7 @@ typed:
   mrb_intern_str: Mrb::intern_str
   mrb_iv_defined: "`Value::iv_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys`"
   mrb_iv_get: Value::iv_get
+  mrb_iv_remove: "`Value::iv_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None`"
   mrb_iv_set: Value::iv_set
   mrb_load_irep_buf: Mrb::load_irep_buf
   mrb_load_nstring_cxt: Ccontext::load_nstring

@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 162 (47%) |
-| macro | 124 | 25 (20%) | 37 (30%) |
-| total | 466 | 357 (77%) | 199 (43%) |
+| function | 342 | 332 (97%) | 163 (48%) |
+| macro | 124 | 26 (21%) | 37 (30%) |
+| total | 466 | 358 (77%) | 200 (43%) |
 
 ## mruby.h
 
@@ -514,7 +514,7 @@ Legend: ✅ covered · — missing
 | `mrb_test` | macro | ✅ | ✅ | `Value::to_bool` |
 | `mrb_true_p` | macro | ✅ | ✅ | `Value::is_true` |
 | `mrb_true_value` | fn | ✅ | ✅ | `Value::true_` |
-| `mrb_undef_p` | macro | — | — |  |
+| `mrb_undef_p` | macro | ✅ | — |  |
 | `mrb_undef_value` | fn | ✅ | — |  |
 ## mruby/variable.h
 
@@ -537,7 +537,7 @@ Legend: ✅ covered · — missing
 | `mrb_iv_get` | fn | ✅ | ✅ | `Value::iv_get` |
 | `mrb_iv_name_sym_check` | fn | ✅ | — |  |
 | `mrb_iv_name_sym_p` | fn | ✅ | — |  |
-| `mrb_iv_remove` | fn | ✅ | — |  |
+| `mrb_iv_remove` | fn | ✅ | ✅ | `Value::iv_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None` |
 | `mrb_iv_set` | fn | ✅ | ✅ | `Value::iv_set` |
 | `mrb_mod_cv_set` | fn | ✅ | — |  |
 | `mrb_obj_iv_defined` | fn | ✅ | — |  |
