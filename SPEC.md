@@ -510,9 +510,17 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   required-and-optional aspec mruby uses to accept the optional positionals
   while still requiring the leading ones. A `FromValue` failure on a supplied
   argument — required or optional — raises to the Ruby caller before the body
-  runs, as for the required-only form. Block arguments are not part of the
-  typed arity model: a method that takes a block reads it through the
-  `beni::sys` escape hatch.
+  runs, as for the required-only form.
+- A typed method registration declares that it accepts a block: the block
+  crosses as an `Option<Proc>` trailing parameter on the registered Rust
+  function — present in the call binds `Some`, omitted binds `None`, since
+  mruby leaves the call's block slot nil when no block was passed. Mirroring
+  `magnus`'s `Option<Proc>` block argument, the block parameter follows the
+  required positionals. The registration derives its aspec by adding the
+  block flag to the required aspec — the argument-spec aspec mruby uses to
+  mark a method as block-accepting. The block parameter is the typed `Proc`
+  the consumer invokes through `Proc::call`; a method that takes a block needs
+  no `beni::sys` to receive it.
 - A registered method asks whether it was called with a block through a total
   predicate on the `Mrb` handle, mirroring magnus's `Ruby::block_given_p`: it
   reads the current call and answers `true` when a block was passed, `false`
@@ -602,9 +610,9 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   the typed surface graduates through a Rust-native construct rather than the
   matching C symbol counts as covered through that construct: a type predicate
   read from the value tag covers the per-type `_p` macro it stands in for, and
-  a typed method definition's required and optional arity counts derive the
-  argument-spec aspec it declares — the required, the required-and-optional, and
-  the any-arguments aspecs.
+  a typed method definition's required and optional arity counts and its
+  block-accepting flag derive the argument-spec aspec it declares — the
+  required, the required-and-optional, the any-arguments, and the block aspecs.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.
