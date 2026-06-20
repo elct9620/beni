@@ -246,7 +246,12 @@ radix. The radix is one of 2 through 36, or 0 to auto-detect a leading base
 prefix (`0x`, `0b`, `0o`), the same radixes Ruby's `String#to_i` accepts; a radix
 outside that domain is itself invalid input and surfaces the same `Err`. This
 parse anchors on mruby's own `mrb_str_to_integer`; it is the strict counterpart
-of Ruby's lenient `String#to_i`, which never raises.
+of Ruby's lenient `String#to_i`, which never raises. It likewise parses the bytes
+to a float — a strict parse that rejects any non-float input rather than ignoring
+trailing characters — which surfaces an `Err`, the `ArgumentError` mruby raises,
+when the bytes are not a valid float. This parse anchors on mruby's own
+`mrb_str_to_dbl`; it is the strict counterpart of Ruby's lenient `String#to_f`,
+which never raises.
 
 A registered method grows an `RString` in place by appending Rust bytes,
 appending another mruby string's bytes, or appending a NUL-terminated C string's
