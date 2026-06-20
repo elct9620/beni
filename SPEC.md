@@ -233,12 +233,20 @@ borrows a string literal. From an mruby string Rust reads the bytes three ways:
 | owned `String` | the bytes when valid UTF-8 | a non-string tag, or non-UTF-8 bytes |
 | owned `Vec<u8>` | arbitrary bytes | a non-string tag |
 
-The three reads above never raise. Rust also reads the bytes as a
-NUL-terminated C-string view — the bytes guaranteed to end in a `\0`, suitable
-for a C boundary — and this read is fallible: because a C string cannot carry an
-embedded NUL, it surfaces an `Err`, the `ArgumentError` mruby raises, when the
-bytes contain an embedded NUL. magnus offers no direct C-string accessor, so the
-read anchors on mruby's own `mrb_string_cstr`.
+The three reads above never raise. Rust also reads the bytes two fallible ways.
+It reads them as a NUL-terminated C-string view — the bytes guaranteed to end in
+a `\0`, suitable for a C boundary — which surfaces an `Err`, the `ArgumentError`
+mruby raises, when the bytes contain an embedded NUL, because a C string cannot
+carry an embedded NUL. magnus offers no direct C-string accessor, so the read
+anchors on mruby's own `mrb_string_cstr`. It also parses the bytes to an integer
+in a given radix — a strict parse that rejects any non-integer input rather than
+stopping at the first invalid character — which surfaces an `Err`, the
+`ArgumentError` mruby raises, when the bytes are not a valid integer in that
+radix. The radix is one of 2 through 36, or 0 to auto-detect a leading base
+prefix (`0x`, `0b`, `0o`), the same radixes Ruby's `String#to_i` accepts; a radix
+outside that domain is itself invalid input and surfaces the same `Err`. This
+parse anchors on mruby's own `mrb_str_to_integer`; it is the strict counterpart
+of Ruby's lenient `String#to_i`, which never raises.
 
 A registered method grows an `RString` in place by appending Rust bytes,
 appending another mruby string's bytes, or appending a NUL-terminated C string's
@@ -301,7 +309,7 @@ raise/return contract:
 | Dispatches Ruby — a method call, `==` / `eql?`, an object `dup` / `clone` or string coercion, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts without dispatching — a numeric conversion across the numeric types, or coercing a value to an `RString` handle by its String tag | the value is non-numeric, or an infinite / NaN float converts to integer; the coerced value carries no String tag | `Result` |
-| Reads without dispatching but can still raise — a string's NUL-terminated C-string view | the bytes contain an embedded NUL | `Result` |
+| Reads without dispatching but can still raise — a string's NUL-terminated C-string view, or a strict parse of a string to an integer in a given radix | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix | `Result` |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
