@@ -133,6 +133,7 @@ typed:
   mrb_false_p: Value::is_false
   mrb_bool_value: "`IntoValue for bool` — a Rust bool boxes to the true/false immediate (see convert extension)"
   mrb_false_value: Value::false_
+  mrb_float_to_integer: "`Value::float_to_int` — convert a Float value to the Integer value it truncates toward zero (Ruby's Float#to_i / Float#to_int); guards the Float tag (TypeError) and raises RangeError on an infinite or NaN float"
   mrb_float_value: Value::from_float
   mrb_fixnum_to_str: "`Value::int_to_str` — the macro `mrb_fixnum_to_str(mrb, x, base)` is a `#define` alias of `mrb_integer_to_str`, so the same Rust item graduates it; no separate item is needed"
   mrb_funcall_argv: "`Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym)"

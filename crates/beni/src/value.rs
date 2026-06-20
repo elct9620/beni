@@ -326,6 +326,35 @@ impl Value {
         }
     }
 
+    /// Convert this Float value to the Integer value it truncates toward
+    /// zero, the way Ruby's `Float#to_i` / `Float#to_int` core does — `3.9`
+    /// to `3`, `-3.9` to `-3`. The result stays an mruby `Value`, an Integer
+    /// in the VM's value domain, not a Rust scalar. `mrb_float_to_integer`
+    /// guards its own receiver on the Float tag, raising `TypeError` for any
+    /// other tag, and raises `RangeError` for an infinite or NaN float, which
+    /// has no integer; both raises run under `Mrb::protect`, so either
+    /// surfaces as `Err` rather than long-jumping. magnus's `Float` exposes no
+    /// such conversion, so this anchors on mruby's own `mrb_float_to_integer`.
+    #[inline]
+    pub fn float_to_int(self, mrb: &Mrb) -> Result<Value, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_float_to_integer` raises
+                // `TypeError` on a non-Float receiver and `RangeError` on an
+                // infinite or NaN float — both caught by `protect` into `Err`
+                // — and otherwise returns an Integer value.
+                Value(unsafe { sys::mrb_float_to_integer(mrb.as_ptr(), self.0) })
+            })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// Coerce `self` to a string value — `self` unchanged when it is
     /// already a string, otherwise the result of its `to_s`. Runs under
     /// `Mrb::protect`: `Ok` with the string value, or `Err` when `to_s`
@@ -2740,6 +2769,58 @@ mod linked_tests {
         // receiver without a tag check.
         assert!(matches!(
             1.5f64.into_value(&mrb).int_to_str(&mrb, 10),
+            Err(Error::Exception(_))
+        ));
+    }
+
+    #[test]
+    fn float_to_int_truncates_toward_zero() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A positive float truncates down, like Ruby's 3.9.to_i == 3.
+        let three = Value::from_float(&mrb, 3.9)
+            .float_to_int(&mrb)
+            .expect("3.9 converts");
+        assert_eq!(i32::from_value(three), Some(3));
+        // A negative float truncates toward zero, like Ruby's -3.9.to_i == -3.
+        let neg_three = Value::from_float(&mrb, -3.9)
+            .float_to_int(&mrb)
+            .expect("-3.9 converts");
+        assert_eq!(i32::from_value(neg_three), Some(-3));
+    }
+
+    #[test]
+    fn float_to_int_surfaces_infinity_and_nan_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Infinity and NaN have no integer; mruby raises RangeError, caught
+        // into Err rather than long-jumping, and the VM stays usable after.
+        assert!(matches!(
+            Value::from_float(&mrb, f64::INFINITY).float_to_int(&mrb),
+            Err(Error::Exception(_))
+        ));
+        assert!(matches!(
+            Value::from_float(&mrb, f64::NAN).float_to_int(&mrb),
+            Err(Error::Exception(_))
+        ));
+        assert_eq!(
+            i32::from_value(
+                Value::from_float(&mrb, 2.5)
+                    .float_to_int(&mrb)
+                    .expect("the VM survives the protected raise")
+            ),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn float_to_int_rejects_a_non_float_receiver() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // mrb_float_to_integer guards its receiver on the Float tag: an
+        // Integer is rejected with TypeError, not passed through.
+        assert!(matches!(
+            Value::from_int(&mrb, 7).float_to_int(&mrb),
             Err(Error::Exception(_))
         ));
     }
