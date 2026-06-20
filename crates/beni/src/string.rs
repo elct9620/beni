@@ -124,6 +124,39 @@ impl RString {
         }
     }
 
+    /// `mrb_str_cat_cstr(mrb, self, ptr)` — append a NUL-terminated C
+    /// string's bytes to this string in place, its content up to the
+    /// terminating NUL, the C-boundary counterpart of `cat`, the way
+    /// Ruby's `String#<<` extends its receiver. The backing buffer may
+    /// reallocate, but `self` keeps naming the same `RString`. Appending
+    /// to a frozen string raises `FrozenError`; the call runs under
+    /// `Mrb::protect`, so that surfaces as `Err` rather than long-jumping.
+    #[inline]
+    pub fn cat_cstr(self, mrb: &Mrb, s: &core::ffi::CStr) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `self` is String-tagged by the newtype contract;
+                // `mrb` is alive inside the protect frame; `s` is a
+                // NUL-terminated buffer read up to its terminator and
+                // copied into the string before the call returns.
+                // `mrb_str_cat_cstr` calls `mrb_str_modify`, which raises
+                // `FrozenError` on a frozen receiver — caught by `protect`
+                // into `Err`.
+                unsafe {
+                    sys::mrb_str_cat_cstr(mrb.as_ptr(), self.0.as_raw(), s.as_ptr());
+                }
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, s);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_str_concat(mrb, self, other)` — append `other` coerced to a
     /// String, the dispatching counterpart of `cat_str`, the way Ruby's
     /// `String#concat` accepts a non-string argument. A non-string
@@ -462,6 +495,34 @@ mod tests {
         );
 
         let result = frozen.cat_str(&mrb, mrb.str_new(b"more"));
+        assert!(matches!(result, Err(Error::Exception(_))));
+    }
+
+    #[test]
+    fn cat_cstr_appends_a_c_string_in_place() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let s = mrb.str_new(b"foo");
+        s.cat_cstr(&mrb, c"bar")
+            .expect("appending a C string to a mutable string succeeds");
+        // The same handle now names the grown string — the bytes up to the
+        // terminating NUL were appended in place.
+        assert_eq!(s.to_bytes(), b"foobar".to_vec());
+
+        // Appending an empty C string leaves the receiver unchanged.
+        s.cat_cstr(&mrb, c"").expect("appending nothing succeeds");
+        assert_eq!(s.to_bytes(), b"foobar".to_vec());
+    }
+
+    #[test]
+    fn cat_cstr_surfaces_frozen_receiver_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
+
+        let frozen = RString::from_value(cxt.load_nstring(b"'fixed'.freeze"))
+            .expect("a frozen String literal is String-tagged");
+        let result = frozen.cat_cstr(&mrb, c"more");
         assert!(matches!(result, Err(Error::Exception(_))));
     }
 

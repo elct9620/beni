@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 137 (40%) |
+| function | 342 | 332 (97%) | 138 (40%) |
 | macro | 124 | 25 (20%) | 34 (27%) |
-| total | 466 | 357 (77%) | 171 (37%) |
+| total | 466 | 357 (77%) | 172 (37%) |
 
 ## mruby.h
 
@@ -438,7 +438,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_buf_new` | macro | — | — |  |
 | `mrb_str_cat` | fn | ✅ | ✅ | `RString::cat` |
 | `mrb_str_cat2` | macro | — | — |  |
-| `mrb_str_cat_cstr` | fn | ✅ | — |  |
+| `mrb_str_cat_cstr` | fn | ✅ | ✅ | `RString::cat_cstr` |
 | `mrb_str_cat_lit` | macro | — | — |  |
 | `mrb_str_cat_str` | fn | ✅ | ✅ | `RString::cat_str` |
 | `mrb_str_cmp` | fn | ✅ | ✅ | `RString::cmp` |
