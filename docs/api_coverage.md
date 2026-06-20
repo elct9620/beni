@@ -10,20 +10,20 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 338 (99%) | 179 (52%) |
-| macro | 124 | 26 (21%) | 41 (33%) |
-| total | 466 | 364 (78%) | 220 (47%) |
+| macro | 124 | 27 (22%) | 43 (35%) |
+| total | 466 | 365 (78%) | 222 (48%) |
 
 ## mruby.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `MRB_ARGS_ANY` | macro | ✅ | ✅ | a typed method's `-1` arity, derived by `Module::define_method` |
-| `MRB_ARGS_ARG` | macro | — | — |  |
+| `MRB_ARGS_ARG` | macro | ✅ | ✅ | a typed method's required-and-optional arity, derived by `Module::define_method` (the `method!(f, req, opt)` form's aspec) |
 | `MRB_ARGS_BLOCK` | macro | — | — |  |
 | `MRB_ARGS_KEY` | macro | — | — |  |
 | `MRB_ARGS_NOBLOCK` | macro | — | — |  |
 | `MRB_ARGS_NONE` | macro | ✅ | ✅ | a typed method's `0` arity, derived by `Module::define_method` (the no-argument aspec a zero-arity definition declares) |
-| `MRB_ARGS_OPT` | macro | — | — |  |
+| `MRB_ARGS_OPT` | macro | — | ✅ | a typed method's optional positional arity, derived by `Module::define_method` (the optional component of the `method!(f, req, opt)` aspec) |
 | `MRB_ARGS_POST` | macro | — | — |  |
 | `MRB_ARGS_REQ` | macro | ✅ | ✅ | a typed method's positional arity, derived by `Module::define_method` |
 | `MRB_ARGS_REST` | macro | — | — |  |

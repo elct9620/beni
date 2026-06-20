@@ -43,12 +43,13 @@ use crate::error::panic_message;
 /// Bridge + arity pair produced by the `method!` macro and
 /// consumed by `Module::define_method` /
 /// `Object::define_singleton_method`, which derives the mruby aspec
-/// from the arity (`-1` = any, `0..` = that many required
-/// positionals).
+/// from the arity: `-1` is any, `arity` is the required positional
+/// count, and `opt` the optional positional count that follows them.
 #[derive(Copy, Clone)]
 pub struct MethodDef {
     pub(crate) func: crate::mrb_func_t,
     pub(crate) arity: i8,
+    pub(crate) opt: i8,
 }
 
 impl MethodDef {
@@ -57,7 +58,19 @@ impl MethodDef {
     /// but registrations should always go through the macro.
     #[doc(hidden)]
     pub const fn new(func: crate::mrb_func_t, arity: i8) -> Self {
-        Self { func, arity }
+        Self {
+            func,
+            arity,
+            opt: 0,
+        }
+    }
+
+    /// As `new`, declaring `opt` optional positionals after the
+    /// required ones — the constructor the `method!(f, req, opt)` form
+    /// expands to.
+    #[doc(hidden)]
+    pub const fn new_with_opt(func: crate::mrb_func_t, arity: i8, opt: i8) -> Self {
+        Self { func, arity, opt }
     }
 }
 
@@ -278,6 +291,128 @@ define_method_trait!(
     (d, T3)
 );
 
+/// Generate one `MethodReqOpt` trait: the typed crossing for a
+/// registered function with `$req` required positionals followed by
+/// `$opt` optional ones. The optional parameters are `Option<O>` on
+/// the wrapped function — `Some` when the caller supplied the slot,
+/// `None` when it was omitted. The format string separates the two
+/// groups with `|`, mruby's optional marker.
+///
+/// An omitted optional leaves its out-parameter untouched, so each
+/// optional slot is seeded with the undef sentinel and read back: an
+/// unchanged (still-undef) slot is the omitted case, any other value
+/// the supplied case converted through `FromValue`.
+macro_rules! define_method_req_opt_trait {
+    (
+        $(#[$attr:meta])* $name:ident, $fmt:literal,
+        [$(($req:ident, $rt:ident)),*],
+        [$(($opt:ident, $ot:ident)),*]
+    ) => {
+        $(#[$attr])*
+        pub trait $name<$($rt,)* $($ot,)* Res>
+        where
+            Self: Sized + Fn(&Mrb, Value $(, $rt)* $(, Option<$ot>)*) -> Res,
+            $($rt: FromValue,)*
+            $($ot: FromValue,)*
+            Res: MethodReturn,
+        {
+            /// Read and convert the call-frame arguments, run the
+            /// wrapped function, and project its return. A failed
+            /// argument conversion — required or supplied optional —
+            /// returns `Err` before the wrapped function runs.
+            #[doc(hidden)]
+            fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
+                #[cfg(mruby_linked)]
+                {
+                    $(let mut $req = sys::mrb_value::zeroed();)*
+                    // SAFETY: pure value computation; the undef sentinel
+                    // marks an optional slot mruby leaves untouched.
+                    $(let mut $opt = unsafe { sys::mrb_undef_value_func() };)*
+                    // SAFETY: `mrb` is alive; each out-parameter is a
+                    // valid `*mut mrb_value`; the format string holds
+                    // one `o` per out-parameter, `|` before the
+                    // optional group.
+                    unsafe {
+                        sys::mrb_get_args(
+                            mrb.as_ptr(),
+                            $fmt.as_ptr()
+                            $(, &mut $req as *mut sys::mrb_value)*
+                            $(, &mut $opt as *mut sys::mrb_value)*
+                        );
+                    }
+                    $(
+                        let $req = $rt::from_value(Value::from_raw($req))
+                            .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
+                    )*
+                    $(
+                        // SAFETY: `mrb` is alive; `$opt` is a valid value.
+                        let $opt = if unsafe { sys::mrb_undef_p_func($opt) } {
+                            None
+                        } else {
+                            Some(
+                                $ot::from_value(Value::from_raw($opt))
+                                    .ok_or_else(|| arg_type_error::<$ot>(mrb))?,
+                            )
+                        };
+                    )*
+                    (self)(mrb, self_ $(, $req)* $(, $opt)*).into_method_return(mrb)
+                }
+                #[cfg(not(mruby_linked))]
+                {
+                    let _ = (mrb, self_);
+                    crate::not_linked()
+                }
+            }
+
+            /// Bridge entry: `call_convert_value` inside the panic
+            /// boundary, raising any error to the Ruby caller.
+            ///
+            /// # Safety
+            ///
+            /// Bridge frame only — the raise long-jumps out.
+            #[doc(hidden)]
+            unsafe fn call_handle_error(self, mrb: &Mrb, self_: Value) -> Value {
+                #[cfg(mruby_linked)]
+                {
+                    // SAFETY: forwarded from the caller.
+                    unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
+                }
+                #[cfg(not(mruby_linked))]
+                {
+                    let _ = (mrb, self_);
+                    crate::not_linked()
+                }
+            }
+        }
+
+        impl<Func, $($rt,)* $($ot,)* Res> $name<$($rt,)* $($ot,)* Res> for Func
+        where
+            Func: Fn(&Mrb, Value $(, $rt)* $(, Option<$ot>)*) -> Res,
+            $($rt: FromValue,)*
+            $($ot: FromValue,)*
+            Res: MethodReturn,
+        {
+        }
+    };
+}
+
+define_method_req_opt_trait!(
+    /// Typed crossing for a method with one optional positional and
+    /// no required ones.
+    Method0Opt1,
+    c"|o",
+    [],
+    [(a, O0)]
+);
+define_method_req_opt_trait!(
+    /// Typed crossing for a method with one required positional
+    /// followed by one optional.
+    Method1Opt1,
+    c"o|o",
+    [(a, T0)],
+    [(b, O0)]
+);
+
 /// Typed crossing for an any-arity method (`method!(f, -1)`): the
 /// wrapped function reads the call frame itself via
 /// `Mrb::get_args` (`format::Rest` and friends), and registration
@@ -324,7 +459,7 @@ where
 
 /// Wrap a Rust function as an mruby method registration.
 ///
-/// The second argument is the arity: `0..=4` for that many required
+/// The arity follows the function: `0..=4` for that many required
 /// positional arguments (each converted through `FromValue` before
 /// the function runs), or `-1` for a function that reads the call
 /// frame itself via `Mrb::get_args`.
@@ -334,6 +469,17 @@ where
 ///     a + b
 /// }
 /// class.define_method(&mrb, c"add", method!(add, 2))?;
+/// ```
+///
+/// A second count declares optional positionals after the required
+/// ones; each optional is an `Option` trailing parameter — `Some` when
+/// supplied, `None` when omitted.
+///
+/// ```ignore
+/// fn add(_mrb: &Mrb, _self: Value, a: i32, b: Option<i32>) -> i32 {
+///     a + b.unwrap_or(0)
+/// }
+/// class.define_method(&mrb, c"add", method!(add, 1, 1))?;
 /// ```
 #[macro_export]
 macro_rules! method {
@@ -371,6 +517,12 @@ macro_rules! method {
     ($f:expr, 4) => {
         $crate::__method_arity!($f, 4, Method4)
     };
+    ($f:expr, 0, 1) => {
+        $crate::__method_req_opt!($f, 0, 1, Method0Opt1)
+    };
+    ($f:expr, 1, 1) => {
+        $crate::__method_req_opt!($f, 1, 1, Method1Opt1)
+    };
 }
 
 /// Shared expansion behind `method!`'s fixed arities. Not part of
@@ -400,6 +552,33 @@ macro_rules! __method_arity {
     }};
 }
 
+/// Shared expansion behind `method!`'s required-plus-optional arities.
+/// As `__method_arity!`, but carries the optional count so the aspec
+/// derives the required-and-optional form. Not part of the public
+/// surface — `#[macro_export]` is only required so the `method!`
+/// expansion can reach it from consumer crates.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __method_req_opt {
+    ($f:expr, $req:literal, $opt:literal, $trait_:ident) => {{
+        unsafe extern "C" fn bridge(
+            mrb: *mut $crate::sys::mrb_state,
+            self_: $crate::Value,
+        ) -> $crate::Value {
+            // Evaluated outside the unsafe block so caller-supplied
+            // code is never silently wrapped in it.
+            let f = $f;
+            // SAFETY: mruby invokes the bridge with a live state
+            // pointer that outlives the call frame.
+            let mrb = unsafe { $crate::Mrb::borrow_raw(&mrb) };
+            // SAFETY: this is the bridge frame the raise contract
+            // names.
+            unsafe { $crate::method::$trait_::call_handle_error(f, mrb, self_) }
+        }
+        $crate::method::MethodDef::new_with_opt(bridge, $req, $opt)
+    }};
+}
+
 #[cfg(all(test, mruby_linked))]
 mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -420,6 +599,18 @@ mod tests {
 
     fn boom(_mrb: &Mrb, _self: Value) -> Value {
         panic!("boom in registered method");
+    }
+
+    // Optional trailing argument: present binds `Some`, omitted binds
+    // `None` (defaulting to a base of 0).
+    fn opt_add(_mrb: &Mrb, _self: Value, a: i32, b: Option<i32>) -> i32 {
+        a + b.unwrap_or(0)
+    }
+
+    // No required arguments, one optional — proves the all-optional
+    // form reads the lone optional slot.
+    fn opt_only(_mrb: &Mrb, _self: Value, a: Option<i32>) -> i32 {
+        a.unwrap_or(-1)
     }
 
     fn fallible(mrb: &Mrb, _self: Value) -> Result<i32, Error> {
@@ -479,6 +670,87 @@ mod tests {
         assert!(
             !TYPE_ERROR_BODY_RAN.load(Ordering::SeqCst),
             "the wrapped function must not run on conversion failure"
+        );
+    }
+
+    #[test]
+    fn optional_argument_defaults_to_none_when_omitted() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = fresh_class(&mrb, c"BeniOptAdder");
+        class
+            .define_method(&mrb, c"add", method!(opt_add, 1, 1))
+            .expect("registering the optional-arg method must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+
+        // Omitting the optional argument binds `None`: the body sees
+        // the default base of 0.
+        let omitted = receiver
+            .funcall(&mrb, c"add", &[Value::from_int(&mrb, 7)])
+            .expect("the call with the optional omitted must not raise");
+        assert_eq!(i32::from_value(omitted), Some(7));
+
+        // Supplying it binds `Some`.
+        let supplied = receiver
+            .funcall(
+                &mrb,
+                c"add",
+                &[Value::from_int(&mrb, 7), Value::from_int(&mrb, 5)],
+            )
+            .expect("the call with the optional supplied must not raise");
+        assert_eq!(i32::from_value(supplied), Some(12));
+    }
+
+    #[test]
+    fn all_optional_method_reads_its_lone_slot() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = fresh_class(&mrb, c"BeniOptOnly");
+        class
+            .define_method(&mrb, c"v", method!(opt_only, 0, 1))
+            .expect("registering the all-optional method must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+
+        let omitted = receiver
+            .funcall(&mrb, c"v", &[])
+            .expect("the call with no arguments must not raise");
+        assert_eq!(i32::from_value(omitted), Some(-1));
+
+        let supplied = receiver
+            .funcall(&mrb, c"v", &[Value::from_int(&mrb, 42)])
+            .expect("the call with the optional supplied must not raise");
+        assert_eq!(i32::from_value(supplied), Some(42));
+    }
+
+    #[test]
+    fn supplied_optional_failing_from_value_raises() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = fresh_class(&mrb, c"BeniOptStrict");
+        class
+            .define_method(&mrb, c"add", method!(opt_add, 1, 1))
+            .expect("registering the optional-arg method must succeed");
+
+        // A supplied optional that fails its i32 conversion raises, just
+        // as a required argument does — an omitted slot would bind None
+        // instead, so the raise is specific to the supplied case.
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let err = receiver
+            .funcall(
+                &mrb,
+                c"add",
+                &[Value::from_int(&mrb, 1), Value::from_float(&mrb, 1.5)],
+            )
+            .expect_err("the supplied optional's conversion failure must raise");
+        assert!(
+            err.message(&mrb).contains("i32"),
+            "the TypeError must name the expected Rust type: {}",
+            err.message(&mrb)
         );
     }
 

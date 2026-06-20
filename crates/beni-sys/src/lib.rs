@@ -261,6 +261,15 @@ pub fn mrb_args_req(n: u32) -> mrb_aspec {
     unsafe { mrb_args_req_func(n) }
 }
 
+/// `MRB_ARGS_ARG(req, opt)` — `req` required followed by `opt`
+/// optional positional arguments.
+#[cfg(mruby_linked)]
+#[inline]
+pub fn mrb_args_arg(req: u32, opt: u32) -> mrb_aspec {
+    // SAFETY: as `mrb_args_none`.
+    unsafe { mrb_args_arg_func(req, opt) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -263,6 +263,25 @@ mrb_args_req_func(uint32_t n)
   return MRB_ARGS_REQ(n);
 }
 
+static inline mrb_aspec
+mrb_args_arg_func(uint32_t req, uint32_t opt)
+{
+  return MRB_ARGS_ARG(req, opt);
+}
+
+/* The `mrb_undef_value()` sentinel, used to seed an optional-argument
+ * out-parameter before `mrb_get_args`: an omitted optional leaves its
+ * slot untouched, so the bridge reads back the undef tag to tell an
+ * omitted argument from a supplied one. `mrb_undef_value` is a boxing-
+ * dependent `MRB_INLINE` in <mruby/value.h>; bindgen does not expand
+ * it, so the C compiler emits the sentinel for the layout libmruby.a
+ * was built with. */
+static inline mrb_value
+mrb_undef_value_func(void)
+{
+  return mrb_undef_value();
+}
+
 /* Mark a class so its instances allocate as the given vtype.
  * Counterpart to the `MRB_SET_INSTANCE_TT(c, tt)` macro in
  * <mruby/class.h>, which rewrites the instance-type bits of the
