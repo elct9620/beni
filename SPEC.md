@@ -261,6 +261,14 @@ tag rather than trusting it, so a non-Integer value surfaces an `Err` carrying a
 `TypeError` instead of reading a malformed value. magnus offers no direct radix
 render, so this anchors on mruby's own `mrb_integer_to_str`.
 
+A Float value converts to the Integer value it truncates toward zero, the way
+Ruby's `Float#to_i` / `Float#to_int` core does — `3.9` to `3`, `-3.9` to `-3`.
+The conversion guards its receiver on the Float tag, so a non-Float value
+surfaces an `Err` carrying a `TypeError`; an infinite or NaN float has no integer
+and surfaces an `Err` carrying a `RangeError`. This stays in mruby's value domain
+— a Float value to an Integer value, not a value to a Rust scalar — and anchors
+on mruby's own `mrb_float_to_integer`.
+
 A registered method grows an `RString` in place by appending Rust bytes,
 appending another mruby string's bytes, or appending a NUL-terminated C string's
 bytes — its content up to the terminating NUL, the C-boundary counterpart of the
@@ -348,7 +356,7 @@ raise/return contract:
 | Mutates a receiver — array append/remove/extend/replace/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment and removal, class-variable assignment, constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables; a constant assignment or removal also when the receiver is not a class or module | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, a `<=>` comparison, an object `dup` / `clone` or string coercion, an array join rendering each element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` (a `<=>` comparison yields nothing when the two values are incomparable) |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
-| Converts without dispatching — a numeric conversion across the numeric types, or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric, or an infinite / NaN float converts to integer; the coerced value carries no String / Array / Hash tag | `Result` |
+| Converts without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion raises a `TypeError`), or an infinite / NaN float converts to integer (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, or rendering an integer to a string in a given radix | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer | `Result` |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
