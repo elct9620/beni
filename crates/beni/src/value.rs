@@ -859,6 +859,29 @@ impl Value {
         }
     }
 
+    /// `mrb_any_to_s(mrb, self)` — the value's default `to_s` render as a
+    /// new `RString`: `#<ClassName>` for an immediate, `#<ClassName:0x...>`
+    /// for a heap object. Built from the class name without dispatching the
+    /// value's own `to_s`, so it is the render `obj_as_string` falls back to
+    /// and runs no user Ruby — total, returning the string directly.
+    #[inline]
+    pub fn any_to_s(self, mrb: &Mrb) -> crate::RString {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `mrb` is alive; `self` originates from the same VM.
+            // `mrb_any_to_s` reads the class name and object id only, so it
+            // returns a String-tagged value without dispatching user Ruby —
+            // the unchecked wrap accepts it.
+            let v = Value::from_raw(unsafe { sys::mrb_any_to_s(mrb.as_ptr(), self.0) });
+            unsafe { RString::from_value_unchecked(v) }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// Recover the `*mut RClass` pointer from a class-tagged
     /// `Value`, via the `mrb_class_ptr_func` static-inline wrapper in
     /// `wrapper.h` — the `mrb_class_ptr(v)` macro expands inside the
@@ -2363,6 +2386,25 @@ mod linked_tests {
             mrb.pending_exc().is_nil(),
             "the swallowed raise must not leave a pending exception"
         );
+    }
+
+    #[test]
+    fn any_to_s_renders_the_default_object_form() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt = Ccontext::new(&mrb, c"any_to_s_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        // A user class with no to_s override renders the default
+        // `#<ClassName:0x...>` form, built from the class name without
+        // dispatching the receiver's own to_s.
+        let obj = cxt.load_nstring(b"class Plain; end; Plain.new");
+        let rendered = obj.any_to_s(&mrb).to_bytes();
+        assert!(
+            rendered.starts_with(b"#<Plain:0x"),
+            "expected the default heap-object form, got {:?}",
+            String::from_utf8_lossy(&rendered)
+        );
+        assert!(rendered.ends_with(b">"));
     }
 
     #[test]

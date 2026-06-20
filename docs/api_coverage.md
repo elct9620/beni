@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 196 (57%) |
+| function | 342 | 338 (99%) | 197 (58%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 249 (53%) |
+| total | 466 | 366 (79%) | 250 (54%) |
 
 ## mruby.h
 
@@ -28,7 +28,7 @@ Legend: ✅ covered · — missing
 | `MRB_ARGS_REQ` | macro | ✅ | ✅ | a typed method's positional arity, derived by `Module::define_method` |
 | `MRB_ARGS_REST` | macro | — | — |  |
 | `mrb_alloca` | macro | — | — |  |
-| `mrb_any_to_s` | fn | ✅ | — |  |
+| `mrb_any_to_s` | fn | ✅ | ✅ | `Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::obj_as_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly |
 | `mrb_argnum_error` | fn | ✅ | ✅ | `Error::argnum` |
 | `mrb_as_float` | macro | ✅ | ✅ | `Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast |
 | `mrb_as_int` | macro | ✅ | ✅ | `Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast |

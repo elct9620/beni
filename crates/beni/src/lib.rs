@@ -180,6 +180,7 @@ mod tests {
         let _ = Value::from_int;
         let _ = Value::from_float;
         let _ = Value::obj_as_string;
+        let _ = Value::any_to_s;
         let _ = Value::obj_dup;
         let _ = Value::obj_clone;
         let _ = Value::classname;

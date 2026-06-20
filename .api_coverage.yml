@@ -207,6 +207,7 @@ typed:
   mrb_num_sub: "`Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width). The obsolete macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it"
   mrb_num_minus: "`Value::sub` — the macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it; no separate item is needed"
   mrb_num_mul: "`Value::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width)"
+  mrb_any_to_s: "`Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::obj_as_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly"
   mrb_obj_as_string: Value::obj_as_string
   mrb_obj_class: Value::class
   mrb_obj_classname: Value::classname
