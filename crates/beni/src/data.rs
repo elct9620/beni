@@ -6,8 +6,10 @@
 //! drops the boxed `T` when the carrier is garbage-collected. A class
 //! is marked through `RClass::set_instance_data_tt` so its instances
 //! allocate as data carriers; `RClass::data_wrap` boxes a `T` into a
-//! fresh instance of that class; `Value::data_get` extracts `&T` back,
-//! type-checked against the descriptor the value was wrapped under.
+//! fresh instance of that class — fallibly, since allocating against an
+//! unmarked class raises a `TypeError` that surfaces as `Err` with the
+//! box reclaimed; `Value::data_get` extracts `&T` back, type-checked
+//! against the descriptor the value was wrapped under.
 //!
 //! The wrapped value's lifetime belongs to the mruby GC — the release
 //! hook runs when the carrier is collected (or the VM closes).
@@ -120,25 +122,52 @@ impl RClass {
     }
 
     /// Box `value` and wrap it as a fresh instance of this class,
-    /// carrying it under `ty`. The mruby GC owns the box from here: its
-    /// release hook drops the `T` when the instance is collected. The
-    /// class should have been marked through
-    /// `RClass::set_instance_data_tt`.
+    /// carrying it under `ty`. Fallible: a class marked through
+    /// `RClass::set_instance_data_tt` yields `Ok`, and the mruby GC owns
+    /// the box from there — its release hook drops the `T` when the
+    /// instance is collected. A class that cannot carry a data carrier —
+    /// one never marked — makes the allocation raise a `TypeError`, which
+    /// surfaces as `Err` rather than unwinding across the boundary; the
+    /// box not yet handed to any carrier is reclaimed, never leaked.
+    /// Mirrors `magnus`'s typed-data wrapping.
     #[inline]
-    pub fn data_wrap<T>(self, mrb: &Mrb, value: T, ty: &'static DataType<T>) -> Value {
+    pub fn data_wrap<T>(
+        self,
+        mrb: &Mrb,
+        value: T,
+        ty: &'static DataType<T>,
+    ) -> Result<Value, crate::Error> {
         #[cfg(mruby_linked)]
         {
             let ptr = Box::into_raw(Box::new(value)) as *mut core::ffi::c_void;
-            // SAFETY: `mrb` is alive; `self` is from the same VM; `ptr`
-            // is a freshly leaked `Box<T>` handed to mruby, which will
-            // release it via `ty`'s release hook; `ty` is `'static`, so
-            // its descriptor outlives the carrier.
-            let rdata = unsafe {
-                sys::mrb_data_object_alloc(mrb.as_ptr(), self.as_raw(), ptr, ty.as_raw())
-            };
-            // SAFETY: `rdata` is a live object pointer just allocated
-            // against this VM; `mrb_obj_value` reifies it.
-            Value::from_raw(unsafe { sys::mrb_obj_value(rdata as *mut core::ffi::c_void) })
+            // `ptr` is `Copy`, so the closure captures a copy while this
+            // frame keeps the original for the reclaim path. On success
+            // mruby's allocation owns the box; on the raise path the
+            // allocation never attached it to any object, so this frame
+            // reclaims the still-orphaned box exactly once.
+            let wrapped = mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // is from the same VM; `ptr` is a freshly leaked `Box<T>`;
+                // `ty` is `'static`, so its descriptor outlives the
+                // carrier. `mrb_data_object_alloc` allocates the carrier,
+                // which raises a `TypeError` when `self` was never marked
+                // to carry a data carrier — caught by `protect`.
+                let rdata = unsafe {
+                    sys::mrb_data_object_alloc(mrb.as_ptr(), self.as_raw(), ptr, ty.as_raw())
+                };
+                // SAFETY: `rdata` is a live object pointer just allocated
+                // against this VM; `mrb_obj_value` reifies it.
+                Value::from_raw(unsafe { sys::mrb_obj_value(rdata as *mut core::ffi::c_void) })
+            });
+            if wrapped.is_err() {
+                // SAFETY: the allocation raised before handing the box to
+                // any carrier, so no GC owner exists and `ptr` is still the
+                // sole owner of the live `Box<T>`. Reclaiming it here drops
+                // the `T` once; the success path never reaches this, so the
+                // box is freed exactly once across both paths.
+                drop(unsafe { Box::from_raw(ptr as *mut T) });
+            }
+            wrapped
         }
         #[cfg(not(mruby_linked))]
         {
@@ -248,7 +277,9 @@ mod tests {
             .expect("defining the carrier class must succeed");
         class.set_instance_data_tt(&mrb);
 
-        let obj = class.data_wrap(&mrb, Holder { tag: 7 }, &HOLDER_TYPE);
+        let obj = class
+            .data_wrap(&mrb, Holder { tag: 7 }, &HOLDER_TYPE)
+            .expect("wrapping into a marked class must succeed");
         assert!(obj.is_data(), "a wrapped carrier reports the data tag");
 
         let got = obj
@@ -269,6 +300,58 @@ mod tests {
                 .is_none(),
             "a non-data value must not extract"
         );
+    }
+
+    /// Drop probe with its own counter for the failed-wrap path — kept
+    /// distinct from the close-time probes so the unmarked-class test's
+    /// reclaim assertion cannot be perturbed by another test's teardown.
+    static UNMARKED_DROPS: AtomicUsize = AtomicUsize::new(0);
+
+    struct UnmarkedProbe;
+    impl Drop for UnmarkedProbe {
+        fn drop(&mut self) {
+            UNMARKED_DROPS.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    static UNMARKED_TYPE: DataType<UnmarkedProbe> = DataType::new(c"BeniUnmarkedProbe");
+
+    #[test]
+    fn data_wrap_into_an_unmarked_class_errs_and_reclaims_the_box() {
+        UNMARKED_DROPS.store(0, Ordering::SeqCst);
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        // A class that was never marked through set_instance_data_tt: its
+        // instances do not allocate as data carriers, so the allocation
+        // raises a TypeError instead of producing a carrier.
+        let class = mrb
+            .define_class(c"BeniUnmarkedHolder", mrb.object_class())
+            .expect("defining the class must succeed");
+
+        let err = class
+            .data_wrap(&mrb, UnmarkedProbe, &UNMARKED_TYPE)
+            .expect_err("wrapping into an unmarked class must surface an Err");
+
+        // The raise is mruby's allocation TypeError, surfaced rather than
+        // unwound across the boundary.
+        let exc = match err {
+            crate::Error::Exception(v) => v,
+            crate::Error::Panic(_) => unreachable!("the allocation raise is a Ruby exception"),
+        };
+        assert_eq!(exc.classname(&mrb), "TypeError");
+
+        // The box handed to the failed allocation was reclaimed exactly
+        // once — proving the orphaned payload is freed, not leaked.
+        assert_eq!(
+            UNMARKED_DROPS.load(Ordering::SeqCst),
+            1,
+            "the unwrapped payload must be dropped once on the failed-wrap path"
+        );
+
+        // The VM survives the protected raise and stays usable.
+        let alive = mrb
+            .protect(|m| m.str_new(b"alive").as_value())
+            .expect("the VM must survive the failed wrap");
+        assert_eq!(alive.to_string(&mrb), "alive");
     }
 
     #[test]
@@ -349,7 +432,9 @@ mod tests {
 
             // Root the carrier so it survives until close, then let the
             // VM drop: `mrb_close` sweeps it and invokes the release hook.
-            let obj = class.data_wrap(&mrb, DropProbe, &PROBE_TYPE);
+            let obj = class
+                .data_wrap(&mrb, DropProbe, &PROBE_TYPE)
+                .expect("wrapping into a marked class must succeed");
             let slot = mrb.intern_cstr(c"$beni_data_probe");
             mrb.gv_set(slot, obj);
         }
@@ -386,7 +471,9 @@ mod tests {
 
             // Root the carrier so `mrb_close` sweeps it and invokes the
             // release hook, which drops a payload whose `Drop` panics.
-            let obj = class.data_wrap(&mrb, PanicOnDrop, &PANIC_TYPE);
+            let obj = class
+                .data_wrap(&mrb, PanicOnDrop, &PANIC_TYPE)
+                .expect("wrapping into a marked class must succeed");
             let slot = mrb.intern_cstr(c"$beni_data_panic");
             mrb.gv_set(slot, obj);
         }
