@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 155 (45%) |
+| function | 342 | 332 (97%) | 157 (46%) |
 | macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 191 (41%) |
+| total | 466 | 357 (77%) | 193 (41%) |
 
 ## mruby.h
 
@@ -86,9 +86,9 @@ Legend: ✅ covered · — missing
 | `mrb_define_private_method_id` | fn | ✅ | ✅ | `Module::define_private_method` with a `Symbol` key (the symbol-or-name key) |
 | `mrb_define_singleton_method` | fn | ✅ | ✅ | `Object::define_singleton_method` with a name key — interns and routes through `mrb_define_singleton_method_id` |
 | `mrb_define_singleton_method_id` | fn | ✅ | ✅ | `Object::define_singleton_method` with a `Symbol` key (the symbol-or-name key) |
-| `mrb_ensure_array_type` | fn | ✅ | — |  |
+| `mrb_ensure_array_type` | fn | ✅ | ✅ | `Value::ensure_array` — the raising Array-tag coercion to an `Array` handle; `mrb_check_array_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `Array` downcast and stays in `sys` |
 | `mrb_ensure_float_type` | fn | ✅ | — |  |
-| `mrb_ensure_hash_type` | fn | ✅ | — |  |
+| `mrb_ensure_hash_type` | fn | ✅ | ✅ | `Value::ensure_hash` — the raising Hash-tag coercion to a `Hash` handle; `mrb_check_hash_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `Hash` downcast and stays in `sys` |
 | `mrb_ensure_int_type` | fn | ✅ | — |  |
 | `mrb_ensure_integer_type` | fn | ✅ | — |  |
 | `mrb_ensure_string_type` | fn | ✅ | ✅ | `Value::ensure_string` — the raising String-tag coercion to an `RString` handle; `mrb_check_string_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `RString` downcast and stays in `sys` |

@@ -335,6 +335,76 @@ impl Value {
         }
     }
 
+    /// Coerce `self` to a typed `Array` handle by its Array tag,
+    /// surfacing a non-Array as an `Err` rather than rejecting it to
+    /// `None`: `Ok` with the handle when `self` is Array-tagged, `Err`
+    /// carrying a `TypeError` for any other tag. It runs no user Ruby —
+    /// it dispatches no `to_ary` — so it is the raising counterpart to
+    /// the `Array::from_value` downcast. The `TypeError` it would
+    /// long-jump is caught by `Mrb::protect` into the returned `Err`.
+    /// Suits a handler that requires an Array argument and rejects
+    /// anything else; reach for the `FromValue` downcast instead when a
+    /// non-Array should read as absent. Mirrors mruby's
+    /// `mrb_ensure_array_type`.
+    #[inline]
+    pub fn ensure_array(self, mrb: &Mrb) -> Result<crate::Array, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_ensure_array_type`
+                // raises `TypeError` on a non-Array tag — caught by
+                // `protect` into `Err` — and otherwise returns `self`
+                // unchanged.
+                Value(unsafe { sys::mrb_ensure_array_type(mrb.as_ptr(), self.0) })
+            })
+            // SAFETY: an `Ok` result passed `mrb_array_p` inside
+            // `mrb_ensure_array_type`, so it carries the Array tag the
+            // unchecked wrap requires.
+            .map(|v| unsafe { crate::Array::from_value_unchecked(v) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
+    /// Coerce `self` to a typed `Hash` handle by its Hash tag,
+    /// surfacing a non-Hash as an `Err` rather than rejecting it to
+    /// `None`: `Ok` with the handle when `self` is Hash-tagged, `Err`
+    /// carrying a `TypeError` for any other tag. It runs no user Ruby —
+    /// it dispatches no `to_hash` — so it is the raising counterpart to
+    /// the `Hash::from_value` downcast. The `TypeError` it would
+    /// long-jump is caught by `Mrb::protect` into the returned `Err`.
+    /// Suits a handler that requires a Hash argument and rejects
+    /// anything else; reach for the `FromValue` downcast instead when a
+    /// non-Hash should read as absent. Mirrors mruby's
+    /// `mrb_ensure_hash_type`.
+    #[inline]
+    pub fn ensure_hash(self, mrb: &Mrb) -> Result<crate::Hash, Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // originates from the same VM. `mrb_ensure_hash_type`
+                // raises `TypeError` on a non-Hash tag — caught by
+                // `protect` into `Err` — and otherwise returns `self`
+                // unchanged.
+                Value(unsafe { sys::mrb_ensure_hash_type(mrb.as_ptr(), self.0) })
+            })
+            // SAFETY: an `Ok` result passed `mrb_hash_p` inside
+            // `mrb_ensure_hash_type`, so it carries the Hash tag the
+            // unchecked wrap requires.
+            .map(|v| unsafe { crate::Hash::from_value_unchecked(v) })
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = mrb;
+            crate::not_linked()
+        }
+    }
+
     /// Coerce `self` into a typed `Symbol`: a Symbol value yields its own
     /// id, a String value interns its contents, and any other value
     /// surfaces an `Err`. It runs no user Ruby — it dispatches no
@@ -1861,6 +1931,52 @@ mod linked_tests {
                 assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
             }
             _ => panic!("a non-String value surfaces a TypeError Err"),
+        }
+    }
+
+    #[test]
+    fn ensure_array_returns_the_handle_or_raises_by_tag() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // An Array tag yields the same array as a typed handle — no
+        // copy, no dispatch.
+        let a = mrb.ary_new().as_value();
+        let handle = a
+            .ensure_array(&mrb)
+            .expect("an Array value coerces without raising");
+        assert!(a.obj_equal(&mrb, handle.as_value()));
+
+        // A non-Array tag raises `TypeError` rather than coercing — no
+        // `to_ary` dispatch. The raise is the genuine `TypeError`
+        // class, not some other exception.
+        match 42i32.into_value(&mrb).ensure_array(&mrb) {
+            Err(Error::Exception(exc)) => {
+                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+            }
+            _ => panic!("a non-Array value surfaces a TypeError Err"),
+        }
+    }
+
+    #[test]
+    fn ensure_hash_returns_the_handle_or_raises_by_tag() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A Hash tag yields the same hash as a typed handle — no copy,
+        // no dispatch.
+        let h = mrb.hash_new().as_value();
+        let handle = h
+            .ensure_hash(&mrb)
+            .expect("a Hash value coerces without raising");
+        assert!(h.obj_equal(&mrb, handle.as_value()));
+
+        // A non-Hash tag raises `TypeError` rather than coercing — no
+        // `to_hash` dispatch. The raise is the genuine `TypeError`
+        // class, not some other exception.
+        match 42i32.into_value(&mrb).ensure_hash(&mrb) {
+            Err(Error::Exception(exc)) => {
+                assert_eq!(exc.class(&mrb).name(&mrb), Some("TypeError"));
+            }
+            _ => panic!("a non-Hash value surfaces a TypeError Err"),
         }
     }
 
