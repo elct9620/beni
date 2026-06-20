@@ -179,6 +179,7 @@ typed:
   mrb_obj_to_sym: "`Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path"
   mrb_obj_value: "`RClass::to_value`, `RClass::data_wrap`"
   mrb_open: Mrb::open
+  mrb_prepend_module: Module::prepend_module
   mrb_protect_error: Mrb::protect
   mrb_raise: RClass::raise
   mrb_range_beg: Range::begin

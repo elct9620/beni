@@ -641,6 +641,31 @@ pub trait Module: private::ClassLike {
         }
     }
 
+    /// `mrb_prepend_module(mrb, self, module)` — mix `module` into this
+    /// class or module ahead of the receiver, Ruby's `prepend`, so the
+    /// module's methods override the receiver's own. A frozen receiver
+    /// raises `FrozenError` and a cyclic prepend raises `ArgumentError`;
+    /// both surface as `Err` via `Mrb::protect`.
+    fn prepend_module(self, mrb: &Mrb, module: RModule) -> Result<(), Error> {
+        #[cfg(mruby_linked)]
+        {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; `self`
+                // and `module` originate from the same VM. `mrb_prepend_module`
+                // checks frozen state and rejects a cyclic prepend, raising
+                // FrozenError or ArgumentError — caught by `protect`.
+                unsafe { sys::mrb_prepend_module(mrb.as_ptr(), self.raw(), module.as_raw()) };
+                Value::nil()
+            })
+            .map(|_| ())
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, module);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_class_name(mrb, self)` — the handle's full Ruby name
     /// (e.g. `"MyService::KV"`). Returns `None` when mruby yields
     /// NULL. The returned slice points into mruby's interned
@@ -1317,6 +1342,53 @@ mod tests {
 
         // Including a module into itself is a cyclic include — rejected.
         assert!(helper.include_module(&mrb, helper).is_err());
+    }
+
+    #[test]
+    fn prepend_module_overrides_the_receiver_and_rejects_a_cyclic_prepend() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let helper = mrb
+            .define_module(c"BeniPrependMixin")
+            .expect("defining the module must succeed");
+        // The module answers a method the host also defines, plus one only
+        // it provides — to prove insert-ahead ancestry and reachability.
+        helper
+            .define_method(&mrb, c"answer", crate::method!(answer_nine, 0))
+            .expect("registering the override must succeed");
+        helper
+            .define_method(&mrb, c"helped", crate::method!(answer_seven, 0))
+            .expect("registering the module method must succeed");
+
+        let class = mrb
+            .define_class(c"BeniPrependHost", object)
+            .expect("defining the class must succeed");
+        class
+            .define_method(&mrb, c"answer", crate::method!(answer_seven, 0))
+            .expect("registering the host method must succeed");
+        class
+            .prepend_module(&mrb, helper)
+            .expect("prepending the module must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+
+        // The prepended module sits ahead of the receiver, so its method wins.
+        let overridden = receiver
+            .funcall(&mrb, c"answer", &[])
+            .expect("the overriding method must not raise");
+        assert_eq!(unsafe { overridden.unbox_integer() }, 9);
+
+        // A method only the prepended module defines is callable.
+        let only = receiver
+            .funcall(&mrb, c"helped", &[])
+            .expect("the module-only method must not raise");
+        assert_eq!(unsafe { only.unbox_integer() }, 7);
+
+        // Prepending a module into itself is a cyclic prepend — rejected.
+        assert!(helper.prepend_module(&mrb, helper).is_err());
     }
 
     #[test]

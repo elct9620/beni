@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 152 (44%) |
+| function | 342 | 332 (97%) | 153 (45%) |
 | macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 188 (40%) |
+| total | 466 | 357 (77%) | 189 (41%) |
 
 ## mruby.h
 
@@ -171,7 +171,7 @@ Legend: ✅ covered · — missing
 | `mrb_open` | fn | ✅ | ✅ | `Mrb::open` |
 | `mrb_open_core` | fn | ✅ | — |  |
 | `mrb_p` | fn | ✅ | — |  |
-| `mrb_prepend_module` | fn | ✅ | — |  |
+| `mrb_prepend_module` | fn | ✅ | ✅ | `Module::prepend_module` |
 | `mrb_print_backtrace` | fn | ✅ | — |  |
 | `mrb_print_error` | fn | ✅ | — |  |
 | `mrb_raise` | fn | ✅ | ✅ | `RClass::raise` |
