@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 338 (99%) | 179 (52%) |
-| macro | 124 | 27 (22%) | 43 (35%) |
-| total | 466 | 365 (78%) | 222 (48%) |
+| macro | 124 | 27 (22%) | 44 (35%) |
+| total | 466 | 365 (78%) | 223 (48%) |
 
 ## mruby.h
 
@@ -195,7 +195,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_new_lit_frozen` | macro | — | — |  |
 | `mrb_str_new_static` | fn | ✅ | ✅ | `Mrb::str_new_static` |
 | `mrb_str_new_static_frozen` | macro | — | — |  |
-| `mrb_str_to_str` | macro | — | — |  |
+| `mrb_str_to_str` | macro | — | ✅ | `Value::obj_as_string` — the macro `mrb_str_to_str(mrb, str)` is a `#define` alias of `mrb_obj_as_string`, so the same Rust item graduates it; no separate item is needed |
 | `mrb_string_type` | macro | — | — |  |
 | `mrb_strlen_lit` | macro | — | — |  |
 | `mrb_sym2name` | macro | — | ✅ | `Mrb::sym_name`, `Symbol::name` — the macro `mrb_sym2name(mrb, sym)` is a `#define` alias of `mrb_sym_name`, so the same Rust items graduate it; no separate item is needed |

@@ -231,6 +231,7 @@ typed:
   mrb_str_substr: RString::substr
   mrb_str_to_dbl: "`RString::to_f` — strict float parse (badcheck on); raises ArgumentError on non-float input"
   mrb_str_to_integer: "`RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input"
+  mrb_str_to_str: "`Value::obj_as_string` — the macro `mrb_str_to_str(mrb, str)` is a `#define` alias of `mrb_obj_as_string`, so the same Rust item graduates it; no separate item is needed"
   mrb_string_cstr: RString::to_cstr
   mrb_sym_name: "`Mrb::sym_name`, `Symbol::name` — the C-string name, escaped to its quoted dump form when it carries an embedded NUL"
   mrb_sym2name: "`Mrb::sym_name`, `Symbol::name` — the macro `mrb_sym2name(mrb, sym)` is a `#define` alias of `mrb_sym_name`, so the same Rust items graduate it; no separate item is needed"
