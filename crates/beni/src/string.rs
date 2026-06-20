@@ -383,6 +383,35 @@ impl RString {
         }
     }
 
+    /// `mrb_str_plus(mrb, self, other)` — concatenate into a fresh String
+    /// holding both operands' bytes, Ruby's `String#+`. It allocates a new
+    /// string and copies the bytes, mutating neither operand — the
+    /// non-mutating counterpart of `cat_str`, which grows its receiver in
+    /// place. With both sides String-tagged it dispatches nothing and never
+    /// raises, so it returns the new `RString` directly. Mirrors `dup`.
+    #[inline]
+    pub fn plus(self, mrb: &Mrb, other: RString) -> RString {
+        #[cfg(mruby_linked)]
+        {
+            // SAFETY: `self` and `other` are String-tagged by the newtype
+            // contract and share the VM; `mrb_str_plus` reads only their
+            // byte buffers and returns a fresh String-tagged value, so the
+            // unchecked wrap is sound.
+            unsafe {
+                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_plus(
+                    mrb.as_ptr(),
+                    self.0.as_raw(),
+                    other.0.as_raw(),
+                )))
+            }
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = (mrb, other);
+            crate::not_linked()
+        }
+    }
+
     /// `mrb_str_cmp(mrb, self, other)` — order this string against
     /// `other` by byte content, Ruby's `String#<=>`. A pure `memcmp`
     /// that dispatches nothing, so it never raises: a shared prefix
@@ -654,6 +683,36 @@ mod tests {
         s.cat(&mrb, b"+more").expect("append succeeds");
         assert_eq!(copy.to_bytes(), b"orig".to_vec());
         assert_eq!(s.to_bytes(), b"orig+more".to_vec());
+    }
+
+    #[test]
+    fn plus_concatenates_into_a_new_string_leaving_operands_unchanged() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        let a = mrb.str_new(b"foo");
+        let b = mrb.str_new(b"bar");
+        // Capture both operands' bytes before the call to prove
+        // non-mutation against the post-call reads.
+        let a_before = a.to_bytes();
+        let b_before = b.to_bytes();
+
+        let joined = a.plus(&mrb, b);
+
+        // The result is the concatenation of both operands.
+        assert_eq!(joined.to_bytes(), b"foobar".to_vec());
+
+        // Neither operand was mutated — plus builds a new string rather
+        // than growing the receiver the way cat_str does.
+        assert_eq!(a.to_bytes(), a_before);
+        assert_eq!(b.to_bytes(), b_before);
+
+        // The result is an independent object: growing it in place leaves
+        // the receiver untouched.
+        joined
+            .cat(&mrb, b"!")
+            .expect("appending to the result succeeds");
+        assert_eq!(joined.to_bytes(), b"foobar!".to_vec());
+        assert_eq!(a.to_bytes(), b"foo".to_vec());
     }
 
     #[test]

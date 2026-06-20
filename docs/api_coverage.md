@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 332 (97%) | 160 (47%) |
+| function | 342 | 332 (97%) | 161 (47%) |
 | macro | 124 | 25 (20%) | 37 (30%) |
-| total | 466 | 357 (77%) | 197 (42%) |
+| total | 466 | 357 (77%) | 198 (42%) |
 
 ## mruby.h
 
@@ -451,7 +451,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_modify` | fn | ✅ | — |  |
 | `mrb_str_modify_keep_ascii` | fn | ✅ | — |  |
 | `mrb_str_new_capa` | fn | ✅ | ✅ | `Mrb::str_new_capa` |
-| `mrb_str_plus` | fn | ✅ | — |  |
+| `mrb_str_plus` | fn | ✅ | ✅ | `RString::plus` |
 | `mrb_str_ptr` | macro | — | — |  |
 | `mrb_str_resize` | fn | ✅ | ✅ | `RString::resize` |
 | `mrb_str_strlen` | macro | — | — |  |
