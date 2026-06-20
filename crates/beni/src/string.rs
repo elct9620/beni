@@ -501,6 +501,17 @@ mod tests {
     }
 
     #[test]
+    fn cat_appends_a_static_literal_in_place() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A `b"..."` literal is a `&'static [u8]`, so `cat` reaches what
+        // C's `mrb_str_cat_lit(mrb, str, lit)` does — the literal-append path.
+        let s = mrb.str_new(b"foo");
+        s.cat(&mrb, b"bar").expect("appending a literal succeeds");
+        assert_eq!(s.to_bytes(), b"foobar".to_vec());
+    }
+
+    #[test]
     fn cat_str_appends_another_string_in_place() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 

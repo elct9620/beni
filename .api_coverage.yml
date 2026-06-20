@@ -194,6 +194,7 @@ typed:
   mrb_read_irep_buf: Mrb::load_bytecode
   mrb_respond_to: Value::respond_to
   mrb_str_cat: RString::cat
+  mrb_str_cat_lit: "`RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_str_cat_cstr: RString::cat_cstr
   mrb_str_cat_str: RString::cat_str
   mrb_str_cmp: RString::cmp

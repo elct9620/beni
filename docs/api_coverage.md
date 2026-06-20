@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 332 (97%) | 158 (46%) |
-| macro | 124 | 25 (20%) | 36 (29%) |
-| total | 466 | 357 (77%) | 194 (42%) |
+| macro | 124 | 25 (20%) | 37 (30%) |
+| total | 466 | 357 (77%) | 195 (42%) |
 
 ## mruby.h
 
@@ -439,7 +439,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_cat` | fn | ✅ | ✅ | `RString::cat` |
 | `mrb_str_cat2` | macro | — | — |  |
 | `mrb_str_cat_cstr` | fn | ✅ | ✅ | `RString::cat_cstr` |
-| `mrb_str_cat_lit` | macro | — | — |  |
+| `mrb_str_cat_lit` | macro | — | ✅ | `RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_str_cat_str` | fn | ✅ | ✅ | `RString::cat_str` |
 | `mrb_str_cmp` | fn | ✅ | ✅ | `RString::cmp` |
 | `mrb_str_concat` | fn | ✅ | ✅ | `RString::concat` |
