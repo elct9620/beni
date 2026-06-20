@@ -338,14 +338,18 @@ nothing, and an empty substring is found at the offset itself.
 #### Symbols
 
 A name interns into a typed `Symbol`, and an already-interned id reifies back
-into one; the symbol reads its interned id back out. A name also interns over a
-borrowed static buffer without copying its bytes — the no-copy counterpart of the
-copying intern, where the interned name aliases the caller's bytes instead of
-owning a copy; the borrowed buffer must stay valid for the whole run of the
-program (a `'static` requirement the intern enforces), since mruby keeps the
-pointer and never frees it. This intern anchors on mruby's own
-`mrb_intern_static`, with `mrb_intern_lit` the convenience that borrows a string
-literal.
+into one; the symbol reads its interned id back out. The Rust-side name reaches
+the intern as a NUL-terminated C string, as a borrowed byte slice carried with its
+own length, or as the bytes of an mruby String value. The length-carrying byte
+slice is the general form — it interns the exact bytes the slice spans, so a name
+that embeds a NUL or is not NUL-terminated interns whole, where the C-string form
+would stop at the first NUL. A name also interns over a borrowed static buffer
+without copying its bytes — the no-copy counterpart of the copying interns, where
+the interned name aliases the caller's bytes instead of owning a copy; the
+borrowed buffer must stay valid for the whole run of the program (a `'static`
+requirement the intern enforces), since mruby keeps the pointer and never frees
+it. This intern anchors on mruby's own `mrb_intern_static`, with `mrb_intern_lit`
+the convenience that borrows a string literal.
 
 Those interns all create the symbol when none exists yet. A name also checks for
 an already-interned `Symbol` without creating one: the bytes resolve to the
