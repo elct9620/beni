@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 200 (58%) |
+| function | 342 | 338 (99%) | 202 (59%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 253 (54%) |
+| total | 466 | 366 (79%) | 255 (55%) |
 
 ## mruby.h
 
@@ -57,7 +57,7 @@ Legend: ✅ covered · — missing
 | `mrb_class_get_under_id` | fn | ✅ | ✅ | `Module::class_get` with a `Symbol` key (the symbol-or-name key) |
 | `mrb_class_name` | fn | ✅ | ✅ | `Module::name` |
 | `mrb_class_new` | fn | ✅ | ✅ | `Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant |
-| `mrb_class_new_instance` | fn | ✅ | — |  |
+| `mrb_class_new_instance` | fn | ✅ | ✅ | `RClass::obj_new` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed |
 | `mrb_class_path` | fn | ✅ | ✅ | `Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous |
 | `mrb_close` | fn | ✅ | ✅ | `Mrb::drop` |
 | `mrb_cmp` | fn | ✅ | ✅ | `Value::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable |
@@ -456,7 +456,7 @@ Legend: ✅ covered · — missing
 | `mrb_str_resize` | fn | ✅ | ✅ | `RString::resize` |
 | `mrb_str_strlen` | macro | — | — |  |
 | `mrb_str_substr` | fn | ✅ | ✅ | `RString::substr` |
-| `mrb_str_to_cstr` | fn | ✅ | — |  |
+| `mrb_str_to_cstr` | fn | ✅ | ✅ | `RString::to_cstr` — like `mrb_string_cstr` it raises ArgumentError on an embedded NUL, differing only in which buffer the returned C pointer addresses (`mrb_str_to_cstr` copies into a fresh RString and leaves the receiver untouched; `mrb_string_cstr` NUL-terminates the receiver in place). `to_cstr` returns an owned `CString` rebuilt from the receiver's NUL-free bytes and never exposes that pointer, so the buffer-ownership distinction collapses to an identical owned result; no separate item is needed |
 | `mrb_str_to_dbl` | fn | ✅ | ✅ | `RString::to_f` — strict float parse (badcheck on); raises ArgumentError on non-float input |
 | `mrb_str_to_integer` | fn | ✅ | ✅ | `RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input |
 | `mrb_str_to_inum` | macro | — | ✅ | `RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError |
