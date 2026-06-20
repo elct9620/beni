@@ -257,7 +257,14 @@ range falls outside the string.
 #### Symbols
 
 A name interns into a typed `Symbol`, and an already-interned id reifies back
-into one; the symbol reads its interned id back out. Beyond the id, a symbol
+into one; the symbol reads its interned id back out. A name also interns over a
+borrowed static buffer without copying its bytes — the no-copy counterpart of the
+copying intern, where the interned name aliases the caller's bytes instead of
+owning a copy; the borrowed buffer must stay valid for the whole run of the
+program (a `'static` requirement the intern enforces), since mruby keeps the
+pointer and never frees it. This intern anchors on mruby's own
+`mrb_intern_static`, with `mrb_intern_lit` the convenience that borrows a string
+literal. Beyond the id, a symbol
 reads its name three ways — all non-dispatching reads that never raise, each
 yielding nothing when mruby has no name for the id:
 
