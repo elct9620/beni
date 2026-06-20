@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 332 (97%) | 173 (51%) |
-| macro | 124 | 26 (21%) | 37 (30%) |
-| total | 466 | 358 (77%) | 210 (45%) |
+| macro | 124 | 26 (21%) | 39 (31%) |
+| total | 466 | 358 (77%) | 212 (45%) |
 
 ## mruby.h
 
@@ -198,8 +198,8 @@ Legend: ✅ covered · — missing
 | `mrb_str_to_str` | macro | — | — |  |
 | `mrb_string_type` | macro | — | — |  |
 | `mrb_strlen_lit` | macro | — | — |  |
-| `mrb_sym2name` | macro | — | — |  |
-| `mrb_sym2name_len` | macro | — | — |  |
+| `mrb_sym2name` | macro | — | ✅ | `Mrb::sym_name`, `Symbol::name` — the macro `mrb_sym2name(mrb, sym)` is a `#define` alias of `mrb_sym_name`, so the same Rust items graduate it; no separate item is needed |
+| `mrb_sym2name_len` | macro | — | ✅ | `Mrb::sym_name_len`, `Symbol::name_bytes` — the macro `mrb_sym2name_len(mrb, sym, len)` is a `#define` alias of `mrb_sym_name_len`, so the same Rust items graduate it; no separate item is needed |
 | `mrb_sym2str` | macro | — | — |  |
 | `mrb_sym_dump` | fn | ✅ | ✅ | `Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), never raises |
 | `mrb_sym_name` | fn | ✅ | ✅ | `Mrb::sym_name`, `Symbol::name` — the C-string name, escaped to its quoted dump form when it carries an embedded NUL |
