@@ -499,6 +499,20 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   the one required argument, and a count read returns the number of arguments
   passed. The single-argument read raises `ArgumentError` to the Ruby caller
   unless exactly one positional argument is present.
+- A typed method registration declares a fixed count of required positionals
+  and, after them, a count of optional positionals: each required positional
+  crosses through `FromValue`, and each optional positional crosses as an
+  `Option` of its type — present in the call binds `Some`, omitted binds
+  `None`. Mirroring `magnus`'s trailing-`Option` arguments, the optional slots
+  are the trailing parameters of the registered Rust function. The registration
+  derives the argument-spec aspec from the two counts: required-only declares
+  the required aspec, and a required-plus-optional declaration the
+  required-and-optional aspec mruby uses to accept the optional positionals
+  while still requiring the leading ones. A `FromValue` failure on a supplied
+  argument — required or optional — raises to the Ruby caller before the body
+  runs, as for the required-only form. Block arguments are not part of the
+  typed arity model: a method that takes a block reads it through the
+  `beni::sys` escape hatch.
 - A registered method asks whether it was called with a block through a total
   predicate on the `Mrb` handle, mirroring magnus's `Ruby::block_given_p`: it
   reads the current call and answers `true` when a block was passed, `false`
@@ -588,7 +602,9 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   the typed surface graduates through a Rust-native construct rather than the
   matching C symbol counts as covered through that construct: a type predicate
   read from the value tag covers the per-type `_p` macro it stands in for, and
-  a typed method definition's arity derives the argument-spec aspec it declares.
+  a typed method definition's required and optional arity counts derive the
+  argument-spec aspec it declares — the required, the required-and-optional, and
+  the any-arguments aspecs.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.
