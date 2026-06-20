@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing
 
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
-| function | 342 | 338 (99%) | 202 (59%) |
+| function | 342 | 338 (99%) | 203 (59%) |
 | macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 255 (55%) |
+| total | 466 | 366 (79%) | 256 (55%) |
 
 ## mruby.h
 
@@ -63,8 +63,8 @@ Legend: ✅ covered · — missing
 | `mrb_cmp` | fn | ✅ | ✅ | `Value::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable |
 | `mrb_context_run` | macro | — | — |  |
 | `mrb_convert_type` | macro | — | — |  |
-| `mrb_define_alias` | fn | ✅ | ✅ | `Module::alias_method` |
-| `mrb_define_alias_id` | fn | ✅ | — |  |
+| `mrb_define_alias` | fn | ✅ | ✅ | `Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id` |
+| `mrb_define_alias_id` | fn | ✅ | ✅ | `Module::alias_method` with `Symbol` keys (the symbol-or-name key, both names keyed independently) |
 | `mrb_define_class` | fn | ✅ | ✅ | `Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id` |
 | `mrb_define_class_id` | fn | ✅ | ✅ | `Mrb::define_class` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) |
 | `mrb_define_class_method` | fn | ✅ | ✅ | `Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment) |

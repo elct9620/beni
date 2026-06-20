@@ -612,27 +612,26 @@ pub trait Module: private::ClassLike {
         }
     }
 
-    /// `mrb_define_alias(mrb, self, new, old)` — bind `new` as a second
-    /// name for the existing method `old` on this class or module, so a
-    /// core method can be preserved before it is overridden. Runs inside
-    /// `Mrb::protect`, so aliasing a method that does not exist surfaces
-    /// as `Err(Error::Exception)` (mruby's `NameError`) rather than
+    /// `mrb_define_alias_id(mrb, self, new, old)` — bind `new` as a
+    /// second name for the existing method `old` on this class or module,
+    /// so a core method can be preserved before it is overridden. Both
+    /// names are symbol-or-name keys (`IntoSym`), each interned to its
+    /// symbol before the `_id` alias call. Runs inside `Mrb::protect`, so
+    /// aliasing a method that does not exist surfaces as
+    /// `Err(Error::Exception)` (mruby's `NameError`) rather than
     /// long-jumping — the same contract as the definition methods above.
-    fn alias_method(
-        self,
-        mrb: &Mrb,
-        new: &core::ffi::CStr,
-        old: &core::ffi::CStr,
-    ) -> Result<(), Error> {
+    fn alias_method<N: IntoSym, O: IntoSym>(self, mrb: &Mrb, new: N, old: O) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
+            let new = new.into_sym(mrb);
+            let old = old.into_sym(mrb);
             mrb.protect(|mrb| {
                 // SAFETY: `mrb` is alive inside the protect frame;
                 // `self` originates from the same VM; `new` and `old`
-                // are NUL-terminated.
-                unsafe {
-                    sys::mrb_define_alias(mrb.as_ptr(), self.raw(), new.as_ptr(), old.as_ptr())
-                };
+                // were interned against it. The original-method lookup
+                // raises NameError when `old` is absent — caught by
+                // `protect`.
+                unsafe { sys::mrb_define_alias_id(mrb.as_ptr(), self.raw(), new, old) };
                 Value::nil()
             })
             .map(|_| ())
@@ -1264,6 +1263,45 @@ mod tests {
             .funcall(&mrb, c"secret", &[])
             .expect("funcall dispatch must reach the private body");
         assert_eq!(unsafe { got.unbox_integer() }, 7);
+    }
+
+    #[test]
+    fn alias_method_keys_both_names_as_symbol_or_name() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let object = mrb.object_class();
+
+        let class = mrb
+            .define_class(c"BeniAliasKeyed", object)
+            .expect("defining the class must succeed");
+        class
+            .define_method(&mrb, c"answer", crate::method!(answer_seven, 0))
+            .expect("registering the original method must succeed");
+
+        // Both names accept a symbol-or-name key independently: alias once
+        // with a Symbol new-name against a name old-name, and once with both
+        // as name keys. Each alias must reach the same body as the original.
+        class
+            .alias_method(&mrb, crate::Symbol::new(&mrb, c"by_sym"), c"answer")
+            .expect("aliasing under a Symbol new-name key must succeed");
+        class
+            .alias_method(&mrb, c"by_name", c"answer")
+            .expect("aliasing under a name key must succeed");
+
+        let receiver = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let original = receiver
+            .funcall(&mrb, c"answer", &[])
+            .expect("the original method must be callable");
+        let by_sym = receiver
+            .funcall(&mrb, c"by_sym", &[])
+            .expect("the Symbol-keyed alias must be callable");
+        let by_name = receiver
+            .funcall(&mrb, c"by_name", &[])
+            .expect("the name-keyed alias must be callable");
+        assert_eq!(unsafe { original.unbox_integer() }, 7);
+        assert_eq!(unsafe { by_sym.unbox_integer() }, 7);
+        assert_eq!(unsafe { by_name.unbox_integer() }, 7);
     }
 
     #[test]

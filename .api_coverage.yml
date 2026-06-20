@@ -106,7 +106,8 @@ typed:
   mrb_data_check_get_ptr: Value::data_get
   mrb_data_init: Value::data_reinit
   mrb_data_object_alloc: "`RClass::data_wrap` (see DataType extension)"
-  mrb_define_alias: Module::alias_method
+  mrb_define_alias: "`Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id`"
+  mrb_define_alias_id: "`Module::alias_method` with `Symbol` keys (the symbol-or-name key, both names keyed independently)"
   mrb_define_class: "`Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id`"
   mrb_define_class_id: "`Mrb::define_class` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
   mrb_define_class_method: "`Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment)"
