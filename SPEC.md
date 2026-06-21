@@ -697,9 +697,11 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   it propagates as the body's `Err` unchanged. An empty class list therefore
   matches nothing and rescues nothing — every exception propagates — and a
   caller wanting the bare-`rescue` default names the `StandardError` class in
-  the list. A Rust panic raised inside the body is not an exception and is never
-  rescued: it surfaces as the panic `Err` regardless of the class list, the same
-  no-long-jump contract `Mrb::protect` carries. `rescue` is a Rust-native
+  the list. A Rust panic is not an exception and is never rescued: a panic in
+  the body surfaces as the panic `Err` regardless of the class list, and a panic
+  in the handler — which also runs under exception protection — surfaces as that
+  panic `Err`, both honoring the same no-long-jump contract `Mrb::protect`
+  carries. `rescue` is a Rust-native
   composition of the already-graduated `Mrb::protect` and `Value::is_kind_of`,
   not a new bound C symbol; the safe `RClass` slice replaces mruby's raw class
   array, so the capability needs no VM-internal reasoning and lives on the typed
@@ -785,6 +787,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | A `Mrb::rescue` body raising an exception instance of a class in the list | the handler runs on a handle with no pending exception and receives the caught exception; its result is the outcome |
 | A `Mrb::rescue` body raising an exception instance of no class in the list | not rescued; surfaced as the body's Rust `Err` unchanged, never unwinds across FFI |
 | A `Mrb::rescue` handler itself raising | surfaced as the handler's Rust `Err`, never unwinds across FFI |
+| A `Mrb::rescue` handler itself panicking — the handler runs under exception protection | caught at the FFI boundary and surfaced as a Rust `Err` (`Error::Panic`), never rescued and never unwinds across FFI |
 | mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
