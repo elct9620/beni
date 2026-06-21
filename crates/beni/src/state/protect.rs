@@ -364,6 +364,35 @@ mod tests {
     }
 
     #[test]
+    fn rescue_surfaces_a_handler_panic_as_err() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let standard_error = mrb
+            .class_get(c"StandardError")
+            .expect("StandardError is a core class");
+
+        // A matching exception routes into the handler, which then panics.
+        // The handler runs under exception protection, so the panic is caught
+        // at the FFI boundary as Error::Panic rather than being rescued.
+        let err = mrb
+            .rescue(
+                &[standard_error],
+                |m| raise_named(m, c"RuntimeError", c"boom"),
+                |_, _| panic!("boom from handler"),
+            )
+            .expect_err("a handler panic surfaces as Err, not rescued");
+
+        match err {
+            Error::Panic(msg) => assert!(msg.contains("boom from handler")),
+            Error::Exception(_) => panic!("a handler Rust panic must surface as Error::Panic"),
+        }
+        // The VM stays usable after the caught handler panic.
+        let again = mrb
+            .protect(|m| m.str_new(b"alive").as_value())
+            .expect("the VM must survive the caught handler panic");
+        assert_eq!(again.to_string(&mrb), "alive");
+    }
+
+    #[test]
     fn rescue_with_an_empty_class_list_rescues_nothing() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
