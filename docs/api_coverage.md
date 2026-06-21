@@ -55,7 +55,7 @@ Legend: ✅ covered · — missing
 | `mrb_class_get_id` | fn | ✅ | ✅ | `Mrb::class_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) |
 | `mrb_class_get_under` | fn | ✅ | ✅ | `Module::class_get` with a name key — interns and routes through `mrb_class_get_under_id` |
 | `mrb_class_get_under_id` | fn | ✅ | ✅ | `Module::class_get` with a `Symbol` key (the symbol-or-name key) |
-| `mrb_class_name` | fn | ✅ | ✅ | `Module::name` |
+| `mrb_class_name` | fn | ✅ | ✅ | `Module::name` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form |
 | `mrb_class_new` | fn | ✅ | ✅ | `Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant |
 | `mrb_class_new_instance` | fn | ✅ | ✅ | `RClass::obj_new` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed |
 | `mrb_class_path` | fn | ✅ | ✅ | `Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous |
@@ -154,7 +154,7 @@ Legend: ✅ covered · — missing
 | `mrb_notimplement_m` | fn | ✅ | — |  |
 | `mrb_obj_alloc` | fn | ✅ | — |  |
 | `mrb_obj_class` | fn | ✅ | ✅ | `Value::class` |
-| `mrb_obj_classname` | fn | ✅ | ✅ | `Value::classname` |
+| `mrb_obj_classname` | fn | ✅ | ✅ | `Value::classname` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form |
 | `mrb_obj_clone` | fn | ✅ | ✅ | `Value::obj_clone` |
 | `mrb_obj_dup` | fn | ✅ | ✅ | `Value::obj_dup` |
 | `mrb_obj_eq` | fn | ✅ | — |  |
@@ -201,9 +201,9 @@ Legend: ✅ covered · — missing
 | `mrb_sym2name` | macro | — | ✅ | `Mrb::sym_name`, `Symbol::name` — the macro `mrb_sym2name(mrb, sym)` is a `#define` alias of `mrb_sym_name`, so the same Rust items graduate it; no separate item is needed |
 | `mrb_sym2name_len` | macro | — | ✅ | `Mrb::sym_name_len`, `Symbol::name_bytes` — the macro `mrb_sym2name_len(mrb, sym, len)` is a `#define` alias of `mrb_sym_name_len`, so the same Rust items graduate it; no separate item is needed |
 | `mrb_sym2str` | macro | — | ✅ | `Symbol::to_str` — the macro `mrb_sym2str(mrb, sym)` is a `#define` alias of `mrb_sym_str`, so the same Rust item graduates it; no separate item is needed |
-| `mrb_sym_dump` | fn | ✅ | ✅ | `Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), never raises |
-| `mrb_sym_name` | fn | ✅ | ✅ | `Mrb::sym_name`, `Symbol::name` — the name copied out into an owned UTF-8 string, escaped to its quoted dump form when it carries an embedded NUL |
-| `mrb_sym_name_len` | fn | ✅ | ✅ | `Mrb::sym_name_len`, `Symbol::name_bytes` — the raw name bytes copied out as an owned vector with the true length, embedded NUL preserved unescaped |
+| `mrb_sym_dump` | fn | ✅ | ✅ | `Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), returned as an owned `String`, not a borrow: it draws on the same shared `mrb->symbuf` scratch an inline name unpacks into and the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). Never raises |
+| `mrb_sym_name` | fn | ✅ | ✅ | `Mrb::sym_name`, `Symbol::name` — returns an owned UTF-8 `String`, not a borrow: mruby unpacks an inline (short) symbol's name into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (unlike CRuby's permanent static symbol names, this cannot wear magnus's `Cow<'static>` shape). Escaped to its quoted dump form when the name carries an embedded NUL |
+| `mrb_sym_name_len` | fn | ✅ | ✅ | `Mrb::sym_name_len`, `Symbol::name_bytes` — returns an owned `Vec<u8>`, not a borrow: an inline (short) symbol's name unpacks into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). The true length carries out of band so an embedded NUL is preserved unescaped |
 | `mrb_sym_str` | fn | ✅ | ✅ | `Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises |
 | `mrb_temp_alloc` | fn | ✅ | — |  |
 | `mrb_to_float` | macro | — | — |  |
@@ -315,7 +315,7 @@ Legend: ✅ covered · — missing
 | `mrb_data_check_type` | fn | ✅ | — |  |
 | `mrb_data_get_ptr` | fn | ✅ | — |  |
 | `mrb_data_init` | fn | ✅ | ✅ | `Value::data_reinit` |
-| `mrb_data_object_alloc` | fn | ✅ | ✅ | `RClass::data_wrap` (see DataType extension) |
+| `mrb_data_object_alloc` | fn | ✅ | ✅ | `RClass::data_wrap` — fallible (returns `Result`, protects the alloc and reclaims the box on a raise); the CDATA mark stays the separate `RClass::set_instance_data_tt` setup step, not folded in (see DataType extension) |
 | `mrb_get_datatype` | macro | — | — |  |
 ## mruby/dump.h
 
@@ -359,7 +359,7 @@ Legend: ✅ covered · — missing
 | `mrb_hash_dup` | fn | ✅ | ✅ | `Hash::dup` |
 | `mrb_hash_empty_p` | fn | ✅ | ✅ | `Hash::is_empty` |
 | `mrb_hash_fetch` | fn | ✅ | ✅ | `Hash::fetch` |
-| `mrb_hash_foreach` | fn | ✅ | ✅ | `Hash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); returns a `Result` because a closure that re-enters the VM to mutate the hash trips mruby's in-walk modification guard, surfaced as `Err` |
+| `mrb_hash_foreach` | fn | ✅ | ✅ | `Hash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); runs under `protect` and returns a `Result` because a closure that re-enters the VM to mutate the hash trips mruby's in-walk modify guard (`H_CHECK_MODIFIED`), which raises and would `longjmp` across the FFI boundary unprotected, surfaced instead as `Err` |
 | `mrb_hash_get` | fn | ✅ | ✅ | `Hash::get` |
 | `mrb_hash_key_p` | fn | ✅ | ✅ | `Hash::contains_key` |
 | `mrb_hash_keys` | fn | ✅ | ✅ | `Hash::keys` |
@@ -550,8 +550,8 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | Item | Description |
 |------|-------------|
 | `ArenaScope` | RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore` with a `mrb_gc_protect` keep — a safety guard with no single C API. |
-| `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, adding Rust-side type safety to the data pointer. |
+| `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, adding Rust-side type safety to the data pointer. `RClass::data_wrap` returns a `Result` and runs the alloc under `protect`, reclaiming the boxed payload when the wrap raises: allocating against a class not yet marked CDATA raises, and marking is a deliberately separate class-setup step (`RClass::set_instance_data_tt`) — mruby's two-step design marks the class once at setup and wraps per instance, so `data_wrap` neither folds the mark in nor presumes it, leaving the caller to assemble both steps. The `DataType::dfree` release hook wraps the payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame of mruby's GC sweep, where unwinding is undefined. |
 | `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by `Mrb::protect` (`mrb_protect_error`). `Error::new` builds an exception error from a class and a message (via `RClass::exc_new`) for a handler to raise its own exception, and `Error::argnum` builds the canonical wrong-argument-count `ArgumentError` (via `mrb_argnum_error`) for a handler validating its own arity. |
 | `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
-| `Mrb::rescue` | `begin`/`rescue` combinator composing `Mrb::protect` (`mrb_protect_error`) with a `Value::is_kind_of` (`mrb_obj_is_kind_of`) class-list filter — the safe typed-surface equivalent of mruby's `mrb_rescue` / `mrb_rescue_exceptions`, with a `&[RClass]` slice replacing the raw class array and the caught exception handed to the handler on a clean VM. Binds no new C symbol; a Rust panic is never rescued. |
+| `Mrb::rescue` | `begin`/`rescue` combinator: a safe composition of the already-graduated `Mrb::protect` (`mrb_protect_error`) and `Value::is_kind_of` (`mrb_obj_is_kind_of`) class-list filter, the typed-surface equivalent of mruby's `mrb_rescue` / `mrb_rescue_exceptions` with a `&[RClass]` slice replacing the raw `RClass**` array. Binds no new C symbol — keeping it a composition is the point. An empty class list intercepts nothing (no implicit `StandardError` default — a caller wanting the bare-`rescue` default names `StandardError` itself); an exception matching no listed class, and a Rust panic, are not caught and propagate unchanged. |
 | `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` and `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as arbitrary owned bytes). |
