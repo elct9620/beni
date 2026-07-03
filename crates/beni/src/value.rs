@@ -1440,22 +1440,23 @@ impl Value {
         }
     }
 
-    /// `mrb_iv_foreach(mrb, self, …)` — visit each set instance variable
+    /// `mrb_iv_foreach(mrb, self, …)` — visit each instance variable set
     /// on `self` in iv-table order, handing its name as a typed `Symbol`
-    /// and its value to `body`. Returning `ForEach::Stop` ends the walk
-    /// before the remaining variables; `ForEach::Continue` proceeds. A
-    /// receiver that holds no instance variables — an immediate, or one
-    /// that never had any — is visited zero times. The walk dispatches no
-    /// Ruby and so never raises; magnus binds no ivar foreach, so this
-    /// anchors on mruby's own `mrb_iv_foreach`.
+    /// and its value to `body`. Returning `ForEach::Stop` ends the
+    /// iteration before the remaining variables; `ForEach::Continue`
+    /// proceeds. The iteration visits the variables and the values they
+    /// held when it began: `body` reassigning, removing, or adding the
+    /// receiver's instance variables changes the receiver but never the
+    /// visited set, and each visited value holds arena protection as if
+    /// created here, staying valid across `body`'s own mutations and
+    /// collections. A receiver that holds no instance variables — an
+    /// immediate, or one that never had any — is visited zero times. The
+    /// iteration dispatches no Ruby and so never raises; magnus binds no
+    /// ivar foreach, so this anchors on mruby's own `mrb_iv_foreach`.
     ///
-    /// Mutating the receiver's instance variables from within `body` is
-    /// unsupported: the C foreach indexes the iv table it captured at
-    /// entry, which a mutation can reallocate.
-    ///
-    /// A panic in `body` is caught at the FFI boundary, stops the walk,
-    /// and resurfaces here once `mrb_iv_foreach` returns — it never
-    /// unwinds into mruby's C frames.
+    /// A panic in `body` ends the iteration and propagates; `body` runs
+    /// after the C walk has finished, so the panic never crosses
+    /// mruby's frames.
     #[inline]
     pub fn each_iv<F>(self, mrb: &Mrb, body: F)
     where
@@ -1463,68 +1464,52 @@ impl Value {
     {
         #[cfg(mruby_linked)]
         {
-            // Park the closure beside a panic slot in a stack local. The
-            // trampoline borrows it per variable; on a panic it stashes
-            // the unwind payload here and reports `Stop`, so the C walk
-            // ends without a panic crossing its frames. The payload
-            // resumes below once control is back on the Rust side.
-            struct Walk<F> {
-                body: F,
-                panic: Option<Box<dyn std::any::Any + Send>>,
-            }
-
-            unsafe extern "C" fn trampoline<F>(
-                _mrb: *mut sys::mrb_state,
+            // Snapshot the (name, value) pairs before any caller code
+            // runs: the C foreach walks the live iv table, which `body`
+            // re-entering the VM could free and reallocate mid-walk, so
+            // `body` only ever runs against this collected copy. Each
+            // value is arena-protected as it is collected — the receiver
+            // stops referencing a value `body` removes, and the snapshot
+            // must outlive any collection `body` triggers.
+            unsafe extern "C" fn collect(
+                mrb: *mut sys::mrb_state,
                 name: sys::mrb_sym,
                 val: sys::mrb_value,
                 data: *mut core::ffi::c_void,
-            ) -> core::ffi::c_int
-            where
-                F: FnMut(crate::Symbol, Value) -> crate::ForEach,
-            {
-                // SAFETY: `data` is the `&mut Walk<F>` handed to
-                // `mrb_iv_foreach` below; the foreach call borrows it for
-                // the duration of the walk on this same thread.
-                let walk: &mut Walk<F> = unsafe { &mut *(data as *mut Walk<F>) };
-                let name = crate::Symbol::from_sym(name);
-                let val = Value::from_raw(val);
-                // Catch here so a `body` panic stops the walk instead of
-                // unwinding through `mrb_iv_foreach`'s C frame.
-                // AssertUnwindSafe matches the crate's other panic
-                // boundaries: the parked payload is the only state that
-                // survives the catch. A non-zero return stops the C walk,
-                // so the trampoline is not re-entered after `Stop` or a
-                // parked panic.
-                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    (walk.body)(name, val)
-                })) {
-                    Ok(crate::ForEach::Continue) => 0,
-                    Ok(crate::ForEach::Stop) => 1,
-                    Err(payload) => {
-                        walk.panic = Some(payload);
-                        1
-                    }
-                }
+            ) -> core::ffi::c_int {
+                // SAFETY: `data` is the `&mut Vec<…>` handed to
+                // `mrb_iv_foreach` below, borrowed for the duration of
+                // the walk on this same thread; `mrb` is the live state
+                // driving the walk, and protecting into the arena leaves
+                // the iv table untouched.
+                let pairs: &mut Vec<(crate::Symbol, Value)> =
+                    unsafe { &mut *(data as *mut Vec<(crate::Symbol, Value)>) };
+                unsafe { sys::mrb_gc_protect(mrb, val) };
+                pairs.push((crate::Symbol::from_sym(name), Value::from_raw(val)));
+                0
             }
 
-            let mut walk = Walk { body, panic: None };
+            let mut pairs: Vec<(crate::Symbol, Value)> = Vec::new();
             // SAFETY: `mrb` is alive; `self` originates from the same VM.
             // `mrb_iv_foreach` guards a receiver that cannot hold instance
-            // variables and returns without calling back. `trampoline::<F>`
-            // upholds the `mrb_iv_foreach_func` ABI; `data` points to
-            // `walk` on this frame, which outlives the call. bindgen wraps
-            // the function-typedef parameter in `Option`, so the
-            // trampoline is passed via `Some`.
+            // variables and returns without calling back. `collect`
+            // upholds the `mrb_iv_foreach_func` ABI and runs no caller
+            // code; `data` points to `pairs` on this frame, which outlives
+            // the call. bindgen wraps the function-typedef parameter in
+            // `Option`, so the collector is passed via `Some`.
             unsafe {
                 sys::mrb_iv_foreach(
                     mrb.as_ptr(),
                     self.0,
-                    Some(trampoline::<F>),
-                    &mut walk as *mut Walk<F> as *mut core::ffi::c_void,
+                    Some(collect),
+                    &mut pairs as *mut Vec<(crate::Symbol, Value)> as *mut core::ffi::c_void,
                 );
             }
-            if let Some(payload) = walk.panic {
-                std::panic::resume_unwind(payload);
+            let mut body = body;
+            for (name, val) in pairs {
+                if let crate::ForEach::Stop = body(name, val) {
+                    break;
+                }
             }
         }
         #[cfg(not(mruby_linked))]
@@ -3784,6 +3769,89 @@ mod linked_tests {
     }
 
     #[test]
+    fn each_iv_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
+        use crate::{ForEach, Symbol};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"each_iv_mutate.rb").expect("allocating the context must succeed");
+        let obj = cxt.load_nstring(b"Object.new");
+        let a = mrb.intern_cstr(c"@a");
+        let b = mrb.intern_cstr(c"@b");
+        let added = mrb.intern_cstr(c"@added");
+        obj.iv_set(&mrb, a, 1i32.into_value(&mrb))
+            .expect("iv_set on a fresh object does not raise");
+        obj.iv_set(&mrb, b, 2i32.into_value(&mrb))
+            .expect("iv_set on a fresh object does not raise");
+
+        // The closure adds a variable and reassigns @b on every visit:
+        // the mutations land on the receiver, while the iteration keeps
+        // visiting the two variables and the values captured when it
+        // began.
+        let mut seen = Vec::new();
+        obj.each_iv(&mrb, |name: Symbol, val| {
+            obj.iv_set(&mrb, added, 9i32.into_value(&mrb))
+                .expect("adding a variable mid-iteration lands on the receiver");
+            obj.iv_set(&mrb, b, 99i32.into_value(&mrb))
+                .expect("reassigning a variable mid-iteration lands on the receiver");
+            seen.push((
+                name.name(&mrb).expect("an ivar name interns to a name"),
+                i32::from_value(val).expect("the seeded values are integers"),
+            ));
+            ForEach::Continue
+        });
+        seen.sort();
+
+        assert_eq!(seen, vec![("@a".to_owned(), 1), ("@b".to_owned(), 2)]);
+        assert_eq!(i32::from_value(obj.iv_get(&mrb, added)), Some(9));
+        assert_eq!(i32::from_value(obj.iv_get(&mrb, b)), Some(99));
+    }
+
+    #[test]
+    fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
+        use crate::{ForEach, RString};
+
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"each_iv_gc.rb").expect("allocating the context must succeed");
+        let obj = cxt.load_nstring(b"Object.new");
+        let a = mrb.intern_cstr(c"@a");
+        let b = mrb.intern_cstr(c"@b");
+
+        // Release the strings' creation-time arena slots so the
+        // receiver's iv table is their only reference going into the
+        // iteration.
+        let scope = mrb.arena_scope();
+        obj.iv_set(&mrb, a, mrb.str_new(b"one").as_value())
+            .expect("iv_set on a fresh object does not raise");
+        obj.iv_set(&mrb, b, mrb.str_new(b"two").as_value())
+            .expect("iv_set on a fresh object does not raise");
+        drop(scope);
+
+        // The first visit removes every variable and runs a full
+        // collection; the remaining snapshot value must still read
+        // intact — the iteration owns its arena protection.
+        let mut seen = Vec::new();
+        let mut first = true;
+        obj.each_iv(&mrb, |_, val| {
+            if first {
+                first = false;
+                obj.iv_remove(&mrb, a).expect("removal does not raise");
+                obj.iv_remove(&mrb, b).expect("removal does not raise");
+                mrb.full_gc();
+            }
+            let s = RString::from_value(val).expect("the seeded values are strings");
+            seen.push(String::from_utf8(s.to_bytes()).expect("the seeded bytes are UTF-8"));
+            ForEach::Continue
+        });
+        seen.sort();
+
+        assert_eq!(seen, vec!["one".to_owned(), "two".to_owned()]);
+        assert!(!obj.iv_defined(&mrb, a), "the removals landed");
+        assert!(!obj.iv_defined(&mrb, b), "the removals landed");
+    }
+
+    #[test]
     fn each_iv_resurfaces_a_closure_panic_on_the_rust_side() {
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
         let cxt =
@@ -3794,10 +3862,10 @@ mod linked_tests {
         obj.iv_set(&mrb, mrb.intern_cstr(c"@b"), 2i32.into_value(&mrb))
             .expect("iv_set on a fresh object does not raise");
 
-        // A panic in the closure is caught at the FFI boundary, stops the
-        // walk, and resumes here once mrb_iv_foreach returns — never
-        // unwinding through mruby's C frames. catch_unwind sees the
-        // resumed panic, proving it crossed back to the Rust side intact.
+        // A panic in the closure ends the iteration and propagates on the
+        // Rust side — the closure runs against the collected snapshot, so
+        // no mruby C frame is on the stack to unwind through. catch_unwind
+        // sees the panic with its payload intact.
         let visited = std::cell::Cell::new(0u32);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             obj.each_iv(&mrb, |_, _| {
