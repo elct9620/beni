@@ -177,7 +177,9 @@ impl Mrb {
                 msg.len() as sys::mrb_int,
             )
         });
-        self.set_pending_exc(err);
+        // SAFETY: `err` is the exception object `mrb_exc_new` just
+        // built on this VM.
+        unsafe { self.set_pending_exc(err) };
     }
 }
 
@@ -304,5 +306,26 @@ mod tests {
 
         assert_eq!(mrb.load_bytecode(&blob), 1);
         assert!(exc_message(&mrb).contains("failed structural validation"));
+    }
+
+    #[test]
+    fn load_irep_buf_leaves_the_pending_exception_for_a_malformed_blob() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // The documented contract: a malformed blob sets `mrb->exc`
+        // for the caller to inspect through `pending_exc`, and the
+        // VM stays usable once the caller clears it.
+        let _ = mrb.load_irep_buf(b"not RITE bytecode");
+        assert!(
+            !mrb.pending_exc().is_nil(),
+            "a malformed blob must leave a pending exception"
+        );
+        mrb.clear_exc();
+        assert!(mrb.pending_exc().is_nil());
+
+        let alive = mrb
+            .load_string(b"1 + 1")
+            .expect("the VM survives the cleared load failure");
+        assert_eq!(i32::from_value(alive), Some(2));
     }
 }

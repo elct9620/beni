@@ -213,11 +213,13 @@ impl Mrb {
     /// triggers the normal exception flow without needing a manual
     /// slot write.
     ///
-    /// `exc` must be an exception-object-tagged `Value`; mruby's
-    /// downstream machinery dereferences the slot as `RObject *`. Pass
-    /// nil or a non-object value at your peril (segfault on the next
-    /// exception check).
-    pub fn set_pending_exc(&self, exc: Value) {
+    /// # Safety
+    ///
+    /// `exc` must be an exception-object-tagged `Value` originating
+    /// from this VM: mruby's downstream machinery dereferences the
+    /// slot as `RObject *`, so nil or any non-object value is
+    /// undefined behavior on the next exception check.
+    pub unsafe fn set_pending_exc(&self, exc: Value) {
         #[cfg(mruby_linked)]
         {
             // SAFETY: `self.state` is alive by the `&self` borrow; `exc`
@@ -358,6 +360,33 @@ mod tests {
         let kept = mrb.gv_get(mrb.intern_static(b"$survivor"));
         let kept = RString::from_value(kept).expect("the survivor is String-tagged");
         assert_eq!(kept.to_bytes(), b"survivor");
+    }
+
+    #[cfg(mruby_linked)]
+    #[test]
+    fn pending_exc_reads_the_slot_and_clear_exc_empties_it() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // A fresh VM has no pending exception.
+        assert!(mrb.pending_exc().is_nil());
+
+        // Install a real exception object; the read hands it back
+        // without clearing the slot.
+        let runtime_error = mrb
+            .class_get(c"RuntimeError")
+            .expect("RuntimeError is a core class");
+        let exc = runtime_error.exc_new(&mrb, "installed by the test");
+        // SAFETY: `exc` is the exception object `exc_new` just built
+        // on this VM.
+        unsafe { mrb.set_pending_exc(exc) };
+        assert_eq!(mrb.pending_exc().classname(&mrb), "RuntimeError");
+        assert_eq!(mrb.pending_exc().classname(&mrb), "RuntimeError");
+
+        // Clearing empties the slot; clearing again is idempotent.
+        mrb.clear_exc();
+        assert!(mrb.pending_exc().is_nil());
+        mrb.clear_exc();
+        assert!(mrb.pending_exc().is_nil());
     }
 
     #[cfg(not(mruby_linked))]
