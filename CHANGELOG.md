@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.1](https://github.com/elct9620/beni/compare/v0.8.0...v0.8.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* **beni-sys:** reject flags.mak layouts the token scan cannot read ([bed80f1](https://github.com/elct9620/beni/commit/bed80f152a3f651a4d1df36813c9521110f9c566))
+* **beni:** guard const and class-variable access on non-class receivers ([3e64ae8](https://github.com/elct9620/beni/commit/3e64ae820fd94accc48b35b111a2ab3a69a46c71))
+* **beni:** mark set_pending_exc unsafe and pin the exception-slot contract ([d21ff98](https://github.com/elct9620/beni/commit/d21ff98dc1ec5daef6a2152dbda01a5cc4bfa589))
+* **beni:** saturate out-of-width argc instead of truncating ([e30bede](https://github.com/elct9620/beni/commit/e30bede2426b45655e35213cb64db2f495d219eb))
+* **beni:** walk instance variables against a protected snapshot ([3e38d4f](https://github.com/elct9620/beni/commit/3e38d4fd9065e1619699d1da5bd652c51e7823b9))
+
 ## [0.8.0](https://github.com/elct9620/beni/compare/v0.7.0...v0.8.0) (2026-06-21)
 
 
