@@ -430,6 +430,16 @@ mod tests {
         let _ = Value::to_sym;
     }
 
+    /// Placeholder-mode canary: the behavior suite is compiled only
+    /// with a staged archive, so a placeholder `cargo test` reporting
+    /// green has run none of it. The ignored marker keeps that skip
+    /// visible in the test summary — an "ignored" count instead of a
+    /// silent all-green.
+    #[cfg(not(mruby_linked))]
+    #[test]
+    #[ignore = "behavior suite skipped: no staged libmruby.a (placeholder mode); stage via `rake beni:build` and set BENI_VENDOR_DIR or MRUBY_LIB_DIR"]
+    fn behavior_suite_needs_a_staged_archive() {}
+
     #[test]
     fn typed_mrb_func_t_coerces_from_value_bridge() {
         // Compile-time check (companion to beni-sys's

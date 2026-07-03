@@ -1032,6 +1032,14 @@ mod tests {
 
     #[test]
     fn substr_saturates_an_out_of_width_beg_rather_than_wrapping() {
+        // An out-of-width beg is only representable when the host `i64` is
+        // wider than `mrb_int`, i.e. a 32-bit `mrb_int`. Under a 64-bit
+        // `mrb_int` the saturation premise is vacuous and the case is
+        // skipped rather than asserted on a width it cannot reach.
+        if core::mem::size_of::<crate::sys::mrb_int>() != 4 {
+            return;
+        }
+
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
         let s = mrb.str_new(b"Hello");
@@ -1041,6 +1049,12 @@ mod tests {
         // "llo". Saturating to the upper bound keeps it "past the end", so
         // the read is None — the same as any genuinely out-of-range beg.
         assert!(s.substr(&mrb, 0x1_0000_0002, 1).is_none());
+
+        // The negative counterpart: a truncating cast would wrap
+        // -0x1_0000_0002 to the in-range beg -2 and slice "lo" off the
+        // tail. Saturating to the lower bound keeps it before the
+        // beginning, so the read is None.
+        assert!(s.substr(&mrb, -0x1_0000_0002, 2).is_none());
     }
 
     #[test]
@@ -1071,6 +1085,14 @@ mod tests {
 
     #[test]
     fn index_saturates_an_out_of_width_offset_rather_than_wrapping() {
+        // An out-of-width offset is only representable when the host `i64`
+        // is wider than `mrb_int`, i.e. a 32-bit `mrb_int`. Under a 64-bit
+        // `mrb_int` the saturation premise is vacuous and the case is
+        // skipped rather than asserted on a width it cannot reach.
+        if core::mem::size_of::<crate::sys::mrb_int>() != 4 {
+            return;
+        }
+
         let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
         let s = mrb.str_new(b"hello, hello");
@@ -1081,6 +1103,12 @@ mod tests {
         // keeps it "past the end", so nothing is found — the same as any
         // genuinely out-of-range offset.
         assert!(s.index(&mrb, b"hello", 0x1_0000_0003).is_none());
+
+        // The negative counterpart: a truncating cast would wrap
+        // -0x1_0000_0003 to the in-range offset -3 and find the tail
+        // "llo"'s match. Saturating to the lower bound keeps it before
+        // the beginning, so nothing is found.
+        assert!(s.index(&mrb, b"llo", -0x1_0000_0003).is_none());
     }
 
     #[test]

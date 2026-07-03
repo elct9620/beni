@@ -354,4 +354,36 @@ mod tests {
         assert_eq!(first, "aa");
         assert_eq!(second, "bb");
     }
+
+    #[test]
+    fn sym_name_len_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Same aliasing net as `sym_name`: hold the first read's bytes
+        // across a second inline-name read that overwrites the shared
+        // scratch buffer; the owned copy must stay intact.
+        let first = mrb
+            .sym_name_len(mrb.intern_cstr(c"aa"))
+            .expect("aa has a name");
+        let second = mrb
+            .sym_name_len(mrb.intern_cstr(c"bb"))
+            .expect("bb has a name");
+
+        assert_eq!(first, b"aa");
+        assert_eq!(second, b"bb");
+    }
+
+    #[test]
+    fn sym_dump_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+        // Same aliasing net as `sym_name`: hold the first dump across a
+        // second inline-name dump that overwrites the shared scratch
+        // buffer; the owned copy must stay intact.
+        let first = mrb.sym_dump(mrb.intern_cstr(c"aa")).expect("aa dumps");
+        let second = mrb.sym_dump(mrb.intern_cstr(c"bb")).expect("bb dumps");
+
+        assert_eq!(first, "aa");
+        assert_eq!(second, "bb");
+    }
 }
