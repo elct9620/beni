@@ -24,8 +24,11 @@ require_relative "support/beni_coverage"
 namespace :api do
   desc "Regenerate docs/api_coverage.md (mruby C API ↔ Rust binding coverage)"
   task :coverage do
-    path = BeniCoverage.generate
-    puts "[api:coverage] wrote #{path}"
+    report = BeniCoverage.generate
+    puts "[api:coverage] wrote #{BeniCoverage::OUTPUT}"
+    if report.unknown.any?
+      abort "[api:coverage] manifest entries match no scanned symbol: #{report.unknown.sort.join(", ")}"
+    end
   end
 
   desc "Rank not-yet-typed mruby C API by mrbgems usage (worklist; top N, default 20)"

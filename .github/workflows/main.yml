@@ -128,6 +128,16 @@ jobs:
             cargo clippy --workspace -- -D warnings
           MRUBY_LIB_DIR="$PWD/vendor/mruby/build/wasi/lib" WASI_SDK_PATH="$PWD/vendor/wasi-sdk" \
             cargo clippy --workspace --target wasm32-wasip1 -- -D warnings
+      # Coverage freshness: the committed report must match a fresh
+      # regeneration against the staged headers and bindings, and the
+      # manifest must name only scanned symbols. Possible only here,
+      # where rust:verify has staged the vendor tree; the report is
+      # platform-independent, so one OS suffices.
+      - name: API coverage freshness
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          bundle exec rake api:coverage
+          git diff --exit-code docs/api_coverage.md
 
   # Consumer lane: each harness under test/scenarios/ is a
   # consumer-shaped Rakefile run from its own directory through the

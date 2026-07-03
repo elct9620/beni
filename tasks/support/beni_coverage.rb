@@ -43,12 +43,14 @@ module BeniCoverage
   module_function
 
   # Scan the inventory, resolve the two coverage tiers, write the report.
-  # Returns the output path so the rake task can echo it.
+  # Returns the report so the rake task can fail on manifest entries
+  # that match no scanned symbol.
   def generate
     surface = Surface.parse(INCLUDE_ROOT)
+    report = build_report(surface)
     FileUtils.mkdir_p(File.dirname(OUTPUT))
-    File.write(OUTPUT, build_report(surface).to_md)
-    OUTPUT
+    File.write(OUTPUT, report.to_md)
+    report
   end
 
   # Every embedder symbol the typed tier has not graduated yet, ranked by

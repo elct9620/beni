@@ -8,6 +8,10 @@ module BeniCoverage
   # name list (auto-derived); +manifest+ is the hand-authored doc with
   # +typed+ (symbol => Note) and +extensions+ (item => description) maps.
   class Report
+    # Manifest entries that match no scanned symbol — stale names the
+    # coverage gate rejects.
+    attr_reader :unknown
+
     def initialize(surface:, sys:, manifest:, version:, linked:)
       @surface = surface
       @sys = sys
