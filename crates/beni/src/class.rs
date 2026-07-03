@@ -233,7 +233,12 @@ impl RClass {
                 // VM. `mrb_obj_new` runs `initialize`, which may raise —
                 // caught by `protect`.
                 Value::from_raw(unsafe {
-                    sys::mrb_obj_new(mrb.as_ptr(), self.0, args.len() as sys::mrb_int, argv)
+                    sys::mrb_obj_new(
+                        mrb.as_ptr(),
+                        self.0,
+                        sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
+                        argv,
+                    )
                 })
             })
         }

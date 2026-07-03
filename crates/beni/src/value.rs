@@ -959,7 +959,7 @@ impl Value {
                         mrb.as_ptr(),
                         self.0,
                         sym,
-                        args.len() as sys::mrb_int,
+                        sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
                         argv,
                     )
                 })
@@ -1007,7 +1007,7 @@ impl Value {
                         mrb.as_ptr(),
                         self.0,
                         sym,
-                        args.len() as sys::mrb_int,
+                        sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
                         argv,
                         block_raw,
                     )

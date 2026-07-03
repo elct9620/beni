@@ -78,7 +78,12 @@ impl Proc {
                 // originates from the same VM and the slice outlives the
                 // call.
                 let raw = unsafe {
-                    sys::mrb_yield_argv(inner.as_ptr(), block_raw, args.len() as sys::mrb_int, argv)
+                    sys::mrb_yield_argv(
+                        inner.as_ptr(),
+                        block_raw,
+                        sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
+                        argv,
+                    )
                 };
                 Value::from_raw(raw)
             })
