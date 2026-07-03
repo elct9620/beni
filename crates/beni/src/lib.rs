@@ -136,7 +136,10 @@ mod tests {
         // or not mruby is linked. Each binding references one public
         // method path; a method that loses its placeholder branch
         // breaks this test's compilation in the CI lint lane's
-        // placeholder build before any consumer sees it.
+        // placeholder build before any consumer sees it. The
+        // reference list is enforced by `rake api:surface`, which
+        // scans the crate's inherent pub fns and fails on drift in
+        // either direction.
         let _ = Mrb::open;
         let _ = Mrb::as_ptr;
         let _ = Mrb::borrow_raw;
@@ -315,6 +318,116 @@ mod tests {
         let _ = <Proc as FromValue>::from_value;
         let _ = <Symbol as FromValue>::from_value;
         let _ = <Symbol as IntoValue>::into_value;
+        let _ = Array::clear;
+        let _ = Array::concat;
+        let _ = Array::dup;
+        let _ = Array::join;
+        let _ = Array::pop;
+        let _ = Array::replace;
+        let _ = Array::resize;
+        let _ = Array::shift;
+        let _ = Array::splice;
+        let _ = Array::store;
+        let _ = Array::unshift;
+        let _ = DataType::<u8>::new;
+        let _ = Error::new;
+        let _ = Hash::clear;
+        let _ = Hash::contains_key;
+        let _ = Hash::delete;
+        let _ = Hash::dup;
+        let _ = Hash::each::<fn(Value, Value) -> ForEach>;
+        let _ = Hash::fetch;
+        let _ = Hash::is_empty;
+        let _ = Hash::len;
+        let _ = Hash::update;
+        let _ = Hash::values;
+        let _ = MethodDef::new_with_block;
+        let _ = MethodDef::new_with_opt;
+        let _ = Mrb::arg1;
+        let _ = Mrb::argc;
+        let _ = Mrb::argv;
+        let _ = Mrb::ary_new_capa;
+        let _ = Mrb::ary_new_from_values;
+        let _ = Mrb::assoc_new;
+        let _ = Mrb::block_given;
+        let _ = Mrb::class_defined::<&core::ffi::CStr>;
+        let _ = Mrb::class_new;
+        let _ = Mrb::exc_get::<&core::ffi::CStr>;
+        let _ = Mrb::full_gc;
+        let _ = Mrb::gv_remove;
+        let _ = Mrb::hash_new_capa;
+        let _ = Mrb::incremental_gc;
+        let _ = Mrb::intern;
+        let _ = Mrb::intern_check;
+        let _ = Mrb::intern_static;
+        let _ = Mrb::load_string;
+        let _ = Mrb::module_new;
+        let _ = Mrb::rescue::<fn(&Mrb) -> Value, fn(&Mrb, Value) -> Value>;
+        let _ = Mrb::str_new_static;
+        let _ = Mrb::sym_dump;
+        let _ = Mrb::sym_name_len;
+        let _ = RClass::as_raw;
+        let _ = RClass::from_raw;
+        let _ = RString::cat_cstr;
+        let _ = RString::cmp;
+        let _ = RString::concat;
+        let _ = RString::dup;
+        let _ = RString::eq;
+        let _ = RString::index;
+        let _ = RString::intern;
+        let _ = RString::plus;
+        let _ = RString::resize;
+        let _ = RString::substr;
+        let _ = RString::to_cstr;
+        let _ = RString::to_f;
+        let _ = RString::to_i;
+        let _ = RString::to_inum;
+        let _ = Symbol::dump;
+        let _ = Symbol::name_bytes;
+        let _ = Symbol::to_str;
+        let _ = Value::add;
+        let _ = Value::as_float;
+        let _ = Value::as_int;
+        let _ = Value::as_raw;
+        let _ = Value::check_frozen;
+        let _ = Value::class;
+        let _ = Value::cmp;
+        let _ = Value::const_defined_at;
+        let _ = Value::const_remove;
+        let _ = Value::const_set;
+        let _ = Value::cv_defined;
+        let _ = Value::cv_set;
+        let _ = Value::each_iv::<fn(Symbol, Value) -> ForEach>;
+        let _ = Value::ensure_array;
+        let _ = Value::ensure_float;
+        let _ = Value::ensure_hash;
+        let _ = Value::ensure_int;
+        let _ = Value::ensure_string;
+        let _ = Value::eql;
+        let _ = Value::equal;
+        let _ = Value::float_to_int;
+        let _ = Value::freeze;
+        let _ = Value::from_raw;
+        let _ = Value::funcall_with_block::<&core::ffi::CStr>;
+        let _ = Value::inspect;
+        let _ = Value::int_to_str;
+        let _ = Value::into_raw;
+        let _ = Value::is_exception;
+        let _ = Value::is_false;
+        let _ = Value::is_instance_of;
+        let _ = Value::is_kind_of;
+        let _ = Value::is_module;
+        let _ = Value::is_range;
+        let _ = Value::is_true;
+        let _ = Value::iv_remove;
+        let _ = Value::mul;
+        let _ = Value::obj_equal;
+        let _ = Value::object_id;
+        let _ = Value::singleton_class;
+        let _ = Value::sub;
+        let _ = Value::to_ary;
+        let _ = Value::to_bool;
+        let _ = Value::to_sym;
     }
 
     #[test]
