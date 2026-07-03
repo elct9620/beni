@@ -109,6 +109,20 @@ fn parse_abi_defines(lib_dir: &Path) -> Vec<String> {
                 flags_mak.display()
             )
         });
+    // The sidecar is the sole ABI channel: a layout the token scan
+    // would silently mis-read — a make continuation line, or a quoted
+    // `-D` value whose spaces the whitespace split severs — fails
+    // loudly instead of dropping or corrupting flags.
+    let quoted_define = cflags
+        .split_whitespace()
+        .any(|token| token.starts_with("-D") && (token.contains('"') || token.contains('\'')));
+    if cflags.trim_end().ends_with('\\') || quoted_define {
+        panic!(
+            "beni-sys: {} carries a continuation line or quoted `-D` value in \
+             `MRUBY_CFLAGS` — unrecognized flags.mak layout",
+            flags_mak.display()
+        );
+    }
     cflags
         .split_whitespace()
         .filter(|token| token.starts_with("-D"))

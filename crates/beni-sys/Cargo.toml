@@ -18,7 +18,10 @@
 # build chain):
 #
 #   * `MRUBY_LIB_DIR` — absolute path to the directory containing the
-#     pre-built `libmruby.a`. Drives `cargo:rustc-link-*`.
+#     pre-built `libmruby.a`. Drives `cargo:rustc-link-*`. Highest
+#     precedence.
+#   * `BENI_VENDOR_DIR` — the vendor tree `rake beni:build` populated;
+#     host cargo targets read its staged `mruby/build/host/lib/`.
 #   * `WASI_SDK_PATH` — absolute path to the unpacked wasi-sdk. Drives
 #     both the bindgen clang invocation (`--sysroot`, `--target`) and
 #     the setjmp library link directive (required for mruby's
@@ -60,9 +63,9 @@ crate-type = ["rlib"]
 doctest = false
 
 [build-dependencies]
-# `cc` compiles the mruby header-driven C shims plus the bindgen-emitted
-# static-fn trampolines. The shims include `<mruby.h>` and friends, so
-# the build only runs when the wasi-sdk toolchain is staged (see
+# `cc` compiles the bindgen-emitted static-fn trampoline file — the
+# crate's single C translation unit — against the staged mruby
+# headers, so it only runs when archive discovery links a build (see
 # `build.rs`).
 cc = "1"
 # `bindgen` generates the mruby C API FFI surface from `src/wrapper.h`.

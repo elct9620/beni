@@ -85,7 +85,7 @@ Beni::Tasks.new do
   end
 
   toolchain "wasi-sdk" do
-    version "29"
+    version "33.0"
     sha256 "…"
   end
 end
