@@ -134,7 +134,7 @@ where
 /// bytes, copied into the VM. The lookup cannot miss for core
 /// classes (`TypeError`, `RuntimeError`).
 #[cfg(mruby_linked)]
-fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str) -> Value {
+pub(crate) fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str) -> Value {
     // SAFETY: `mrb` is alive; `class_name` is NUL-terminated and
     // names a core class present in every VM.
     let class =

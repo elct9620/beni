@@ -1534,14 +1534,40 @@ impl Value {
         }
     }
 
+    /// TRUE when `self` is a class, module, or singleton class — the
+    /// receiver family that owns constants and class variables, the
+    /// same set mruby's own constant accessors accept.
+    #[cfg(mruby_linked)]
+    fn is_class_or_module(self) -> bool {
+        // SAFETY: as `is_integer`.
+        matches!(
+            unsafe { sys::mrb_type(self.0) },
+            sys::MRB_TT_CLASS | sys::MRB_TT_MODULE | sys::MRB_TT_SCLASS
+        )
+    }
+
+    /// The `TypeError` the class-variable accessors surface for a
+    /// receiver that is not a class or module — the rejection the
+    /// constant accessors inherit from mruby's own receiver check.
+    #[cfg(mruby_linked)]
+    fn not_class_or_module_error(self, mrb: &Mrb) -> Error {
+        let msg = format!("{} is not a class/module", self.classname(mrb));
+        Error::Exception(crate::method::core_exception(mrb, c"TypeError", &msg))
+    }
+
     /// `mrb_const_defined(mrb, self, sym)` — TRUE when constant `sym`
     /// is defined on `self` (the module or class value), walking the
-    /// ancestry.
+    /// ancestry. Answers false when `self` is not a class or module.
     #[inline]
     pub fn const_defined(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: as `iv_set`.
+            if !self.is_class_or_module() {
+                return false;
+            }
+            // SAFETY: as `iv_set`, with the class-or-module receiver
+            // `mrb_const_defined` dereferences unchecked established
+            // by the guard above.
             unsafe { sys::mrb_const_defined(mrb.as_ptr(), self.0, sym) }
         }
         #[cfg(not(mruby_linked))]
@@ -1554,11 +1580,17 @@ impl Value {
     /// `mrb_const_defined_at(mrb, self, sym)` — TRUE when constant `sym`
     /// is defined directly on `self` alone, never one inherited from an
     /// ancestor; contrast `const_defined`, which walks the ancestry.
+    /// Answers false when `self` is not a class or module.
     #[inline]
     pub fn const_defined_at(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: as `iv_set`.
+            if !self.is_class_or_module() {
+                return false;
+            }
+            // SAFETY: as `iv_set`, with the class-or-module receiver
+            // `mrb_const_defined_at` dereferences unchecked established
+            // by the guard above.
             unsafe { sys::mrb_const_defined_at(mrb.as_ptr(), self.0, sym) }
         }
         #[cfg(not(mruby_linked))]
@@ -1647,11 +1679,15 @@ impl Value {
 
     /// `mrb_cv_get(mrb, self, sym)` — read class variable `sym` from
     /// `self` (the module or class value), walking the ancestry.
-    /// Surfaces an `Err` when `sym` resolves to no class variable.
+    /// Surfaces an `Err` when `self` is not a class or module, or when
+    /// `sym` resolves to no class variable.
     #[inline]
     pub fn cv_get(self, mrb: &Mrb, sym: sys::mrb_sym) -> Result<Value, Error> {
         #[cfg(mruby_linked)]
         {
+            if !self.is_class_or_module() {
+                return Err(self.not_class_or_module_error(mrb));
+            }
             mrb.protect(|mrb| {
                 // SAFETY: `mrb` is alive inside the protect frame;
                 // `self` originates from the same VM. `mrb_cv_get`
@@ -1669,13 +1705,16 @@ impl Value {
 
     /// `mrb_cv_set(mrb, self, sym, val)` — assign class variable `sym`
     /// on `self` (the module or class value) to `val`. Surfaces an
-    /// `Err` when `self` is frozen. The value-level write complementing
-    /// `cv_get`; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in
-    /// `sys`.
+    /// `Err` when `self` is not a class or module, or is frozen. The
+    /// value-level write complementing `cv_get`; `mrb_mod_cv_set` (the
+    /// raw-`RClass*` form) stays in `sys`.
     #[inline]
     pub fn cv_set(self, mrb: &Mrb, sym: sys::mrb_sym, val: Value) -> Result<(), Error> {
         #[cfg(mruby_linked)]
         {
+            if !self.is_class_or_module() {
+                return Err(self.not_class_or_module_error(mrb));
+            }
             mrb.protect(|mrb| {
                 // SAFETY: `mrb` is alive inside the protect frame;
                 // `self` and `val` originate from the same VM.
@@ -1695,13 +1734,19 @@ impl Value {
 
     /// `mrb_cv_defined(mrb, self, sym)` — TRUE when class variable `sym`
     /// is defined on `self` (the module or class value) or any ancestor.
-    /// The value-level analogue of the raw-`RClass*` `mrb_mod_cv_defined`,
+    /// Answers false when `self` is not a class or module. The
+    /// value-level analogue of the raw-`RClass*` `mrb_mod_cv_defined`,
     /// which stays in `sys`.
     #[inline]
     pub fn cv_defined(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
         #[cfg(mruby_linked)]
         {
-            // SAFETY: as `iv_set`.
+            if !self.is_class_or_module() {
+                return false;
+            }
+            // SAFETY: as `iv_set`, with the class-or-module receiver
+            // `mrb_cv_defined` dereferences unchecked established by
+            // the guard above.
             unsafe { sys::mrb_cv_defined(mrb.as_ptr(), self.0, sym) }
         }
         #[cfg(not(mruby_linked))]
@@ -3059,6 +3104,87 @@ mod linked_tests {
         let missing = mrb.intern_cstr(c"@@missing");
         assert!(child.cv_defined(&mrb, inherited));
         assert!(!child.cv_defined(&mrb, missing));
+    }
+
+    /// The `Err` must carry a `TypeError` — the same rejection the
+    /// constant accessors surface for a non-class receiver.
+    fn assert_type_error(mrb: &Mrb, err: Error) {
+        match err {
+            Error::Exception(exc) => assert_eq!(exc.classname(mrb), "TypeError"),
+            Error::Panic(msg) => panic!("expected a TypeError exception, got a panic: {msg}"),
+        }
+    }
+
+    #[test]
+    fn cv_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let sym = mrb.intern_cstr(c"@@x");
+
+        // nil, an immediate, and a plain object all sit outside the
+        // class-or-module family the accessors dereference into: the
+        // reads and writes surface a TypeError `Err`, the presence
+        // test stays a total predicate answering false.
+        let receivers = [
+            Value::nil(),
+            Value::from_int(&mrb, 5),
+            mrb.str_new(b"not a module").as_value(),
+        ];
+        for receiver in receivers {
+            let err = receiver
+                .cv_get(&mrb, sym)
+                .expect_err("a non-class receiver must not read a class variable");
+            assert_type_error(&mrb, err);
+
+            let err = receiver
+                .cv_set(&mrb, sym, Value::nil())
+                .expect_err("a non-class receiver must not assign a class variable");
+            assert_type_error(&mrb, err);
+
+            assert!(!receiver.cv_defined(&mrb, sym));
+        }
+        // The VM stays usable after the rejections.
+        assert!(mrb.pending_exc().is_nil());
+    }
+
+    #[test]
+    fn const_presence_answers_false_for_a_receiver_that_is_not_a_class_or_module() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let sym = mrb.intern_cstr(c"X");
+
+        // Both presence tests are total predicates: a receiver outside
+        // the class-or-module family answers false instead of walking
+        // an unchecked dereference.
+        let receivers = [
+            Value::nil(),
+            Value::from_int(&mrb, 5),
+            mrb.str_new(b"not a module").as_value(),
+        ];
+        for receiver in receivers {
+            assert!(!receiver.const_defined(&mrb, sym));
+            assert!(!receiver.const_defined_at(&mrb, sym));
+        }
+    }
+
+    #[test]
+    fn cv_accessors_accept_a_singleton_class_receiver() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let cxt =
+            Ccontext::new(&mrb, c"cv_sclass_test.rb").expect("allocating the context must succeed");
+
+        // A singleton class carries `MRB_TT_SCLASS`, inside the guarded
+        // family: the accessors must keep working through it.
+        let sclass =
+            cxt.load_nstring(b"class BeniCvSclassHost; end; BeniCvSclassHost.singleton_class");
+        assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+
+        let sym = mrb.intern_cstr(c"@@through_sclass");
+        sclass
+            .cv_set(&mrb, sym, Value::from_int(&mrb, 7))
+            .expect("a singleton-class receiver must accept the write");
+        let got = sclass
+            .cv_get(&mrb, sym)
+            .expect("a singleton-class receiver must read the value back");
+        assert_eq!(i32::from_value(got), Some(7));
     }
 
     #[test]
