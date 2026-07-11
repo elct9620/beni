@@ -582,22 +582,16 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   passed, and an argument-array read returns all positional arguments as a
   borrowed slice. The single-argument read raises `ArgumentError` to the Ruby
   caller unless exactly one positional argument is present. The count read and
-  the argument-array read are total — they never raise. The argument-array
-  slice has exactly the count read's length and borrows the call frame's
-  argument buffer: it is valid only for the duration of the current call, a
-  borrow the typed surface ties to the `Mrb` handle the body holds. An empty
-  argument list yields an empty slice.
-- A shape-typed read whose format captures a rest array offers the rest slot in
-  two projections: a borrowed projection that views it in place — tied to the
-  `Mrb` handle, valid only for the duration of the current call — and an owned
-  projection that copies it out of the call frame before the read returns. A
-  body that re-enters the VM — a funcall or an allocation — while holding rest
-  arguments reads the owned projection: a borrow into the call frame does not
-  survive re-entry, whereas the owned copy is independent of it. The copy
-  concerns the borrow's validity alone; it does not extend the copied values'
-  liveness, which the garbage collector and arena scopes govern identically for
-  both projections. The borrowed projection stays the zero-copy choice for a
-  read that does not re-enter the VM.
+  the argument-array read are total — they never raise. A shape-typed read
+  whose format captures a rest array hands back a slice that stays valid for
+  the whole call: it survives any VM re-entry — a funcall or an allocation —
+  the body performs while holding it, so a body that re-enters with rest
+  arguments in hand needs no copy of its own. The argument-array read's slice
+  instead views the live call frame directly and is valid only until the next
+  VM re-entry: a body that must hold positional arguments across a funcall or
+  allocation reads them through a rest format rather than the argument-array
+  read. Each slice has exactly the count read's length, ties its borrow to the
+  `Mrb` handle the body holds, and is empty for an empty argument list.
 - A typed method registration declares a fixed count of required positionals
   and, after them, a count of optional positionals: each required positional
   crosses through `FromValue`, and each optional positional crosses as an
