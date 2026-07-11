@@ -22,25 +22,16 @@
 //!   - `format::S`          — `"S"`   → single String argument
 //!   - `format::Str`        — `"s"`   → String as a borrowed byte slice
 //!   - `format::RestBlock`  — `"*&"`  → rest array + block slot
-//!   - `format::RestOwned`       — `"*"`   → rest array copied out of the
-//!     call frame
-//!   - `format::RestBlockOwned`  — `"*&"`  → owned rest array + block slot
-//!   - `format::NRestBlockOwned` — `"n*&"` → symbol + owned rest array +
-//!     block slot
 //!
-//! Rest-form variants borrow the call frame's argv buffer; the
-//! lifetime is tied to `&self`, which the bridge body holds for the
-//! duration of the C call. mruby may set the rest pointer to NULL
-//! when the rest count is zero — `slice_from_argv` folds that into
-//! an empty `&[Value]` so callers do not have to gate on NULL.
-//!
-//! The owned rest-form variants copy the rest slot out of the call
-//! frame before `read` returns, so a bridge body that re-enters the VM
-//! (funcall, allocation) while holding the rest arguments needs no
-//! manual copy first: a borrow into the call frame does not survive the
-//! re-entry, the owned `Vec<Value>` does. The copy bounds the borrow's
-//! validity alone — it does not extend the copied values' GC liveness,
-//! which the arena governs the same as for the borrowed variants.
+//! Rest-form variants hand back a slice tied to `&self` — the borrow
+//! the bridge body holds for the whole call. The slice stays valid
+//! across a VM re-entry (a funcall or an allocation) the body performs
+//! while holding it, because mruby projects the `"*"` rest slot through
+//! a GC-arena-rooted array rather than the live value stack; a body
+//! that re-enters with rest arguments in hand needs no copy of its own.
+//! mruby may set the rest pointer to NULL when the rest count is zero —
+//! `slice_from_argv` folds that into an empty `&[Value]` so callers do
+//! not have to gate on NULL.
 //!
 //! ## Why a trait rather than per-method wrappers
 //!
@@ -172,11 +163,13 @@ impl Mrb {
 
     /// Read the call frame's positional arguments as a borrowed slice,
     /// the companion to `Mrb::argc`. The slice holds exactly `argc`
-    /// values and borrows the call frame's argument buffer: it is valid
-    /// only for the duration of the current call, a borrow the returned
-    /// lifetime ties to `&self`. Splat arguments appear expanded, as the
-    /// count read sees them. An empty argument list yields an empty
-    /// slice. Total: it never raises.
+    /// values and views the live call frame directly: it must not be
+    /// held across a VM re-entry, since a funcall or an allocation can
+    /// relocate the value stack and dangle it. To keep positional
+    /// arguments across a re-entry, read them through a rest format
+    /// (`get_args::<format::Rest>`), whose slice is re-entry-stable.
+    /// Splat arguments appear expanded, as the count read sees them. An
+    /// empty argument list yields an empty slice. Total: it never raises.
     #[inline]
     pub fn argv(&self) -> &[Value] {
         #[cfg(mruby_linked)]
@@ -235,8 +228,9 @@ pub mod format {
         }
     }
 
-    /// `mrb_get_args(mrb, "*", &argv, &argc)` — read the rest array
-    /// as a borrowed slice into the call frame.
+    /// `mrb_get_args(mrb, "*", &argv, &argc)` — read the rest array as
+    /// a borrowed, re-entry-stable slice (see the module docs on
+    /// rest-form borrows).
     pub struct Rest;
     impl Format for Rest {
         type Output<'a> = &'a [Value];
@@ -409,11 +403,11 @@ pub mod format {
     }
 
     /// `mrb_get_args(mrb, "s", &ptr, &len)` — read a String argument as
-    /// a borrowed byte slice into the call frame. mruby checks the
-    /// argument is a String before writing; the slice points at the
-    /// string's buffer, valid for the duration of the call (the same
-    /// borrow contract as the rest-form variants). A zero-length string
-    /// folds to an empty slice.
+    /// a borrowed byte slice pointing at the string's own buffer. mruby
+    /// checks the argument is a String before writing. The slice is
+    /// valid while that String is unmodified; a body that mutates or
+    /// reallocates the argument String while holding the slice
+    /// invalidates it. A zero-length string folds to an empty slice.
     pub struct Str;
     impl Format for Str {
         type Output<'a> = &'a [u8];
@@ -489,126 +483,6 @@ pub mod format {
             }
         }
     }
-
-    /// `mrb_get_args(mrb, "*", &argv, &argc)` — read the rest array,
-    /// copied out of the call frame into an owned `Vec`. The owned
-    /// counterpart to `Rest`: prefer it whenever the bridge body
-    /// re-enters the VM (funcall, allocation) while holding the rest
-    /// arguments, since a borrow into the call frame does not survive
-    /// the re-entry.
-    pub struct RestOwned;
-    impl Format for RestOwned {
-        type Output<'a> = Vec<Value>;
-        const FMT: &'static core::ffi::CStr = c"*";
-
-        fn read(mrb: &Mrb) -> Vec<Value> {
-            #[cfg(mruby_linked)]
-            {
-                let mut argv: *const sys::mrb_value = core::ptr::null();
-                let mut argc: sys::mrb_int = 0;
-                // SAFETY: as `Rest::read`; the copy runs before control
-                // returns to the bridge body, while the argv pointer is
-                // still valid.
-                unsafe {
-                    sys::mrb_get_args(
-                        mrb.as_ptr(),
-                        Self::FMT.as_ptr(),
-                        &mut argv as *mut *const sys::mrb_value,
-                        &mut argc as *mut sys::mrb_int,
-                    );
-                }
-                slice_from_argv(argv, argc).to_vec()
-            }
-            #[cfg(not(mruby_linked))]
-            {
-                let _ = mrb;
-                crate::not_linked()
-            }
-        }
-    }
-
-    /// `mrb_get_args(mrb, "*&", &argv, &argc, &block)` — read the rest
-    /// array copied out of the call frame, followed by the block slot.
-    /// The owned counterpart to `RestBlock`. The block value is already
-    /// a standalone copy; only the rest array is copied out. An absent
-    /// block decodes as nil.
-    pub struct RestBlockOwned;
-    impl Format for RestBlockOwned {
-        type Output<'a> = (Vec<Value>, Value);
-        const FMT: &'static core::ffi::CStr = c"*&";
-
-        fn read(mrb: &Mrb) -> (Vec<Value>, Value) {
-            #[cfg(mruby_linked)]
-            {
-                let mut argv: *const sys::mrb_value = core::ptr::null();
-                let mut argc: sys::mrb_int = 0;
-                let mut block_raw = sys::mrb_value::zeroed();
-                // SAFETY: as `RestBlock::read`; the rest copy runs while
-                // the argv pointer is still valid.
-                unsafe {
-                    sys::mrb_get_args(
-                        mrb.as_ptr(),
-                        Self::FMT.as_ptr(),
-                        &mut argv as *mut *const sys::mrb_value,
-                        &mut argc as *mut sys::mrb_int,
-                        &mut block_raw as *mut sys::mrb_value,
-                    );
-                }
-                (
-                    slice_from_argv(argv, argc).to_vec(),
-                    Value::from_raw(block_raw),
-                )
-            }
-            #[cfg(not(mruby_linked))]
-            {
-                let _ = mrb;
-                crate::not_linked()
-            }
-        }
-    }
-
-    /// `mrb_get_args(mrb, "n*&", &sym, &argv, &argc, &block)` — read a
-    /// leading symbol, the rest array copied out of the call frame, then
-    /// the block slot. The owned counterpart to `NRestBlock`, the shape
-    /// a dispatch bridge reads when it re-enters the VM with the rest
-    /// arguments in hand. An absent block decodes as nil.
-    pub struct NRestBlockOwned;
-    impl Format for NRestBlockOwned {
-        type Output<'a> = (sys::mrb_sym, Vec<Value>, Value);
-        const FMT: &'static core::ffi::CStr = c"n*&";
-
-        fn read(mrb: &Mrb) -> (sys::mrb_sym, Vec<Value>, Value) {
-            #[cfg(mruby_linked)]
-            {
-                let mut sym: sys::mrb_sym = 0;
-                let mut argv: *const sys::mrb_value = core::ptr::null();
-                let mut argc: sys::mrb_int = 0;
-                let mut block_raw = sys::mrb_value::zeroed();
-                // SAFETY: as `NRestBlock::read`; the rest copy runs while
-                // the argv pointer is still valid.
-                unsafe {
-                    sys::mrb_get_args(
-                        mrb.as_ptr(),
-                        Self::FMT.as_ptr(),
-                        &mut sym as *mut sys::mrb_sym,
-                        &mut argv as *mut *const sys::mrb_value,
-                        &mut argc as *mut sys::mrb_int,
-                        &mut block_raw as *mut sys::mrb_value,
-                    );
-                }
-                (
-                    sym,
-                    slice_from_argv(argv, argc).to_vec(),
-                    Value::from_raw(block_raw),
-                )
-            }
-            #[cfg(not(mruby_linked))]
-            {
-                let _ = mrb;
-                crate::not_linked()
-            }
-        }
-    }
 }
 
 /// Cast a `mrb_get_args` rest-form `(*const mrb_value, mrb_int)` pair
@@ -633,9 +507,7 @@ fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: sys::mrb_int) -> &'a [
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use super::format::{
-        Io, NRest, NRestBlockOwned, Rest, RestBlock, RestBlockOwned, RestOwned, Str, S,
-    };
+    use super::format::{Io, NRest, Rest, RestBlock, Str, S};
     use super::*;
 
     /// Registered through `method!(rest_count, -1)`: reads the rest
@@ -1061,55 +933,33 @@ mod tests {
         assert_eq!(bool::from_value(with), Some(true));
     }
 
-    /// Registered through `method!(rest_owned_join_after_gc, -1)`: reads
-    /// the `"*"` rest array as an owned `Vec`, then runs a full GC while
-    /// holding it before decoding each element back to a String and
-    /// joining them. The rest arguments are heap Strings, so a copy that
-    /// failed to keep them reachable — or a borrow that a re-entry
-    /// invalidated — would surface as a corrupted join rather than the
-    /// original bytes.
-    fn rest_owned_join_after_gc(mrb: &Mrb, _self: Value) -> Value {
-        let owned = mrb.get_args::<RestOwned>();
-        // Re-enter the collector while holding the owned copy: the
-        // originals stay rooted on the call frame, so the copied handles
-        // survive the sweep.
+    /// Registered through `method!(rest_borrowed_survives_reentry, -1)`:
+    /// reads the `"*"` rest array as a borrowed slice, then re-enters the
+    /// VM while holding it — compiling and running a fragment that
+    /// allocates thousands of objects and recurses 400 frames deep — and
+    /// only then joins the elements. Pins the rest-form contract that the
+    /// borrow stays valid across VM re-entry: mruby backs it with a
+    /// GC-arena-rooted copy, so a read that had dangled would surface as a
+    /// corrupted join rather than the original bytes.
+    fn rest_borrowed_survives_reentry(mrb: &Mrb, _self: Value) -> Value {
+        let rest = mrb.get_args::<Rest>();
+        // Re-enter the VM while holding the borrow: compilation allocates
+        // heavily and the recursion grows the value stack. The rest borrow
+        // survives because it views an arena-backed copy, not the live stack.
+        let cxt = crate::Ccontext::new(mrb, c"reentry_probe.rb").expect("compile context");
+        cxt.load_nstring(
+            b"def __probe_deep(n); return 0 if n <= 0; Array.new(16){ 'y' * 40 }; __probe_deep(n - 1); end; __probe_deep(400)",
+        );
         mrb.full_gc();
         let mut joined = String::new();
-        for v in &owned {
+        for v in rest {
             joined.push_str(&v.to_string(mrb));
         }
         mrb.str_new(joined.as_bytes()).as_value()
     }
 
-    /// Registered through `method!(rest_block_owned_report, -1)`: reads
-    /// the `"*&"` owned rest array and block slot, returning the rest
-    /// length when a block was given and `-1` otherwise — the owned
-    /// counterpart to `rest_block_report`.
-    fn rest_block_owned_report(mrb: &Mrb, _self: Value) -> Value {
-        let (rest, block) = mrb.get_args::<RestBlockOwned>();
-        if block.is_nil() {
-            Value::from_int(mrb, -1)
-        } else {
-            Value::from_int(mrb, rest.len() as sys::mrb_int)
-        }
-    }
-
-    /// Registered through `method!(nrest_block_owned_report, -1)`: reads
-    /// the `"n*&"` leading symbol, owned rest array, and block slot,
-    /// returning the rest length only when the symbol decoded as `:tag`
-    /// and a block was given — so a read that folds the symbol or block
-    /// into the rest fails the assertion.
-    fn nrest_block_owned_report(mrb: &Mrb, _self: Value) -> Value {
-        let (sym, rest, block) = mrb.get_args::<NRestBlockOwned>();
-        if sym == mrb.intern_cstr(c"tag") && !block.is_nil() {
-            Value::from_int(mrb, rest.len() as sys::mrb_int)
-        } else {
-            Value::from_int(mrb, -1)
-        }
-    }
-
     #[test]
-    fn rest_owned_format_copies_the_rest_array_out() {
+    fn rest_borrowed_slice_survives_vm_reentry() {
         use crate::Module;
 
         let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
@@ -1117,8 +967,8 @@ mod tests {
         class
             .define_method(
                 &mrb,
-                c"rest_owned_join_after_gc",
-                crate::method!(rest_owned_join_after_gc, -1),
+                c"rest_borrowed_survives_reentry",
+                crate::method!(rest_borrowed_survives_reentry, -1),
             )
             .expect("registering the bridge must succeed");
 
@@ -1130,93 +980,9 @@ mod tests {
             mrb.str_new(b"pha").as_value(),
         ];
         let got = receiver
-            .funcall(&mrb, c"rest_owned_join_after_gc", &args)
-            .expect("the owned read must not raise");
+            .funcall(&mrb, c"rest_borrowed_survives_reentry", &args)
+            .expect("the borrowed read must not raise");
 
-        // The owned copy survived the intervening full GC: the joined
-        // bytes equal the concatenated inputs.
         assert_eq!(got.to_string(&mrb), "alpha");
-    }
-
-    #[test]
-    fn rest_block_owned_format_splits_rest_from_block() {
-        use crate::{Ccontext, FromValue, Module};
-
-        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
-        let class = mrb.object_class();
-        class
-            .define_method(
-                &mrb,
-                c"rest_block_owned_report",
-                crate::method!(rest_block_owned_report, -1),
-            )
-            .expect("registering the bridge must succeed");
-
-        let recv = class
-            .obj_new(&mrb, &[])
-            .expect("the receiver constructs without raising");
-        let slot = mrb.intern_cstr(c"$beni_rest_block_owned_recv");
-        mrb.gv_set(slot, recv);
-
-        let cxt = Ccontext::new(&mrb, c"rest_block_owned_test.rb")
-            .expect("allocating the compile context must succeed");
-
-        // A block is given: the three positionals land in the owned rest
-        // array, the block in its own slot — rest length 3.
-        let with_block =
-            cxt.load_nstring(b"$beni_rest_block_owned_recv.rest_block_owned_report(1, 2, 3) { }");
-        assert!(
-            mrb.pending_exc().is_nil(),
-            "the *& owned read must not raise: {}",
-            mrb.pending_exc().to_string(&mrb)
-        );
-        assert_eq!(i32::from_value(with_block), Some(3));
-
-        // No block: the slot decodes as nil.
-        let without_block =
-            cxt.load_nstring(b"$beni_rest_block_owned_recv.rest_block_owned_report(1, 2)");
-        assert_eq!(i32::from_value(without_block), Some(-1));
-    }
-
-    #[test]
-    fn nrest_block_owned_format_splits_symbol_rest_and_block() {
-        use crate::{Ccontext, FromValue, Module};
-
-        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
-        let class = mrb.object_class();
-        class
-            .define_method(
-                &mrb,
-                c"nrest_block_owned_report",
-                crate::method!(nrest_block_owned_report, -1),
-            )
-            .expect("registering the bridge must succeed");
-
-        let recv = class
-            .obj_new(&mrb, &[])
-            .expect("the receiver constructs without raising");
-        let slot = mrb.intern_cstr(c"$beni_nrest_block_owned_recv");
-        mrb.gv_set(slot, recv);
-
-        let cxt = Ccontext::new(&mrb, c"nrest_block_owned_test.rb")
-            .expect("allocating the compile context must succeed");
-
-        // Leading `:tag` symbol, three rest positionals, and a block: the
-        // read splits all three apart — rest length 3.
-        let got = cxt.load_nstring(
-            b"$beni_nrest_block_owned_recv.nrest_block_owned_report(:tag, 1, 2, 3) { }",
-        );
-        assert!(
-            mrb.pending_exc().is_nil(),
-            "the n*& owned read must not raise: {}",
-            mrb.pending_exc().to_string(&mrb)
-        );
-        assert_eq!(i32::from_value(got), Some(3));
-
-        // No block: the block slot decodes as nil, so the report returns
-        // -1 rather than folding an absent block into the rest array.
-        let without_block =
-            cxt.load_nstring(b"$beni_nrest_block_owned_recv.nrest_block_owned_report(:tag, 1, 2)");
-        assert_eq!(i32::from_value(without_block), Some(-1));
     }
 }
