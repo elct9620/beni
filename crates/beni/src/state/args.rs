@@ -950,6 +950,14 @@ mod tests {
         cxt.load_nstring(
             b"def __probe_deep(n); return 0 if n <= 0; Array.new(16){ 'y' * 40 }; __probe_deep(n - 1); end; __probe_deep(400)",
         );
+        // The probe must actually run: a swallowed compile or runtime error
+        // would leave the value stack unstressed, letting a dangling read slip
+        // through as a false pass rather than exercising the re-entry contract.
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the re-entry probe must run cleanly: {}",
+            mrb.pending_exc().to_string(mrb)
+        );
         mrb.full_gc();
         let mut joined = String::new();
         for v in rest {
