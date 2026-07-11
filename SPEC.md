@@ -587,6 +587,17 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   argument buffer: it is valid only for the duration of the current call, a
   borrow the typed surface ties to the `Mrb` handle the body holds. An empty
   argument list yields an empty slice.
+- A shape-typed read whose format captures a rest array offers the rest slot in
+  two projections: a borrowed projection that views it in place — tied to the
+  `Mrb` handle, valid only for the duration of the current call — and an owned
+  projection that copies it out of the call frame before the read returns. A
+  body that re-enters the VM — a funcall or an allocation — while holding rest
+  arguments reads the owned projection: a borrow into the call frame does not
+  survive re-entry, whereas the owned copy is independent of it. The copy
+  concerns the borrow's validity alone; it does not extend the copied values'
+  liveness, which the garbage collector and arena scopes govern identically for
+  both projections. The borrowed projection stays the zero-copy choice for a
+  read that does not re-enter the VM.
 - A typed method registration declares a fixed count of required positionals
   and, after them, a count of optional positionals: each required positional
   crosses through `FromValue`, and each optional positional crosses as an
