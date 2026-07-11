@@ -591,7 +591,13 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   VM re-entry: a body that must hold positional arguments across a funcall or
   allocation reads them through a rest format rather than the argument-array
   read. Each slice has exactly the count read's length, ties its borrow to the
-  `Mrb` handle the body holds, and is empty for an empty argument list.
+  `Mrb` handle the body holds, and is empty for an empty argument list. A
+  shape-typed read whose format borrows a String argument's bytes rather than a
+  positional slot hands back a byte slice into that String's own buffer, valid
+  while the String is unmodified: a body that mutates or reallocates the
+  argument String while holding the slice invalidates it, while a VM re-entry
+  that leaves the String untouched keeps it valid. A zero-length String yields
+  an empty slice.
 - A typed method registration declares a fixed count of required positionals
   and, after them, a count of optional positionals: each required positional
   crosses through `FromValue`, and each optional positional crosses as an
