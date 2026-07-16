@@ -448,6 +448,7 @@ The typed array carries Ruby `Array`'s surface:
 | construct | empty, with a preallocated capacity, from a slice of values, or as a pair holding two given values |
 | append | add a value to the end |
 | indexed read | the element, or `nil` when the index is out of range |
+| index walk | visit the elements from first to last, each read as the indexed read does — the element, or `nil` — dispatching no Ruby `#each`, over a length fixed when the walk begins. An element appended past that length is not visited, a position the array no longer reaches reads `nil`, and a position whose element changed reads its current value: a live walk, not a content snapshot — capturing the elements as they stand requires duplicating the array first. Dispatches no Ruby and surfaces no `Err` |
 | indexed write | Ruby's `ary[i] = v`, growing with `nil` to reach past the end |
 | resize | set the length — growing with `nil` to reach a longer length, truncating to a shorter one |
 | remove | take a value from either end |
