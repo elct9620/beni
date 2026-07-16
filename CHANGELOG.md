@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/elct9620/beni/compare/v0.8.1...v0.9.0) (2026-07-16)
+
+
+### Features
+
+* **beni:** add Array::entries index walk ([844ab18](https://github.com/elct9620/beni/commit/844ab18cf1ddd945856c693c6e9d3e80f1104ae6))
+* **beni:** graduate owned rest-arg format projections ([b3063c2](https://github.com/elct9620/beni/commit/b3063c23bd8d710e4aea256c44996450c00a26ac))
+
+
+### Reverts
+
+* **beni:** withdraw owned rest-arg format projections ([d04fb52](https://github.com/elct9620/beni/commit/d04fb5241f072a19ef7e7fbd9fdd19a632211c4f))
+
 ## [0.8.1](https://github.com/elct9620/beni/compare/v0.8.0...v0.8.1) (2026-07-03)
 
 
