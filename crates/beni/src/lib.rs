@@ -267,6 +267,7 @@ mod tests {
         let _ = Array::as_raw;
         let _ = Array::push;
         let _ = Array::entry;
+        let _ = Array::entries;
         let _ = Array::len;
         let _ = Array::is_empty;
         let _ = RString::from_value_unchecked;

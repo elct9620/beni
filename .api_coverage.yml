@@ -326,3 +326,12 @@ extensions:
     implicit `StandardError` default — a caller wanting the bare-`rescue`
     default names `StandardError` itself); an exception matching no listed
     class, and a Rust panic, are not caught and propagate unchanged.
+  Array::entries: >-
+    `ExactSizeIterator` walk of an array by C-level index: composes the
+    already-graduated `Array::entry` (`mrb_ary_entry`) and `Array::len`
+    (`RARRAY_LEN`) over a length snapshot taken when the walk begins, binding
+    no new C symbol. A live view rather than a content snapshot — a
+    re-entrant mutation is only partly visible, and a position the array no
+    longer reaches reads `nil` — dispatching no Ruby, the idiomatic Rust
+    surface over mruby's caller-side index loop (which the C API has no
+    iterator primitive for).

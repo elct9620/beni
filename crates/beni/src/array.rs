@@ -425,7 +425,59 @@ impl Array {
     pub fn is_empty(self) -> bool {
         self.len() == 0
     }
+
+    /// Walk the elements by C-level index — repeated `entry` reads over a
+    /// length snapshot taken here, never a Ruby `#each` / `#[]` dispatch.
+    /// Reach for it when a walk must not dispatch Ruby.
+    ///
+    /// This is a live view, not a content snapshot: a re-entrant mutation
+    /// during the walk is only partly visible — an element appended past the
+    /// snapshot length is not visited, a position the array no longer reaches
+    /// reads `nil`, and a position whose element changed reads its current
+    /// value. Capture the elements as they stand by duplicating the array
+    /// first.
+    #[inline]
+    pub fn entries(self) -> Entries {
+        Entries {
+            ary: self,
+            idx: 0,
+            len: self.len(),
+        }
+    }
 }
+
+/// Iterator returned by `Array::entries`. Reads each slot through `entry`
+/// against the length fixed when the walk began, yielding `nil` for any
+/// position the array no longer reaches. `ExactSizeIterator` reports that
+/// fixed length: exactly as many items as the array held at the walk's
+/// start, regardless of a mutation during it.
+pub struct Entries {
+    ary: Array,
+    idx: usize,
+    len: usize,
+}
+
+impl Iterator for Entries {
+    type Item = Value;
+
+    #[inline]
+    fn next(&mut self) -> Option<Value> {
+        if self.idx >= self.len {
+            return None;
+        }
+        let v = self.ary.entry(self.idx as isize);
+        self.idx += 1;
+        Some(v)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.len - self.idx;
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for Entries {}
 
 #[cfg(all(test, mruby_linked))]
 mod tests {
@@ -814,5 +866,94 @@ mod tests {
             frozen.store(&mrb, 0, mrb.str_new(b"x").as_value()),
             Err(Error::Exception(_))
         ));
+    }
+
+    #[test]
+    fn entries_visits_nothing_for_an_empty_array() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+
+        // A length-0 walk yields no elements at all.
+        assert_eq!(ary.entries().count(), 0);
+    }
+
+    #[test]
+    fn entries_walks_elements_first_to_last() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        for n in [1, 2, 3] {
+            ary.push(&mrb, crate::Value::from_int(&mrb, n))
+                .expect("push succeeds");
+        }
+
+        // The count is exact up front (ExactSizeIterator), and the walk reads
+        // the slots from the first to the last in order.
+        assert_eq!(ary.entries().len(), 3);
+        let rendered: Vec<String> = ary.entries().map(|v| v.to_string(&mrb)).collect();
+        assert_eq!(rendered, ["1", "2", "3"]);
+    }
+
+    #[test]
+    fn entries_snapshots_the_length_so_a_shrink_reads_nil_past_the_new_end() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        for n in [1, 2, 3] {
+            ary.push(&mrb, crate::Value::from_int(&mrb, n))
+                .expect("push succeeds");
+        }
+
+        // The walk fixes its length at 3 when it begins. Shrinking the array
+        // to one element mid-walk does not shorten the walk: the first slot
+        // reads its live value, and the two positions the array no longer
+        // reaches read nil. Re-reading the length each step would instead have
+        // stopped after the single live element.
+        let mut walk = ary.entries();
+        assert_eq!(
+            walk.next()
+                .expect("the first slot is visited")
+                .to_string(&mrb),
+            "1"
+        );
+
+        ary.pop(&mrb).expect("pop succeeds");
+        ary.pop(&mrb).expect("pop succeeds");
+        assert_eq!(ary.len(), 1);
+
+        assert!(walk
+            .next()
+            .expect("the second slot is still visited")
+            .is_nil());
+        assert!(walk
+            .next()
+            .expect("the third slot is still visited")
+            .is_nil());
+        assert!(walk.next().is_none());
+    }
+
+    #[test]
+    fn entries_does_not_visit_elements_appended_after_the_walk_begins() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        ary.push(&mrb, crate::Value::from_int(&mrb, 1))
+            .expect("push succeeds");
+
+        // The walk fixes its length at 1 when it begins. Growing the array
+        // mid-walk does not lengthen the walk: it ends after the one element
+        // present at the start, never reaching the appended tail.
+        let mut walk = ary.entries();
+        assert_eq!(
+            walk.next()
+                .expect("the first slot is visited")
+                .to_string(&mrb),
+            "1"
+        );
+
+        for n in [2, 3] {
+            ary.push(&mrb, crate::Value::from_int(&mrb, n))
+                .expect("push succeeds");
+        }
+        assert_eq!(ary.len(), 3);
+
+        assert!(walk.next().is_none());
     }
 }
