@@ -956,4 +956,43 @@ mod tests {
 
         assert!(walk.next().is_none());
     }
+
+    #[test]
+    fn entries_reads_a_slot_changed_mid_walk_as_its_current_value() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let ary = mrb.ary_new();
+        for n in [1, 2, 3] {
+            ary.push(&mrb, crate::Value::from_int(&mrb, n))
+                .expect("push succeeds");
+        }
+
+        // The walk reads each slot live, not from a snapshot taken at the
+        // start. Overwriting a not-yet-visited slot mid-walk therefore
+        // surfaces its current value when the walk reaches it — a content
+        // snapshot would instead yield the value the slot held at the start.
+        let mut walk = ary.entries();
+        assert_eq!(
+            walk.next()
+                .expect("the first slot is visited")
+                .to_string(&mrb),
+            "1"
+        );
+
+        ary.store(&mrb, 2, mrb.str_new(b"changed").as_value())
+            .expect("an in-range store succeeds");
+
+        assert_eq!(
+            walk.next()
+                .expect("the second slot is visited")
+                .to_string(&mrb),
+            "2"
+        );
+        assert_eq!(
+            walk.next()
+                .expect("the third slot is visited")
+                .to_string(&mrb),
+            "changed"
+        );
+        assert!(walk.next().is_none());
+    }
 }
