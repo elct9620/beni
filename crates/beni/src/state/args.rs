@@ -22,6 +22,10 @@
 //!   - `format::S`          — `"S"`   → single String argument
 //!   - `format::Str`        — `"s"`   → String as a borrowed byte slice
 //!   - `format::RestBlock`  — `"*&"`  → rest array + block slot
+//!   - `format::Kw`         — `":"`   → keyword arguments as a Hash
+//!     bucket, kept apart from the positionals
+//!   - `format::NRestKwBlock` — `"n*:&"` → symbol + rest array + keyword
+//!     Hash bucket + block slot
 //!
 //! Rest-form variants hand back a slice tied to `&self` — the borrow
 //! the bridge body holds for the whole call. The slice stays valid
@@ -192,6 +196,8 @@ impl Mrb {
 /// Zero-sized marker types implementing `Format`. Each marker maps
 /// one mruby format string to a typed Rust return.
 pub mod format {
+    #[cfg(mruby_linked)]
+    use super::capture_all_kwargs;
     #[cfg(mruby_linked)]
     use super::slice_from_argv;
     use super::sys;
@@ -483,6 +489,98 @@ pub mod format {
             }
         }
     }
+
+    /// `mrb_get_args(mrb, ":", &kwargs)` — read the call's keyword
+    /// arguments as a `Hash` bucket kept apart from the positionals.
+    /// Capture-all: every keyword pair lands in the returned `Hash`, which
+    /// is empty rather than nil when the call passed no keywords, and an
+    /// explicit positional `Hash` the caller wrote stays among the
+    /// positionals rather than folding into it.
+    pub struct Kw;
+    impl Format for Kw {
+        type Output<'a> = crate::Hash;
+        const FMT: &'static core::ffi::CStr = c":";
+
+        fn read(mrb: &Mrb) -> crate::Hash {
+            #[cfg(mruby_linked)]
+            {
+                let mut out = sys::mrb_value::zeroed();
+                let mut kwargs = capture_all_kwargs(&mut out);
+                // SAFETY: as `O::read`; the `":"` format reads the keyword
+                // dict through the `mrb_kwargs` input struct. Capture-all
+                // sends every pair to `rest`, which mruby fills with an
+                // empty Hash when none were passed, so `out` is Hash-tagged.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut kwargs as *mut sys::mrb_kwargs,
+                    );
+                }
+                // SAFETY: capture-all guarantees `out` is a Hash value.
+                unsafe { crate::Hash::from_value_unchecked(Value::from_raw(out)) }
+            }
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
+        }
+    }
+
+    /// `mrb_get_args(mrb, "n*:&", &sym, &argv, &argc, &kwargs, &block)` —
+    /// read a leading symbol, a rest array, the keyword `Hash` bucket, and
+    /// the block slot in one read. The shape a signature-blind
+    /// `method_missing` proxy needs: the `:` specifier keeps the caller's
+    /// keyword arguments in their own `Hash` (empty rather than nil when
+    /// none were passed) instead of folding them into the rest, while an
+    /// explicit positional `Hash` stays in the rest. An absent block
+    /// decodes as nil.
+    pub struct NRestKwBlock;
+    impl Format for NRestKwBlock {
+        type Output<'a> = (sys::mrb_sym, &'a [Value], crate::Hash, Value);
+        const FMT: &'static core::ffi::CStr = c"n*:&";
+
+        fn read(mrb: &Mrb) -> (sys::mrb_sym, &[Value], crate::Hash, Value) {
+            #[cfg(mruby_linked)]
+            {
+                let mut sym: sys::mrb_sym = 0;
+                let mut argv: *const sys::mrb_value = core::ptr::null();
+                let mut argc: sys::mrb_int = 0;
+                let mut out = sys::mrb_value::zeroed();
+                let mut kwargs = capture_all_kwargs(&mut out);
+                let mut block_raw = sys::mrb_value::zeroed();
+                // SAFETY: as `O::read`; the `"n*:&"` format writes the
+                // leading symbol, the argv pointer + length pair, the
+                // keyword dict through the `mrb_kwargs` input struct, and a
+                // single block-slot value.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut sym as *mut sys::mrb_sym,
+                        &mut argv as *mut *const sys::mrb_value,
+                        &mut argc as *mut sys::mrb_int,
+                        &mut kwargs as *mut sys::mrb_kwargs,
+                        &mut block_raw as *mut sys::mrb_value,
+                    );
+                }
+                // SAFETY: capture-all guarantees `out` is a Hash value.
+                let kw = unsafe { crate::Hash::from_value_unchecked(Value::from_raw(out)) };
+                (
+                    sym,
+                    slice_from_argv(argv, argc),
+                    kw,
+                    Value::from_raw(block_raw),
+                )
+            }
+            #[cfg(not(mruby_linked))]
+            {
+                let _ = mrb;
+                crate::not_linked()
+            }
+        }
+    }
 }
 
 /// Cast a `mrb_get_args` rest-form `(*const mrb_value, mrb_int)` pair
@@ -505,9 +603,26 @@ fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: sys::mrb_int) -> &'a [
     }
 }
 
+/// Build a capture-all `mrb_kwargs` (no name table) whose keyword dict
+/// lands in `*out`. Paired with the `:` specifier, mruby routes every
+/// keyword pair to `rest` and fills `*out` with an empty Hash — never nil
+/// — when the call passed none, so a caller reads `*out` as a Hash
+/// unconditionally (`vendor/mruby/src/class.c:1649`).
+#[cfg(mruby_linked)]
+#[inline]
+fn capture_all_kwargs(out: *mut sys::mrb_value) -> sys::mrb_kwargs {
+    sys::mrb_kwargs {
+        num: 0,
+        required: 0,
+        table: core::ptr::null(),
+        values: core::ptr::null_mut(),
+        rest: out,
+    }
+}
+
 #[cfg(all(test, mruby_linked))]
 mod tests {
-    use super::format::{Io, NRest, Rest, RestBlock, Str, S};
+    use super::format::{Io, Kw, NRest, NRestKwBlock, Rest, RestBlock, Str, S};
     use super::*;
 
     /// Registered through `method!(rest_count, -1)`: reads the rest
@@ -992,5 +1107,113 @@ mod tests {
             .expect("the borrowed read must not raise");
 
         assert_eq!(got.to_string(&mrb), "alpha");
+    }
+
+    /// Registered through `method!(kw_size, -1)`: reads the `":"` keyword
+    /// bucket and returns its size. A nil bucket could not answer `size`,
+    /// so a clean `0` proves the empty case is an empty Hash, not nil.
+    fn kw_size(mrb: &Mrb, _self: Value) -> Value {
+        let kw = mrb.get_args::<Kw>();
+        Value::from_int(mrb, kw.len(mrb) as sys::mrb_int)
+    }
+
+    /// Registered through `method!(nrest_kwblock_encode, -1)`: reads the
+    /// `"n*:&"` shape and encodes the split as
+    /// `rest.len()*100 + kwargs.len()*10 + block`, returning `-1` unless
+    /// the leading symbol decoded as `:tag` — so a read that folds the
+    /// keywords into the rest, drops the symbol, or misplaces the block
+    /// fails the assertion instead of passing.
+    fn nrest_kwblock_encode(mrb: &Mrb, _self: Value) -> Value {
+        let (sym, rest, kw, block) = mrb.get_args::<NRestKwBlock>();
+        if sym != mrb.intern_cstr(c"tag") {
+            return Value::from_int(mrb, -1);
+        }
+        let block_bit = if block.is_nil() { 0 } else { 1 };
+        let code = rest.len() as sys::mrb_int * 100 + kw.len(mrb) as sys::mrb_int * 10 + block_bit;
+        Value::from_int(mrb, code)
+    }
+
+    #[test]
+    fn kw_format_captures_keywords_and_empty_is_a_hash() {
+        use crate::{Ccontext, FromValue, Module};
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(&mrb, c"kw_size", crate::method!(kw_size, -1))
+            .expect("registering the bridge must succeed");
+
+        let recv = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let slot = mrb.intern_cstr(c"$beni_kw_recv");
+        mrb.gv_set(slot, recv);
+
+        let cxt = Ccontext::new(&mrb, c"kw_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        // Two keywords land in the bucket.
+        let two = cxt.load_nstring(b"$beni_kw_recv.kw_size(a: 1, b: 2)");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the : read must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(i32::from_value(two), Some(2));
+
+        // No keywords: the bucket is an empty Hash, not nil, so `size`
+        // answers 0 rather than raising on a nil receiver.
+        let none = cxt.load_nstring(b"$beni_kw_recv.kw_size");
+        assert_eq!(i32::from_value(none), Some(0));
+    }
+
+    #[test]
+    fn nrest_kwblock_separates_positionals_keywords_and_block() {
+        use crate::{Ccontext, FromValue, Module};
+
+        let mrb = crate::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb.object_class();
+        class
+            .define_method(
+                &mrb,
+                c"nrest_kwblock_encode",
+                crate::method!(nrest_kwblock_encode, -1),
+            )
+            .expect("registering the bridge must succeed");
+
+        let recv = class
+            .obj_new(&mrb, &[])
+            .expect("the receiver constructs without raising");
+        let slot = mrb.intern_cstr(c"$beni_kwblock_recv");
+        mrb.gv_set(slot, recv);
+
+        let cxt = Ccontext::new(&mrb, c"kwblock_test.rb")
+            .expect("allocating the compile context must succeed");
+
+        // A brace-less keyword stays in its own bucket: rest [1], kwargs
+        // {a: 1}, no block -> 1*100 + 1*10 + 0.
+        let kw = cxt.load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag, 1, a: 1)");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "the n*:& read must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(i32::from_value(kw), Some(110));
+
+        // An explicit positional Hash stays among the positionals: rest
+        // [1, {a: 1}], kwargs {} -> 2*100.
+        let explicit =
+            cxt.load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag, 1, {a: 1})");
+        assert_eq!(i32::from_value(explicit), Some(200));
+
+        // A block fills its own slot: rest [1], kwargs {a: 1}, block -> 111.
+        let with_block =
+            cxt.load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag, 1, a: 1) { }");
+        assert_eq!(i32::from_value(with_block), Some(111));
+
+        // No positionals or keywords: kwargs is an empty Hash, not nil, so
+        // the encode reaches 0 only because `size` answered on a real Hash.
+        let empty = cxt.load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag)");
+        assert_eq!(i32::from_value(empty), Some(0));
     }
 }
