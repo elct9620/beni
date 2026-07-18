@@ -599,6 +599,19 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   argument String while holding the slice invalidates it, while a VM re-entry
   that leaves the String untouched keeps it valid. A zero-length String yields
   an empty slice.
+- A shape-typed read composes its shape from independent parts — required
+  positionals, optional positionals, an optional rest, trailing required
+  positionals, a keyword bucket, and a block — and hands each part back
+  separately, letting a body read any argument shape mruby accepts in one
+  read. An optional positional binds its value when the call supplies it and
+  nothing when omitted; a trailing required positional binds after the rest;
+  the block part is nothing when no block was passed. The keyword bucket holds
+  the call's keyword arguments apart from the positionals: always a hash,
+  empty rather than absent when the call passed none, and never capturing an
+  explicit positional hash the caller wrote — that stays among the
+  positionals. A keyword read may instead name the keywords it expects,
+  binding each named value, treating a missing one as absent, and collecting
+  the unnamed keywords as the rest.
 - A typed method registration declares a fixed count of required positionals
   and, after them, a count of optional positionals: each required positional
   crosses through `FromValue`, and each optional positional crosses as an
@@ -759,6 +772,11 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   a typed method definition's required and optional arity counts and its
   block-accepting flag derive the argument-spec aspec it declares — the
   required, the required-and-optional, the any-arguments, and the block aspecs.
+  `mrb_get_args` is one symbol whose format string is a vocabulary of argument
+  specifiers, so that vocabulary is measured as its own lens: each specifier is
+  covered through a read composed with a conversion, through the keyword read,
+  or deliberately left in `beni::sys` — a specifier left in `sys` with a stated
+  reason counts as accounted for, not as a gap.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.
