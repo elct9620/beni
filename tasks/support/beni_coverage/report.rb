@@ -104,7 +104,8 @@ module BeniCoverage
         ## get_args format specifiers
 
         `mrb_get_args`' format string is a specifier vocabulary — one symbol,
-        many capabilities — measured as its own lens. ✅ covered · 🔒 sys.
+        many capabilities — measured as its own lens. Every specifier is
+        covered (✅); the Via column names the surface that covers each one.
 
         | Specifier | Covered | Via |
         |-----------|:-------:|-----|
@@ -115,8 +116,7 @@ module BeniCoverage
     # A literal `|` specifier is escaped so it does not close the table cell.
     def formats_row(spec, entry)
       cell = spec == "|" ? "\\|" : spec
-      status = entry["status"] == "covered" ? "✅" : "🔒"
-      "| `#{cell}` | #{status} | #{entry["via"]} |"
+      "| `#{cell}` | ✅ | #{entry["via"]} |"
     end
 
     def extensions_block

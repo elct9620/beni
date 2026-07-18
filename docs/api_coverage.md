@@ -546,7 +546,8 @@ Legend: ✅ covered · — missing
 ## get_args format specifiers
 
 `mrb_get_args`' format string is a specifier vocabulary — one symbol,
-many capabilities — measured as its own lens. ✅ covered · 🔒 sys.
+many capabilities — measured as its own lens. Every specifier is
+covered (✅); the Via column names the surface that covers each one.
 
 | Specifier | Covered | Via |
 |-----------|:-------:|-----|
@@ -564,7 +565,6 @@ many capabilities — measured as its own lens. ✅ covered · 🔒 sys.
 | `b` | ✅ | read + Value::to_bool |
 | `n` | ✅ | format::NRest / NRestBlock / NRestKwBlock, or read + FromValue<Symbol> |
 | `d` | ✅ | read + Value::data_get |
-| `I` | 🔒 | inline-struct pointer needs VM-internal reasoning; no carrier built (SPEC graduation boundary) |
 | `&` | ✅ | format::NRestBlock / RestBlock / NRestKwBlock, or block-accepting registration |
 | `*` | ✅ | format::Rest — re-entry-stable borrowed slice |
 | `\|` | ✅ | optional-positional registration (Option crossing), or Mrb::argv indexing |

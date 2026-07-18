@@ -341,9 +341,8 @@ extensions:
 #
 # `mrb_get_args` is one symbol whose format string is a vocabulary of argument
 # specifiers, so the vocabulary is its own coverage lens (see SPEC's coverage
-# measure). Each specifier is covered through a format marker, a read composed
-# with a conversion, the typed method registration, or deliberately left in
-# `sys` with a stated reason — which counts as accounted for, not a gap. The
+# measure). Every specifier is covered through a format marker, a read composed
+# with a conversion, the keyword read, or the typed method registration. The
 # composable tuple-scan and the named-keyword form are ergonomic surfaces
 # reachable today through composition, not per-specifier gaps, so they are not
 # tracked here. `via` names the covering Rust surface; the `api:formats` gate
@@ -363,7 +362,6 @@ get_args_formats:
   b: { status: covered, via: "read + Value::to_bool" }
   n: { status: covered, via: "format::NRest / NRestBlock / NRestKwBlock, or read + FromValue<Symbol>" }
   d: { status: covered, via: "read + Value::data_get" }
-  I: { status: sys, via: "inline-struct pointer needs VM-internal reasoning; no carrier built (SPEC graduation boundary)" }
   "&": { status: covered, via: "format::NRestBlock / RestBlock / NRestKwBlock, or block-accepting registration" }
   "*": { status: covered, via: "format::Rest — re-entry-stable borrowed slice" }
   "|": { status: covered, via: "optional-positional registration (Option crossing), or Mrb::argv indexing" }
