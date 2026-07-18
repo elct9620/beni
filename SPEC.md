@@ -773,10 +773,10 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   block-accepting flag derive the argument-spec aspec it declares — the
   required, the required-and-optional, the any-arguments, and the block aspecs.
   `mrb_get_args` is one symbol whose format string is a vocabulary of argument
-  specifiers, so that vocabulary is measured as its own lens: each specifier is
-  covered through a read composed with a conversion, through the keyword read,
-  or deliberately left in `beni::sys` — a specifier left in `sys` with a stated
-  reason counts as accounted for, not as a gap.
+  specifiers, so that vocabulary is measured as its own lens: every specifier
+  is covered through the typed surface — a format marker, a read composed with
+  a conversion, the keyword read, or the typed method registration that
+  declares it — and the lens records which surface covers each one.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.
