@@ -157,7 +157,7 @@ typed:
   mrb_gc_protect: "`ArenaScope::keep` (see ArenaScope extension)"
   mrb_get_arg1: "`Mrb::arg1` — the single required argument, raising `ArgumentError` on any other count (the strict counterpart to a `format::O` read)"
   mrb_get_argc: Mrb::argc
-  mrb_get_args: state::args
+  mrb_get_args: "state::args — the format markers and frame-read helpers; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol"
   mrb_get_argv: "`Mrb::argv` — the call frame's positional arguments as a borrowed slice, the companion to `Mrb::argc`"
   mrb_gv_get: Mrb::gv_get
   mrb_gv_remove: Mrb::gv_remove
@@ -335,3 +335,39 @@ extensions:
     longer reaches reads `nil` — dispatching no Ruby, the idiomatic Rust
     surface over mruby's caller-side index loop (which the C API has no
     iterator primitive for).
+
+# get_args format specifiers
+# ==========================
+#
+# `mrb_get_args` is one symbol whose format string is a vocabulary of argument
+# specifiers, so the vocabulary is its own coverage lens (see SPEC's coverage
+# measure). Each specifier is covered through a format marker, a read composed
+# with a conversion, the typed method registration, or deliberately left in
+# `sys` with a stated reason — which counts as accounted for, not a gap. The
+# composable tuple-scan and the named-keyword form are ergonomic surfaces
+# reachable today through composition, not per-specifier gaps, so they are not
+# tracked here. `via` names the covering Rust surface; the `api:formats` gate
+# checks that every specifier a `format::` marker reads is marked covered.
+get_args_formats:
+  o: { status: covered, via: "format::O, or the composable read" }
+  C: { status: covered, via: "read + FromValue<RClass> / Value::is_class" }
+  S: { status: covered, via: "format::S, or read + Value::ensure_string" }
+  A: { status: covered, via: "read + FromValue<Array> / Value::ensure_array" }
+  H: { status: covered, via: "read + FromValue<Hash> / Value::ensure_hash" }
+  s: { status: covered, via: "format::Str — borrowed bytes into the String buffer" }
+  z: { status: covered, via: "read + RString::to_cstr" }
+  a: { status: covered, via: "read + Array::entries" }
+  c: { status: covered, via: "read + FromValue<RClass>" }
+  f: { status: covered, via: "read + FromValue<f64> / Value::ensure_float" }
+  i: { status: covered, via: "format::Io, or read + FromValue<i32> / Value::ensure_int" }
+  b: { status: covered, via: "read + Value::to_bool" }
+  n: { status: covered, via: "format::NRest / NRestBlock / NRestKwBlock, or read + FromValue<Symbol>" }
+  d: { status: covered, via: "read + Value::data_get" }
+  I: { status: sys, via: "inline-struct pointer needs VM-internal reasoning; no carrier built (SPEC graduation boundary)" }
+  "&": { status: covered, via: "format::NRestBlock / RestBlock / NRestKwBlock, or block-accepting registration" }
+  "*": { status: covered, via: "format::Rest — re-entry-stable borrowed slice" }
+  "|": { status: covered, via: "optional-positional registration (Option crossing), or Mrb::argv indexing" }
+  "?": { status: covered, via: "optional-given answered by the Option crossing" }
+  ":": { status: covered, via: "format::Kw / NRestKwBlock — the keyword bucket" }
+  "!": { status: covered, via: "nilable read as Option<T> in the conversion layer" }
+  "+": { status: covered, via: "read + Value::check_frozen" }

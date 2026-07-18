@@ -37,4 +37,4 @@ end
 
 Dir.glob(File.join(__dir__, "tasks", "*.rake")).each { |f| load f }
 
-task default: %i[test rubocop steep api:surface]
+task default: %i[test rubocop steep api:surface api:formats]

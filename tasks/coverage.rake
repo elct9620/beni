@@ -38,4 +38,13 @@ namespace :api do
     rows.first(top).each { |e| puts "#{e.uses.to_s.rjust(5)}  #{e.name.ljust(34)} #{e.header}" }
     puts "showing #{[top, rows.size].min} of #{rows.size} not-yet-typed symbols"
   end
+
+  desc "Verify every get_args format marker is recorded in the coverage lens"
+  task :formats do
+    problems = BeniCoverage.formats_drift
+    problems.each { |problem| puts "[api:formats] #{problem}" }
+    abort "[api:formats] get_args format lens drift detected" unless problems.empty?
+
+    puts "[api:formats] #{BeniCoverage.marker_specifiers.size} marker specifiers all recorded"
+  end
 end

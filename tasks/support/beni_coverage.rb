@@ -36,6 +36,7 @@ module BeniCoverage
   MANIFEST = File.join(ROOT, ".api_coverage.yml")
   OUTPUT = File.join(ROOT, "docs", "api_coverage.md")
   VERSION_H = File.join(INCLUDE_ROOT, "mruby", "version.h")
+  ARGS_RS = File.join(ROOT, "crates", "beni", "src", "state", "args.rs")
 
   # One not-yet-typed symbol worth graduating, with its downstream weight.
   Priority = Data.define(:name, :uses, :header)
@@ -118,5 +119,33 @@ module BeniCoverage
   def mruby_version
     src = File.read(VERSION_H)
     %w[MAJOR MINOR TEENY].map { |part| src[/MRUBY_RELEASE_#{part}\s+(\d+)/, 1] }.join(".")
+  end
+
+  # Specifier chars every +format::+ marker reads, scanned from the +FMT+
+  # constants in the args module. The lens gate's numerator is derived from
+  # Rust source, so a new marker cannot silently escape the coverage lens.
+  def marker_specifiers
+    File.readlines(ARGS_RS)
+        .reject { |line| line.strip.start_with?("//") }
+        .join
+        .scan(/const\s+FMT\b[^=]*=\s*c"([^"]*)"/)
+        .join.chars.uniq
+  end
+
+  # Problems between the marker FMT vocabulary and the +get_args_formats+
+  # lens — empty when they agree. Every specifier a marker reads must be
+  # recorded covered through a +format::+ surface.
+  def formats_drift
+    lens = load_manifest["get_args_formats"] || {}
+    marker_specifiers.filter_map { |ch| format_lens_problem(ch, lens[ch]) }
+  end
+
+  def format_lens_problem(char, entry)
+    prefix = "specifier #{char.inspect} is read by a format marker but"
+    return "#{prefix} absent from get_args_formats" if entry.nil?
+    return "#{prefix} not marked covered" if entry["status"] != "covered"
+    return "#{prefix} its via names no format:: surface" unless entry["via"].to_s.include?("format::")
+
+    nil
   end
 end

@@ -123,7 +123,7 @@ Legend: ✅ covered · — missing
 | `mrb_gc_unregister` | fn | ✅ | — |  |
 | `mrb_get_arg1` | fn | ✅ | ✅ | `Mrb::arg1` — the single required argument, raising `ArgumentError` on any other count (the strict counterpart to a `format::O` read) |
 | `mrb_get_argc` | fn | ✅ | ✅ | `Mrb::argc` |
-| `mrb_get_args` | fn | ✅ | ✅ | `state::args` |
+| `mrb_get_args` | fn | ✅ | ✅ | state::args — the format markers and frame-read helpers; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol |
 | `mrb_get_args_a` | fn | ✅ | — |  |
 | `mrb_get_argv` | fn | ✅ | ✅ | `Mrb::argv` — the call frame's positional arguments as a borrowed slice, the companion to `Mrb::argc` |
 | `mrb_get_mid` | fn | ✅ | — |  |
@@ -543,6 +543,35 @@ Legend: ✅ covered · — missing
 | `mrb_obj_iv_defined` | fn | ✅ | — |  |
 | `mrb_obj_iv_get` | fn | ✅ | — |  |
 | `mrb_obj_iv_set` | fn | ✅ | — |  |
+## get_args format specifiers
+
+`mrb_get_args`' format string is a specifier vocabulary — one symbol,
+many capabilities — measured as its own lens. ✅ covered · 🔒 sys.
+
+| Specifier | Covered | Via |
+|-----------|:-------:|-----|
+| `o` | ✅ | format::O, or the composable read |
+| `C` | ✅ | read + FromValue<RClass> / Value::is_class |
+| `S` | ✅ | format::S, or read + Value::ensure_string |
+| `A` | ✅ | read + FromValue<Array> / Value::ensure_array |
+| `H` | ✅ | read + FromValue<Hash> / Value::ensure_hash |
+| `s` | ✅ | format::Str — borrowed bytes into the String buffer |
+| `z` | ✅ | read + RString::to_cstr |
+| `a` | ✅ | read + Array::entries |
+| `c` | ✅ | read + FromValue<RClass> |
+| `f` | ✅ | read + FromValue<f64> / Value::ensure_float |
+| `i` | ✅ | format::Io, or read + FromValue<i32> / Value::ensure_int |
+| `b` | ✅ | read + Value::to_bool |
+| `n` | ✅ | format::NRest / NRestBlock / NRestKwBlock, or read + FromValue<Symbol> |
+| `d` | ✅ | read + Value::data_get |
+| `I` | 🔒 | inline-struct pointer needs VM-internal reasoning; no carrier built (SPEC graduation boundary) |
+| `&` | ✅ | format::NRestBlock / RestBlock / NRestKwBlock, or block-accepting registration |
+| `*` | ✅ | format::Rest — re-entry-stable borrowed slice |
+| `\|` | ✅ | optional-positional registration (Option crossing), or Mrb::argv indexing |
+| `?` | ✅ | optional-given answered by the Option crossing |
+| `:` | ✅ | format::Kw / NRestKwBlock — the keyword bucket |
+| `!` | ✅ | nilable read as Option<T> in the conversion layer |
+| `+` | ✅ | read + Value::check_frozen |
 ## Rust extensions
 
 Rust-native surface with no 1:1 mruby C API — not part of the ratio.

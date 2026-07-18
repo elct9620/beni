@@ -17,6 +17,7 @@ module BeniCoverage
       @sys = sys
       @typed = manifest["typed"] || {}
       @extensions = manifest["extensions"] || {}
+      @formats = manifest["get_args_formats"] || {}
       @version = version
       @linked = linked
       @unknown = @typed.keys - surface.map(&:name)
@@ -24,7 +25,7 @@ module BeniCoverage
 
     def to_md
       sections = @surface.group_by(&:header).map { |header, entries| header_section(header, entries) }
-      "#{[head_block, *sections, extensions_block, unknown_block].compact.join("\n")}\n"
+      "#{[head_block, *sections, formats_block, extensions_block, unknown_block].compact.join("\n")}\n"
     end
 
     private
@@ -93,6 +94,29 @@ module BeniCoverage
       return "⚠️ unspecified" if note.empty?
 
       note.match?(/\A\S+\z/) ? "`#{note}`" : note
+    end
+
+    def formats_block
+      return nil if @formats.empty?
+
+      rows = @formats.map { |spec, entry| formats_row(spec, entry) }
+      <<~MD.chomp
+        ## get_args format specifiers
+
+        `mrb_get_args`' format string is a specifier vocabulary — one symbol,
+        many capabilities — measured as its own lens. ✅ covered · 🔒 sys.
+
+        | Specifier | Covered | Via |
+        |-----------|:-------:|-----|
+        #{rows.join("\n")}
+      MD
+    end
+
+    # A literal `|` specifier is escaped so it does not close the table cell.
+    def formats_row(spec, entry)
+      cell = spec == "|" ? "\\|" : spec
+      status = entry["status"] == "covered" ? "✅" : "🔒"
+      "| `#{cell}` | #{status} | #{entry["via"]} |"
     end
 
     def extensions_block
