@@ -736,17 +736,19 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   scope ends, and a survivor carried out through `keep` counts as created
   where its scope was opened. The type system does not enforce the rule;
   the consumer upholds it.
-- The typed surface graduates a capability out of the `beni::sys` escape
-  hatch only when a caller can use it correctly without reasoning about
-  mruby's VM internals — a stronger bar than freedom from undefined
-  behavior. An operation whose correct use depends on internal VM structure
-  (raw call-info frame indices, VM-object internals) stays behind
-  `beni::sys`: a safe-looking typed wrapper would misrepresent its
-  sharpness, so it stays where `unsafe` marks the caller's responsibility
-  for the invariants the type system cannot check. Any C API the typed
-  surface does not expose remains reachable there, unsafe and outside the
-  wrapper's guarantees; closing a consumer's `beni::sys` use to zero is not
-  a goal.
+- A capability reaches the safe typed surface only when the wrapper can
+  encode its invariant — a lifetime, a carrier type, or a runtime check —
+  so a caller uses it without reasoning about mruby's VM internals, a
+  stronger bar than freedom from undefined behavior. Where the invariant is
+  not encodable, the honest form is `unsafe`: a typed `unsafe fn` on the
+  `beni` surface when a typed shape can still carry the value — one
+  caller-owned invariant left unencoded — otherwise a raw `beni::sys`
+  binding when the value is VM-internal with no typed shape to add
+  (call-info frame indices, VM-object internals), where a safe-looking
+  wrapper would misrepresent its sharpness. A capability unsafe only for
+  want of an unbuilt carrier graduates once the carrier exists, unlike one
+  permanently VM-internal. Closing a consumer's `beni::sys` use to zero is
+  not a goal; any unexposed C API stays reachable there.
 - `docs/api_coverage.md` measures how far the typed surface has graduated
   mruby's embedder API — the functions and macros an embedder calls across the
   public embedder headers. Compile-time and debug assertion macros and internal
