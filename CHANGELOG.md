@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/elct9620/beni/compare/v0.9.0...v0.10.0) (2026-07-18)
+
+
+### Features
+
+* **beni:** measure the get_args specifier vocabulary as a coverage lens ([a1ea5df](https://github.com/elct9620/beni/commit/a1ea5df9ae53eafee8e44644c99522b76d115727))
+* **beni:** read keyword arguments as a separate bucket ([a583b5e](https://github.com/elct9620/beni/commit/a583b5eb4dcb3b536aa08caf9a51248336067809))
+
 ## [0.9.0](https://github.com/elct9620/beni/compare/v0.8.1...v0.9.0) (2026-07-16)
 
 
