@@ -16,6 +16,10 @@ AllCops:
   Exclude:
     - "test/scenarios/*/vendor/**/*"
     - "test/scenarios/*/build_config/**/*"
+    # Cargo's build directory holds no Ruby, but RuboCop's defaults
+    # cover vendor/ and tmp/ rather than a Rust convention, so it walks
+    # every artifact in it before finding nothing.
+    - "target/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

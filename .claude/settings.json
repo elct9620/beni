@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "file=$(jq -r '.tool_input.file_path | select(endswith(\".rb\"))'); if [ -n \"$file\" ]; then bundle exec rubocop -A --stderr \"$file\" || exit 2; fi"
+            "command": "file=$(jq -r '.tool_input.file_path | select(endswith(\".rb\"))'); if [ -n \"$file\" ]; then cd \"$CLAUDE_PROJECT_DIR\" && bundle exec rubocop -A --stderr \"$file\" || exit 2; fi"
           },
           {
             "type": "command",
@@ -26,7 +26,7 @@
           },
           {
             "type": "command",
-            "command": "file=$(jq -r '.tool_input.file_path | select(test(\"\\\\.(rb|rbs)$\"))'); if [ -n \"$file\" ]; then bundle exec steep check >&2 || exit 2; fi"
+            "command": "file=$(jq -r '.tool_input.file_path | select(test(\"\\\\.(rb|rbs)$\"))'); if [ -n \"$file\" ]; then cd \"$CLAUDE_PROJECT_DIR\" && bundle exec steep check >&2 || exit 2; fi"
           },
           {
             "type": "command",
