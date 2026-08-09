@@ -1,0 +1,30 @@
+{
+  "skill_name": "maintain",
+  "notes": "Read-only evals. Each prompt naturally stops before implementation, so the skill's core judgement — is a measured gap a defect or a deliberate decision — is exercised without mutating the repo.",
+  "evals": [
+    {
+      "id": 0,
+      "name": "gate-decision-vs-defect",
+      "prompt": "我們接下來該把哪個 mruby C API 升級到 typed beni 面？先不要寫任何 code —— 把 api:priority 排在前面的幾個符號各自是真的覆蓋缺口、還是刻意留在 sys 的設計決定，分別講清楚並附上判斷依據。",
+      "expected_output": "A candidate table where the majority of high-frequency symbols are classified as deliberate decisions citing CLAUDE.md Principle 11 (allocator and raw-pointer accessors such as mrb_free / mrb_malloc / RARRAY_PTR have no invariant a wrapper can encode), not as gaps to fix. Frequency must be stated as ranking only, never as eligibility. No files written, no branch, no PR.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 1,
+      "name": "scheduled-report-format",
+      "prompt": "Weekly maintenance run: check the mruby C API coverage situation for this repo and propose repairs where they are needed. Report only this time — do not open a PR and do not write code.",
+      "expected_output": "A report following the skill's template: gate result, candidate count, a table with Verdict and 'Settled by' columns, a 'Taken this round' section, and a 'Left for next time' list. api:priority is used as the survey; api:surface and api:formats are treated as the precondition gate rather than as gap signals. No branch, no PR.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "name": "withdrawn-graduation-trap",
+      "prompt": "有人跟我說 get_args 的 owned rest-arg projection 好像一直沒做，這是不是一個該補起來的覆蓋缺口？幫我確認一下，先不要動手改。",
+      "expected_output": "Not a gap. It was built and then withdrawn — commit d04fb52 'revert(beni): withdraw owned rest-arg format projections', because mruby does not scan the C stack so an owned Vec gets no GC protection. The answer must cite the revert and must not propose re-implementing it.",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}
