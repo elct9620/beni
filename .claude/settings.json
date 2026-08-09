@@ -1,4 +1,16 @@
 {
+  "extraKnownMarketplaces": {
+    "claudekit": {
+      "source": {
+        "source": "github",
+        "repo": "elct9620/claudekit"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "git@claudekit": true,
+    "coding@claudekit": true
+  },
   "hooks": {
     "PostToolUse": [
       {
