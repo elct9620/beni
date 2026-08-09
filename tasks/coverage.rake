@@ -14,10 +14,11 @@
 #                           staged (run after `rake beni:build` for the
 #                           exact sys surface), otherwise infers it.
 #   $ rake api:priority       — print the top 20 not-yet-typed embedder
-#   $ rake "api:priority[50]"   symbols ranked by mrbgems call frequency,
-#                             the worklist for what to graduate next. The
-#                             optional argument caps the rows; a query
-#                             only, writes no file.
+#   $ rake "api:priority[50]"   symbols ranked by how often the mrbgems
+#                             this repo builds call them, the worklist
+#                             for what to graduate next. The optional
+#                             argument caps the rows; a query only,
+#                             writes no file.
 
 require_relative "support/beni_coverage"
 
@@ -31,12 +32,13 @@ namespace :api do
     end
   end
 
-  desc "Rank not-yet-typed mruby C API by mrbgems usage (worklist; top N, default 20)"
+  desc "Rank not-yet-typed mruby C API by usage in the mrbgems this repo builds (worklist; top N, default 20)"
   task :priority, [:top] do |_task, args|
     top = Integer(args.top || 20)
     rows = BeniCoverage.priority
     rows.first(top).each { |e| puts "#{e.uses.to_s.rjust(5)}  #{e.name.ljust(34)} #{e.header}" }
     puts "showing #{[top, rows.size].min} of #{rows.size} not-yet-typed symbols"
+    puts "demand: #{BeniCoverage.demand_signal}"
   end
 
   desc "Verify every get_args format marker is recorded in the coverage lens"

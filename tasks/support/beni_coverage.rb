@@ -27,8 +27,9 @@ require_relative "beni_coverage/report"
 #               implementers, not inferred.
 #
 # The +priority+ query is a separate concern from the report: it ranks
-# the not-yet-typed surface by mrbgems call frequency (+Frequency+) to
-# point graduation work at the symbols embedders lean on hardest.
+# the not-yet-typed surface by the call frequency of the mrbgems this
+# repo builds (+Frequency+), to point graduation work at the symbols
+# embedders lean on hardest.
 module BeniCoverage
   ROOT = File.expand_path("../..", __dir__)
   INCLUDE_ROOT = File.join(ROOT, "vendor", "mruby", "include")
@@ -61,6 +62,13 @@ module BeniCoverage
   def priority
     surface = Surface.parse(INCLUDE_ROOT)
     rank(surface, load_manifest["typed"] || {}, Frequency.scan(ROOT, surface.map(&:name)))
+  end
+
+  # Which gem sources the ranking counted, so a reader knows how far to
+  # trust the order — the +priority+ counterpart of the report's
+  # linked-versus-heuristic sys detection.
+  def demand_signal
+    Frequency.signal(ROOT)
   end
 
   def rank(surface, typed, uses)
