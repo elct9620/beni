@@ -196,9 +196,9 @@ Gate: `bundle exec rake` <green|red> · Survey: <N> candidates · Eligible: <N>
 
 | Candidate | Verdict | Settled by |
 |---|---|---|
-| `mrb_foo_bar` | taken | SPEC.md §… — described, not implemented |
+| `mrb_foo_bar` | taken | SPEC.md §… "the wrapper reads it through a carrier" — described, not implemented |
 | `mrb_ci_baz` | decision | Principle 11 — call-frame index, no carrier to add |
-| `mrb_qux` | withdrawn | `d04fb52 revert(beni): …` |
+| `mrb_qux` | withdrawn | `d04fb52` "withdraw owned rest-arg format projections" |
 
 ## Taken this round
 <the intent sentence, the verification result, and the PR url — or where the run stopped>
