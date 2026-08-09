@@ -764,10 +764,9 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   not a goal; any unexposed C API stays reachable there.
 - `docs/api_coverage.md` measures how far the typed surface has graduated
   mruby's embedder API — the functions and macros an embedder calls across the
-  public embedder headers. Compile-time and debug assertion macros and internal
-  helper macros are not embedder API and stay out of the measure. A capability
-  the typed surface graduates through a Rust-native construct rather than the
-  matching C symbol counts as covered through that construct: a type predicate
+  public embedder headers. A capability the typed surface graduates through a
+  Rust-native construct rather than the matching C symbol counts as covered
+  through that construct: a type predicate
   read from the value tag covers the per-type `_p` macro it stands in for, and
   a typed method definition's required and optional arity counts and its
   block-accepting flag derive the argument-spec aspec it declares — the
@@ -777,6 +776,27 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   is covered through the typed surface — a format marker, a read composed with
   a conversion, the keyword read, or the typed method registration that
   declares it — and the lens records which surface covers each one.
+- Symbols carrying the same capability are covered together. Where one C
+  symbol is defined as another, covering either covers both. Where two C
+  symbols differ only in what a Rust caller already expresses otherwise — a
+  length the byte slice carries, an argument count the slice carries — the
+  graduated item covers them both, recorded with what the Rust shape carries in
+  the C form's place. A symbol a graduated item cannot express is not covered
+  by it, however close their purposes.
+- API an embedder cannot call never enters the measure: what the headers do not
+  publish, and compile-time, debug assertion, and internal helper macros. What
+  does enter leaves again only for a reason the measure records. Public API the
+  typed surface deliberately does not carry leaves as declined — what the
+  graduation rule above leaves in `beni::sys` for want of a typed shape to add,
+  named for the measure. A capability awaiting a carrier is not declined: it
+  stays in the measure as the work it is. API a build's ABI lacks
+  because a compile-time flag gates it leaves as flag-gated, and stays distinct
+  from declined because letting a consumer choose its ABI turns the flag-gated
+  set into work while the declined set stays declined. Each reason names what
+  settles it — a statement in this specification, the graduation rule above, or
+  the vendored source it reads from — so a classification can be reviewed
+  rather than taken on trust. What remains is the embedder API a build's ABI
+  intends to carry, so a fully graduated surface measures complete.
 - In placeholder mode the wrapper's full API surface still compiles;
   `Mrb::open` returns an error, so no interpreter ever exists to operate
   on.
@@ -848,3 +868,5 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of defines/flags the crates align with |
 | linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents in every build — `1` with a real archive linked, `0` in placeholder mode |
 | placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set |
+| declined symbol | public embedder API the typed surface deliberately does not carry, outside the coverage measure and recorded with what settles it |
+| flag-gated symbol | embedder API a build's ABI lacks because a compile-time flag gates it, outside the coverage measure and recorded with what settles it — the gating flag |
