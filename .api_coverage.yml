@@ -6,7 +6,7 @@
 # vendored headers by `rake api:coverage`; this file is the *numerator*
 # the implementer maintains.
 #
-# Two sections:
+# Three sections:
 #
 #   typed       — keyed by mruby C API symbol (function or function-like
 #                 macro, exactly as in the headers). The value is a free
@@ -20,10 +20,19 @@
 #   extensions  — Rust-native surface with no 1:1 C API (RAII guards,
 #                 caches, trait conversions). Documented for context;
 #                 not part of the C-API coverage ratio.
+#   get_args_formats
+#               — the `mrb_get_args` specifier vocabulary, measured as
+#                 its own lens: one entry per specifier, each recording
+#                 the typed surface that covers it.
 #
-# The raw `sys` FFI tier is derived automatically (bindgen + wrapper.h
-# shims), so it is not listed. A `typed` key absent from the scanned
-# inventory is reported as "unknown" by the rake task.
+# Two tiers are derived rather than listed: the raw `sys` FFI surface
+# (bindgen + wrapper.h shims), and every symbol a `#define` alias makes
+# equivalent to a recorded one — covering either covers both, so
+# recording an alias here only duplicates the headers. Record one only
+# when its Note names a Rust item the partner's does not, and
+# `rake api:aliases` will hold that claim to the headers. A `typed` key
+# absent from the scanned inventory is reported as "unknown" by the
+# rake task.
 ---
 typed:
   MRB_ARGS_ANY: a typed method's `-1` arity, derived by `Module::define_method`
@@ -34,7 +43,6 @@ typed:
   MRB_ARGS_REQ: a typed method's positional arity, derived by `Module::define_method`
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
   RARRAY_LEN: Array::len
-  RSTRING_CSTR: RString::to_cstr
   RSTRING_LEN: "`RString::as_bytes`, `RString::to_bytes`, `RString::len`"
   RSTRING_PTR: "`RString::as_bytes`, `RString::to_bytes`"
   mrb_argnum_error: Error::argnum
@@ -42,7 +50,6 @@ typed:
   mrb_ary_concat: Array::concat
   mrb_ary_dup: Array::dup
   mrb_ary_entry: "`Array::entry`, `Value::ary_entry`"
-  mrb_ary_ref: "`Array::entry`, `Value::ary_entry` — the macro `mrb_ary_ref(mrb, ary, n)` is a `#define` alias of `mrb_ary_entry`, so the same Rust items graduate it; no separate item is needed"
   mrb_ary_join: Array::join
   mrb_ary_new: Mrb::ary_new
   mrb_ary_new_capa: Mrb::ary_new_capa
@@ -148,7 +155,6 @@ typed:
   mrb_false_value: Value::false_
   mrb_float_to_integer: "`Value::float_to_int` — convert a Float value to the Integer value it truncates toward zero (Ruby's Float#to_i / Float#to_int); guards the Float tag (TypeError) and raises RangeError on an infinite or NaN float"
   mrb_float_value: Value::from_float
-  mrb_fixnum_to_str: "`Value::int_to_str` — the macro `mrb_fixnum_to_str(mrb, x, base)` is a `#define` alias of `mrb_integer_to_str`, so the same Rust item graduates it; no separate item is needed"
   mrb_full_gc: "`Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive)"
   mrb_funcall_argv: "`Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym)"
   mrb_funcall_with_block: "`Value::funcall_with_block` — dispatch passing an explicit typed `Proc` block"
@@ -206,10 +212,8 @@ typed:
   mrb_module_new: "`Mrb::module_new` — create an anonymous module, bound to no constant"
   mrb_nil_p: Value::is_nil
   mrb_nil_value: Value::nil
-  mrb_num_add: "`Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width. The obsolete macro `mrb_num_plus(mrb, x, y)` is a `#define` alias of `mrb_num_add`, so the same Rust item graduates it"
-  mrb_num_plus: "`Value::add` — the macro `mrb_num_plus(mrb, x, y)` is a `#define` alias of `mrb_num_add`, so the same Rust item graduates it; no separate item is needed"
-  mrb_num_sub: "`Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width). The obsolete macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it"
-  mrb_num_minus: "`Value::sub` — the macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it; no separate item is needed"
+  mrb_num_add: "`Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width"
+  mrb_num_sub: "`Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width)"
   mrb_num_mul: "`Value::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width)"
   mrb_any_to_s: "`Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::obj_as_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly"
   mrb_obj_as_string: Value::obj_as_string
@@ -237,11 +241,8 @@ typed:
   mrb_remove_method: "`Module::remove_method` — Ruby's `Module#remove_method`; deletes the method's own definition from the handle (the name reverts to an ancestor's method), distinct from `Module::undef_method` which masks ancestor lookups. The symbol-or-name key routes through this raising form, which takes a `mrb_sym` directly with no string variant"
   mrb_respond_to: Value::respond_to
   mrb_singleton_class: "`Value::singleton_class` — the value's per-instance eigenclass (Ruby's `singleton_class`), returning a typed `RClass`; nil/true/false yield their predefined classes and every other immediate raises a TypeError. The raw-`RClass*` form `mrb_singleton_class_ptr`, which hands back a possibly-null pointer and demands VM-internal reasoning, stays in `sys`"
-  mrb_str_buf_cat: "`RString::cat` — the macro `mrb_str_buf_cat(mrb, str, ptr, len)` is a `#define` alias of `mrb_str_cat`, so the same Rust item graduates it; no separate item is needed"
-  mrb_str_buf_new: "`Mrb::str_new_capa` — the macro `mrb_str_buf_new(mrb, capa)` is a `#define` alias of `mrb_str_new_capa`, so the same Rust item graduates it; no separate item is needed"
   mrb_str_cat: RString::cat
   mrb_str_cat_lit: "`RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
-  mrb_str_cat2: "`RString::cat_cstr` — the macro `mrb_str_cat2(mrb, str, ptr)` is a `#define` alias of `mrb_str_cat_cstr`, so the same Rust item graduates it; no separate item is needed"
   mrb_str_cat_cstr: RString::cat_cstr
   mrb_str_cat_str: RString::cat_str
   mrb_str_append: "`RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed"
@@ -264,15 +265,11 @@ typed:
   mrb_str_to_dbl: "`RString::to_f` — strict float parse (badcheck on); raises ArgumentError on non-float input"
   mrb_str_to_integer: "`RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input"
   mrb_str_to_inum: "`RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError"
-  mrb_str_to_str: "`Value::obj_as_string` — the macro `mrb_str_to_str(mrb, str)` is a `#define` alias of `mrb_obj_as_string`, so the same Rust item graduates it; no separate item is needed"
   mrb_string_cstr: RString::to_cstr
   mrb_sym_name: "`Mrb::sym_name`, `Symbol::name` — returns an owned UTF-8 `String`, not a borrow: mruby unpacks an inline (short) symbol's name into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (unlike CRuby's permanent static symbol names, this cannot wear magnus's `Cow<'static>` shape). Escaped to its quoted dump form when the name carries an embedded NUL"
-  mrb_sym2name: "`Mrb::sym_name`, `Symbol::name` — the macro `mrb_sym2name(mrb, sym)` is a `#define` alias of `mrb_sym_name`, so the same Rust items graduate it; no separate item is needed"
   mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — returns an owned `Vec<u8>`, not a borrow: an inline (short) symbol's name unpacks into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). The true length carries out of band so an embedded NUL is preserved unescaped"
-  mrb_sym2name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — the macro `mrb_sym2name_len(mrb, sym, len)` is a `#define` alias of `mrb_sym_name_len`, so the same Rust items graduate it; no separate item is needed"
   mrb_sym_dump: "`Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), returned as an owned `String`, not a borrow: it draws on the same shared `mrb->symbuf` scratch an inline name unpacks into and the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). Never raises"
   mrb_sym_str: "`Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises"
-  mrb_sym2str: "`Symbol::to_str` — the macro `mrb_sym2str(mrb, sym)` is a `#define` alias of `mrb_sym_str`, so the same Rust item graduates it; no separate item is needed"
   mrb_symbol_value: Symbol::from_sym
   mrb_test: Value::to_bool
   mrb_top_run: Mrb::load_bytecode

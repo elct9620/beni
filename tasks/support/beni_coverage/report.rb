@@ -12,10 +12,11 @@ module BeniCoverage
     # coverage gate rejects.
     attr_reader :unknown
 
-    def initialize(surface:, sys:, manifest:, version:, linked:)
+    def initialize(surface:, manifest:, derived:, version:, linked:)
       @surface = surface
-      @sys = sys
+      @sys = derived.sys
       @typed = manifest["typed"] || {}
+      @equivalents = derived.equivalents
       @extensions = manifest["extensions"] || {}
       @formats = manifest["get_args_formats"] || {}
       @version = version
@@ -55,8 +56,14 @@ module BeniCoverage
     def summary_row(label, entries)
       total = entries.size
       in_sys = entries.count { |e| @sys.include?(e.name) }
-      in_typed = entries.count { |e| @typed.key?(e.name) }
+      in_typed = entries.count { |e| typed?(e.name) }
       "| #{label} | #{total} | #{pct(in_sys, total)} | #{pct(in_typed, total)} |"
+    end
+
+    # Covered by the typed surface, whether the manifest records it or
+    # an alias partner carries it.
+    def typed?(name)
+      @typed.key?(name) || @equivalents.key?(name)
     end
 
     def pct(count, total)
@@ -78,17 +85,20 @@ module BeniCoverage
 
     def symbol_row(entry)
       kind = entry.kind == :function ? "fn" : "macro"
-      typed = @typed.key?(entry.name)
       "| `#{entry.name}` | #{kind} | #{mark(@sys.include?(entry.name))} | " \
-        "#{mark(typed)} | #{note_cell(entry.name, typed)} |"
+        "#{mark(typed?(entry.name))} | #{note_cell(entry.name)} |"
     end
 
     # The Rust item(s) the typed tier binds, from the manifest Note. A
-    # typed entry with no Note is flagged — a ✅ that cannot name its Rust
-    # side is an unverified claim, not coverage. A lone symbol is set as
-    # code; multi-item / prose Notes are rendered as authored.
-    def note_cell(name, typed)
-      return "" unless typed
+    # derived symbol names the partner it is defined as, whose own row
+    # carries the Rust side. A hand-recorded entry with no Note is
+    # flagged — a ✅ that cannot name its Rust side is an unverified
+    # claim, not coverage. A lone symbol is set as code; multi-item /
+    # prose Notes are rendered as authored.
+    def note_cell(name)
+      partner = @equivalents[name]
+      return "defined as `#{partner}`" if partner
+      return "" unless @typed.key?(name)
 
       note = @typed[name].to_s.strip
       return "⚠️ unspecified" if note.empty?

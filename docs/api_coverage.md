@@ -10,8 +10,8 @@ Legend: ✅ covered · — missing
 | Category | Total | sys | typed |
 |----------|------:|----:|------:|
 | function | 342 | 338 (99%) | 203 (59%) |
-| macro | 124 | 28 (23%) | 53 (43%) |
-| total | 466 | 366 (79%) | 256 (55%) |
+| macro | 124 | 28 (23%) | 68 (55%) |
+| total | 466 | 366 (79%) | 271 (58%) |
 
 ## mruby.h
 
@@ -26,7 +26,7 @@ Legend: ✅ covered · — missing
 | `MRB_ARGS_OPT` | macro | — | ✅ | a typed method's optional positional arity, derived by `Module::define_method` (the optional component of the `method!(f, req, opt)` aspec) |
 | `MRB_ARGS_POST` | macro | — | — |  |
 | `MRB_ARGS_REQ` | macro | ✅ | ✅ | a typed method's positional arity, derived by `Module::define_method` |
-| `MRB_ARGS_REST` | macro | — | — |  |
+| `MRB_ARGS_REST` | macro | — | ✅ | defined as `MRB_ARGS_ANY` |
 | `mrb_alloca` | macro | — | — |  |
 | `mrb_any_to_s` | fn | ✅ | ✅ | `Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::obj_as_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly |
 | `mrb_argnum_error` | fn | ✅ | ✅ | `Error::argnum` |
@@ -130,7 +130,7 @@ Legend: ✅ covered · — missing
 | `mrb_include_module` | fn | ✅ | ✅ | `Module::include_module` |
 | `mrb_incremental_gc` | fn | ✅ | ✅ | `Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive) |
 | `mrb_inspect` | fn | ✅ | ✅ | `Value::inspect` |
-| `mrb_int` | macro | ✅ | — |  |
+| `mrb_int` | macro | ✅ | ✅ | defined as `mrb_as_int` |
 | `mrb_intern` | fn | ✅ | ✅ | `Mrb::intern` — the general byte-taking creating intern: interns the exact bytes a borrowed slice spans (length-based, so a name embedding a NUL or not NUL-terminated interns whole), creating the Symbol when absent where `mrb_intern_check` only tests |
 | `mrb_intern_check` | fn | ✅ | ✅ | `Mrb::intern_check` — the non-creating presence test over name bytes, `Some` Symbol when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to |
 | `mrb_intern_check_cstr` | fn | ✅ | ✅ | `Mrb::intern_check` — a NUL-terminated name is bytes passed to the check primitive this convenience wrapper forwards to |
@@ -195,21 +195,21 @@ Legend: ✅ covered · — missing
 | `mrb_str_new_lit_frozen` | macro | — | — |  |
 | `mrb_str_new_static` | fn | ✅ | ✅ | `Mrb::str_new_static` |
 | `mrb_str_new_static_frozen` | macro | — | — |  |
-| `mrb_str_to_str` | macro | — | ✅ | `Value::obj_as_string` — the macro `mrb_str_to_str(mrb, str)` is a `#define` alias of `mrb_obj_as_string`, so the same Rust item graduates it; no separate item is needed |
-| `mrb_string_type` | macro | — | — |  |
+| `mrb_str_to_str` | macro | — | ✅ | defined as `mrb_obj_as_string` |
+| `mrb_string_type` | macro | — | ✅ | defined as `mrb_ensure_string_type` |
 | `mrb_strlen_lit` | macro | — | — |  |
-| `mrb_sym2name` | macro | — | ✅ | `Mrb::sym_name`, `Symbol::name` — the macro `mrb_sym2name(mrb, sym)` is a `#define` alias of `mrb_sym_name`, so the same Rust items graduate it; no separate item is needed |
-| `mrb_sym2name_len` | macro | — | ✅ | `Mrb::sym_name_len`, `Symbol::name_bytes` — the macro `mrb_sym2name_len(mrb, sym, len)` is a `#define` alias of `mrb_sym_name_len`, so the same Rust items graduate it; no separate item is needed |
-| `mrb_sym2str` | macro | — | ✅ | `Symbol::to_str` — the macro `mrb_sym2str(mrb, sym)` is a `#define` alias of `mrb_sym_str`, so the same Rust item graduates it; no separate item is needed |
+| `mrb_sym2name` | macro | — | ✅ | defined as `mrb_sym_name` |
+| `mrb_sym2name_len` | macro | — | ✅ | defined as `mrb_sym_name_len` |
+| `mrb_sym2str` | macro | — | ✅ | defined as `mrb_sym_str` |
 | `mrb_sym_dump` | fn | ✅ | ✅ | `Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), returned as an owned `String`, not a borrow: it draws on the same shared `mrb->symbuf` scratch an inline name unpacks into and the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). Never raises |
 | `mrb_sym_name` | fn | ✅ | ✅ | `Mrb::sym_name`, `Symbol::name` — returns an owned UTF-8 `String`, not a borrow: mruby unpacks an inline (short) symbol's name into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (unlike CRuby's permanent static symbol names, this cannot wear magnus's `Cow<'static>` shape). Escaped to its quoted dump form when the name carries an embedded NUL |
 | `mrb_sym_name_len` | fn | ✅ | ✅ | `Mrb::sym_name_len`, `Symbol::name_bytes` — returns an owned `Vec<u8>`, not a borrow: an inline (short) symbol's name unpacks into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). The true length carries out of band so an embedded NUL is preserved unescaped |
 | `mrb_sym_str` | fn | ✅ | ✅ | `Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises |
 | `mrb_temp_alloc` | fn | ✅ | — |  |
-| `mrb_to_float` | macro | — | — |  |
-| `mrb_to_int` | macro | — | — |  |
-| `mrb_to_integer` | macro | — | — |  |
-| `mrb_to_str` | macro | — | — |  |
+| `mrb_to_float` | macro | — | ✅ | defined as `mrb_ensure_float_type` |
+| `mrb_to_int` | macro | — | ✅ | defined as `mrb_ensure_int_type` |
+| `mrb_to_integer` | macro | — | ✅ | defined as `mrb_ensure_int_type` |
+| `mrb_to_str` | macro | — | ✅ | defined as `mrb_ensure_string_type` |
 | `mrb_top_run` | fn | ✅ | ✅ | `Mrb::load_bytecode` |
 | `mrb_top_self` | fn | ✅ | ✅ | `Mrb::load_bytecode` |
 | `mrb_toplevel_run` | macro | — | — |  |
@@ -249,7 +249,7 @@ Legend: ✅ covered · — missing
 | `mrb_ary_pop` | fn | ✅ | ✅ | `Array::pop` |
 | `mrb_ary_ptr` | macro | — | — |  |
 | `mrb_ary_push` | fn | ✅ | ✅ | `Array::push` |
-| `mrb_ary_ref` | macro | — | ✅ | `Array::entry`, `Value::ary_entry` — the macro `mrb_ary_ref(mrb, ary, n)` is a `#define` alias of `mrb_ary_entry`, so the same Rust items graduate it; no separate item is needed |
+| `mrb_ary_ref` | macro | — | ✅ | defined as `mrb_ary_entry` |
 | `mrb_ary_replace` | fn | ✅ | ✅ | `Array::replace` |
 | `mrb_ary_resize` | fn | ✅ | ✅ | `Array::resize` |
 | `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
@@ -257,7 +257,7 @@ Legend: ✅ covered · — missing
 | `mrb_ary_splat` | fn | ✅ | ✅ | `Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `Array`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `Array` downcast (the tag-test that reads a non-Array as absent) |
 | `mrb_ary_splice` | fn | ✅ | ✅ | `Array::splice` |
 | `mrb_ary_unshift` | fn | ✅ | ✅ | `Array::unshift` |
-| `mrb_ary_value` | macro | — | — |  |
+| `mrb_ary_value` | macro | — | ✅ | defined as `mrb_obj_value` |
 | `mrb_assoc_new` | fn | ✅ | ✅ | `Mrb::assoc_new` |
 ## mruby/class.h
 
@@ -305,7 +305,7 @@ Legend: ✅ covered · — missing
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `DATA_CHECK_GET_PTR` | macro | — | — |  |
+| `DATA_CHECK_GET_PTR` | macro | — | ✅ | defined as `mrb_data_check_get_ptr` |
 | `DATA_GET_PTR` | macro | — | — |  |
 | `DATA_PTR` | macro | — | — |  |
 | `DATA_TYPE` | macro | — | — |  |
@@ -369,7 +369,7 @@ Legend: ✅ covered · — missing
 | `mrb_hash_ptr` | macro | — | — |  |
 | `mrb_hash_set` | fn | ✅ | ✅ | `Hash::set` |
 | `mrb_hash_size` | fn | ✅ | ✅ | `Hash::len` |
-| `mrb_hash_value` | macro | — | — |  |
+| `mrb_hash_value` | macro | — | ✅ | defined as `mrb_obj_value` |
 | `mrb_hash_values` | fn | ✅ | ✅ | `Hash::values` |
 ## mruby/irep.h
 
@@ -386,15 +386,15 @@ Legend: ✅ covered · — missing
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_fixnum_to_str` | macro | — | ✅ | `Value::int_to_str` — the macro `mrb_fixnum_to_str(mrb, x, base)` is a `#define` alias of `mrb_integer_to_str`, so the same Rust item graduates it; no separate item is needed |
+| `mrb_fixnum_to_str` | macro | — | ✅ | defined as `mrb_integer_to_str` |
 | `mrb_float_to_integer` | fn | ✅ | ✅ | `Value::float_to_int` — convert a Float value to the Integer value it truncates toward zero (Ruby's Float#to_i / Float#to_int); guards the Float tag (TypeError) and raises RangeError on an infinite or NaN float |
 | `mrb_int_to_cstr` | fn | ✅ | — |  |
 | `mrb_integer_to_str` | fn | ✅ | ✅ | `Value::int_to_str` — render an Integer value to an RString in a radix (Ruby's Integer#to_s(base)); guards the Integer tag (TypeError) and raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys` |
-| `mrb_num_add` | fn | ✅ | ✅ | `Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width. The obsolete macro `mrb_num_plus(mrb, x, y)` is a `#define` alias of `mrb_num_add`, so the same Rust item graduates it |
-| `mrb_num_minus` | macro | — | ✅ | `Value::sub` — the macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it; no separate item is needed |
+| `mrb_num_add` | fn | ✅ | ✅ | `Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width |
+| `mrb_num_minus` | macro | — | ✅ | defined as `mrb_num_sub` |
 | `mrb_num_mul` | fn | ✅ | ✅ | `Value::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
-| `mrb_num_plus` | macro | — | ✅ | `Value::add` — the macro `mrb_num_plus(mrb, x, y)` is a `#define` alias of `mrb_num_add`, so the same Rust item graduates it; no separate item is needed |
-| `mrb_num_sub` | fn | ✅ | ✅ | `Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width). The obsolete macro `mrb_num_minus(mrb, x, y)` is a `#define` alias of `mrb_num_sub`, so the same Rust item graduates it |
+| `mrb_num_plus` | macro | — | ✅ | defined as `mrb_num_add` |
+| `mrb_num_sub` | fn | ✅ | ✅ | `Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
 ## mruby/proc.h
 
 | Symbol | Kind | sys | typed | Note |
@@ -419,13 +419,13 @@ Legend: ✅ covered · — missing
 | `mrb_range_new` | fn | ✅ | ✅ | `Mrb::range_new` |
 | `mrb_range_ptr` | fn | ✅ | — |  |
 | `mrb_range_raw_ptr` | macro | — | — |  |
-| `mrb_range_value` | macro | — | — |  |
+| `mrb_range_value` | macro | — | ✅ | defined as `mrb_obj_value` |
 ## mruby/string.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `RSTRING_CAPA` | macro | — | — |  |
-| `RSTRING_CSTR` | macro | — | ✅ | `RString::to_cstr` |
+| `RSTRING_CSTR` | macro | — | ✅ | defined as `mrb_string_cstr` |
 | `RSTRING_EMBED_LEN` | macro | — | — |  |
 | `RSTRING_END` | macro | — | — |  |
 | `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes`, `RString::len` |
@@ -433,11 +433,11 @@ Legend: ✅ covered · — missing
 | `mrb_obj_as_string` | fn | ✅ | ✅ | `Value::obj_as_string` |
 | `mrb_ptr_to_str` | fn | ✅ | — |  |
 | `mrb_str_append` | fn | ✅ | ✅ | `RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed |
-| `mrb_str_buf_append` | macro | — | — |  |
-| `mrb_str_buf_cat` | macro | — | ✅ | `RString::cat` — the macro `mrb_str_buf_cat(mrb, str, ptr, len)` is a `#define` alias of `mrb_str_cat`, so the same Rust item graduates it; no separate item is needed |
-| `mrb_str_buf_new` | macro | — | ✅ | `Mrb::str_new_capa` — the macro `mrb_str_buf_new(mrb, capa)` is a `#define` alias of `mrb_str_new_capa`, so the same Rust item graduates it; no separate item is needed |
+| `mrb_str_buf_append` | macro | — | ✅ | defined as `mrb_str_cat_str` |
+| `mrb_str_buf_cat` | macro | — | ✅ | defined as `mrb_str_cat` |
+| `mrb_str_buf_new` | macro | — | ✅ | defined as `mrb_str_new_capa` |
 | `mrb_str_cat` | fn | ✅ | ✅ | `RString::cat` |
-| `mrb_str_cat2` | macro | — | ✅ | `RString::cat_cstr` — the macro `mrb_str_cat2(mrb, str, ptr)` is a `#define` alias of `mrb_str_cat_cstr`, so the same Rust item graduates it; no separate item is needed |
+| `mrb_str_cat2` | macro | — | ✅ | defined as `mrb_str_cat_cstr` |
 | `mrb_str_cat_cstr` | fn | ✅ | ✅ | `RString::cat_cstr` |
 | `mrb_str_cat_lit` | macro | — | ✅ | `RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_str_cat_str` | fn | ✅ | ✅ | `RString::cat_str` |
@@ -462,15 +462,15 @@ Legend: ✅ covered · — missing
 | `mrb_str_to_inum` | macro | — | ✅ | `RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError |
 | `mrb_string_cstr` | fn | ✅ | ✅ | `RString::to_cstr` |
 | `mrb_string_value_cstr` | fn | ✅ | — |  |
-| `mrb_string_value_len` | macro | — | — |  |
-| `mrb_string_value_ptr` | macro | — | — |  |
+| `mrb_string_value_len` | macro | — | ✅ | defined as `RSTRING_LEN` |
+| `mrb_string_value_ptr` | macro | — | ✅ | defined as `RSTRING_PTR` |
 ## mruby/value.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `mrb_array_p` | macro | — | ✅ | `Value::is_array`, via the value tag |
 | `mrb_bigint_p` | macro | — | — |  |
-| `mrb_bool` | macro | ✅ | — |  |
+| `mrb_bool` | macro | ✅ | ✅ | defined as `mrb_test` |
 | `mrb_bool_value` | fn | ✅ | ✅ | `IntoValue for bool` — a Rust bool boxes to the true/false immediate (see convert extension) |
 | `mrb_break_p` | macro | ✅ | ✅ | `Value::as_break` |
 | `mrb_class_p` | macro | — | ✅ | `Value::is_class`, via the value tag |

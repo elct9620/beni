@@ -4,6 +4,7 @@ require "yaml"
 require "fileutils"
 
 require_relative "beni_coverage/surface"
+require_relative "beni_coverage/aliases"
 require_relative "beni_coverage/frequency"
 require_relative "beni_coverage/report"
 
@@ -11,7 +12,7 @@ require_relative "beni_coverage/report"
 # ====================================
 #
 # Pure-Ruby helpers backing the +api:coverage+ rake task. Builds the
-# +docs/api_coverage.md+ tracking index by joining three sources:
+# +docs/api_coverage.md+ tracking index by joining four sources:
 #
 #   inventory — mruby's public embedder surface (+Surface+), scanned
 #               from the vendored headers. The denominator; always
@@ -25,6 +26,10 @@ require_relative "beni_coverage/report"
 #               +.api_coverage.yml+ manifest. The Rust shape does not map
 #               onto C names mechanically, so this tier is curated by
 #               implementers, not inferred.
+#   aliases   — symbols the headers make equivalent to a typed one
+#               (+Aliases+), covered without being recorded. Derived, so
+#               the manifest never spells out what a `#define` already
+#               says.
 #
 # The +priority+ query is a separate concern from the report: it ranks
 # the not-yet-typed surface by the call frequency of the mrbgems this
@@ -41,6 +46,11 @@ module BeniCoverage
 
   # One not-yet-typed symbol worth graduating, with its downstream weight.
   Priority = Data.define(:name, :uses, :header)
+
+  # The coverage the manifest cannot state, because both sides are read
+  # rather than authored: the raw FFI tier, and the symbols an alias
+  # covers through a recorded partner.
+  Derived = Data.define(:sys, :equivalents)
 
   module_function
 
@@ -61,7 +71,8 @@ module BeniCoverage
   # them, but the API still exists and graduation is not yet complete.
   def priority
     surface = Surface.parse(INCLUDE_ROOT)
-    rank(surface, load_manifest["typed"] || {}, Frequency.scan(ROOT, surface.map(&:name)))
+    typed = typed_notes
+    rank(surface, typed.merge(equivalents(typed)), Frequency.scan(ROOT, surface.map(&:name)))
   end
 
   # Which gem sources the ranking counted, so a reader knows how far to
@@ -69,6 +80,27 @@ module BeniCoverage
   # linked-versus-heuristic sys detection.
   def demand_signal
     Frequency.signal(ROOT)
+  end
+
+  # The hand-authored typed tier, keyed by C symbol.
+  def typed_notes
+    load_manifest["typed"] || {}
+  end
+
+  # Symbols an alias covers on a recorded partner's behalf — the tier no
+  # one writes down.
+  def equivalents(typed)
+    Aliases.equivalents(Surface.aliases(INCLUDE_ROOT), typed)
+  end
+
+  # Manifest notes whose claimed alias relation the headers no longer
+  # support — the gate `api:aliases` gives the derived tier.
+  def alias_drift
+    Aliases.drift(Surface.aliases(INCLUDE_ROOT), typed_notes)
+  end
+
+  def alias_claims_count
+    Aliases.claims(typed_notes).size
   end
 
   def rank(surface, typed, uses)
@@ -79,10 +111,12 @@ module BeniCoverage
 
   def build_report(surface)
     bindings = bindings_files
-    Report.new(
-      surface:, sys: sys_covered(surface, bindings), manifest: load_manifest,
-      version: mruby_version, linked: !bindings.empty?
+    manifest = load_manifest
+    derived = Derived.new(
+      sys: sys_covered(surface, bindings),
+      equivalents: equivalents(manifest["typed"] || {})
     )
+    Report.new(surface:, manifest:, derived:, version: mruby_version, linked: !bindings.empty?)
   end
 
   # Names reachable through the raw FFI: bound functions plus shimmed

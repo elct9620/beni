@@ -52,6 +52,12 @@ module BeniCoverage
       /\Amrb_int_hash_func\z/
     ].freeze
 
+    # A cast a bare alias wraps its call in — mruby writes the data
+    # accessors and the value constructors this way.
+    ALIAS_CAST = /\(\s*(?:void|char|type|struct\s+\w+)\s*\**\s*\)/
+    # A function-like macro definition, captured as name and body.
+    DEFINITION = %r{^[ \t]*\#\s*define\s+([A-Za-z_]\w*)\([^)]*\)\s*(.+?)\s*(?:/\*.*)?$}
+
     Entry = Data.define(:name, :kind, :header)
 
     module_function
@@ -83,6 +89,39 @@ module BeniCoverage
       return false if MACRO_DENY.any? { |re| re.match?(name) }
 
       name.start_with?("mrb_") || MACRO_ALLOW.any? { |re| re.match?(name) }
+    end
+
+    # Macros naming another embedder symbol's capability under a second
+    # spelling — the body is one call and nothing else — as
+    # +alias => target+. Covering either symbol covers both.
+    def aliases(include_root)
+      inventory = parse(include_root).map(&:name)
+      unambiguous_bodies(include_root).filter_map do |name, body|
+        next unless inventory.include?(name)
+
+        target = alias_target(body, inventory)
+        [name, target] if target && target != name
+      end.to_h
+    end
+
+    # Macro bodies keyed by name, keeping only what the include tree
+    # defines once. The boxing headers give predicates like
+    # +mrb_fixnum_p+ a second definition that is no alias at all, and
+    # which one applies is the built ABI's answer rather than a
+    # scanner's — so an ambiguous macro is never read as an alias. This
+    # reads every header, not the embedder set, because the definition
+    # that would mislead lives outside it.
+    def unambiguous_bodies(include_root)
+      bodies = Hash.new { |hash, key| hash[key] = [] }
+      Dir.glob(File.join(include_root, "**", "*.h")).each do |path|
+        File.read(path).scan(DEFINITION) { |name, body| bodies[name] << body }
+      end
+      bodies.select { |_, found| found.one? }.transform_values(&:first)
+    end
+
+    def alias_target(body, inventory)
+      calls = body.gsub(ALIAS_CAST, "").scan(/([A-Za-z_]\w*)\s*\(/).flatten
+      calls.first if calls.one? && inventory.include?(calls.first)
     end
   end
 end

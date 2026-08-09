@@ -9,6 +9,9 @@
 # line coverage. The .rake wrapper is the rake DSL surface; the parsing
 # and rendering live in +tasks/support/beni_coverage.rb+.
 #
+#   $ rake api:aliases    — hold every alias relation the manifest's
+#                           notes claim to what the headers define.
+#
 #   $ rake api:coverage   — rewrite docs/api_coverage.md. Reads the
 #                           generated bindings.rs when an archive is
 #                           staged (run after `rake beni:build` for the
@@ -39,6 +42,19 @@ namespace :api do
     rows.first(top).each { |e| puts "#{e.uses.to_s.rjust(5)}  #{e.name.ljust(34)} #{e.header}" }
     puts "showing #{[top, rows.size].min} of #{rows.size} not-yet-typed symbols"
     puts "demand: #{BeniCoverage.demand_signal}"
+  end
+end
+
+# The gates the default task runs: each holds one part of the record to
+# what the vendored source actually says, so a claim cannot outlive it.
+namespace :api do
+  desc "Verify every recorded #define alias still matches the vendored headers"
+  task :aliases do
+    problems = BeniCoverage.alias_drift
+    problems.each { |problem| puts "[api:aliases] #{problem}" }
+    abort "[api:aliases] recorded alias relations drifted from the headers" unless problems.empty?
+
+    puts "[api:aliases] #{BeniCoverage.alias_claims_count} recorded alias relations all hold"
   end
 
   desc "Verify every get_args format marker is recorded in the coverage lens"
