@@ -28,10 +28,13 @@ require_relative "support/beni_coverage"
 namespace :api do
   desc "Regenerate docs/api_coverage.md (mruby C API ↔ Rust binding coverage)"
   task :coverage do
-    report = BeniCoverage.generate
+    coverage = BeniCoverage.generate.coverage
     puts "[api:coverage] wrote #{BeniCoverage::OUTPUT}"
-    if report.unknown.any?
-      abort "[api:coverage] manifest entries match no scanned symbol: #{report.unknown.sort.join(", ")}"
+    if coverage.conflicting.any?
+      abort "[api:coverage] symbols claimed by more than one section: #{coverage.conflicting.join(", ")}"
+    end
+    if coverage.unknown.any?
+      abort "[api:coverage] manifest entries match no scanned symbol: #{coverage.unknown.sort.join(", ")}"
     end
   end
 

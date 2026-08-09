@@ -5,6 +5,7 @@ require "fileutils"
 
 require_relative "beni_coverage/surface"
 require_relative "beni_coverage/aliases"
+require_relative "beni_coverage/coverage"
 require_relative "beni_coverage/frequency"
 require_relative "beni_coverage/report"
 
@@ -47,11 +48,6 @@ module BeniCoverage
   # One not-yet-typed symbol worth graduating, with its downstream weight.
   Priority = Data.define(:name, :uses, :header)
 
-  # The coverage the manifest cannot state, because both sides are read
-  # rather than authored: the raw FFI tier, and the symbols an alias
-  # covers through a recorded partner.
-  Derived = Data.define(:sys, :equivalents)
-
   module_function
 
   # Scan the inventory, resolve the two coverage tiers, write the report.
@@ -65,14 +61,14 @@ module BeniCoverage
     report
   end
 
-  # Every embedder symbol the typed tier has not graduated yet, ranked by
-  # how often mrbgems call them — the complete worklist for what to bind
-  # next. Unused symbols (count 0) stay in, sorted last: no mrbgem reaches
-  # them, but the API still exists and graduation is not yet complete.
+  # Every embedder symbol still owed — neither covered nor recorded as
+  # outside the measure — ranked by how often the mrbgems this repo
+  # builds call them. Unused symbols (count 0) stay in, sorted last: no
+  # mrbgem reaches them, but the API still exists and is not yet bound.
   def priority
     surface = Surface.parse(INCLUDE_ROOT)
-    typed = typed_notes
-    rank(surface, typed.merge(equivalents(typed)), Frequency.scan(ROOT, surface.map(&:name)))
+    coverage = coverage_of(surface, load_manifest, [])
+    rank(surface, coverage, Frequency.scan(ROOT, surface.map(&:name)))
   end
 
   # Which gem sources the ranking counted, so a reader knows how far to
@@ -85,6 +81,15 @@ module BeniCoverage
   # The hand-authored typed tier, keyed by C symbol.
   def typed_notes
     load_manifest["typed"] || {}
+  end
+
+  # What the measure knows about every scanned symbol, joining the
+  # authored sections to the two tiers nobody writes down.
+  def coverage_of(surface, manifest, sys)
+    Coverage.new(
+      manifest:, sys:, equivalents: equivalents(manifest["typed"] || {}),
+      inventory: surface.map(&:name)
+    )
   end
 
   # Symbols an alias covers on a recorded partner's behalf — the tier no
@@ -103,8 +108,8 @@ module BeniCoverage
     Aliases.claims(typed_notes).size
   end
 
-  def rank(surface, typed, uses)
-    surface.reject { |e| typed.key?(e.name) }
+  def rank(surface, coverage, uses)
+    surface.reject { |e| coverage.typed?(e.name) || coverage.exclusion(e.name) }
            .map { |e| Priority.new(name: e.name, uses: uses[e.name], header: e.header) }
            .sort_by { |e| [-e.uses, e.name] }
   end
@@ -112,11 +117,8 @@ module BeniCoverage
   def build_report(surface)
     bindings = bindings_files
     manifest = load_manifest
-    derived = Derived.new(
-      sys: sys_covered(surface, bindings),
-      equivalents: equivalents(manifest["typed"] || {})
-    )
-    Report.new(surface:, manifest:, derived:, version: mruby_version, linked: !bindings.empty?)
+    coverage = coverage_of(surface, manifest, sys_covered(surface, bindings))
+    Report.new(surface:, manifest:, coverage:, version: mruby_version, linked: !bindings.empty?)
   end
 
   # Names reachable through the raw FFI: bound functions plus shimmed

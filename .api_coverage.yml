@@ -6,7 +6,12 @@
 # vendored headers by `rake api:coverage`; this file is the *numerator*
 # the implementer maintains.
 #
-# Three sections:
+# Four sections are keyed by C symbol and a symbol belongs to exactly
+# one of them, so its absence from all four means API still owed. They
+# fill as the worklist is walked: an unrecorded symbol is one nobody has
+# ruled on yet, not one ruled to be missing. Every entry names what
+# settles it — a SPEC statement, the graduation rule, or a vendored
+# source line — so a classification can be reviewed rather than trusted:
 #
 #   typed       — keyed by mruby C API symbol (function or function-like
 #                 macro, exactly as in the headers). The value is a free
@@ -17,6 +22,27 @@
 #                 prose for caveats. A single bare symbol is rendered as
 #                 code automatically. A `~` Note is reported as
 #                 "unspecified": typed, but its Rust side is unnamed.
+#   subsumed    — a graduated Rust item delivers the symbol's whole
+#                 capability, the C form differing only in what the Rust
+#                 shape already carries (a length the byte slice holds,
+#                 an argument count the slice holds). Counts as covered;
+#                 the Note names the item and what it carries in the C
+#                 form's place. A symbol no graduated item can express
+#                 does not belong here, however close their purposes.
+#   declined    — public embedder API with no typed shape to add, which
+#                 the graduation rule therefore leaves in `beni::sys`.
+#                 Leaves the measure entirely. A capability merely
+#                 awaiting a carrier is NOT declined, and neither is one
+#                 a typed shape could carry but nobody has scoped — both
+#                 stay out of every section, as the work they are.
+#   conditional — API this ABI does not have because a compile-time flag
+#                 gates it. Leaves the measure. Kept apart from declined
+#                 because letting a consumer choose its ABI turns this
+#                 set into work while declined stays declined; the Note
+#                 leads with the gating flag.
+#
+# Two further sections are not keyed by C symbol:
+#
 #   extensions  — Rust-native surface with no 1:1 C API (RAII guards,
 #                 caches, trait conversions). Documented for context;
 #                 not part of the C-API coverage ratio.
@@ -366,3 +392,33 @@ get_args_formats:
   ":": { status: covered, via: "format::Kw / NRestKwBlock — the keyword bucket" }
   "!": { status: covered, via: "nilable read as Option<T> in the conversion layer" }
   "+": { status: covered, via: "read + Value::check_frozen" }
+subsumed:
+  mrb_funcall: "`Value::funcall`, `Value::funcall_argv` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"
+  mrb_funcall_id: "`Value::funcall`, `Value::funcall_argv` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"
+  mrb_yield: "`Proc::call` — the one-argument form of `mrb_yield_argv` (`vendor/mruby/src/vm.c:1328` passes `1, &arg` to the same `yield_with_attr`); a Rust slice of one carries it"
+  mrb_load_string_cxt: "`Ccontext::load_nstring` — the NUL-terminated form of `mrb_load_nstring_cxt` over `strlen`; a Rust byte slice carries its own length, so the length-taking call subsumes it"
+declined:
+  mrb_sys_fail: "declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from a class and a message, which `RClass::raise` already reaches from a Rust `std::io::Error`"
+  mrb_malloc: "VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `RClass::data_wrap` is the graduated seam between the two"
+  mrb_malloc_simple: "VM allocator, the non-raising variant — see `mrb_malloc`"
+  mrb_calloc: "VM allocator — see `mrb_malloc`"
+  mrb_realloc: "VM allocator — see `mrb_malloc`"
+  mrb_realloc_simple: "VM allocator, the non-raising variant — see `mrb_malloc`"
+  mrb_free: "VM allocator — see `mrb_malloc`"
+  mrb_temp_alloc: "VM scratch allocator tied to the arena — see `mrb_malloc`"
+  mrb_alloca: "VM scratch allocator, a `#define` over `mrb_temp_alloc` — see `mrb_malloc`"
+  mrb_basic_alloc_func: "the default allocator `mrb_open_allocf` installs; `Mrb::open` opens with `mrb_open`, so no typed caller reaches it"
+  mrb_str_ptr: "unchecked cast to `struct RString*` — Principle 11: beni's `RString` is `#[repr(transparent)]` over `Value`, not a struct pointer, so there is no typed shape to add"
+  mrb_ary_ptr: "unchecked cast to `struct RArray*` — see `mrb_str_ptr`"
+  mrb_proc_ptr: "unchecked cast to `struct RProc*` — see `mrb_str_ptr`"
+  mrb_hash_ptr: "unchecked cast to `struct RHash*` — see `mrb_str_ptr`"
+  mrb_range_ptr: "unchecked cast to `struct RRange*` — see `mrb_str_ptr`"
+  DATA_PTR: "reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `Value::data_get`, which returns `None` where this returns a wrong-typed pointer"
+  DATA_TYPE: "reads `RDATA(d)->type` with no type check — see `DATA_PTR`"
+conditional:
+  mrb_bigint_p: "`MRB_USE_BIGINT` — without it `vendor/mruby/include/mruby/value.h:322` expands the macro to `FALSE`; beni's pinned ABI sets only `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`"
+  mrb_locale_from_utf8: "`_WIN32` — `vendor/mruby/include/mruby.h:1248` makes it an identity macro off Windows, where there is no encoding to convert"
+  mrb_locale_free: "`_WIN32` — see `mrb_locale_from_utf8`"
+  mrb_utf8_from_locale: "`_WIN32` — see `mrb_locale_from_utf8`"
+  mrb_utf8_free: "`_WIN32` — see `mrb_locale_from_utf8`"
+  mrb_msvc_snprintf: "`_MSC_VER` — MSVC's `snprintf` shim, absent from every toolchain beni builds with"
