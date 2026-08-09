@@ -14,9 +14,10 @@ module BeniCoverage
     OUTSIDE = %w[declined conditional].freeze
     SECTIONS = (COVERING + OUTSIDE).freeze
 
-    # Section entries matching no scanned symbol, and symbols more than
-    # one section claims — both reject the manifest.
-    attr_reader :unknown, :conflicting
+    # Section entries matching no scanned symbol, symbols more than one
+    # section claims, and classifications with nothing behind them — each
+    # rejects the manifest.
+    attr_reader :unknown, :conflicting, :unexplained
 
     def initialize(manifest:, sys:, equivalents:, inventory:)
       @sections = SECTIONS.to_h { |name| [name, manifest[name] || {}] }
@@ -24,6 +25,7 @@ module BeniCoverage
       @equivalents = equivalents
       @unknown = @sections.values.flat_map(&:keys).uniq - inventory
       @conflicting = doubly_claimed
+      @unexplained = reasonless
     end
 
     def in_sys?(name)
@@ -56,6 +58,14 @@ module BeniCoverage
     # A symbol two sections claim, or one an alias covers while a
     # section takes it out of the measure — either way the record says
     # two things about it and only one can be acted on.
+    # A symbol taken out of the measure with nothing said about why. The
+    # ratio moves on these, so an unreviewable one cannot be allowed to
+    # stand; a bare `typed` Note is only an unnamed Rust side, which the
+    # report flags without failing.
+    def reasonless
+      OUTSIDE.flat_map { |section| @sections.fetch(section).select { |_, note| note.to_s.strip.empty? }.keys }.sort
+    end
+
     def doubly_claimed
       named = @sections.values.flat_map(&:keys)
       contradicted = @equivalents.keys.select { |name| exclusion(name) }
@@ -68,7 +78,7 @@ module BeniCoverage
     # rendered — an unexplained classification cannot be reviewed.
     def reason(section, note)
       text = note.to_s.strip
-      return unexplained(section) if text.empty?
+      return blank_reason(section) if text.empty?
 
       text = "`#{text}`" if text.match?(/\A\S+\z/)
       section == "typed" ? text : "#{section}: #{text}"
@@ -76,7 +86,7 @@ module BeniCoverage
 
     # The manifest reads a `~` typed Note as "unspecified"; any other
     # section left blank is a classification nobody can review.
-    def unexplained(section)
+    def blank_reason(section)
       section == "typed" ? "⚠️ unspecified" : "⚠️ #{section} without a reason"
     end
   end

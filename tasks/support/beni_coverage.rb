@@ -13,7 +13,9 @@ require_relative "beni_coverage/report"
 # ====================================
 #
 # Pure-Ruby helpers backing the +api:coverage+ rake task. Builds the
-# +docs/api_coverage.md+ tracking index by joining four sources:
+# +docs/api_coverage.md+ tracking index. A symbol is covered by one of
+# four sources, set aside for a recorded reason, or still owed — and
+# +Coverage+ is what makes those the only three answers:
 #
 #   inventory — mruby's public embedder surface (+Surface+), scanned
 #               from the vendored headers. The denominator; always
@@ -31,6 +33,13 @@ require_relative "beni_coverage/report"
 #               (+Aliases+), covered without being recorded. Derived, so
 #               the manifest never spells out what a `#define` already
 #               says.
+#   subsumed  — a graduated item delivering a symbol's whole capability,
+#               recorded because no header states it.
+#
+# The manifest also records why a symbol leaves the measure entirely —
+# declined for want of a typed shape, or gated behind a build flag this
+# ABI lacks — so what remains unrecorded is API still owed and nothing
+# else.
 #
 # The +priority+ query is a separate concern from the report: it ranks
 # the not-yet-typed surface by the call frequency of the mrbgems this

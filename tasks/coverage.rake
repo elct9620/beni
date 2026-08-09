@@ -33,6 +33,9 @@ namespace :api do
     if coverage.conflicting.any?
       abort "[api:coverage] symbols claimed by more than one section: #{coverage.conflicting.join(", ")}"
     end
+    if coverage.unexplained.any?
+      abort "[api:coverage] taken out of the measure with no reason: #{coverage.unexplained.join(", ")}"
+    end
     if coverage.unknown.any?
       abort "[api:coverage] manifest entries match no scanned symbol: #{coverage.unknown.sort.join(", ")}"
     end
