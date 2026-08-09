@@ -6,12 +6,14 @@ description: Sweep one maintenance lens over this repo, decide whether each meas
 # Maintain
 
 Nobody is waiting on the other end of this run. It fires on a schedule, decides on its
-own whether there is anything worth doing, and **its most common correct outcome is to do
-nothing and say so.**
+own whether there is anything worth doing, and **its most common correct outcome changes
+no code.**
 
-That framing matters more than any single step below. A run that manufactures work to
+That framing matters more than any single step below. A run that builds something to
 justify itself is worse than a run that reports a clean lens: the repo carries the wrong
-change forever, while the report costs one paragraph. Resist the pull to find something.
+change forever, while the report costs one paragraph. Resist the pull to *build*
+something — not the pull to write down what you worked out, which is the cheapest useful
+thing a run can do.
 
 Close **exactly one** gap per run. Not one per lens, not one per PR round — one. A run
 that finds five real gaps closes the first and names the other four in its report, so the
@@ -44,7 +46,9 @@ Two things about the `api:*` family are easy to get wrong:
   and run on every Stop hook, so they are green by construction and reveal nothing on a
   weekly cadence. They belong to the precondition check in step 1.
 - **`api:coverage` renders, it does not detect.** It writes `docs/api_coverage.md` from
-  the manifest. Only `api:priority` reports what is unbound.
+  the manifest, and fails when the manifest says two things about one symbol. Only
+  `api:priority` reports what is unbound — and it now lists only symbols nobody has ruled
+  on, since anything the manifest records has already left the worklist.
 
 ## Workflow
 
@@ -84,7 +88,13 @@ needs those sentences more than the fix does.
    only when the wrapper can encode its invariant as a lifetime, a carrier, or a runtime
    check. A value that is VM-internal with no shape to add belongs in `sys` and is not a
    gap.
-3. **`.api_coverage.yml`** — recorded means already graduated.
+3. **`.api_coverage.yml`** — the manifest records, per symbol, that it is
+   graduated (`typed`), covered by an item that subsumes it (`subsumed`), kept off
+   the typed surface for want of a shape (`declined`), or absent from this ABI
+   (`conditional`). A symbol in any of them is settled; consult this before
+   deriving anything, since the whole point of the record is that nobody re-derives
+   it. `rake api:priority` already drops what is recorded, so a candidate reaching
+   you is one nobody has ruled on.
 4. **`git log`** — the one thing the documents cannot tell you: whether this exact
    graduation was built and then withdrawn. Search the symbol across history
    (`git log --all -S<symbol>`) and read any `revert(...)` touching it. A withdrawn
@@ -102,7 +112,22 @@ Frequency ranks candidates; it never establishes eligibility. mrbgem C call freq
 systematically overstates the Rust-side gap — a symbol the C ecosystem leans on may be
 one an embedder never touches.
 
-### 3. Choose the one, by what a wrong binding costs the consumer
+### 3. Recording a decision closes a gap too
+
+A candidate the gate settles as a decision is not a dead end. Writing it into
+`declined` or `conditional` with the authority that settled it is real work
+closing a real gap: the reasoning you just did becomes the answer every later run
+reads instead of redoing. It is also the cheapest round available — a manifest
+entry, no code — so prefer it over leaving the survey unchanged.
+
+Two rules keep that from becoming a way to inflate the ratio. The first is one question:
+**could a typed shape carry this?** Where one could — a carrier that does not exist yet,
+or a shape nobody has scoped — the symbol is not declined and stays unrecorded, as the
+work it is. Only where no typed shape can carry the value at all does it leave the
+measure. The second is that a reason unable to name what settles it — a SPEC statement,
+the graduation rule, or a vendored source line — is not ready to record.
+
+### 4. Choose the one, by what a wrong binding costs the consumer
 
 Order the survivors this way rather than by what is convenient to write:
 
@@ -112,7 +137,7 @@ Order the survivors this way rather than by what is convenient to write:
 2. Gaps that force `unsafe` at a call site a carrier could make safe.
 3. Everything else, frequency-ranked.
 
-### 4. Write the intent sentence
+### 5. Write the intent sentence
 
 Write one sentence naming the symbol, the Rust items that will bind it, the SPEC section
 that authorizes it, and the files expected to change.
@@ -129,9 +154,9 @@ is what a reviewer has to unpick later — and the question is the thing only th
 in a position to find.
 
 This sentence is also the round's confirmed work list, which is what makes the second
-`coding:inspect` in step 5 behave as a drift check instead of an opening survey.
+`coding:inspect` in step 6 behave as a drift check instead of an opening survey.
 
-### 5. Run the round
+### 6. Run the round
 
 Branch from `main` as `maintain/<lens>/<symbol>`, then:
 
@@ -151,7 +176,7 @@ Branch from `main` as `maintain/<lens>/<symbol>`, then:
 6. `coding:refactor` over what was written, leaving nothing for the next reader to clean.
 7. `git:commit`.
 
-### 6. Check the budget
+### 7. Check the budget
 
 One PR, at most **5 files** and **500 changed lines** (additions plus deletions), measured
 with `git diff --stat` against `main`.
@@ -165,7 +190,7 @@ A change that will not fit is reported as too large for one round. Do not split 
 files to slip under the count — two halves that each compile but neither of which is
 usable is exactly the outcome this budget exists to prevent.
 
-### 7. Open the PR — or don't
+### 8. Open the PR — or don't
 
 Only a verified, in-budget change earns a PR:
 
@@ -197,7 +222,10 @@ Gate: `bundle exec rake` <green|red> · Survey: <N> candidates · Eligible: <N>
 | Candidate | Verdict | Settled by |
 |---|---|---|
 | `mrb_foo_bar` | taken | SPEC.md §… "the wrapper reads it through a carrier" — described, not implemented |
-| `mrb_ci_baz` | decision | Principle 11 — call-frame index, no carrier to add |
+| `mrb_ci_baz` | declined | Principle 11 — call-frame index, no carrier to add |
+| `mrb_win_thing` | conditional | `_WIN32` — `mruby.h:1248` makes it an identity macro elsewhere |
+| `mrb_bar_argv` | subsumed | `Value::bar` — the slice carries the count the C form spells out |
+| `mrb_baz` | awaiting a carrier | a borrow carrier could encode it; stays owed, recorded nowhere |
 | `mrb_qux` | withdrawn | `d04fb52` "withdraw owned rest-arg format projections" |
 
 ## Taken this round
@@ -206,6 +234,10 @@ Gate: `bundle exec rake` <green|red> · Survey: <N> candidates · Eligible: <N>
 ## Left for next time
 <eligible gaps not taken, in order>
 ```
+
+A verdict names the state that settled the candidate, so the table reads the same way the
+manifest does. Say for each recorded verdict whether this run wrote it down or found it
+already written — the first is work done, the second is work saved.
 
 When the lens is clean, the table is the whole report and "Taken this round" says so in
 one line. State it plainly; a clean lens is the expected result, not a failure to find
