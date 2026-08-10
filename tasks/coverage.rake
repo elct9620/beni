@@ -11,6 +11,9 @@
 #
 #   $ rake api:aliases    — hold every alias relation the manifest's
 #                           notes claim to what the headers define.
+#                           Reads the vendored headers, so it runs
+#                           where they are staged: as api:coverage's
+#                           prerequisite, not in the default task.
 #
 #   $ rake api:coverage   — rewrite docs/api_coverage.md. Reads the
 #                           generated bindings.rs when an archive is
@@ -25,9 +28,25 @@
 
 require_relative "support/beni_coverage"
 
+# The gate the derived alias tier needs, held to the vendored headers —
+# so it runs where they are staged, ahead of the report that derives
+# from them.
+namespace :api do
+  desc "Verify every recorded #define alias still matches the vendored headers"
+  task :aliases do
+    abort "[api:aliases] vendored headers absent; run rake beni:vendor:setup first" unless BeniCoverage.headers?
+
+    problems = BeniCoverage.alias_drift
+    problems.each { |problem| puts "[api:aliases] #{problem}" }
+    abort "[api:aliases] recorded alias relations drifted from the headers" unless problems.empty?
+
+    puts "[api:aliases] #{BeniCoverage.alias_claims_count} recorded alias relations all hold"
+  end
+end
+
 namespace :api do
   desc "Regenerate docs/api_coverage.md (mruby C API ↔ Rust binding coverage)"
-  task :coverage do
+  task coverage: :aliases do
     coverage = BeniCoverage.generate.coverage
     puts "[api:coverage] wrote #{BeniCoverage::OUTPUT}"
     if coverage.conflicting.any?
@@ -51,18 +70,10 @@ namespace :api do
   end
 end
 
-# The gates the default task runs: each holds one part of the record to
-# what the vendored source actually says, so a claim cannot outlive it.
+# The gate the default task runs: the record held to the repo's own
+# sources, so it holds anywhere the checkout does — no vendored
+# toolchain, no network.
 namespace :api do
-  desc "Verify every recorded #define alias still matches the vendored headers"
-  task :aliases do
-    problems = BeniCoverage.alias_drift
-    problems.each { |problem| puts "[api:aliases] #{problem}" }
-    abort "[api:aliases] recorded alias relations drifted from the headers" unless problems.empty?
-
-    puts "[api:aliases] #{BeniCoverage.alias_claims_count} recorded alias relations all hold"
-  end
-
   desc "Verify every get_args format marker is recorded in the coverage lens"
   task :formats do
     problems = BeniCoverage.formats_drift

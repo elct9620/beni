@@ -107,6 +107,13 @@ module BeniCoverage
     Aliases.equivalents(Surface.aliases(INCLUDE_ROOT), typed)
   end
 
+  # Whether the vendored headers are staged. They are the evidence every
+  # header-reading gate holds its claims to; absent, the gate has nothing
+  # to say rather than a verdict to report.
+  def headers?
+    Dir.exist?(INCLUDE_ROOT)
+  end
+
   # Manifest notes whose claimed alias relation the headers no longer
   # support — the gate `api:aliases` gives the derived tier.
   def alias_drift
