@@ -12,6 +12,19 @@
     "coding@claudekit": true
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/cloud_setup.sh\" >&2",
+            "timeout": 600,
+            "statusMessage": "Preparing the cloud session checkout"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
