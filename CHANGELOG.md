@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.11.0](https://github.com/elct9620/beni/compare/v0.10.0...v0.11.0) (2026-09-04)
+
+
+### Features
+
+* **beni:** let the caller place the memory the collector carves ([737c09a](https://github.com/elct9620/beni/commit/737c09a8c78ae65aaa21ca32a9e8787e5b48c1c8))
+* **beni:** release one root without releasing another's ([05d8b4b](https://github.com/elct9620/beni/commit/05d8b4b766f087a5c5dd09a983096d8e4fb11e40))
+* **beni:** root a value for the interpreter's lifetime ([6a9777d](https://github.com/elct9620/beni/commit/6a9777d9ccc049c2a77588e217ee8822bc5775bb))
+* **coverage:** derive alias coverage from the headers ([0b09e18](https://github.com/elct9620/beni/commit/0b09e18ab5702f3d48e74c2a78dc9f480c372d2a))
+* **coverage:** rank the worklist by the consumers beni exists for ([5873287](https://github.com/elct9620/beni/commit/587328701fbac7ae3f010aaeb345065596a40485))
+* **coverage:** record why a symbol sits outside the measure ([d950f62](https://github.com/elct9620/beni/commit/d950f62df87f63b714cf07096f5809b2b0e4f55a))
+
+
+### Bug Fixes
+
+* **api:** rank by the mrbgems the build activates ([bbed32d](https://github.com/elct9620/beni/commit/bbed32dd420beeeb2b4230aec846c4263117487d))
+* **coverage:** hold the alias gate where its evidence is ([7cf2aa1](https://github.com/elct9620/beni/commit/7cf2aa1fc9d912f7e622689ba4a76acd8e51d402))
+* **coverage:** reject a classification with nothing behind it ([2362939](https://github.com/elct9620/beni/commit/2362939397130d83bf942bd22a76e5cdd584c170))
+
 ## [0.10.0](https://github.com/elct9620/beni/compare/v0.9.0...v0.10.0) (2026-07-18)
 
 
