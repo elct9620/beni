@@ -1,20 +1,29 @@
 # frozen_string_literal: true
 
 module BeniCoverage
-  # Counts how often each embedder API symbol is called across the
-  # mrbgems this repo builds. mrbgems are the embedder-shaped consumers
-  # of the C API, so their call sites approximate downstream demand —
-  # the signal that orders graduation priority in the coverage report.
-  # Core VM sources are excluded: they implement the API rather than
-  # consume it, so their counts would drown the embedder signal.
+  # Counts how often each embedder API symbol is called, across two
+  # populations that do not behave alike and are therefore never summed.
   #
-  # Only the gems a build activated count. The vendored tree ships every
-  # bundled gem's sources whether or not the archive contains them, and
-  # counting all of them ranks the worklist by an ecosystem beni never
-  # builds — POSIX io and socket gems reaching for API a Rust embedder
-  # has no use for.
+  # C mrbgems approximate demand from inside the VM. Core VM sources are
+  # excluded: they implement the API rather than consume it, so their
+  # counts would drown the embedder signal. Only the gems a build
+  # activated count — the vendored tree ships every bundled gem's sources
+  # whether or not the archive contains them, and counting all of them
+  # ranks the worklist by an ecosystem beni never builds.
+  #
+  # Rust consumers reach the C API through +beni::sys+, and they are the
+  # population beni exists for. An mrbgem runs inside the VM and never
+  # holds a value across a host boundary, so the API a Rust embedder
+  # leans on hardest — rooting, interpreter lifecycle — scores zero on
+  # the mrbgem side however badly it is needed. A symbol any Rust
+  # consumer reaches therefore outranks one only mrbgems call.
   module Frequency
     BUNDLED = "vendor/mruby/mrbgems"
+    # The consumer harnesses this repo ships. A Rust consumer outside it
+    # — a downstream crate in its own checkout — is named by this
+    # environment variable, colon-separated.
+    SCENARIOS = "test/scenarios"
+    CONSUMERS_ENV = "BENI_CONSUMER_PATHS"
     # mruby rewrites this only when the gem set changes, so it is the
     # authoritative record of what a target built — mruby's own
     # +gem_init.c+ takes it as a prerequisite for the same reason.
@@ -51,14 +60,54 @@ module BeniCoverage
          .reject(&:empty?).uniq.sort
     end
 
+    # symbol name => `beni::sys::` use count across the Rust consumers
+    # in reach, restricted to +names+ like the mrbgem scan.
+    def scan_rust(root, names)
+      counts = names.to_h { |name| [name, 0] }
+      rust_sources(root).each do |path|
+        sys_calls(File.read(path)).each { |name| counts[name] += 1 if counts.key?(name) }
+      end
+      counts
+    end
+
+    # Rust sources belonging to consumers. Build outputs are skipped, and
+    # so is the beni crate itself: it implements the binding rather than
+    # consuming it, the same reason core VM sources are excluded above.
+    def rust_sources(root)
+      consumer_roots(root)
+        .flat_map { |dir| Dir.glob(File.join(dir, "**", "*.rs")) }
+        .reject { |path| path.include?("/target/") }
+    end
+
+    def consumer_roots(root)
+      [File.join(root, SCENARIOS)] + ENV.fetch(CONSUMERS_ENV, "").split(":").reject(&:empty?)
+    end
+
+    # Identifiers reached through a `sys::` path. Line comments are
+    # stripped first so a mention in rustdoc does not count as a use.
+    def sys_calls(src)
+      src.gsub(%r{//.*$}, "").scan(/\bsys::([A-Za-z_]\w*)/).flatten
+    end
+
     # One line saying how far to trust the ranking, mirroring the
     # report's linked-versus-heuristic sys detection: a ranking whose
     # signal is silently weaker is worse than one that says it is weak.
     def signal(root)
+      "#{gem_signal(root)}; #{rust_signal(root)}"
+    end
+
+    def gem_signal(root)
       gems = active_gems(root)
       return "every bundled gem — no build staged, so gems this build excludes still rank" if gems.empty?
 
       "#{gems.size} active gems (#{gems.join(", ")})"
+    end
+
+    def rust_signal(root)
+      count = rust_sources(root).size
+      return "no Rust consumer in reach — set #{CONSUMERS_ENV} to rank by what one calls" if count.zero?
+
+      "#{count} Rust consumer sources"
     end
 
     # Identifiers used in call position. Comments are stripped first so a

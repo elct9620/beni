@@ -7,6 +7,7 @@ require_relative "beni_coverage/surface"
 require_relative "beni_coverage/aliases"
 require_relative "beni_coverage/coverage"
 require_relative "beni_coverage/frequency"
+require_relative "beni_coverage/ranking"
 require_relative "beni_coverage/report"
 
 # mruby C API coverage support module
@@ -41,10 +42,10 @@ require_relative "beni_coverage/report"
 # ABI lacks — so what remains unrecorded is API still owed and nothing
 # else.
 #
-# The +priority+ query is a separate concern from the report: it ranks
-# the not-yet-typed surface by the call frequency of the mrbgems this
-# repo builds (+Frequency+), to point graduation work at the symbols
-# embedders lean on hardest.
+# The +priority+ query is a separate concern from the report: it orders
+# the not-yet-typed surface by what downstream calls (+Frequency+,
+# +Ranking+), to point graduation work at the symbols embedders lean on
+# hardest.
 module BeniCoverage
   ROOT = File.expand_path("../..", __dir__)
   INCLUDE_ROOT = File.join(ROOT, "vendor", "mruby", "include")
@@ -53,9 +54,6 @@ module BeniCoverage
   OUTPUT = File.join(ROOT, "docs", "api_coverage.md")
   VERSION_H = File.join(INCLUDE_ROOT, "mruby", "version.h")
   ARGS_RS = File.join(ROOT, "crates", "beni", "src", "state", "args.rs")
-
-  # One not-yet-typed symbol worth graduating, with its downstream weight.
-  Priority = Data.define(:name, :uses, :header)
 
   module_function
 
@@ -71,16 +69,15 @@ module BeniCoverage
   end
 
   # Every embedder symbol still owed — neither covered nor recorded as
-  # outside the measure — ranked by how often the mrbgems this repo
-  # builds call them. Unused symbols (count 0) stay in, sorted last: no
-  # mrbgem reaches them, but the API still exists and is not yet bound.
+  # outside the measure — in the order +Ranking+ puts them.
   def priority
     surface = Surface.parse(INCLUDE_ROOT)
     coverage = coverage_of(surface, load_manifest, [])
-    rank(surface, coverage, Frequency.scan(ROOT, surface.map(&:name)))
+    names = surface.map(&:name)
+    Ranking.build(surface, coverage, Frequency.scan(ROOT, names), Frequency.scan_rust(ROOT, names))
   end
 
-  # Which gem sources the ranking counted, so a reader knows how far to
+  # Which sources the ranking counted, so a reader knows how far to
   # trust the order — the +priority+ counterpart of the report's
   # linked-versus-heuristic sys detection.
   def demand_signal
@@ -122,12 +119,6 @@ module BeniCoverage
 
   def alias_claims_count
     Aliases.claims(typed_notes).size
-  end
-
-  def rank(surface, coverage, uses)
-    surface.reject { |e| coverage.typed?(e.name) || coverage.exclusion(e.name) }
-           .map { |e| Priority.new(name: e.name, uses: uses[e.name], header: e.header) }
-           .sort_by { |e| [-e.uses, e.name] }
   end
 
   def build_report(surface)

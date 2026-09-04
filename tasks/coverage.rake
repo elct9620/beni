@@ -20,9 +20,12 @@
 #                           staged (run after `rake beni:build` for the
 #                           exact sys surface), otherwise infers it.
 #   $ rake api:priority       — print the top 20 not-yet-typed embedder
-#   $ rake "api:priority[50]"   symbols ranked by how often the mrbgems
-#                             this repo builds call them, the worklist
-#                             for what to graduate next. The optional
+#   $ rake "api:priority[50]"   symbols in the order downstream calls
+#                             them, the worklist for what to graduate
+#                             next: a Rust consumer's use first, then
+#                             the mrbgems this repo builds. Point
+#                             BENI_CONSUMER_PATHS at a consumer checkout
+#                             to rank by what it calls. The optional
 #                             argument caps the rows; a query only,
 #                             writes no file.
 
@@ -60,11 +63,14 @@ namespace :api do
     end
   end
 
-  desc "Rank not-yet-typed mruby C API by usage in the mrbgems this repo builds (worklist; top N, default 20)"
+  desc "Rank not-yet-typed mruby C API by what downstream calls it (worklist; top N, default 20)"
   task :priority, [:top] do |_task, args|
     top = Integer(args.top || 20)
     rows = BeniCoverage.priority
-    rows.first(top).each { |e| puts "#{e.uses.to_s.rjust(5)}  #{e.name.ljust(34)} #{e.header}" }
+    puts " rust  gems  symbol"
+    rows.first(top).each do |e|
+      puts "#{e.rust_uses.to_s.rjust(5)} #{e.uses.to_s.rjust(5)}  #{e.name.ljust(34)} #{e.header}"
+    end
     puts "showing #{[top, rows.size].min} of #{rows.size} not-yet-typed symbols"
     puts "demand: #{BeniCoverage.demand_signal}"
   end
