@@ -688,11 +688,12 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
     the shape for a value an embedder holds as long as the VM itself, such as
     a cached class handle. It returns nothing, and rooting an immediate value
     is a no-op, immediates being values the collector never reclaims.
-  - `GcRoot` roots a value and releases that root when it is dropped. Each
-    `GcRoot` owns one root: dropping it releases that root alone, so roots
-    over the same value are independent and no drop affects another. This is
-    the shape for a value held across a round trip out of the VM and released
-    afterwards. The value stays rooted while any `GcRoot` over it lives, and
+  - `Mrb::gc_root` roots a value and answers a `GcRoot` guard that releases
+    that root when it is dropped. Each guard owns one root: dropping it
+    releases that root alone, so roots over the same value are independent
+    and no drop affects another. This is the shape for a value held across a
+    round trip out of the VM and released afterwards. The value stays rooted
+    while any `GcRoot` over it lives, and
     is no longer rooted once the last one is dropped. Reachability from the
     arena or from Ruby is a separate matter, and neither depends on a root.
     Taking a root grows the record of roots, so it is fallible and answers a
