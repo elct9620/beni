@@ -284,6 +284,39 @@ impl Mrb {
         crate::not_linked()
     }
 
+    /// Hand the collector `buf` to carve into heap pages, so objects can
+    /// live in memory the caller placed rather than only in pages the
+    /// allocator hands out. Answers how many pages the buffer yielded,
+    /// which is zero when it is too small to hold one.
+    ///
+    /// The buffer is taken by move for the process's whole lifetime: the
+    /// caller cannot reach it again, and the same buffer cannot be handed
+    /// over twice. mruby never frees it — closing the interpreter releases
+    /// the descriptors it kept, never the memory behind them. Alignment
+    /// within the buffer is the collector's concern, not the caller's.
+    ///
+    /// This adds to the collector's pages without capping them: once they
+    /// are exhausted the collector grows through the allocator as it
+    /// otherwise would.
+    pub fn gc_add_region(&self, buf: &'static mut [u8]) -> usize {
+        #[cfg(mruby_linked)]
+        {
+            let len = buf.len();
+            let start = buf.as_mut_ptr() as *mut core::ffi::c_void;
+            // SAFETY: `self` is alive by the `&self` borrow. The buffer
+            // is `'static` and moved in, so it outlives the VM and no
+            // caller can write it again while the collector holds pages
+            // carved from it.
+            let pages = unsafe { sys::mrb_gc_add_region(self.as_ptr(), start, len) };
+            usize::try_from(pages).unwrap_or(0)
+        }
+        #[cfg(not(mruby_linked))]
+        {
+            let _ = buf;
+            crate::not_linked()
+        }
+    }
+
     /// Return `mrb->object_class` as a typed `RClass` handle.
     /// Replaces direct field access — the `object_class` field on
     /// the `crate::mrb_state` struct is `pub(crate)` so this
@@ -362,6 +395,47 @@ mod tests {
         let kept = mrb.gv_get(mrb.intern_static(b"$survivor"));
         let kept = RString::from_value(kept).expect("the survivor is String-tagged");
         assert_eq!(kept.to_bytes(), b"survivor");
+    }
+
+    /// A buffer generous enough to carve several heap pages from; the
+    /// page struct is private to mruby's gc.c, so the size is chosen to
+    /// clear it rather than computed from it.
+    #[cfg(mruby_linked)]
+    const REGION_BYTES: usize = 512 * 1024;
+
+    #[cfg(mruby_linked)]
+    #[test]
+    fn a_generous_region_yields_pages_the_vm_then_allocates_into() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let buf = Box::leak(vec![0u8; REGION_BYTES].into_boxed_slice());
+
+        let pages = mrb.gc_add_region(buf);
+        assert!(pages > 0, "a {REGION_BYTES}-byte buffer must yield pages");
+
+        // The VM keeps working with the region linked in, and closing it
+        // releases only the descriptors — never the caller's buffer.
+        for _ in 0..2048 {
+            let _ = mrb.str_new(b"allocated after the region was added");
+        }
+        mrb.full_gc();
+        drop(mrb);
+    }
+
+    #[cfg(mruby_linked)]
+    #[test]
+    fn a_region_too_small_for_one_page_yields_none() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let buf = Box::leak(vec![0u8; 16].into_boxed_slice());
+
+        assert_eq!(
+            mrb.gc_add_region(buf),
+            0,
+            "a buffer too small to hold one page must add none"
+        );
+
+        // Adding nothing leaves the interpreter allocating as before.
+        let kept = mrb.str_new(b"still allocating");
+        assert_eq!(kept.to_bytes(), b"still allocating");
     }
 
     #[cfg(mruby_linked)]

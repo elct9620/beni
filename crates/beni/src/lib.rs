@@ -357,6 +357,7 @@ mod tests {
         let _ = Mrb::class_new;
         let _ = Mrb::exc_get::<&core::ffi::CStr>;
         let _ = Mrb::full_gc;
+        let _ = Mrb::gc_add_region;
         let _ = Mrb::gc_register_forever;
         let _ = Mrb::gc_root;
         let _ = Mrb::gv_remove;
