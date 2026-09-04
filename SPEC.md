@@ -672,7 +672,54 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   unwinding across the boundary, and the unwrapped value is reclaimed — so
   it lives on the typed surface rather than behind `beni::sys`.
 
-#### Gems, arena scopes, and blocks
+#### Garbage collection
+
+- `Mrb::arena_scope` bounds GC arena growth across a region of Rust code:
+  values created inside the scope hold arena protection until the scope
+  ends, and the scope's end releases it. `keep` ends the scope and
+  re-protects the one value it names; dropping the scope ends it with no
+  survivor. Arena protection reaches only as far as the C frame that opened
+  the scope; a value a Rust caller holds past that frame needs a root.
+- A **root** keeps a value reachable independently of the arena and of any
+  Ruby reference to it. The typed surface carries two rooting shapes, which
+  differ in whether the root is ever released:
+  - `Mrb::gc_register_forever` roots a value for the interpreter's remaining
+    lifetime. The root is never released, so the value is never reclaimed —
+    the shape for a value an embedder holds as long as the VM itself, such as
+    a cached class handle. It returns nothing, and rooting an immediate value
+    is a no-op, immediates being values the collector never reclaims.
+  - `GcRoot` roots a value and releases that root when it is dropped. Each
+    `GcRoot` owns one root: dropping it releases that root alone, so roots
+    over the same value are independent and no drop affects another. This is
+    the shape for a value held across a round trip out of the VM and released
+    afterwards. The value stays rooted while any `GcRoot` over it lives, and
+    is no longer rooted once the last one is dropped. Reachability from the
+    arena or from Ruby is a separate matter, and neither depends on a root.
+- A consumer reaching mruby's own root registry through `beni::sys` owns an
+  invariant the typed shapes encode: that registry is keyed by value rather
+  than by registration, so removing a value removes every root over it and a
+  released root cannot be told from another holder's. `GcRoot` supplies the
+  per-root identity that makes independent release well defined.
+- `Mrb::full_gc` and `Mrb::incremental_gc` drive collection directly:
+  `full_gc` runs one complete collection cycle, `incremental_gc` advances
+  the collector by a single step. Both are total — they return nothing,
+  never raise, and are safe to call whenever the VM is alive (a disabled or
+  mid-collection collector ignores the request). This is the collection-timing
+  concern, distinct from arenas and roots: those govern which values stay
+  reachable, these methods govern when the collector reclaims the unreachable
+  rest. Both graduate because correct use needs no reasoning about VM internals.
+- `Mrb::gc_add_region` hands the collector a caller-owned byte buffer to carve
+  into heap pages, so objects can live in memory the caller placed rather than
+  only in pages the allocator hands out. It adds to the collector's pages
+  without capping them: once they are exhausted the collector grows through
+  the allocator as it otherwise would. The call takes the buffer by move for
+  the process's whole lifetime: the caller cannot reach it again, and the same
+  buffer cannot be handed over twice. mruby never frees it — the memory
+  outlives the interpreter. The call answers how many heap pages the buffer
+  yielded, which is zero when it is too small to hold one; alignment within
+  the buffer is the collector's concern, not the caller's.
+
+#### Gems and blocks
 
 - Provides the `Gem` trait — the unit of Ruby surface a Rust crate ships:
 
@@ -685,19 +732,6 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   The embedder invokes each gem's `init` with the live interpreter handle
   during interpreter setup; the gem defines its classes, modules, and methods
   there. An `Err` from `init` aborts setup and surfaces to the embedder.
-- `Mrb::arena_scope` bounds GC arena growth across a region of Rust code:
-  values created inside the scope hold arena protection until the scope
-  ends, and the scope's end releases it. `keep` ends the scope and
-  re-protects the one value it names; dropping the scope ends it with no
-  survivor.
-- `Mrb::full_gc` and `Mrb::incremental_gc` drive collection directly:
-  `full_gc` runs one complete collection cycle, `incremental_gc` advances
-  the collector by a single step. Both are total — they return nothing,
-  never raise, and are safe to call whenever the VM is alive (a disabled or
-  mid-collection collector ignores the request). This is the collection-timing
-  concern, distinct from `arena_scope`: the arena governs which values stay
-  reachable, these methods govern when the collector reclaims the unreachable
-  rest. Both graduate because correct use needs no reasoning about VM internals.
 - A typed `Proc` handle wraps an mruby block. `Proc::call` invokes it with
   an argument slice under the same exception protection as closure-based
   `protect`: the block's normal return is the `Ok` value, and any non-local
@@ -747,8 +781,9 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 - The safe API cannot cause undefined behavior while the GC validity rule
   holds: a value created inside an arena scope is not used after that
   scope ends, and a survivor carried out through `keep` counts as created
-  where its scope was opened. The type system does not enforce the rule;
-  the consumer upholds it.
+  where its scope was opened. A rooted value is exempt for as long as its
+  root lives, which is what lets a value outlive the frame that made it.
+  The type system does not enforce the rule; the consumer upholds it.
 - A capability reaches the safe typed surface only when the wrapper can
   encode its invariant — a lifetime, a carrier type, or a runtime check —
   so a caller uses it without reasoning about mruby's VM internals, a
@@ -844,6 +879,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
 | A registered method body's single-argument read receiving other than one positional argument | raised as an `ArgumentError` to the Ruby caller |
+| A heap region buffer too small to hold one heap page | no pages are added and the count answers zero; the interpreter keeps allocating as before |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
 
 ## Terminology
@@ -868,5 +904,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of defines/flags the crates align with |
 | linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents in every build — `1` with a real archive linked, `0` in placeholder mode |
 | placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set |
+| root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
+| heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
 | declined symbol | public embedder API the typed surface deliberately does not carry, outside the coverage measure and recorded with what settles it |
 | flag-gated symbol | embedder API a build's ABI lacks because a compile-time flag gates it, outside the coverage measure and recorded with what settles it — the gating flag |
