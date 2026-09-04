@@ -40,6 +40,7 @@
 //!     clusters once combinatorial pressure shows up)
 //!   * `load` — RITE bytecode loaders
 //!   * `protect` — closure-based `mrb_protect_error`
+//!   * `root` — GC roots outliving the frame that made the value
 //!
 //! Splitting per concern keeps each file's surface small and the
 //! rustdoc on each cluster focused.
@@ -50,6 +51,7 @@ pub mod define;
 pub mod factory;
 pub mod load;
 pub mod protect;
+pub mod root;
 pub mod symbol;
 
 use crate::{RClass, Value};

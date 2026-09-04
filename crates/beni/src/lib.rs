@@ -355,6 +355,7 @@ mod tests {
         let _ = Mrb::class_new;
         let _ = Mrb::exc_get::<&core::ffi::CStr>;
         let _ = Mrb::full_gc;
+        let _ = Mrb::gc_register_forever;
         let _ = Mrb::gv_remove;
         let _ = Mrb::hash_new_capa;
         let _ = Mrb::incremental_gc;
