@@ -184,9 +184,11 @@ typed:
   mrb_full_gc: "`Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive)"
   mrb_funcall_argv: "`Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym)"
   mrb_funcall_with_block: "`Value::funcall_with_block` — dispatch passing an explicit typed `Proc` block"
+  mrb_gc_add_region: "`Mrb::gc_add_region` — hand the collector a caller-owned buffer to carve into heap pages, answering the page count (zero when it holds none); the `&'static mut [u8]` taken by move encodes both invariants the C API leaves to the caller — the buffer outlives the interpreter, and no caller reaches it again"
   mrb_gc_arena_restore: "`ArenaScope::keep`/`drop` (see ArenaScope extension)"
   mrb_gc_arena_save: "`Mrb::arena_scope` (see ArenaScope extension)"
   mrb_gc_protect: "`ArenaScope::keep` (see ArenaScope extension)"
+  mrb_gc_register: "`Mrb::gc_register_forever` — root a value for the interpreter's remaining lifetime. Only the never-released shape graduates: mruby's registry is keyed by value, so a removal drops every root over it, and a shape that never removes cannot drop another holder's (the releasable shape is the GcRoot extension)"
   mrb_get_arg1: "`Mrb::arg1` — the single required argument, raising `ArgumentError` on any other count (the strict counterpart to a `format::O` read)"
   mrb_get_argc: Mrb::argc
   mrb_get_args: "state::args — the format markers and frame-read helpers; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol"
@@ -319,6 +321,18 @@ extensions:
   ArenaScope: >-
     RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore`
     with a `mrb_gc_protect` keep — a safety guard with no single C API.
+  GcRoot: >-
+    The releasable root: a guard holding one slot of a table the interpreter
+    keeps, released when the guard drops. Binds no new C symbol — it composes
+    the already-graduated array and global-variable primitives — because the
+    C pair it would otherwise wrap cannot carry it: `mrb_gc_unregister`
+    removes by value, so one holder's release would drop every other root
+    over the same value. A slot is the per-root identity mruby's registry
+    lacks, the same role the storage address plays for CRuby's
+    `rb_gc_register_address`. Released slots go on an intrusive free list so
+    a long-running consumer's table stops growing. A refused release leaves
+    the value rooted for the interpreter's remaining lifetime —
+    over-retention, never a value collected while a holder still names it.
   Immediates: >-
     Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` /
     `mrb_true_value` / `mrb_false_value`.
@@ -397,6 +411,7 @@ subsumed:
   mrb_funcall_id: "`Value::funcall`, `Value::funcall_argv` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"
   mrb_yield: "`Proc::call` — the one-argument form of `mrb_yield_argv` (`vendor/mruby/src/vm.c:1328` passes `1, &arg` to the same `yield_with_attr`); a Rust slice of one carries it"
   mrb_load_string_cxt: "`Ccontext::load_nstring` — the NUL-terminated form of `mrb_load_nstring_cxt` over `strlen`; a Rust byte slice carries its own length, so the length-taking call subsumes it"
+  mrb_garbage_collect: "`Mrb::full_gc` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection"
 declined:
   mrb_sys_fail: "declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from a class and a message, which `RClass::raise` already reaches from a Rust `std::io::Error`"
   mrb_malloc: "VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `RClass::data_wrap` is the graduated seam between the two"
@@ -415,6 +430,15 @@ declined:
   mrb_range_ptr: "unchecked cast to `struct RRange*` — see `mrb_str_ptr`"
   DATA_PTR: "reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `Value::data_get`, which returns `None` where this returns a wrong-typed pointer"
   DATA_TYPE: "reads `RDATA(d)->type` with no type check — see `DATA_PTR`"
+  mrb_gc_unregister: "removes a root by value, so it drops every registration of that value at once (`vendor/mruby/src/gc.c:537-553`) — no typed shape can release one holder's root without releasing another's. The releasable root is the GcRoot extension, whose slot supplies the identity this call lacks; the never-released half is `Mrb::gc_register_forever`"
+  mrb_gc_mark: "marks one object during the collector's mark phase — mruby's `mrb_data_type` carries only `struct_name` and `dfree` (`vendor/mruby/include/mruby/data.h:22-28`), so an embedder has no mark hook to write and no typed caller reaches it (contrast magnus's `gc::Marker`, which exists because CRuby's `rb_data_type_t` has `dmark`)"
+  mrb_gc_mark_value: "the `mrb_value` form of `mrb_gc_mark` — see `mrb_gc_mark`"
+  mrb_write_barrier: "repaints an object the collector already marked, needed only when a caller writes an object's fields directly through `struct RBasic*` — a pointer beni does not expose (see `mrb_str_ptr`); every write the typed surface reaches runs its own barrier, as `mrb_ary_set` does at `vendor/mruby/src/array.c:1123`"
+  mrb_field_write_barrier: "the two-object form, taking both as `struct RBasic*` — see `mrb_write_barrier`"
+  mrb_field_write_barrier_value: "the `mrb_value` form of `mrb_field_write_barrier`, still taking the owner as `struct RBasic*` — see `mrb_write_barrier`"
+  mrb_object_dead_p: "asks whether the collector has reclaimed a `struct RBasic*` — see `mrb_str_ptr`; a typed `Value` names a live object or it is not one"
+  mrb_obj_alloc: "allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `RClass::data_wrap`"
+  mrb_free_context: "releases a `struct mrb_context*` — VM-internal, the same call-frame machinery whose indices stay in `sys`; `Mrb::drop` releases the interpreter and every context it owns"
 conditional:
   mrb_bigint_p: "`MRB_USE_BIGINT` — without it `vendor/mruby/include/mruby/value.h:322` expands the macro to `FALSE`; beni's pinned ABI sets only `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`"
   mrb_locale_from_utf8: "`_WIN32` — `vendor/mruby/include/mruby.h:1248` makes it an identity macro off Windows, where there is no encoding to convert"
@@ -422,3 +446,4 @@ conditional:
   mrb_utf8_from_locale: "`_WIN32` — see `mrb_locale_from_utf8`"
   mrb_utf8_free: "`_WIN32` — see `mrb_locale_from_utf8`"
   mrb_msvc_snprintf: "`_MSC_VER` — MSVC's `snprintf` shim, absent from every toolchain beni builds with"
+  mrb_gc_free_range: "`MRB_RANGE_EMBED` — beni's ABI names no boxing mode, and mruby then defaults to `MRB_WORD_BOXING` (`vendor/mruby/include/mrbconf.h:63-65`), which embeds a Range's bounds and expands the macro to `((void)0)` (`vendor/mruby/include/mruby/range.h:28`)"
