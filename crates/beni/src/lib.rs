@@ -69,6 +69,7 @@ pub mod symbol;
 pub mod value;
 
 pub use state::arena::ArenaScope;
+pub use state::root::GcRoot;
 pub use state::{Mrb, MrbOpenError};
 
 pub use state::args::{format, Format};
@@ -332,6 +333,7 @@ mod tests {
         let _ = Array::unshift;
         let _ = DataType::<u8>::new;
         let _ = Error::new;
+        let _ = GcRoot::value;
         let _ = Hash::clear;
         let _ = Hash::contains_key;
         let _ = Hash::delete;
@@ -356,6 +358,7 @@ mod tests {
         let _ = Mrb::exc_get::<&core::ffi::CStr>;
         let _ = Mrb::full_gc;
         let _ = Mrb::gc_register_forever;
+        let _ = Mrb::gc_root;
         let _ = Mrb::gv_remove;
         let _ = Mrb::hash_new_capa;
         let _ = Mrb::incremental_gc;

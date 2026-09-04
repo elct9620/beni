@@ -695,6 +695,11 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
     afterwards. The value stays rooted while any `GcRoot` over it lives, and
     is no longer rooted once the last one is dropped. Reachability from the
     arena or from Ruby is a separate matter, and neither depends on a root.
+    Taking a root grows the record of roots, so it is fallible and answers a
+    `Result` — no root is taken when it fails. Releasing one cannot fail into
+    an unrooted value: where mruby refuses the release the value stays rooted
+    for the interpreter's remaining lifetime, so the failure a consumer can
+    meet is over-retention, never a value collected while still held.
 - A consumer reaching mruby's own root registry through `beni::sys` owns an
   invariant the typed shapes encode: that registry is keyed by value rather
   than by registration, so removing a value removes every root over it and a
