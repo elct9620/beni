@@ -706,6 +706,11 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   than by registration, so removing a value removes every root over it and a
   released root cannot be told from another holder's. `GcRoot` supplies the
   per-root identity that makes independent release well defined.
+- Rooting keeps its record inside the interpreter, so a guest program that
+  enumerates globals sees one entry per rooting shape in use — mruby's own
+  for the never-released shape, beni's for the releasable one. Neither is
+  named as a Ruby global variable, so no guest program can read or write the
+  record; it is visible to enumeration alone.
 - `Mrb::full_gc` and `Mrb::incremental_gc` drive collection directly:
   `full_gc` runs one complete collection cycle, `incremental_gc` advances
   the collector by a single step. Both are total — they return nothing,
