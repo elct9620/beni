@@ -113,7 +113,7 @@ typed:
   mrb_ccontext_free: Ccontext::drop
   mrb_ccontext_new: Ccontext::new
   mrb_check_error: Mrb::clear_exc
-  mrb_check_frozen_value: "`Value::check_frozen` — the frozen-state precondition guard; `mrb_check_frozen` (the `void*` form) and `mrb_check_type` (a raw `mrb_vtype` tag, subsumed by the `FromValue` downcasts) stay in `sys`"
+  mrb_check_frozen_value: "`Value::check_frozen` — the frozen-state precondition guard, the `mrb_value` form a typed caller can reach"
   mrb_class_defined: "`Mrb::class_defined` with a name key — interns and routes through `mrb_class_defined_id`"
   mrb_class_defined_id: "`Mrb::class_defined` with a `Symbol` key (the symbol-or-name key) — a total bool predicate, never raises"
   mrb_class_defined_under: "`Module::class_defined` with a name key — interns and routes through `mrb_class_defined_under_id`"
@@ -162,9 +162,9 @@ typed:
   mrb_define_private_method_id: "`Module::define_private_method` with a `Symbol` key (the symbol-or-name key)"
   mrb_define_singleton_method: "`Object::define_singleton_method` with a name key — interns and routes through `mrb_define_singleton_method_id`"
   mrb_define_singleton_method_id: "`Object::define_singleton_method` with a `Symbol` key (the symbol-or-name key)"
-  mrb_ensure_array_type: "`Value::ensure_array` — the raising Array-tag coercion to an `Array` handle; `mrb_check_array_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `Array` downcast and stays in `sys`"
-  mrb_ensure_hash_type: "`Value::ensure_hash` — the raising Hash-tag coercion to a `Hash` handle; `mrb_check_hash_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `Hash` downcast and stays in `sys`"
-  mrb_ensure_string_type: "`Value::ensure_string` — the raising String-tag coercion to an `RString` handle; `mrb_check_string_type` (the `nil`-returning form) is subsumed by the `FromValue` -> `RString` downcast and stays in `sys`"
+  mrb_ensure_array_type: "`Value::ensure_array` — the raising Array-tag coercion to an `Array` handle"
+  mrb_ensure_hash_type: "`Value::ensure_hash` — the raising Hash-tag coercion to a `Hash` handle"
+  mrb_ensure_string_type: "`Value::ensure_string` — the raising String-tag coercion to an `RString` handle"
   mrb_ensure_int_type: "`Value::ensure_int` — the raising numeric-tag coercion to an Integer `Value` (Integer unchanged, Float truncated toward zero), narrowing to one that fits the configured integer width; distinct from the exact-tag `FromValue` -> integer downcast, which coerces nothing"
   mrb_ensure_integer_type: "`Value::ensure_int` — the un-narrowed Integer coercion that `mrb_ensure_int_type` wraps; same raising numeric-tag coercion, surfaced through the single `Value::ensure_int`"
   mrb_ensure_float_type: "`Value::ensure_float` — the raising numeric-tag coercion to a Float `Value` (Float unchanged, Integer widened); distinct from the exact-tag `FromValue` -> float downcast, which coerces nothing"
@@ -415,6 +415,10 @@ subsumed:
   mrb_protect: "`Mrb::protect` — the older `mrb_func_t` + `mrb_value data` form, whose body is `mrb_protect_error(mrb, protect_body, &protect_data, state)` and nothing else (`vendor/mruby/mrbgems/mruby-error/src/exception.c:34-37`); a Rust closure carries the body-and-data pair the C form spells out as two arguments"
   mrb_rescue_exceptions: "`Mrb::rescue` — `mrb_protect_error` followed by an `mrb_obj_is_kind_of` walk of the class array (`vendor/mruby/mrbgems/mruby-error/src/exception.c:109-133`), which is the composition `rescue` is; the `&[RClass]` slice carries the `len` the C form spells out beside `classes`, and the closures carry the two `mrb_func_t` + `mrb_value` data pairs. The arena restore and exception clear that bracket the C form are `mrb_protect_error`'s own (`vendor/mruby/src/vm.c:548,566-567`), so each `protect` call already performs them"
   mrb_rescue: "`Mrb::rescue` — the StandardError form of `mrb_rescue_exceptions`, whose body passes `1, &mrb->eStandardError_class` (`vendor/mruby/mrbgems/mruby-error/src/exception.c:86-89`); a caller naming `StandardError` in the class slice reaches it — the bare-`rescue` default SPEC names"
+  mrb_check_array_type: "`FromValue` -> `Array` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it"
+  mrb_check_hash_type: "`FromValue` -> `Hash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type`"
+  mrb_check_string_type: "`FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type`"
+  mrb_check_type: "the `FromValue` downcasts and the `Value::is_*` tag predicates — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot"
 declined:
   mrb_sys_fail: "declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from a class and a message, which `RClass::raise` already reaches from a Rust `std::io::Error`"
   mrb_malloc: "VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `RClass::data_wrap` is the graduated seam between the two"
@@ -431,6 +435,7 @@ declined:
   mrb_proc_ptr: "unchecked cast to `struct RProc*` — see `mrb_str_ptr`"
   mrb_hash_ptr: "unchecked cast to `struct RHash*` — see `mrb_str_ptr`"
   mrb_range_ptr: "unchecked cast to `struct RRange*` — see `mrb_str_ptr`"
+  mrb_check_frozen: "takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `Value::check_frozen`"
   DATA_PTR: "reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `Value::data_get`, which returns `None` where this returns a wrong-typed pointer"
   DATA_TYPE: "reads `RDATA(d)->type` with no type check — see `DATA_PTR`"
   mrb_gc_unregister: "removes a root by value, so it drops every registration of that value at once (`vendor/mruby/src/gc.c:537-553`) — no typed shape can release one holder's root without releasing another's. The releasable root is the GcRoot extension, whose slot supplies the identity this call lacks; the never-released half is `Mrb::gc_register_forever`"
