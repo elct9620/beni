@@ -90,6 +90,7 @@ use std::path::{Path, PathBuf};
 const ARCHIVE_LIB: &str = "mruby";
 
 include!("build/sidecar.rs");
+include!("build/version.rs");
 
 /// Non-empty value of the env var named `key`, treating unset and
 /// empty as the same "not provided" state.
@@ -194,6 +195,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=WASI_SDK_PATH");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build/sidecar.rs");
+    println!("cargo:rerun-if-changed=build/version.rs");
     println!("cargo:rerun-if-changed=src/wrapper.h");
     println!("cargo:rustc-check-cfg=cfg(mruby_linked)");
 
@@ -228,6 +230,13 @@ fn main() {
             include_root.display()
         );
     }
+    // Re-run when the header stating the release changes: a re-staged
+    // archive from another mruby answers the floor differently.
+    println!(
+        "cargo:rerun-if-changed={}",
+        include_root.join("mruby").join("version.h").display()
+    );
+    require_supported_mruby(&include_root);
 
     let wasi_sdk = is_wasm.then(|| resolve_wasi_sdk(&lib_dir));
 

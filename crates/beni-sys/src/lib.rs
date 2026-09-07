@@ -286,6 +286,13 @@ mod sidecar {
     include!("../build/sidecar.rs");
 }
 
+/// The build script's mruby version read, reachable here for the same
+/// reason as the sidecar parse above.
+#[cfg(test)]
+mod version {
+    include!("../build/version.rs");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
