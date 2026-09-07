@@ -43,8 +43,8 @@ pub struct DataType<T> {
 // SAFETY: the descriptor is shared as a `'static` but carries no `T`
 // value — only a release-hook function pointer and a `'static` type
 // name, both immutable plain data. Sharing it across threads shares no
-// `T`, so `Sync` holds regardless of `T`; the bound only lets the
-// descriptor live in a `static` (mruby itself is single-threaded).
+// `T`, so `Sync` holds regardless of `T`: one `static` descriptor
+// serves every interpreter, on whichever thread each is reached from.
 unsafe impl<T> Sync for DataType<T> {}
 
 impl<T> DataType<T> {
@@ -130,8 +130,30 @@ impl RClass {
     /// surfaces as `Err` rather than unwinding across the boundary; the
     /// box not yet handed to any carrier is reclaimed, never leaked.
     /// Mirrors `magnus`'s typed-data wrapping.
+    ///
+    /// The payload travels with the interpreter and is dropped by the
+    /// release hook on whichever thread reaches it, so only a `Send`
+    /// payload wraps:
+    ///
+    /// ```
+    /// # use beni::{DataType, Mrb, RClass};
+    /// struct Counter(u32);
+    /// static COUNTER: DataType<Counter> = DataType::new(c"Counter");
+    /// fn wrap(mrb: &Mrb, class: RClass) {
+    ///     let _ = class.data_wrap(mrb, Counter(0), &COUNTER);
+    /// }
+    /// ```
+    ///
+    /// ```compile_fail
+    /// # use beni::{DataType, Mrb, RClass};
+    /// struct Bare(*const ());
+    /// static BARE: DataType<Bare> = DataType::new(c"Bare");
+    /// fn wrap(mrb: &Mrb, class: RClass) {
+    ///     let _ = class.data_wrap(mrb, Bare(core::ptr::null()), &BARE);
+    /// }
+    /// ```
     #[inline]
-    pub fn data_wrap<T>(
+    pub fn data_wrap<T: Send>(
         self,
         mrb: &Mrb,
         value: T,
@@ -230,7 +252,7 @@ impl Value {
     /// already present, so re-running it over a live carrier leaks the
     /// previous box; applied to a non-carrier value it does nothing.
     #[inline]
-    pub fn data_reinit<T>(self, _mrb: &Mrb, value: T, ty: &'static DataType<T>) {
+    pub fn data_reinit<T: Send>(self, _mrb: &Mrb, value: T, ty: &'static DataType<T>) {
         #[cfg(mruby_linked)]
         {
             // `mrb_data_init` writes through the carrier's `RData`, so it is
