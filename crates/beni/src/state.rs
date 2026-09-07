@@ -6,9 +6,11 @@
 //! Callers that still reach for the raw FFI use `Mrb::as_ptr` as an
 //! explicit escape hatch.
 //!
-//! `Mrb` is intentionally `!Send` and `!Sync` (inherited from
-//! `NonNull<mrb_state>`): mruby's `mrb_state` is single-threaded and
-//! must not cross thread boundaries.
+//! `Mrb` is `Send` and not `Sync`: an interpreter is carried between
+//! threads, never reached from two at once. A consumer that wants two
+//! threads to reach one interpreter wraps the handle in a `Mutex`, and
+//! a guard that borrows the handle — an arena scope, a root, a compile
+//! context — holds both on the thread that made it.
 //!
 //! ## Why a newtype rather than passing `*mut mrb_state`
 //!
@@ -56,6 +58,8 @@ pub mod symbol;
 
 use crate::{RClass, Value};
 use beni_sys as sys;
+use core::cell::Cell;
+use core::marker::PhantomData;
 #[cfg(mruby_linked)]
 use core::ptr::NonNull;
 
@@ -70,11 +74,39 @@ use core::ptr::NonNull;
 /// `NonNull<mrb_state>` so `Mrb::borrow_raw` can fabricate a `&Mrb`
 /// reference from a raw `*mut mrb_state` received at a C-bridge
 /// frame. The two layouts are byte-identical there.
+///
+/// An interpreter is carried between threads:
+///
+/// ```
+/// fn carried<T: Send>() {}
+/// carried::<beni::Mrb>();
+/// ```
+///
+/// It is never reached from two at once, so sharing one across threads
+/// is the consumer's own `Mutex` rather than something the handle
+/// offers:
+///
+/// ```compile_fail
+/// fn shared<T: Sync>() {}
+/// shared::<beni::Mrb>();
+/// ```
 #[cfg_attr(mruby_linked, repr(transparent))]
 pub struct Mrb {
     #[cfg(mruby_linked)]
     state: NonNull<sys::mrb_state>,
+    /// Withholds `Sync` in every build, including the placeholder
+    /// layout that carries no pointer to withhold it through.
+    not_sync: PhantomData<Cell<()>>,
 }
+
+// SAFETY: an interpreter owns everything it runs on — heap, symbol
+// table, arena — and mruby binds none of it to the thread that opened
+// it, so an owner may hand one over. Every entry point that installs a
+// jump target takes `&self`, so no move outruns a live one. `Sync` is
+// withheld above: concurrent reach is the one thing an interpreter
+// cannot survive, and refusing it is also what keeps `borrow_raw`'s
+// `&Mrb` and the scope guards on the thread that made them.
+unsafe impl Send for Mrb {}
 
 /// Returned by `Mrb::open` when mruby could not produce a usable
 /// interpreter: `mrb_open` returned NULL (allocation failure),
@@ -104,7 +136,10 @@ impl Mrb {
             let Some(state) = NonNull::new(raw) else {
                 return Err(MrbOpenError);
             };
-            let mrb = Self { state };
+            let mrb = Self {
+                state,
+                not_sync: PhantomData,
+            };
             // `mrb_open` also signals failure by returning a state
             // with `mrb->exc` set — core or gem init failed (vendored
             // `src/state.c`). That state is not a usable interpreter;
@@ -170,7 +205,9 @@ impl Mrb {
         {
             debug_assert!(!mrb_ref.is_null());
             // SAFETY: `Mrb` is `#[repr(transparent)]` over
-            // `NonNull<mrb_state>`, which is itself `#[repr(transparent)]`
+            // `NonNull<mrb_state>` — its `not_sync` marker is zero-sized
+            // and so carries no layout — and `NonNull` is itself
+            // `#[repr(transparent)]`
             // over `*mut mrb_state`. So a `*const *mut mrb_state` (the
             // address of the caller's pointer variable) and a `*const Mrb`
             // index into the same storage layout. The borrow lifetime is

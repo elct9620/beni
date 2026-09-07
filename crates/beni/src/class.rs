@@ -52,6 +52,25 @@ pub struct RClass(pub(crate) *mut sys::RClass);
 #[derive(Copy, Clone, Debug)]
 pub struct RModule(pub(crate) *mut sys::RClass);
 
+// SAFETY: a class handle carries neither the interpreter nor ownership
+// of the class it names, so crossing a thread with one is inert; it
+// means something only against the interpreter that produced it, the
+// same pairing `Value` leaves to the consumer.
+unsafe impl Send for RClass {}
+unsafe impl Sync for RClass {}
+unsafe impl Send for RModule {}
+unsafe impl Sync for RModule {}
+
+#[cfg(test)]
+mod thread_tests {
+    #[test]
+    fn class_handles_cross_threads() {
+        fn crosses<T: Send + Sync>() {}
+        crosses::<crate::RClass>();
+        crosses::<crate::RModule>();
+    }
+}
+
 mod private {
     use beni_sys as sys;
 
