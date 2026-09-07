@@ -795,6 +795,16 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   where its scope was opened. A rooted value is exempt for as long as its
   root lives, which is what lets a value outlive the frame that made it.
   The type system does not enforce the rule; the consumer upholds it.
+- An interpreter crosses threads; it is never reached from two at once. One
+  thread hands an interpreter to another, and separate threads each hold their
+  own, but an interpreter is carried rather than shared: the typed surface
+  permits the move and refuses the share, and a consumer that wants two threads
+  to reach one interpreter supplies its own mutual exclusion. A guard that
+  borrows the interpreter — an arena scope, a root, a compile context — pins
+  both to the thread they were made on for as long as the guard lives. A typed
+  handle crosses as freely as the interpreter does and means something only
+  against the interpreter that produced it; the type system does not enforce
+  that pairing, the consumer upholds it, as with the GC validity rule above.
 - A capability reaches the safe typed surface only when the wrapper can
   encode its invariant — a lifetime, a carrier type, or a runtime check —
   so a caller uses it without reasoning about mruby's VM internals, a
