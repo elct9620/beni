@@ -48,10 +48,11 @@ fn sidecar_line(lib_dir: &std::path::Path, key: &str) -> String {
 }
 
 /// The compile flags the discovered archive was actually built with,
-/// less the three `build.rs` derives from the archive itself: the
-/// target, the sysroot, and the include root. The trampoline compile
-/// sees everything else the archive saw, so no flag that shapes the
-/// generated code is left behind.
+/// less its include path, which names the header tree through a make
+/// variable no reader outside make can expand; `build.rs` substitutes
+/// the tree staged beside the archive. Everything else the archive saw
+/// reaches the trampoline compile, which uses the compiler these flags
+/// were written for.
 ///
 /// A quoted value has spaces the whitespace split would sever, so a
 /// flag carrying one stops the read rather than reaching a compiler
@@ -59,11 +60,7 @@ fn sidecar_line(lib_dir: &std::path::Path, key: &str) -> String {
 fn parse_compile_flags(lib_dir: &std::path::Path) -> Vec<String> {
     let flags: Vec<String> = sidecar_line(lib_dir, "MRUBY_CFLAGS")
         .split_whitespace()
-        .filter(|token| {
-            !token.starts_with("--target")
-                && !token.starts_with("--sysroot")
-                && !token.starts_with("-I")
-        })
+        .filter(|token| !token.starts_with("-I"))
         .map(str::to_owned)
         .collect();
     if let Some(quoted) = flags
@@ -134,13 +131,21 @@ fn parse_link_libs(lib_dir: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
+/// The compiler that built the discovered archive. A cross build's
+/// sidecar names it by path, a host build by a name off `PATH`; either
+/// way it is the compiler the sidecar's flags were written for, and the
+/// one the trampoline compile uses.
+fn parse_compiler(lib_dir: &std::path::Path) -> String {
+    sidecar_line(lib_dir, "MRUBY_CC").trim().to_owned()
+}
+
 /// The toolchain root the archive was built against, derived from the
 /// compiler the sidecar names. A cross build's sidecar names it as
 /// `<root>/bin/<compiler>`; a host build names a compiler off `PATH`
 /// with no root to derive, and yields `None`.
 fn parse_toolchain_root(lib_dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    let cc = sidecar_line(lib_dir, "MRUBY_CC");
-    let bin = std::path::Path::new(cc.trim()).parent()?;
+    let cc = parse_compiler(lib_dir);
+    let bin = std::path::Path::new(&cc).parent()?;
     if bin.file_name()? != "bin" {
         return None;
     }
@@ -149,7 +154,10 @@ fn parse_toolchain_root(lib_dir: &std::path::Path) -> Option<std::path::PathBuf>
 
 #[cfg(test)]
 mod tests {
-    use super::{declaration_flags, parse_compile_flags, parse_link_libs, parse_toolchain_root};
+    use super::{
+        declaration_flags, parse_compile_flags, parse_compiler, parse_link_libs,
+        parse_toolchain_root,
+    };
 
     /// A directory holding one sidecar with the given `MRUBY_CFLAGS`
     /// body, named after the case so concurrent tests cannot collide.
@@ -196,25 +204,33 @@ mod tests {
     }
 
     #[test]
-    fn a_cross_builds_codegen_flags_are_carried_and_its_own_target_is_not() {
-        // `-mllvm -wasm-use-legacy-eh=false` decides how setjmp
-        // compiles, so it reaches the trampoline compile; the target
-        // and sysroot are the archive's own paths, which build.rs
-        // derives from the discovered lib dir instead.
+    fn a_cross_builds_flags_reach_the_trampoline_compile_whole() {
+        // The target and sysroot belong to the compiler the sidecar
+        // names, and `-mllvm -wasm-use-legacy-eh=false` decides how
+        // setjmp compiles; the trampoline compile uses that compiler,
+        // so all of them reach it.
         let dir = sidecar_dir(
             "wasi",
             "MRUBY_CFLAGS = --target=wasm32-wasip1 --sysroot=/opt/wasi-sdk/share/wasi-sysroot \
-             -mllvm -wasm-use-legacy-eh=false -DMRB_INT32\n",
+             -mllvm -wasm-use-legacy-eh=false -DMRB_INT32 -I\"$(MRUBY_PACKAGE_DIR)/include\"\n",
         );
         assert_eq!(
             parse_compile_flags(&dir),
             vec![
+                "--target=wasm32-wasip1".to_owned(),
+                "--sysroot=/opt/wasi-sdk/share/wasi-sysroot".to_owned(),
                 "-mllvm".to_owned(),
                 "-wasm-use-legacy-eh=false".to_owned(),
                 "-DMRB_INT32".to_owned(),
             ],
             "a flag and the value it governs stay together and in order"
         );
+    }
+
+    #[test]
+    fn the_archives_compiler_is_read_from_its_cc() {
+        let dir = sidecar_dir("wasi-cc", "MRUBY_CC = /opt/wasi-sdk/bin/clang\n");
+        assert_eq!(parse_compiler(&dir), "/opt/wasi-sdk/bin/clang".to_owned());
     }
 
     #[test]

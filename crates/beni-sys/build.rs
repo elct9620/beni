@@ -65,12 +65,11 @@
 // interface, recording the compiler that built it, the flags that
 // compiler was given, and the libraries it needs; `Beni::Builder`
 // requests it on every build). A flag holds only for the compiler it
-// was written for, so the two consumers take different sets: the
-// trampoline compile sees every carried flag, less the target, the
-// sysroot, and the include root this script derives from the
-// discovered archive itself; bindgen, which parses with libclang
-// rather than that compiler, sees only the flags deciding what the
-// headers declare.
+// was written for, so the two consumers differ: the trampoline compile
+// uses the compiler the sidecar names and sees every flag it carries,
+// less the include path this script substitutes; bindgen, which parses
+// with libclang rather than that compiler, sees only the flags
+// deciding what the headers declare.
 //
 // Linked signal
 // -------------
@@ -250,6 +249,7 @@ fn main() {
         "cargo:rerun-if-changed={}",
         lib_dir.join("libmruby.flags.mak").display()
     );
+    let compiler = parse_compiler(&lib_dir);
     let compile_flags = parse_compile_flags(&lib_dir);
     let declaration_flags = declaration_flags(&lib_dir, &compile_flags);
 
@@ -266,12 +266,7 @@ fn main() {
         &bindings_rs,
         &static_wrappers_c,
     );
-    compile_trampolines(
-        &include_root,
-        wasi_sdk.as_deref(),
-        &compile_flags,
-        &static_wrappers_c,
-    );
+    compile_trampolines(&include_root, &compiler, &compile_flags, &static_wrappers_c);
 
     // The archive sits where discovery found it; every other library
     // its sidecar names comes from the toolchain that built it, which
@@ -364,7 +359,7 @@ fn run_bindgen(
 
 fn compile_trampolines(
     include_root: &Path,
-    wasi_sdk: Option<&str>,
+    compiler: &str,
     compile_flags: &[String],
     static_wrappers_c: &Path,
 ) {
@@ -379,13 +374,10 @@ fn compile_trampolines(
         );
     }
     let mut build = cc::Build::new();
-    if let Some(wasi_sdk) = wasi_sdk {
-        build
-            .compiler(format!("{}/bin/clang", wasi_sdk))
-            .flag(format!("--sysroot={}/share/wasi-sysroot", wasi_sdk));
-    }
-    // `-D<name>[=<value>]` tokens straight from flags.mak, passed as
-    // raw flags so name=value pairs survive untouched.
+    build.compiler(compiler);
+    // Passed as raw flags so name=value pairs survive untouched. This
+    // is the compiler they were written for, so every one of them means
+    // here what it meant when the archive was built.
     for flag in compile_flags {
         build.flag(flag);
     }
