@@ -40,11 +40,12 @@ pub struct DataType<T> {
     _marker: PhantomData<T>,
 }
 
-// SAFETY: the descriptor is shared as a `'static` but carries no `T`
-// value — only a release-hook function pointer and a `'static` type
-// name, both immutable plain data. Sharing it across threads shares no
-// `T`, so `Sync` holds regardless of `T`: one `static` descriptor
-// serves every interpreter, on whichever thread each is reached from.
+// SAFETY: the descriptor carries no `T` value — only a release-hook
+// function pointer and a `'static` type name, both immutable plain
+// data. Reaching it from a thread reaches no `T`, so both markers hold
+// regardless of `T`: one descriptor serves every interpreter, on
+// whichever thread each is reached from.
+unsafe impl<T> Send for DataType<T> {}
 unsafe impl<T> Sync for DataType<T> {}
 
 impl<T> DataType<T> {
@@ -276,8 +277,20 @@ impl Value {
     }
 }
 
-#[cfg(all(test, mruby_linked))]
+#[cfg(test)]
 mod tests {
+    #[test]
+    fn a_descriptor_crosses_threads_whatever_it_describes() {
+        // The descriptor carries no `T`, so it crosses even where the
+        // payload it names could not. A field of its own would end
+        // that, and end it here.
+        fn crosses<T: Send + Sync>() {}
+        crosses::<crate::DataType<*const ()>>();
+    }
+}
+
+#[cfg(all(test, mruby_linked))]
+mod linked_tests {
     use super::*;
     use crate::Mrb;
     use std::sync::atomic::{AtomicUsize, Ordering};
