@@ -86,9 +86,22 @@ fn parse_link_libs(lib_dir: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
+/// The toolchain root the archive was built against, derived from the
+/// compiler the sidecar names. A cross build's sidecar names it as
+/// `<root>/bin/<compiler>`; a host build names a compiler off `PATH`
+/// with no root to derive, and yields `None`.
+fn parse_toolchain_root(lib_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    let cc = sidecar_line(lib_dir, "MRUBY_CC");
+    let bin = std::path::Path::new(cc.trim()).parent()?;
+    if bin.file_name()? != "bin" {
+        return None;
+    }
+    Some(bin.parent()?.to_path_buf())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_abi_defines, parse_link_libs};
+    use super::{parse_abi_defines, parse_link_libs, parse_toolchain_root};
 
     /// A directory holding one sidecar with the given `MRUBY_CFLAGS`
     /// body, named after the case so concurrent tests cannot collide.
@@ -201,6 +214,35 @@ mod tests {
     fn a_continuation_in_the_link_set_fails_rather_than_dropping_a_library() {
         let dir = sidecar_dir("libs-continuation", "MRUBY_LIBS = -lmruby \\\n  -lm\n");
         parse_link_libs(&dir);
+    }
+
+    #[test]
+    fn a_cross_builds_toolchain_root_is_derived_from_its_compiler() {
+        let dir = sidecar_dir(
+            "cc-cross",
+            "MRUBY_CC = /opt/wasi-sdk/bin/clang\nMRUBY_CFLAGS = -DMRB_INT32\n",
+        );
+        assert_eq!(
+            parse_toolchain_root(&dir),
+            Some(std::path::PathBuf::from("/opt/wasi-sdk"))
+        );
+    }
+
+    #[test]
+    fn a_host_build_names_a_compiler_with_no_root_to_derive() {
+        let dir = sidecar_dir("cc-host", "MRUBY_CC = gcc\nMRUBY_CFLAGS = -DMRB_INT32\n");
+        assert_eq!(parse_toolchain_root(&dir), None);
+    }
+
+    #[test]
+    fn a_compiler_outside_a_bin_directory_yields_no_root() {
+        // Only the `<root>/bin/<compiler>` shape names a root; anything
+        // else is read as naming none rather than as naming its parent.
+        let dir = sidecar_dir(
+            "cc-loose",
+            "MRUBY_CC = /usr/local/clang\nMRUBY_CFLAGS = -DMRB_INT32\n",
+        );
+        assert_eq!(parse_toolchain_root(&dir), None);
     }
 
     #[test]

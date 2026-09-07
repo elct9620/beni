@@ -50,7 +50,9 @@
 // cross-compiled cargo target fails naming the target. wasm32 builds
 // resolve the wasi-sdk root from `WASI_SDK_PATH`, defaulting to
 // `/opt/wasi-sdk` when unset, and fail naming the root in effect when
-// it lacks the toolchain.
+// it lacks the toolchain, when it is not the root the archive's
+// sidecar records as having built it, or when the sidecar records
+// none. One root reached by two spellings is one root.
 //
 // The discovered lib dir is self-contained: mruby's build copies the
 // complete public header tree (source headers, generated headers,
@@ -141,8 +143,9 @@ fn require_archive(lib_dir: &Path, var: &str) {
 /// Resolve the wasi-sdk root for wasm32 builds: `WASI_SDK_PATH` when
 /// set, the `/opt/wasi-sdk` convention otherwise. The root must hold
 /// the toolchain (`bin/clang`) — a missing toolchain fails naming the
-/// root in effect.
-fn resolve_wasi_sdk() -> String {
+/// root in effect — and must be the one the archive in `lib_dir` was
+/// built against, which its sidecar records.
+fn resolve_wasi_sdk(lib_dir: &Path) -> String {
     let root = env_path("WASI_SDK_PATH").unwrap_or_else(|| "/opt/wasi-sdk".to_owned());
     if !Path::new(&root).join("bin").join("clang").exists() {
         panic!(
@@ -151,7 +154,36 @@ fn resolve_wasi_sdk() -> String {
              wasi-sdk root."
         );
     }
-    root
+    let Some(recorded) = parse_toolchain_root(lib_dir) else {
+        panic!(
+            "beni-sys: the archive in {} records no toolchain root, so the \
+             wasi-sdk root in effect ({root}) cannot be checked against the one \
+             that built it. A cross-built archive names its compiler by path; \
+             rebuild it through `bundle exec rake beni:build`.",
+            lib_dir.display()
+        );
+    };
+    if same_directory(&recorded, Path::new(&root)) {
+        return root;
+    }
+    panic!(
+        "beni-sys: the archive in {} was built against the wasi-sdk root {}, \
+         but the root in effect is {root}. Point WASI_SDK_PATH at the root \
+         that built the archive, or rebuild the archive against this one.",
+        lib_dir.display(),
+        recorded.display()
+    );
+}
+
+/// Whether two paths name the same directory, resolving symlinks and
+/// relative segments so one root reached by two spellings still reads
+/// as one. A path that does not resolve names no directory, so it can
+/// match nothing.
+fn same_directory(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
 }
 
 fn main() {
@@ -195,7 +227,7 @@ fn main() {
         );
     }
 
-    let wasi_sdk = is_wasm.then(resolve_wasi_sdk);
+    let wasi_sdk = is_wasm.then(|| resolve_wasi_sdk(&lib_dir));
 
     // The archive's actual compile defines, from its flags.mak
     // sidecar. Re-run when the sidecar changes — a rebuilt archive
