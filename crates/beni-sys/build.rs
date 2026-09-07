@@ -17,9 +17,11 @@
 //      object set. No hand-written C shims remain — the
 //      single-translation-unit file produced by bindgen is the
 //      entire C surface.
-//   3. Emits `cargo:rustc-link-search=native=<lib dir>` plus
-//      `cargo:rustc-link-lib=static=mruby` so the resulting rlib drags
-//      `libmruby.a` into the consumer's link graph.
+//   3. Emits the link directives that drag the archive and everything
+//      it needs beside it into the consumer's link graph — search
+//      paths for the discovered lib dir and, on a cross build, the
+//      toolchain's own sysroot, plus one `cargo:rustc-link-lib` per
+//      library the sidecar names.
 //   4. Emits `cargo:rustc-cfg=mruby_linked` so the crate sources
 //      include the generated bindings instead of the host
 //      placeholders.
@@ -55,12 +57,13 @@
 // gem exports) into the sibling `include/` whenever it archives
 // `libmruby.a`, so `<lib dir>/../include` is the single include root
 // — the same directory the sidecar's own `-I$(MRUBY_PACKAGE_DIR)/
-// include` names. The ABI-bearing `-D` defines are NOT hard-coded:
-// they are parsed from the `libmruby.flags.mak` sidecar mruby writes
-// next to each archive (mruby's official embedder interface,
-// recording the exact compile flags; `Beni::Builder` requests it on
-// every build), so bindgen and the trampoline compile always see
-// what the archive was actually built with.
+// include` names. Neither the ABI-bearing `-D` defines nor the link
+// set are hard-coded: both are parsed from the `libmruby.flags.mak`
+// sidecar mruby writes next to each archive (mruby's official
+// embedder interface, recording the exact compile flags and
+// libraries; `Beni::Builder` requests it on every build), so bindgen,
+// the trampoline compile, and the link graph always see what the
+// archive was actually built with and against.
 //
 // Linked signal
 // -------------
@@ -78,6 +81,9 @@
 
 use std::env;
 use std::path::{Path, PathBuf};
+
+/// The archive discovery looks for, named as the linker names it.
+const ARCHIVE_LIB: &str = "mruby";
 
 include!("build/sidecar.rs");
 
@@ -121,7 +127,7 @@ fn discover_lib_dir(is_wasm: bool) -> Option<PathBuf> {
 /// no archive — a set variable is a claim that the archive exists, so
 /// the build never silently degrades to placeholder mode.
 fn require_archive(lib_dir: &Path, var: &str) {
-    let archive = lib_dir.join("libmruby.a");
+    let archive = lib_dir.join(format!("lib{ARCHIVE_LIB}.a"));
     if !archive.exists() {
         panic!(
             "beni-sys: {var} is set but {} does not exist. Run \
@@ -220,23 +226,26 @@ fn main() {
         &static_wrappers_c,
     );
 
+    // The archive sits where discovery found it; every other library
+    // its sidecar names comes from the toolchain that built it, which
+    // for a cross build is the wasi-sdk sysroot rather than Rust's own
+    // (Rust's wasm32-wasip1 self-contained set carries libc alone).
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
-    println!("cargo:rustc-link-lib=static=mruby");
-
-    // wasi-sdk setjmp library — required because the wasi libmruby.a
-    // uses setjmp/longjmp via the new WebAssembly exception handling
-    // mechanism (the wasi toolchain file sets
-    // `-mllvm -wasm-use-legacy-eh=false`). This produces calls to
-    // `__wasm_setjmp`, `__wasm_longjmp`, and `__wasm_setjmp_test`
-    // which live in wasi-sdk's `libsetjmp.a` (not in Rust's
-    // wasm32-wasip1 self-contained libc). Without this library,
-    // rust-lld's `--allow-undefined` flag would turn these into wasm
-    // imports that the host cannot satisfy. Host builds use the
-    // platform's native setjmp from libc — no extra directive.
     if let Some(wasi_sdk) = wasi_sdk.as_deref() {
-        let setjmp_dir = format!("{}/share/wasi-sysroot/lib/wasm32-wasip1", wasi_sdk);
-        println!("cargo:rustc-link-search=native={}", setjmp_dir);
-        println!("cargo:rustc-link-lib=static=setjmp");
+        println!(
+            "cargo:rustc-link-search=native={}/share/wasi-sysroot/lib/wasm32-wasip1",
+            wasi_sdk
+        );
+    }
+    for lib in parse_link_libs(&lib_dir) {
+        // The archive is static by definition; on wasm32 nothing links
+        // dynamically, so every library there is static too.
+        let kind = if lib == ARCHIVE_LIB || is_wasm {
+            "static="
+        } else {
+            ""
+        };
+        println!("cargo:rustc-link-lib={kind}{lib}");
     }
 
     println!("cargo:rustc-cfg=mruby_linked");

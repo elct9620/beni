@@ -20,6 +20,10 @@
 #   $ rake rust:check:wasm   — cargo check on wasm32-wasip1 (degrades to
 #                              host with a warning when the Rust target
 #                              is not provisioned)
+#   $ rake rust:link:wasm    — link wasm32-wasip1 test binaries against the
+#                              staged archive. `cargo check` never reaches
+#                              the linker, so this is what exercises the
+#                              link set the sidecar names.
 #   $ rake rust:test:default — cargo test against an mruby built with the
 #                              untouched upstream default config — the
 #                              gem's clean-build behaviour (64-bit
@@ -63,6 +67,25 @@ namespace :rust do
     end
   end
 
+  namespace :link do
+    # `cargo check` never reaches the linker, so the link directives the
+    # archive's sidecar drives — which libraries, found through which
+    # search paths — are only exercised by producing a real artifact.
+    # wasm32 has no test runner, so the binaries are built and not run.
+    desc "link wasm32-wasip1 test binaries against the staged archive"
+    task :wasm do
+      abort "cargo not on PATH; install Rust toolchain to run rust:link:wasm" unless BeniRust.cargo_available?
+
+      target = BeniRust.wasm_target_or_host
+      if target.nil?
+        warn "[rust] #{BeniRust::WASM_TARGET} not provisioned; skipping the wasm link"
+        next
+      end
+
+      sh(BeniRust.wasm_env, "cargo", "test", "--workspace", "--target", target, "--no-run")
+    end
+  end
+
   namespace :test do
     # Catches type/width coincidences the repo's MRB_INT32 validation
     # config masks — see BeniRust.default_abi_test for the mechanics.
@@ -74,6 +97,7 @@ namespace :rust do
     end
   end
 
-  desc "Full local compile verification: beni:build + host check/test + wasm32 check + default-ABI test"
-  task verify: ["beni:build", "rust:check", "rust:test", "rust:check:wasm", "rust:test:default"]
+  desc "Full local compile verification: beni:build + host check/test + wasm32 check/link + default-ABI test"
+  task verify: ["beni:build", "rust:check", "rust:test", "rust:check:wasm", "rust:link:wasm",
+                "rust:test:default"]
 end
