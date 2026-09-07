@@ -62,12 +62,15 @@
 // include` names. Neither the compile flags nor the link set are
 // hard-coded: both are parsed from the `libmruby.flags.mak` sidecar
 // mruby writes next to each archive (mruby's official embedder
-// interface, recording the exact compile flags and libraries;
-// `Beni::Builder` requests it on every build), so bindgen, the
-// trampoline compile, and the link graph always see what the archive
-// was actually built with and against. Only the target, the sysroot,
-// and the include root are left out of the carried flags, each being
-// something this script derives from the discovered archive itself.
+// interface, recording the compiler that built it, the flags that
+// compiler was given, and the libraries it needs; `Beni::Builder`
+// requests it on every build). A flag holds only for the compiler it
+// was written for, so the two consumers take different sets: the
+// trampoline compile sees every carried flag, less the target, the
+// sysroot, and the include root this script derives from the
+// discovered archive itself; bindgen, which parses with libclang
+// rather than that compiler, sees only the flags deciding what the
+// headers declare.
 //
 // Linked signal
 // -------------
@@ -248,6 +251,7 @@ fn main() {
         lib_dir.join("libmruby.flags.mak").display()
     );
     let compile_flags = parse_compile_flags(&lib_dir);
+    let declaration_flags = declaration_flags(&lib_dir, &compile_flags);
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -258,7 +262,7 @@ fn main() {
         &manifest_dir,
         &include_root,
         wasi_sdk.as_deref(),
-        &compile_flags,
+        &declaration_flags,
         &bindings_rs,
         &static_wrappers_c,
     );
@@ -299,7 +303,7 @@ fn run_bindgen(
     manifest_dir: &Path,
     include_root: &Path,
     wasi_sdk: Option<&str>,
-    compile_flags: &[String],
+    declaration_flags: &[String],
     bindings_rs: &Path,
     static_wrappers_c: &Path,
 ) {
@@ -310,8 +314,10 @@ fn run_bindgen(
             .clang_arg("--target=wasm32-wasip1")
             .clang_arg(format!("--sysroot={}/share/wasi-sysroot", wasi_sdk));
     }
-    // `-D<name>[=<value>]` tokens straight from flags.mak.
-    for flag in compile_flags {
+    // These decide what the archive's headers declare. libclang is not
+    // the compiler the sidecar names, so nothing deciding how code is
+    // generated reaches it.
+    for flag in declaration_flags {
         builder = builder.clang_arg(flag);
     }
     let bindings = builder

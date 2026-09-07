@@ -49,9 +49,9 @@ fn sidecar_line(lib_dir: &std::path::Path, key: &str) -> String {
 
 /// The compile flags the discovered archive was actually built with,
 /// less the three `build.rs` derives from the archive itself: the
-/// target, the sysroot, and the include root. bindgen and the
-/// trampoline compile see everything else the archive saw, so no flag
-/// that shapes the generated code is left behind.
+/// target, the sysroot, and the include root. The trampoline compile
+/// sees everything else the archive saw, so no flag that shapes the
+/// generated code is left behind.
 ///
 /// A quoted value has spaces the whitespace split would sever, so a
 /// flag carrying one stops the read rather than reaching a compiler
@@ -77,6 +77,33 @@ fn parse_compile_flags(lib_dir: &std::path::Path) -> Vec<String> {
         );
     }
     flags
+}
+
+/// The flags deciding what the archive's headers declare — macro
+/// definitions and removals, and the language standard. Binding
+/// generation parses with a toolchain that is never the one the sidecar
+/// names, so it is held to these alone.
+///
+/// A `-D` or `-U` carrying its value in the next token would reach the
+/// parse without it, so it stops the read instead.
+fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec<String> {
+    if let Some(bare) = compile_flags
+        .iter()
+        .find(|token| token.as_str() == "-D" || token.as_str() == "-U")
+    {
+        panic!(
+            "beni-sys: {} names a bare `{bare}` in `MRUBY_CFLAGS`, whose value is a \
+             separate token — unrecognized flags.mak layout",
+            lib_dir.join("libmruby.flags.mak").display()
+        );
+    }
+    compile_flags
+        .iter()
+        .filter(|token| {
+            token.starts_with("-D") || token.starts_with("-U") || token.starts_with("-std=")
+        })
+        .cloned()
+        .collect()
 }
 
 /// The libraries the archive needs linked, named by the sidecar as
@@ -122,7 +149,7 @@ fn parse_toolchain_root(lib_dir: &std::path::Path) -> Option<std::path::PathBuf>
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_compile_flags, parse_link_libs, parse_toolchain_root};
+    use super::{declaration_flags, parse_compile_flags, parse_link_libs, parse_toolchain_root};
 
     /// A directory holding one sidecar with the given `MRUBY_CFLAGS`
     /// body, named after the case so concurrent tests cannot collide.
@@ -188,6 +215,36 @@ mod tests {
             ],
             "a flag and the value it governs stay together and in order"
         );
+    }
+
+    #[test]
+    fn only_the_flags_deciding_what_the_headers_declare_reach_binding_generation() {
+        // `-mllvm -wasm-use-legacy-eh=false` decides how code is
+        // generated and `-Wall` what is warned about; neither changes a
+        // declaration, and libclang need not know either.
+        let dir = sidecar_dir(
+            "wasi-declares",
+            "MRUBY_CFLAGS = -std=gnu99 -g -O3 -Wall -mllvm -wasm-use-legacy-eh=false \
+             -DMRB_INT32 -UMRB_USE_FLOAT32\n",
+        );
+        let flags = parse_compile_flags(&dir);
+        assert_eq!(
+            declaration_flags(&dir, &flags),
+            vec![
+                "-std=gnu99".to_owned(),
+                "-DMRB_INT32".to_owned(),
+                "-UMRB_USE_FLOAT32".to_owned(),
+            ],
+            "the language standard and the macro state cross; nothing else does"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "names a bare `-D` in `MRUBY_CFLAGS`")]
+    fn a_bare_define_fails_rather_than_reaching_the_parse_without_its_value() {
+        let dir = sidecar_dir("bare-define", "MRUBY_CFLAGS = -D MRB_INT32\n");
+        let flags = parse_compile_flags(&dir);
+        declaration_flags(&dir, &flags);
     }
 
     #[test]
