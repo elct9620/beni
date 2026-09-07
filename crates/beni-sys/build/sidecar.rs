@@ -111,24 +111,17 @@ mod tests {
     /// A directory holding one sidecar with the given `MRUBY_CFLAGS`
     /// body, named after the case so concurrent tests cannot collide.
     fn sidecar_dir(case: &str, contents: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "beni-sys-sidecar-{}-{}",
-            std::process::id(),
-            case
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("beni-sys-sidecar-{}-{}", std::process::id(), case));
         std::fs::create_dir_all(&dir).expect("the case directory is creatable");
-        std::fs::write(dir.join("libmruby.flags.mak"), contents)
-            .expect("the sidecar is writable");
+        std::fs::write(dir.join("libmruby.flags.mak"), contents).expect("the sidecar is writable");
         dir
     }
 
     /// A directory with no sidecar in it at all.
     fn empty_dir(case: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "beni-sys-sidecar-{}-{}",
-            std::process::id(),
-            case
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("beni-sys-sidecar-{}-{}", std::process::id(), case));
         std::fs::create_dir_all(&dir).expect("the case directory is creatable");
         let _ = std::fs::remove_file(dir.join("libmruby.flags.mak"));
         dir
@@ -196,10 +189,7 @@ mod tests {
         // A cross build's sidecar names the toolchain library its
         // exception mechanism needs; a gem's configuration could name
         // any other. Neither is known to the crate.
-        let dir = sidecar_dir(
-            "extra-libs",
-            "MRUBY_LIBS = -lmruby -lm -lsetjmp -lz\n",
-        );
+        let dir = sidecar_dir("extra-libs", "MRUBY_LIBS = -lmruby -lm -lsetjmp -lz\n");
         assert_eq!(
             parse_link_libs(&dir),
             vec![
@@ -270,7 +260,10 @@ mod tests {
     #[test]
     #[should_panic(expected = "continuation line in `MRUBY_CFLAGS`")]
     fn a_continuation_line_fails_rather_than_dropping_the_rest() {
-        let dir = sidecar_dir("continuation", "MRUBY_CFLAGS = -DMRB_INT32 \\\n  -DMRB_UTF8\n");
+        let dir = sidecar_dir(
+            "continuation",
+            "MRUBY_CFLAGS = -DMRB_INT32 \\\n  -DMRB_UTF8\n",
+        );
         parse_compile_flags(&dir);
     }
 
