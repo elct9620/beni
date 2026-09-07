@@ -107,14 +107,13 @@ impl mrb_value {
 
 // Compile-time pin on the mrb_value layout. Under word boxing the
 // value is a single machine word on every target (4 bytes on wasm32,
-// 8 on 64-bit hosts). Catches a future bindgen / build_config drift
-// before it silently breaks ABI.
-#[cfg(mruby_linked)]
+// 8 on 64-bit hosts), and the placeholder stub holds to the same word
+// so both builds present one layout. Catches a future bindgen /
+// build_config drift before it silently breaks ABI.
 const _: () = assert!(
     core::mem::size_of::<mrb_value>() == core::mem::size_of::<usize>(),
     "mrb_value size diverged from the MRB_WORDBOX_NO_INLINE_FLOAT word-boxing layout"
 );
-#[cfg(mruby_linked)]
 const _: () = assert!(
     core::mem::align_of::<mrb_value>() == core::mem::align_of::<usize>(),
     "mrb_value alignment diverged from the MRB_WORDBOX_NO_INLINE_FLOAT word-boxing layout"
@@ -196,14 +195,15 @@ pub type mrb_ccontext = c_void;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct mrb_value {
-    _payload: [u64; 2],
+    /// The word boxing puts the value in, carried here so a
+    /// placeholder build presents the layout it would link against.
+    _payload: usize,
 }
 #[cfg(not(mruby_linked))]
 impl mrb_value {
-    /// All-zero `mrb_value`. In placeholder mode this produces a
-    /// zeroed 16-byte stand-in.
+    /// All-zero `mrb_value`, as in a linked build.
     pub const fn zeroed() -> Self {
-        Self { _payload: [0, 0] }
+        Self { _payload: 0 }
     }
 }
 
@@ -296,15 +296,6 @@ mod version {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn mrb_value_size_covers_known_layouts() {
-        // The documented word-box layouts top out at 8 bytes
-        // (NaN-boxing on 64-bit), but we reserve 16 bytes on host so
-        // future layouts do not require an ABI break.
-        assert!(core::mem::size_of::<mrb_value>() >= 8);
-        assert_eq!(core::mem::align_of::<mrb_value>(), 8);
-    }
 
     #[test]
     fn mrb_func_t_is_a_valid_extern_c_fn_pointer() {
