@@ -153,11 +153,15 @@ Selection, checksums, and cross-compile activation:
 
 ### beni-sys crate — FFI surface
 
-- FFI bindings are generated against the discovered archive and aligned via
-  the compile-flags sidecar, so the bindings always match how the archive was
-  actually built. The sidecar also names the libraries the archive needs
-  linked, and those are the ones linked. The crate follows the `-sys` crate
-  convention.
+- The compile-flags sidecar names the compiler that built the archive and
+  the flags it was given; a flag holds only for that compiler. The C shims
+  compiled beside the bindings use that compiler with those flags unchanged.
+  Binding generation parses the headers with its own toolchain, never that
+  compiler, so it takes only the flags deciding what the headers declare —
+  macro definitions and removals, and the language standard; the target, the
+  sysroot, and the header tree are the crate's own. The sidecar also names
+  the libraries the archive needs linked, and those are the ones linked. The
+  crate follows the `-sys` crate convention.
 - One archive serves one cargo build target. Archive discovery is
   environment-driven, highest precedence first; the highest-precedence
   variable set is the sole source, never falling back to a lower one:
@@ -186,7 +190,11 @@ Selection, checksums, and cross-compile activation:
   so a release the crates have not been reconciled with is not refused —
   what it changed surfaces as a compile failure, a symbol the wrapper
   calls that the archive does not declare or a layout the crates pin.
-  Supported boxing configurations: word boxing.
+  Supported boxing configurations: word boxing. Supported language
+  standard: the GNU dialect below C11 mruby's toolchains set
+  unconditionally; overriding it leaves mruby's never-returning
+  declarations in a form the bindings do not carry, and the typed
+  wrapper's diverging raise does not compile.
 - In placeholder mode `cargo check` passes and no FFI surface is exported.
 - A `mruby_linked` cfg reflects whether a real archive is linked. The cfg
   is derived, never a cargo feature: `beni-sys` publishes the linked
@@ -893,7 +901,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | `beni:config` with the configured `version`'s mruby source not staged | task fails and names the missing source, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
 | Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar, never silently falls back to placeholder mode |
-| A compile-flags sidecar the crate cannot read — no line naming the flags or the libraries, or a layout whose tokens it would mis-read | `beni-sys` build fails and names the sidecar, never reading a partial set from it |
+| A compile-flags sidecar the crate cannot read — no line naming the compiler, the flags, or the libraries, or a layout whose tokens it would mis-read | `beni-sys` build fails and names the sidecar, never reading a partial set from it |
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
 | Discovered archive below the supported mruby floor | `beni-sys` build fails and names the archive's version, never falls back to placeholder mode |
 | Discovered archive whose headers state no mruby version | `beni-sys` build fails and names the headers it read, never falls back to placeholder mode |
@@ -940,7 +948,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | staged path | `mruby/build/<name>/lib/` under the vendor tree, holding one target's archive and compile-flags sidecar |
 | wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — beni's wasm32-wasip1 cross-compile settings, staged whenever `wasi-sdk` is selected and activated by a build config via `conf.toolchain :wasi` |
-| compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of defines/flags the crates align with |
+| compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of the compiler that built it, the flags that compiler was given, and the libraries it needs linked |
 | supported mruby floor | mruby 4.0 — the oldest release the crates build against; an archive states its own version in the header tree staged beside it |
 | linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents in every build — `1` with a real archive linked, `0` in placeholder mode |
 | placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set |
