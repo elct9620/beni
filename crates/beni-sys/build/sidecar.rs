@@ -47,31 +47,36 @@ fn sidecar_line(lib_dir: &std::path::Path, key: &str) -> String {
     value.to_owned()
 }
 
-/// Extract the `-D` defines from the sidecar's compile flags — the
-/// flags the discovered archive was actually compiled with. bindgen and
-/// the trampoline compile must see the same set or the `mrb_value`
-/// layout silently diverges from the archive. (`MRUBY_CFLAGS = ...` is
-/// plain space-separated tokens; only the `-D` ones matter here —
-/// `build.rs` constructs include paths and target flags independently.)
-fn parse_abi_defines(lib_dir: &std::path::Path) -> Vec<String> {
-    let cflags = sidecar_line(lib_dir, "MRUBY_CFLAGS");
-    // A quoted `-D` value has spaces the whitespace split would sever,
-    // so it stops the read rather than corrupting the define.
-    if cflags
+/// The compile flags the discovered archive was actually built with,
+/// less the three `build.rs` derives from the archive itself: the
+/// target, the sysroot, and the include root. bindgen and the
+/// trampoline compile see everything else the archive saw, so no flag
+/// that shapes the generated code is left behind.
+///
+/// A quoted value has spaces the whitespace split would sever, so a
+/// flag carrying one stops the read rather than reaching a compiler
+/// in pieces.
+fn parse_compile_flags(lib_dir: &std::path::Path) -> Vec<String> {
+    let flags: Vec<String> = sidecar_line(lib_dir, "MRUBY_CFLAGS")
         .split_whitespace()
-        .any(|token| token.starts_with("-D") && (token.contains('"') || token.contains('\'')))
+        .filter(|token| {
+            !token.starts_with("--target")
+                && !token.starts_with("--sysroot")
+                && !token.starts_with("-I")
+        })
+        .map(str::to_owned)
+        .collect();
+    if let Some(quoted) = flags
+        .iter()
+        .find(|token| token.contains('"') || token.contains('\''))
     {
         panic!(
-            "beni-sys: {} carries a quoted `-D` value in `MRUBY_CFLAGS` — \
+            "beni-sys: {} carries a quoted value in `MRUBY_CFLAGS` ({quoted}) — \
              unrecognized flags.mak layout",
             lib_dir.join("libmruby.flags.mak").display()
         );
     }
-    cflags
-        .split_whitespace()
-        .filter(|token| token.starts_with("-D"))
-        .map(str::to_owned)
-        .collect()
+    flags
 }
 
 /// The libraries the archive needs linked, named by the sidecar as
@@ -101,7 +106,7 @@ fn parse_toolchain_root(lib_dir: &std::path::Path) -> Option<std::path::PathBuf>
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_abi_defines, parse_link_libs, parse_toolchain_root};
+    use super::{parse_compile_flags, parse_link_libs, parse_toolchain_root};
 
     /// A directory holding one sidecar with the given `MRUBY_CFLAGS`
     /// body, named after the case so concurrent tests cannot collide.
@@ -138,38 +143,42 @@ mod tests {
     );
 
     #[test]
-    fn the_archives_defines_are_read_from_its_cflags() {
+    fn the_archives_compile_flags_are_read_from_its_cflags() {
         let dir = sidecar_dir("host", HOST_SIDECAR);
         assert_eq!(
-            parse_abi_defines(&dir),
+            parse_compile_flags(&dir),
             vec![
+                "-std=gnu99".to_owned(),
+                "-g".to_owned(),
+                "-O3".to_owned(),
+                "-Wall".to_owned(),
                 "-DMRB_INT32".to_owned(),
                 "-DMRB_WORDBOX_NO_INLINE_FLOAT".to_owned(),
             ],
-            "every -D token is carried and nothing else is"
+            "every flag is carried but the include root build.rs derives"
         );
     }
 
     #[test]
-    fn a_quoted_include_path_is_not_mistaken_for_a_quoted_define() {
-        // `-I"$(MRUBY_PACKAGE_DIR)/include"` carries quotes but is not
-        // a define, so it must not trip the layout guard.
-        let dir = sidecar_dir("quoted-include", HOST_SIDECAR);
-        assert_eq!(parse_abi_defines(&dir).len(), 2);
-    }
-
-    /// A cross build's sidecar carries toolchain and codegen flags
-    /// that decide ABI as surely as a define does. The parse reaches
-    /// only the `-D` tokens, so this pins which flags reach the crate
-    /// and which do not.
-    #[test]
-    fn flags_other_than_defines_are_dropped() {
+    fn a_cross_builds_codegen_flags_are_carried_and_its_own_target_is_not() {
+        // `-mllvm -wasm-use-legacy-eh=false` decides how setjmp
+        // compiles, so it reaches the trampoline compile; the target
+        // and sysroot are the archive's own paths, which build.rs
+        // derives from the discovered lib dir instead.
         let dir = sidecar_dir(
             "wasi",
             "MRUBY_CFLAGS = --target=wasm32-wasip1 --sysroot=/opt/wasi-sdk/share/wasi-sysroot \
              -mllvm -wasm-use-legacy-eh=false -DMRB_INT32\n",
         );
-        assert_eq!(parse_abi_defines(&dir), vec!["-DMRB_INT32".to_owned()]);
+        assert_eq!(
+            parse_compile_flags(&dir),
+            vec![
+                "-mllvm".to_owned(),
+                "-wasm-use-legacy-eh=false".to_owned(),
+                "-DMRB_INT32".to_owned(),
+            ],
+            "a flag and the value it governs stay together and in order"
+        );
     }
 
     #[test]
@@ -248,27 +257,27 @@ mod tests {
     #[test]
     #[should_panic(expected = "is missing")]
     fn a_missing_sidecar_fails_naming_the_path() {
-        parse_abi_defines(&empty_dir("absent"));
+        parse_compile_flags(&empty_dir("absent"));
     }
 
     #[test]
     #[should_panic(expected = "has no `MRUBY_CFLAGS = ` line")]
     fn a_sidecar_without_a_cflags_line_fails() {
         let dir = sidecar_dir("no-cflags", "MRUBY_CC = gcc\nMRUBY_LIBS = -lmruby\n");
-        parse_abi_defines(&dir);
+        parse_compile_flags(&dir);
     }
 
     #[test]
     #[should_panic(expected = "continuation line in `MRUBY_CFLAGS`")]
     fn a_continuation_line_fails_rather_than_dropping_the_rest() {
         let dir = sidecar_dir("continuation", "MRUBY_CFLAGS = -DMRB_INT32 \\\n  -DMRB_UTF8\n");
-        parse_abi_defines(&dir);
+        parse_compile_flags(&dir);
     }
 
     #[test]
-    #[should_panic(expected = "quoted `-D` value")]
-    fn a_quoted_define_fails_rather_than_severing_its_value() {
+    #[should_panic(expected = "carries a quoted value")]
+    fn a_quoted_value_fails_rather_than_reaching_a_compiler_in_pieces() {
         let dir = sidecar_dir("quoted-define", "MRUBY_CFLAGS = -DMRB_NAME=\"a b\"\n");
-        parse_abi_defines(&dir);
+        parse_compile_flags(&dir);
     }
 }

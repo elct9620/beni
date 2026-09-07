@@ -64,7 +64,6 @@ impl Error {
                         max as core::ffi::c_int,
                     );
                 }
-                Value::zeroed()
             }) {
                 Err(err) => err,
                 // `mrb_argnum_error` always raises, so `protect` returns

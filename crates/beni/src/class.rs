@@ -283,13 +283,9 @@ impl RClass {
         #[cfg(mruby_linked)]
         {
             // SAFETY: bridge frame — caller upholds the unwind contract.
-            // bindgen drops the `mrb_noreturn` attribute on its `mrb_raise`
-            // declaration, so the FFI return type is `()` rather than the
-            // diverging `!`. The `unreachable_unchecked` keeps the
-            // diverging Rust signature without an extra runtime branch —
-            // `mrb_raise` long-jumps before control can reach it.
-            unsafe { sys::mrb_raise(mrb.as_ptr(), self.0, msg.as_ptr()) };
-            unsafe { core::hint::unreachable_unchecked() }
+            // `mrb_raise` is declared as never returning and the binding
+            // carries that, so it satisfies the diverging signature.
+            unsafe { sys::mrb_raise(mrb.as_ptr(), self.0, msg.as_ptr()) }
         }
         #[cfg(not(mruby_linked))]
         {

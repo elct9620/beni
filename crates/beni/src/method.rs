@@ -173,12 +173,10 @@ unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
             exc
         }
     };
-    // SAFETY: bridge frame — forwarded from the caller. bindgen
-    // drops the `mrb_noreturn` attribute, so the diverging signature
-    // is restated via `unreachable_unchecked` (`mrb_exc_raise`
-    // long-jumps before control can reach it).
-    unsafe { sys::mrb_exc_raise(mrb.as_ptr(), exc.into_raw()) };
-    unsafe { core::hint::unreachable_unchecked() }
+    // SAFETY: bridge frame — forwarded from the caller.
+    // `mrb_exc_raise` is declared as never returning and the binding
+    // carries that, so it satisfies the diverging signature.
+    unsafe { sys::mrb_exc_raise(mrb.as_ptr(), exc.into_raw()) }
 }
 
 /// Wrap the conversion + body pipeline in the panic boundary and

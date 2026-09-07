@@ -218,7 +218,6 @@ mod tests {
                     let runtime_error = sys::mrb_class_get(m.as_ptr(), c"RuntimeError".as_ptr());
                     sys::mrb_raise(m.as_ptr(), runtime_error, c"boom from ruby".as_ptr());
                 }
-                Value::zeroed()
             })
             .expect_err("a raise inside the body must surface as Err");
 
@@ -263,7 +262,6 @@ mod tests {
             let class = sys::mrb_class_get(m.as_ptr(), class.as_ptr());
             sys::mrb_raise(m.as_ptr(), class, message.as_ptr());
         }
-        Value::zeroed()
     }
 
     #[test]
