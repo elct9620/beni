@@ -21,6 +21,14 @@ use beni_sys as sys;
 /// arena index recorded at `Mrb::arena_scope`, releasing arena
 /// protection for every value created inside; `keep` instead
 /// carries one surviving value out still protected.
+///
+/// The guard borrows the interpreter, so it stays on the thread that
+/// made it:
+///
+/// ```compile_fail
+/// fn carried<T: Send>() {}
+/// carried::<beni::ArenaScope<'static>>();
+/// ```
 pub struct ArenaScope<'mrb> {
     mrb: &'mrb Mrb,
     #[cfg(mruby_linked)]

@@ -148,6 +148,14 @@ const TABLE_GLOBAL: &[u8] = b"beni_gc_roots";
 /// value are independent: each owns its own slot, so no drop releases
 /// another's. The guard holds the table and the value it rooted, so
 /// reading it back and releasing it need no lookup.
+///
+/// The guard borrows the interpreter, so it stays on the thread that
+/// made it:
+///
+/// ```compile_fail
+/// fn carried<T: Send>() {}
+/// carried::<beni::GcRoot<'static>>();
+/// ```
 pub struct GcRoot<'mrb> {
     #[cfg(mruby_linked)]
     mrb: &'mrb Mrb,

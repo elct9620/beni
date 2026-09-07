@@ -25,6 +25,14 @@ use beni_sys as sys;
 /// `mrb_state` that produced it: when `Drop` runs we still need
 /// `self.mrb.as_ptr()` to call `mrb_ccontext_free`, and the borrow
 /// checker keeps `Mrb` alive long enough.
+///
+/// The guard borrows the interpreter, so it stays on the thread that
+/// made it:
+///
+/// ```compile_fail
+/// fn carried<T: Send>() {}
+/// carried::<beni::Ccontext<'static>>();
+/// ```
 pub struct Ccontext<'mrb> {
     #[cfg(mruby_linked)]
     mrb: &'mrb Mrb,
