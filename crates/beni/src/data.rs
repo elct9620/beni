@@ -467,6 +467,60 @@ mod tests {
         );
     }
 
+    /// Records which thread released it, so a close on a thread the
+    /// interpreter was handed to can be told from a close at home.
+    static RELEASED_ON: std::sync::Mutex<Option<std::thread::ThreadId>> =
+        std::sync::Mutex::new(None);
+
+    struct ThreadProbe;
+    impl Drop for ThreadProbe {
+        fn drop(&mut self) {
+            *RELEASED_ON
+                .lock()
+                .expect("the probe mutex is never poisoned") = Some(std::thread::current().id());
+        }
+    }
+
+    static THREAD_PROBE_TYPE: DataType<ThreadProbe> = DataType::new(c"BeniThreadProbe");
+
+    #[test]
+    fn release_hook_runs_on_the_thread_the_interpreter_was_carried_to() {
+        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let class = mrb
+            .define_class(c"BeniThreadHolder", mrb.object_class())
+            .expect("defining the carrier class must succeed");
+        class.set_instance_data_tt(&mrb);
+
+        // Root the carrier so nothing collects it before the close that
+        // happens on the far thread.
+        let obj = class
+            .data_wrap(&mrb, ThreadProbe, &THREAD_PROBE_TYPE)
+            .expect("wrapping into a marked class must succeed");
+        let slot = mrb.intern_cstr(c"$beni_thread_probe");
+        mrb.gv_set(slot, obj);
+
+        let carrier = std::thread::spawn(move || {
+            let id = std::thread::current().id();
+            drop(mrb);
+            id
+        })
+        .join()
+        .expect("the thread carrying the interpreter ran to completion");
+
+        assert_ne!(
+            carrier,
+            std::thread::current().id(),
+            "the close must have happened away from this thread"
+        );
+        assert_eq!(
+            *RELEASED_ON
+                .lock()
+                .expect("the probe mutex is never poisoned"),
+            Some(carrier),
+            "the payload is released wherever its interpreter is reached from"
+        );
+    }
+
     /// Records that its `Drop` ran, then panics — a consumer payload
     /// whose destructor unwinds while the GC sweeps it from a C frame.
     static PANIC_DROPS: AtomicUsize = AtomicUsize::new(0);
