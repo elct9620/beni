@@ -178,7 +178,14 @@ Selection, checksums, and cross-compile activation:
   against, and the root in effect is that one: a build finding a
   different root, or none recorded, fails naming what it has. One root
   reached by two spellings is one root.
-- Supports one FFI surface per mruby minor version; supported versions: 4.0.
+- Builds against an archive at the supported mruby floor or above; one
+  below it fails the `beni-sys` build, named by the version its own
+  headers record, and an archive whose headers state no version fails the
+  same way. No upper bound is declared: the FFI surface is generated from
+  the discovered archive's own headers rather than declared per version,
+  so a release the crates have not been reconciled with is not refused —
+  what it changed surfaces as a compile failure, a symbol the wrapper
+  calls that the archive does not declare or a layout the crates pin.
   Supported boxing configurations: word boxing.
 - In placeholder mode `cargo check` passes and no FFI surface is exported.
 - A `mruby_linked` cfg reflects whether a real archive is linked. The cfg
@@ -888,7 +895,8 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar, never silently falls back to placeholder mode |
 | A compile-flags sidecar the crate cannot read — no line naming the flags or the libraries, or a layout whose tokens it would mis-read | `beni-sys` build fails and names the sidecar, never reading a partial set from it |
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
-| Discovered archive at an mruby version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
+| Discovered archive below the supported mruby floor | `beni-sys` build fails and names the archive's version, never falls back to placeholder mode |
+| Discovered archive whose headers state no mruby version | `beni-sys` build fails and names the headers it read, never falls back to placeholder mode |
 | Cross-compiled build for a cargo target other than wasm32 | `beni-sys` build fails and names the unsupported target, never falls back to placeholder mode |
 | Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails, never falls back to placeholder mode |
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
@@ -933,6 +941,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | staged path | `mruby/build/<name>/lib/` under the vendor tree, holding one target's archive and compile-flags sidecar |
 | wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — beni's wasm32-wasip1 cross-compile settings, staged whenever `wasi-sdk` is selected and activated by a build config via `conf.toolchain :wasi` |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of defines/flags the crates align with |
+| supported mruby floor | mruby 4.0 — the oldest release the crates build against; an archive states its own version in the header tree staged beside it |
 | linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents in every build — `1` with a real archive linked, `0` in placeholder mode |
 | placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
