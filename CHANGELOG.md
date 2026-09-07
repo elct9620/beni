@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.12.0](https://github.com/elct9620/beni/compare/v0.11.0...v0.12.0) (2026-09-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni-sys:** check the toolchain root against the one that built it
+* **beni-sys:** link what the archive's sidecar names
+* **beni:** require a carried payload to cross threads
+
+### Features
+
+* **beni-sys:** check the toolchain root against the one that built it ([c8799ae](https://github.com/elct9620/beni/commit/c8799aedff194819d1ef5b1e9ebbdefcc95344e7))
+* **beni-sys:** link what the archive's sidecar names ([e694a2d](https://github.com/elct9620/beni/commit/e694a2d03199f86982e776e3c39dafb1c95bcaaa))
+* **beni-sys:** refuse an archive older than the crates build against ([46d5830](https://github.com/elct9620/beni/commit/46d583041f3789a64e5e5cf4385e3666304caa8e))
+* **beni:** carry an interpreter between threads ([e439835](https://github.com/elct9620/beni/commit/e4398358c25a2a167c4f90e6becd8da5260c9db7))
+* **beni:** require a carried payload to cross threads ([ee8a0b7](https://github.com/elct9620/beni/commit/ee8a0b7303eb7c6ed651b26aad4c30b933661c3c))
+* **beni:** state that a data-type descriptor crosses threads ([95b6d2f](https://github.com/elct9620/beni/commit/95b6d2f02c823b9b79cdfee449aad5f87f54ba99))
+* **beni:** state that a typed handle crosses threads ([c75436a](https://github.com/elct9620/beni/commit/c75436a02db5ff6d23363b2e38499e93c8fb62e2))
+
+
+### Bug Fixes
+
+* **beni-sys:** compile the shims with the compiler their flags were written for ([bb3a3ea](https://github.com/elct9620/beni/commit/bb3a3ea57096c84d4a304cc16f469730191feb51))
+* **beni-sys:** fail on a link set the sidecar states in another shape ([a68f3e9](https://github.com/elct9620/beni/commit/a68f3e919adc5c0cd944b9863677a126a7bd3ca0))
+* **beni-sys:** hold binding generation to what the headers declare ([1829b20](https://github.com/elct9620/beni/commit/1829b20c959aa1875578589651730d8d94fc360d))
+
 ## [0.11.0](https://github.com/elct9620/beni/compare/v0.10.0...v0.11.0) (2026-09-04)
 
 
