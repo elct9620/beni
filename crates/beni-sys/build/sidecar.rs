@@ -83,11 +83,27 @@ fn parse_compile_flags(lib_dir: &std::path::Path) -> Vec<String> {
 /// `-l` tokens and yielded without the prefix. The archive states its
 /// own link set, so a configuration that pulls in a further library is
 /// served without the crate being taught about it.
+///
+/// mruby writes every token on the line through the linker option its
+/// toolchain defines, so a token in any other shape names a link set
+/// this read would carry only in part; it stops rather than linking
+/// against less than the archive names.
 fn parse_link_libs(lib_dir: &std::path::Path) -> Vec<String> {
     sidecar_line(lib_dir, "MRUBY_LIBS")
         .split_whitespace()
-        .filter_map(|token| token.strip_prefix("-l"))
-        .map(str::to_owned)
+        .map(|token| {
+            token
+                .strip_prefix("-l")
+                .filter(|name| !name.is_empty() && !name.contains(['"', '\'']))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "beni-sys: {} names `{token}` in `MRUBY_LIBS`, which is not a \
+                         `-l<name>` library — unrecognized flags.mak layout",
+                        lib_dir.join("libmruby.flags.mak").display()
+                    )
+                })
+                .to_owned()
+        })
         .collect()
 }
 
@@ -205,6 +221,20 @@ mod tests {
     #[should_panic(expected = "has no `MRUBY_LIBS = ` line")]
     fn a_sidecar_without_a_libs_line_fails() {
         let dir = sidecar_dir("no-libs", "MRUBY_CFLAGS = -DMRB_INT32\n");
+        parse_link_libs(&dir);
+    }
+
+    #[test]
+    #[should_panic(expected = "is not a `-l<name>` library")]
+    fn a_quoted_library_fails_rather_than_naming_one_with_its_quotes() {
+        let dir = sidecar_dir("libs-quoted", "MRUBY_LIBS = -l\"mruby\" -l\"m\"\n");
+        parse_link_libs(&dir);
+    }
+
+    #[test]
+    #[should_panic(expected = "is not a `-l<name>` library")]
+    fn a_library_named_without_the_l_option_fails_rather_than_linking_none() {
+        let dir = sidecar_dir("libs-msvc", "MRUBY_LIBS = libmruby.lib\n");
         parse_link_libs(&dir);
     }
 
