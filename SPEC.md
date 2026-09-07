@@ -175,8 +175,9 @@ Selection, checksums, and cross-compile activation:
   wasm32 requires the wasi-sdk toolchain: `WASI_SDK_PATH` names its
   unpacked root, defaulting to `/opt/wasi-sdk` when the variable is
   unset. The sidecar records the toolchain root the archive was built
-  against, and a build whose root in effect differs from the recorded
-  one fails naming both.
+  against, and the root in effect is that one: a build finding a
+  different root, or none recorded, fails naming what it has. One root
+  reached by two spellings is one root.
 - Supports one FFI surface per mruby minor version; supported versions: 4.0.
   Supported boxing configurations: word boxing.
 - In placeholder mode `cargo check` passes and no FFI surface is exported.
@@ -892,7 +893,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails, never falls back to placeholder mode |
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
-| The wasi-sdk root in effect differs from the one the archive's sidecar records | `beni-sys` build fails and names both roots, never falls back to placeholder mode |
+| The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has, never falls back to placeholder mode |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable read or assignment to a receiver that is not a class or module — assignment also to a frozen one, or a constant fetch, assignment, or removal to a receiver that is not a class or module — assignment and removal also to a frozen one | surfaced as a Rust `Err`, never unwinds across FFI |
