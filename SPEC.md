@@ -155,7 +155,9 @@ Selection, checksums, and cross-compile activation:
 
 - FFI bindings are generated against the discovered archive and aligned via
   the compile-flags sidecar, so the bindings always match how the archive was
-  actually built. The crate follows the `-sys` crate convention.
+  actually built. The sidecar also names the libraries the archive needs
+  linked, and those are the ones linked. The crate follows the `-sys` crate
+  convention.
 - One archive serves one cargo build target. Archive discovery is
   environment-driven, highest precedence first; the highest-precedence
   variable set is the sole source, never falling back to a lower one:
@@ -172,8 +174,11 @@ Selection, checksums, and cross-compile activation:
   cross-compiled cargo target fails and names the unsupported target.
   wasm32 requires the wasi-sdk toolchain: `WASI_SDK_PATH` names its
   unpacked root, defaulting to `/opt/wasi-sdk` when the variable is
-  unset.
+  unset. The sidecar records the toolchain root the archive was built
+  against, and a build whose root in effect differs from the recorded
+  one fails naming both.
 - Supports one FFI surface per mruby minor version; supported versions: 4.0.
+  Supported boxing configurations: word boxing.
 - In placeholder mode `cargo check` passes and no FFI surface is exported.
 - A `mruby_linked` cfg reflects whether a real archive is linked. The cfg
   is derived, never a cargo feature: `beni-sys` publishes the linked
@@ -880,12 +885,14 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | `beni:config` with the configured `version`'s mruby source not staged | task fails and names the missing source, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
 | Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar, never silently falls back to placeholder mode |
+| A compile-flags sidecar the crate cannot read — no line naming the flags or the libraries, or a layout whose tokens it would mis-read | `beni-sys` build fails and names the sidecar, never reading a partial set from it |
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
 | Discovered archive at an mruby version outside the supported versions | `beni-sys` fails to compile, never falls back to placeholder mode |
 | Cross-compiled build for a cargo target other than wasm32 | `beni-sys` build fails and names the unsupported target, never falls back to placeholder mode |
 | Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails, never falls back to placeholder mode |
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
+| The wasi-sdk root in effect differs from the one the archive's sidecar records | `beni-sys` build fails and names both roots, never falls back to placeholder mode |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable read or assignment to a receiver that is not a class or module — assignment also to a frozen one, or a constant fetch, assignment, or removal to a receiver that is not a class or module — assignment and removal also to a frozen one | surfaced as a Rust `Err`, never unwinds across FFI |
