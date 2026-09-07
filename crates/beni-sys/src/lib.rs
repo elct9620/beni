@@ -279,6 +279,13 @@ pub fn mrb_args_block() -> mrb_aspec {
     unsafe { mrb_args_block_func() }
 }
 
+/// The build script's sidecar parse, reachable here because a build
+/// script is outside `cargo test`'s reach.
+#[cfg(test)]
+mod sidecar {
+    include!("../build/sidecar.rs");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

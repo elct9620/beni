@@ -79,56 +79,7 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-/// Extract the `-D` defines from the `libmruby.flags.mak` sidecar in
-/// `lib_dir` — the flags the discovered archive was actually compiled
-/// with. bindgen and the trampoline compile must see the same set or
-/// the `mrb_value` layout silently diverges from the archive, so a
-/// discovered archive without its sidecar fails loudly instead of
-/// guessing. (`MRUBY_CFLAGS = ...` is plain space-separated tokens;
-/// only the `-D` ones matter here — include paths and target flags
-/// are constructed independently below.)
-fn parse_abi_defines(lib_dir: &Path) -> Vec<String> {
-    let flags_mak = lib_dir.join("libmruby.flags.mak");
-    let content = std::fs::read_to_string(&flags_mak).unwrap_or_else(|_| {
-        panic!(
-            "beni-sys: {} is missing. The discovered libmruby.a's compile flags are \
-             unknown, so bindgen cannot be aligned with the archive. Re-run \
-             `bundle exec rake beni:build` (which requests the sidecar), or for \
-             an externally built archive invoke mruby's rake with the sidecar's \
-             file task — `rake <build_dir>/lib/libmruby.flags.mak`.",
-            flags_mak.display()
-        )
-    });
-    let cflags = content
-        .lines()
-        .find_map(|line| line.strip_prefix("MRUBY_CFLAGS = "))
-        .unwrap_or_else(|| {
-            panic!(
-                "beni-sys: {} has no `MRUBY_CFLAGS = ` line — unrecognized \
-                 flags.mak layout",
-                flags_mak.display()
-            )
-        });
-    // The sidecar is the sole ABI channel: a layout the token scan
-    // would silently mis-read — a make continuation line, or a quoted
-    // `-D` value whose spaces the whitespace split severs — fails
-    // loudly instead of dropping or corrupting flags.
-    let quoted_define = cflags
-        .split_whitespace()
-        .any(|token| token.starts_with("-D") && (token.contains('"') || token.contains('\'')));
-    if cflags.trim_end().ends_with('\\') || quoted_define {
-        panic!(
-            "beni-sys: {} carries a continuation line or quoted `-D` value in \
-             `MRUBY_CFLAGS` — unrecognized flags.mak layout",
-            flags_mak.display()
-        );
-    }
-    cflags
-        .split_whitespace()
-        .filter(|token| token.starts_with("-D"))
-        .map(str::to_owned)
-        .collect()
-}
+include!("build/sidecar.rs");
 
 /// Non-empty value of the env var named `key`, treating unset and
 /// empty as the same "not provided" state.
@@ -202,6 +153,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=BENI_VENDOR_DIR");
     println!("cargo:rerun-if-env-changed=WASI_SDK_PATH");
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=build/sidecar.rs");
     println!("cargo:rerun-if-changed=src/wrapper.h");
     println!("cargo:rustc-check-cfg=cfg(mruby_linked)");
 
