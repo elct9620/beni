@@ -62,7 +62,7 @@ unsafe impl Send for RModule {}
 unsafe impl Sync for RModule {}
 
 #[cfg(test)]
-mod thread_tests {
+mod tests {
     #[test]
     fn class_handles_cross_threads() {
         fn crosses<T: Send + Sync>() {}
@@ -918,7 +918,7 @@ impl Object for RClass {}
 impl Object for RModule {}
 
 #[cfg(all(test, mruby_linked))]
-mod tests {
+mod linked_tests {
     use super::*;
 
     /// Registration target answering a fixed Integer for the trait
