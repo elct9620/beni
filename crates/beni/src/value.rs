@@ -156,6 +156,14 @@ impl Immediates {
 #[derive(Copy, Clone)]
 pub struct Value(pub(crate) sys::mrb_value);
 
+// SAFETY: a handle carries neither the interpreter nor ownership of what
+// it names, so crossing a thread with one is inert; it means something
+// only against the interpreter that produced it, a pairing the consumer
+// upholds. Stated here so the contract holds whatever shape a boxing ABI
+// gives the payload.
+unsafe impl Send for Value {}
+unsafe impl Sync for Value {}
+
 // Manual and deliberately opaque: the boxed payload is meaningless
 // without the VM that produced it (and its layout varies by boxing
 // config), so the debug form identifies the type without pretending
@@ -2175,6 +2183,22 @@ mod tests {
             core::mem::align_of::<Value>(),
             core::mem::align_of::<sys::mrb_value>(),
         );
+    }
+
+    #[test]
+    fn typed_handles_cross_threads() {
+        // Every typed handle is a newtype over `Value`, so the markers
+        // stated on `Value` are what carry the whole family. A handle
+        // that grew a field of its own leaves the family here.
+        fn crosses<T: Send + Sync>() {}
+        crosses::<crate::Value>();
+        crosses::<crate::Break>();
+        crosses::<crate::Array>();
+        crosses::<crate::Hash>();
+        crosses::<crate::Proc>();
+        crosses::<crate::Range>();
+        crosses::<crate::RString>();
+        crosses::<crate::Symbol>();
     }
 }
 
