@@ -666,7 +666,9 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   and on a value that carries no data type it does nothing — a total
   operation safe on any value. It is the seam through which a typed object
   copies its Rust state. The mruby garbage collector owns a successfully
-  wrapped value's lifetime, releasing it when its carrier is collected.
+  wrapped value's lifetime, releasing it when its carrier is collected —
+  on whichever thread reaches the interpreter, so a value wraps only if it
+  can cross threads.
   Mirrors `magnus`'s typed-data wrapping, and meets the graduation bar —
   a wrapping that cannot succeed reports its failure as an `Err` instead of
   unwinding across the boundary, and the unwrapped value is reclaimed — so
