@@ -67,6 +67,17 @@ jobs:
       # else — this runner is that host.
       - name: Generate the documentation bindings
         run: bundle exec rake docs:bindings:release
+      # The other half of the bound, and the one that reaches outside the
+      # package: generating runs a whole mruby build and a cargo build,
+      # either of which could touch something tracked. Excluding the one
+      # path the generator owns is what makes the rest of the tree still
+      # answerable for itself. Mirrors `ring`'s mk/package.sh, which
+      # brackets its own pregenerated artefacts the same way.
+      - name: Nothing but the bindings changed while generating them
+        run: |
+          dirty=$(git status --porcelain -- ':(exclude)crates/beni-sys/src/bindings_docs.rs')
+          test -z "$dirty" \
+            || { echo "$dirty"; echo 'generating the bindings changed something else'; exit 1; }
       # `src/*.rs` is the include glob that matches whatever is there, so
       # it is where both mistakes live: the bindings missing, which only
       # docs.rs would notice and only after publishing, and some other
