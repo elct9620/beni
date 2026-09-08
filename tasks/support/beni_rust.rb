@@ -65,16 +65,30 @@ module BeniRust
          chdir: ROOT)
   end
 
-  # Render the docs the way a documentation host does: DOCS_RS set, no
-  # archive discovery variable, so beni-sys stages the checked-in
-  # documentation bindings. Its own target dir, since flipping DOCS_RS
-  # would otherwise invalidate the main verification cache.
+  # What a documentation host sets: DOCS_RS on and no archive discovery
+  # variable, so beni-sys stages the checked-in documentation bindings.
+  # Its own target dir, since flipping DOCS_RS would otherwise
+  # invalidate the main verification cache.
+  DOCUMENTATION_ENV = { "DOCS_RS" => "1", "BENI_VENDOR_DIR" => nil, "MRUBY_LIB_DIR" => nil }.freeze
+  DOCUMENTATION_TARGET_DIR = File.join(ROOT, "target", "docs-rs")
+
+  # Whether the checked-in documentation bindings still declare
+  # everything the crate calls. rustdoc type checks signatures and not
+  # function bodies, so the render below cannot answer this: the
+  # bindings surface grows by a `sys::` call inside a body, which is
+  # exactly what a render passes over. Only a compile asks.
+  def self.documentation_build_check
+    run!(DOCUMENTATION_ENV, "cargo", "check", "-p", "beni-sys", "-p", "beni",
+         "--target-dir", DOCUMENTATION_TARGET_DIR, chdir: ROOT)
+  end
+
+  # Render the docs the way a documentation host does, holding rustdoc's
+  # own diagnostics — broken intra-doc links, malformed examples — to
+  # the same bar the rest of the build meets.
   def self.documentation_build_doc
-    env = { "DOCS_RS" => "1", "RUSTDOCFLAGS" => "-D warnings",
-            "BENI_VENDOR_DIR" => nil, "MRUBY_LIB_DIR" => nil }
-    run!(env, "cargo", "doc", "-p", "beni-sys", "-p", "beni", "--no-deps",
-         "--target-dir", File.join(ROOT, "target", "docs-rs"),
-         chdir: ROOT)
+    run!(DOCUMENTATION_ENV.merge("RUSTDOCFLAGS" => "-D warnings"),
+         "cargo", "doc", "-p", "beni-sys", "-p", "beni", "--no-deps",
+         "--target-dir", DOCUMENTATION_TARGET_DIR, chdir: ROOT)
   end
 
   # Echo-then-run with the env overlay, raising on failure — the same

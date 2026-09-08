@@ -67,6 +67,13 @@ jobs:
       # What the documentation host does: DOCS_RS set, no archive
       # anywhere, the checked-in documentation bindings standing in for
       # one. Scoped to the published crates, which are what it renders.
+      # The compile comes first because the render passes over function
+      # bodies, and a body is where a new `sys::` call — the way the
+      # bindings surface grows — appears.
+      - name: cargo check (documentation build)
+        run: cargo check -p beni-sys -p beni
+        env:
+          DOCS_RS: '1'
       - name: cargo doc (documentation build)
         run: cargo doc -p beni-sys -p beni --no-deps
         env:
