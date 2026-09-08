@@ -63,7 +63,7 @@
 //
 // The build script leaves the bindings at `$OUT_DIR/bindings.rs`
 // whatever produced them — bindgen against a discovered archive's
-// headers, or the checked-in documentation bindings staged there — so
+// headers, or the documentation bindings staged there — so
 // this file includes one path and the crate carries one surface.
 //
 // The generated `bindings.rs` is `include!`-d into a private
