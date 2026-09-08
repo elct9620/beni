@@ -17,9 +17,13 @@ generated bindings with the archive's compile flags through the
 - `WASI_SDK_PATH` — wasi-sdk root for `wasm32-wasip1` cross builds
   (defaults to `/opt/wasi-sdk`)
 
-Without an archive the host build emits a placeholder surface so
-downstream `cargo check` passes. `links = "mruby"` publishes the
-outcome as `DEP_MRUBY_LINKED` (`1`/`0`) for downstream build scripts.
+A build that finds no archive fails naming the variables above. The one
+exception is a documentation build, which `DOCS_RS` marks: its host has
+nowhere to stage an archive and never links, so the checked-in
+`src/bindings_docs.rs` supplies the declarations. Those are generated
+from an mruby built with mruby's own default config, so the rendered
+page carries that configuration's type widths — your own come from the
+archive your build discovers.
 
 Behavior contracts live in the repository's
 [SPEC.md](https://github.com/elct9620/beni/blob/main/SPEC.md).

@@ -94,11 +94,10 @@ An interpreter is carried between threads but never reached from two at
 once: `Mrb` is `Send` and not `Sync`, so handing one to another thread
 compiles while sharing it needs a `Mutex` of your own.
 
-With no archive discovery variable set, a host build compiles in
-placeholder mode: `cargo check` passes, no FFI surface is exported, and
-`Mrb::open` returns an error — so `beni` is safe to take as a transitive
-dependency. Any C API the typed wrapper does not cover stays reachable
-through the unsafe `beni::sys` escape hatch.
+Every build needs the archive: with no discovery variable set the build
+fails naming the ones it looked for, rather than handing you a crate
+whose every call aborts later. Any C API the typed wrapper does not
+cover stays reachable through the unsafe `beni::sys` escape hatch.
 
 ### Cross-compile for wasm32-wasip1
 

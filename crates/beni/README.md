@@ -45,10 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 `beni-sys` discovers a prebuilt archive through environment variables
 (`MRUBY_LIB_DIR`, or the vendor tree the beni Ruby gem stages under
 `BENI_VENDOR_DIR`) and aligns its bindings with the archive's ABI via
-the `libmruby.flags.mak` sidecar. Without an archive the host build
-still compiles as a placeholder — the full API surface type-checks
-and `Mrb::open` returns `Err` — so taking beni as a transitive
-dependency never breaks `cargo check`.
+the `libmruby.flags.mak` sidecar. A build that finds no archive fails
+naming the variables it consulted.
 
 Behavior contracts live in the repository's
 [SPEC.md](https://github.com/elct9620/beni/blob/main/SPEC.md).
