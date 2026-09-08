@@ -50,6 +50,18 @@ categories = ["external-ffi-bindings"]
 # Names the native library this crate links, so cargo refuses a graph
 # where two packages would link libmruby.
 links = "mruby"
+# The package carries the documentation bindings, which git does not:
+# naming what to package is what lets a generated file in, since the
+# default list is git's. A complete allowlist — anything unlisted is
+# dropped, `Cargo.toml` and the `readme` file aside.
+include = [
+  "build.rs",
+  "build/*.rs",
+  "src/*.rs",
+  "src/wrapper.h",
+  "LICENSE",
+  "README.md",
+]
 
 # docs.rs cross-compiles anything but its default target, and this
 # crate refuses a cross target it has no archive for. Building the

@@ -24,15 +24,12 @@
 #                              without a compiler gets.
 #   $ rake rust:check:wasm   — cargo check on wasm32-wasip1
 #   $ rake rust:check:docs   — what a documentation host builds: no
-#                              archive, the checked-in documentation
-#                              bindings standing in for one. Compiles
-#                              first, then renders — a render passes
-#                              over function bodies, which is where the
-#                              bindings surface grows. Runs anywhere,
-#                              since it reads the committed file rather
-#                              than writing it, so a host that cannot
-#                              regenerate the bindings still learns here
-#                              that its change has outgrown them.
+#                              archive, documentation bindings standing
+#                              in for one. Generates them first, so what
+#                              it reads is this tree's own surface, then
+#                              compiles before it renders — a render
+#                              passes over function bodies, which is
+#                              where the bindings surface grows.
 #   $ rake rust:link:wasm    — link wasm32-wasip1 test binaries against the
 #                              staged archive. `cargo check` never reaches
 #                              the linker, so this is what exercises the
@@ -85,14 +82,14 @@ namespace :rust do
       sh(BeniRust.host_env, "cargo", "check", "-p", "beni", "--no-default-features")
     end
 
-    # The documentation bindings can only be written on the platform the
-    # documentation host builds on, but whether they still describe a
-    # surface the crate compiles against is the same question
-    # everywhere — so this leg runs on every host and needs no archive.
-    # It compiles before it renders: rustdoc type checks signatures and
-    # not bodies, and a body is where a new `sys::` call appears.
-    desc "Build as a documentation host would: no archive, checked-in bindings"
-    task :docs do
+    # What a documentation host builds, against bindings this host
+    # generated for itself: the mruby C API surface does not vary by
+    # platform, so the question — does the declared surface still cover
+    # what the crate calls — has the same answer everywhere. It compiles
+    # before it renders, because rustdoc type checks signatures and not
+    # bodies, and a body is where a new `sys::` call appears.
+    desc "Build as a documentation host would: no archive, generated bindings"
+    task docs: "docs:bindings" do
       abort "cargo not on PATH; install Rust toolchain to run rust:check:docs" unless BeniRust.cargo_available?
 
       BeniRust.documentation_build_check

@@ -30,3 +30,11 @@ mkmf.log
 /pkg/
 /spec/reports/
 /tmp/
+
+# The documentation bindings are generated where they are read — a local
+# build writes its own before the documentation leg reads it, and the
+# copy a published package carries is written by the release. Tracking
+# one would pin a single host's output and need a gate to keep it
+# current; `include` in beni-sys's manifest is what puts it in the
+# package without git seeing it.
+/crates/beni-sys/src/bindings_docs.rs

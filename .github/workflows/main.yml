@@ -64,24 +64,11 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
-      # What the documentation host does: DOCS_RS set, no archive
-      # anywhere, the checked-in documentation bindings standing in for
-      # one. Scoped to the published crates, which are what it renders.
-      # The compile comes first because the render passes over function
-      # bodies, and a body is where a new `sys::` call — the way the
-      # bindings surface grows — appears.
-      - name: cargo check (documentation build)
-        run: cargo check -p beni-sys -p beni
-        env:
-          DOCS_RS: '1'
-      - name: cargo doc (documentation build)
-        run: cargo doc -p beni-sys -p beni --no-deps
-        env:
-          DOCS_RS: '1'
-          RUSTDOCFLAGS: -D warnings
-      # The other half of that contract: without DOCS_RS there is no
-      # second shape to fall back to, so the build fails naming what it
-      # looked for.
+      # Without DOCS_RS there is no second shape to fall back to, so the
+      # build fails naming what it looked for. The documentation build
+      # itself lives in the verify lane now: it reads bindings generated
+      # from an upstream-default mruby, and building one is what this
+      # lane exists not to do.
       - name: Build without an archive fails
         run: |
           if cargo check -p beni-sys --target-dir target/no-archive; then
@@ -148,25 +135,6 @@ jobs:
         run: BENI_VENDOR_DIR="$PWD/vendor" cargo doc --workspace --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: -D warnings
-      # The documentation bindings are generated, so a difference after
-      # regenerating them is drift. rust:verify has already built the
-      # upstream-default mruby they come from.
-      # This runner is the documentation host's platform, so it is the one
-      # place the bindings can be regenerated. A difference is drift; the
-      # regenerated file is attached so it can be committed from a host
-      # that cannot produce it.
-      - name: Documentation bindings freshness
-        id: docs-bindings
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          bundle exec rake docs:bindings
-          git diff --exit-code crates/beni-sys/src/bindings_docs.rs
-      - name: Upload the regenerated documentation bindings
-        if: failure() && steps.docs-bindings.outcome == 'failure'
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: bindings_docs
-          path: crates/beni-sys/src/bindings_docs.rs
       # Coverage freshness: every alias relation the manifest claims must
       # still hold in the headers (api:coverage's prerequisite), the
       # committed report must match a fresh regeneration against the

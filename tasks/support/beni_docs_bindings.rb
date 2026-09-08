@@ -34,33 +34,35 @@ module BeniDocsBindings
   TARGET = File.join(ROOT, "crates", CRATE, "src", "bindings_docs.rs")
   BUILD_DIR = File.join(ROOT, "tmp", "docs-bindings-target")
   # docs.rs builds every crate on this target and cross-compiles the
-  # rest, so this is the platform the checked-in bindings describe.
+  # rest, so this is the host whose bindings a release must carry.
   DOCUMENTATION_HOST = "x86_64-unknown-linux-gnu"
   HEADER = <<~RUST
     // Documentation bindings, written by `rake docs:bindings` — never
-    // edited. Read by a documentation build alone, where no archive can
-    // be staged; every other build generates its own from the archive it
-    // discovered. See SPEC.md's Terminology.
+    // edited, never committed. Read by a documentation build alone,
+    // where no archive can be staged; every other build generates its
+    // own from the archive it discovered. See SPEC.md's Terminology.
   RUST
 
   module_function
 
-  # Rewrite the checked-in bindings and return the path written.
+  # Write the bindings a documentation build reads and return the path.
+  # Generated where it is read, so any host may write its own.
   def generate
-    require_documentation_host!
     out_dir = build_out_dir(upstream_default_lib_dir)
     File.write(TARGET, HEADER + File.read(File.join(out_dir, "bindings.rs")))
     TARGET
   end
 
-  # Refuse to write bindings this host would shape differently from the
-  # one that reads them.
+  # Refuse to package bindings shaped by a host other than the one that
+  # will read them. Only a release has to care: a local build generates
+  # its own and reads it on the same machine, while the copy a published
+  # package carries is read on the documentation host alone.
   def require_documentation_host!
     return if rustc_host == DOCUMENTATION_HOST
 
-    abort "docs:bindings runs on #{DOCUMENTATION_HOST}, the target the documentation host " \
-          "builds on; this is #{rustc_host}. CI regenerates the file on every verify run and " \
-          "attaches it when it differs from the committed one."
+    abort "a release carries bindings for #{DOCUMENTATION_HOST}, the target the documentation " \
+          "host builds on; this is #{rustc_host}. Publish from that platform — the release " \
+          "workflow already runs there."
   end
 
   # The triple rustc reports for this machine.
