@@ -26,9 +26,9 @@ the resulting `libmruby.a`.
 - Under one installed beni release, the same `version`, `build_config`,
   `target`, and `toolchain` declarations always build the same way: the
   same toolchain versions, compile flags, and staged layout.
-- In a host build with no archive discovery variable set, a crate that
-  depends on `beni` compiles in placeholder mode, so `beni` is safe to
-  take as a transitive dependency in such builds.
+- The documentation host renders the published crates without an archive,
+  so the typed surface can be read before a build chain exists to try it
+  against.
 
 ## Success criteria
 
@@ -41,8 +41,12 @@ the resulting `libmruby.a`.
 - The `beni` crate's behavior is verified from outside the crate, through its
   public paths alone, so every export those paths cross — the `sys` re-export
   among them — fails the suite the moment it stops being public.
-- `cargo check` on the `beni` crate succeeds with no archive discovery
-  variable set, and `Mrb::open` returns an error.
+- Outside a documentation build, a build with no archive discovery
+  variable set fails on every cargo target, naming the variables archive
+  discovery consults.
+- A documentation build renders the typed surface with no archive present,
+  and the documentation bindings it reads match what the upstream default
+  configuration generates.
 - A `wasm32-wasip1` cross-build succeeds when a target declaration
   references `wasi-sdk`, the build config defines a target cross-compiled
   for wasm32, `MRUBY_LIB_DIR` names that target's staged path, and
@@ -180,8 +184,11 @@ Selection, checksums, and cross-compile activation:
      reads the `host` build's staged path and serves host cargo targets
      only — a cross-compiled cargo target never reads the vendor tree and
      requires `MRUBY_LIB_DIR`.
-  3. With neither variable set, no archive is linked: a host build compiles
-     in placeholder mode, a cross-compiled build fails.
+  3. With neither variable set the build fails, naming the variables it
+     consults.
+
+  A documentation build runs no archive discovery, so an archive
+  discovery variable set in one changes nothing.
 - wasm32 is the one supported cross target; a build for any other
   cross-compiled cargo target fails and names the unsupported target.
   wasm32 requires the wasi-sdk toolchain: `WASI_SDK_PATH` names its
@@ -203,13 +210,11 @@ Selection, checksums, and cross-compile activation:
   unconditionally; overriding it leaves mruby's never-returning
   declarations in a form the bindings do not carry, and the typed
   wrapper's diverging raise does not compile.
-- In placeholder mode `cargo check` passes and no FFI surface is exported.
-- A `mruby_linked` cfg reflects whether a real archive is linked. The cfg
-  is derived, never a cargo feature: `beni-sys` publishes the linked
-  signal to its direct dependents' build scripts in every build, the
-  `beni` crate re-derives its own cfg from the signal's value
-  automatically, and any crate gating mruby-dependent code does the same
-  as a direct dependent of `beni-sys`.
+- A documentation build reads the documentation bindings and links
+  nothing, so the whole typed surface renders where no archive can be
+  staged. It serves host cargo targets only, and it is the one build
+  archive discovery does not run for; every other build generates its
+  bindings from the discovered archive's own headers.
 
 ### beni crate — typed wrapper
 
@@ -884,9 +889,6 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   the vendored source it reads from — so a classification can be reviewed
   rather than taken on trust. What remains is the embedder API a build's ABI
   intends to carry, so a fully graduated surface measures complete.
-- In placeholder mode the wrapper's full API surface still compiles;
-  `Mrb::open` returns an error, so no interpreter ever exists to operate
-  on.
 
 ## Error scenarios
 
@@ -908,16 +910,18 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | `beni:config` with no `build_config` declaration | task fails, nothing generated |
 | `beni:config` with the configured `version`'s mruby source not staged | task fails and names the missing source, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
-| Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar, never silently falls back to placeholder mode |
+| Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar |
 | A compile-flags sidecar the crate cannot read — no line naming the compiler, the flags, or the libraries, or a layout whose tokens it would mis-read | `beni-sys` build fails and names the sidecar, never reading a partial set from it |
-| `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path, never falls back to placeholder mode |
-| Discovered archive below the supported mruby floor | `beni-sys` build fails and names the archive's version, never falls back to placeholder mode |
-| Discovered archive whose headers state no mruby version | `beni-sys` build fails and names the headers it read, never falls back to placeholder mode |
-| Cross-compiled build for a cargo target other than wasm32 | `beni-sys` build fails and names the unsupported target, never falls back to placeholder mode |
-| Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails, never falls back to placeholder mode |
-| wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails, never falls back to placeholder mode |
-| The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root, never falls back to placeholder mode |
-| The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has, never falls back to placeholder mode |
+| No archive discovery variable set, outside a documentation build | `beni-sys` build fails and names the variables it consults |
+| A documentation build whose documentation bindings are absent | `beni-sys` build fails and names the bindings it expected |
+| `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path |
+| Discovered archive below the supported mruby floor | `beni-sys` build fails and names the archive's version |
+| Discovered archive whose headers state no mruby version | `beni-sys` build fails and names the headers it read |
+| Cross-compiled build for a cargo target other than wasm32 | `beni-sys` build fails and names the unsupported target |
+| Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails |
+| wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails |
+| The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root |
+| The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable read or assignment to a receiver that is not a class or module — assignment also to a frozen one, or a constant fetch, assignment, or removal to a receiver that is not a class or module — assignment and removal also to a frozen one | surfaced as a Rust `Err`, never unwinds across FFI |
@@ -958,8 +962,9 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — beni's wasm32-wasip1 cross-compile settings, staged whenever `wasi-sdk` is selected and activated by a build config via `conf.toolchain :wasi` |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of the compiler that built it, the flags that compiler was given, and the libraries it needs linked |
 | supported mruby floor | mruby 4.0 — the oldest release the crates build against; an archive states its own version in the header tree staged beside it |
-| linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents in every build — `1` with a real archive linked, `0` in placeholder mode |
-| placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set. Not a second way to consume an archive: a static `libmruby.a` links into the consumer's own artefact and admits no other shape, so this mode carries the transitive-dependency compilation the Impacts state and nothing else |
+| documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable |
+| documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
+| documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated from an mruby built with the upstream default configuration and carrying that configuration's type widths, never hand-written; no other build reads them |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
 | declined symbol | public embedder API the typed surface deliberately does not carry, outside the coverage measure and recorded with what settles it |

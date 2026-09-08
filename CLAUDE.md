@@ -10,7 +10,7 @@ beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sd
 
 Apply these in order — earlier principles override later ones on conflict.
 
-1. **SPEC.md is the source of truth, and authority flows spec → code.** The spec is deliberately ahead of the implementation; unimplemented spec behaviors are the roadmap, and a spec/code mismatch is an implementation bug. Never edit SPEC.md to ratify what the code happens to do — when SPEC is silent, extend it first, then implement. Cross-package contracts (archive discovery, compile-flags sidecar, staged path, linked signal) are defined once at the write end with constants in SPEC's Terminology; cite those terms instead of restating them.
+1. **SPEC.md is the source of truth, and authority flows spec → code.** The spec is deliberately ahead of the implementation; unimplemented spec behaviors are the roadmap, and a spec/code mismatch is an implementation bug. Never edit SPEC.md to ratify what the code happens to do — when SPEC is silent, extend it first, then implement. Cross-package contracts (archive discovery, compile-flags sidecar, staged path, documentation bindings) are defined once at the write end with constants in SPEC's Terminology; cite those terms instead of restating them.
 
 2. **kobako-derived code is scaffolding, not precedent.** Much of this repo was extracted from kobako; matching kobako's shape is never a design justification. Follow upstream conventions instead — mruby's own (`rake` entry point, `MRUBY_CONFIG`, untouched `build_config/default.rb` as the gem default), wasi-sdk's (`/opt/wasi-sdk`), the `-sys` crate conventions (`*_LIB_DIR`, `links =` metadata), and magnus's wrapper idioms for the `beni` crate's API surface.
 
