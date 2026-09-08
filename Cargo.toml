@@ -6,6 +6,10 @@ members = ["crates/beni-sys", "crates/beni", "crates/beni-tests"]
 # selection a bare cargo command uses; the gates that stage an archive
 # reach it with an explicit --workspace.
 default-members = ["crates/beni-sys", "crates/beni"]
+# The rust_consumer scenario is a consumer's project, not a member of
+# this workspace; excluding it here is what lets its manifest stay the
+# shape a consumer's actually is.
+exclude = ["test/scenarios/rust_consumer"]
 resolver = "2"
 
 [workspace.package]

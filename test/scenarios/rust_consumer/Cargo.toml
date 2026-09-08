@@ -1,0 +1,17 @@
+# The Rust half of the rust_consumer scenario: a project outside this
+# repo's workspace that depends on beni the way a consumer's crate
+# does, and links the archive the gem's own task surface produced in
+# this directory.
+#
+# The dependency is a path rather than a version so the scenario
+# exercises the working tree; a registry dependency would only ever
+# verify the last release.
+
+[package]
+name = "rust_consumer"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+beni = { path = "../../../crates/beni" }

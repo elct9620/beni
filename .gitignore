@@ -6,6 +6,9 @@
 # build configs are scenario:setup output, regenerated every run.
 /test/scenarios/*/vendor/
 /test/scenarios/*/build_config/
+# The consumer crate resolves against the working tree through a path
+# dependency, so its lock file records nothing the repo's own does not.
+/test/scenarios/*/Cargo.lock
 
 # Native build artifacts (any nesting level, matching kobako's rules):
 # cargo target dirs, C objects, static libs (libmruby.a), and Ruby

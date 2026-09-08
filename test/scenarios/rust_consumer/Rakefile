@@ -1,0 +1,34 @@
+# frozen_string_literal: true
+
+# Consumer scenario: a Rust crate against an archive this directory built.
+#
+# The other harnesses stop once `beni:build` leaves its artifacts. This
+# one carries on into what those artifacts exist for: a cargo project
+# outside the repo's workspace, with its own lock file and target dir,
+# discovering the staged archive through BENI_VENDOR_DIR and running a
+# gem it defined against a live interpreter. Run from this directory:
+#
+#   $ cd test/scenarios/rust_consumer && rake scenario:setup beni:build scenario:verify
+$LOAD_PATH.unshift File.expand_path("../../../lib", __dir__)
+
+require "beni/tasks"
+
+Beni::Tasks.new
+
+namespace :scenario do
+  # Part of the harness contract every scenario implements
+  # (setup → beni:build → verify); the consumer crate is committed, so
+  # there is nothing to generate first.
+  desc "No-op: the consumer crate needs no preparation"
+  task :setup
+
+  desc "Build and run the consumer crate against the staged archive"
+  task :verify do
+    abort "[scenario] cargo not on PATH" unless system("which cargo > /dev/null 2>&1")
+
+    sh({ "BENI_VENDOR_DIR" => File.expand_path("vendor", __dir__) },
+       "cargo", "test", "--manifest-path", File.expand_path("Cargo.toml", __dir__))
+
+    puts "[scenario] rust_consumer linked and ran against #{File.expand_path("vendor", __dir__)}"
+  end
+end

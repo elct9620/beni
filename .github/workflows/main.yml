@@ -152,7 +152,11 @@ jobs:
   # detection), so it runs on every OS. generated_config drives the
   # rake beni:config → cross-build chain; the mechanism is
   # platform-independent and the resulting config already builds on
-  # all three OS in the verify lane, so one OS suffices.
+  # all three OS in the verify lane, so one OS suffices. rust_consumer
+  # carries on past the artifacts into a cargo project outside the
+  # workspace that links them; the linkers themselves are already
+  # covered on all three OS by the verify lane, so what is new here —
+  # discovery from outside the workspace — needs one OS.
   scenario:
     runs-on: ${{ matrix.os }}
     name: Scenario ${{ matrix.scenario }} (${{ matrix.os }})
@@ -168,6 +172,8 @@ jobs:
             scenario: default_host
           - os: ubuntu-latest
             scenario: generated_config
+          - os: ubuntu-latest
+            scenario: rust_consumer
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -177,6 +183,17 @@ jobs:
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           ruby-version: '3.4'
+      # Only rust_consumer reaches for cargo; the channel comes from
+      # rust-toolchain.toml the same way every other lane sources it.
+      - name: Read Rust channel from rust-toolchain.toml
+        if: matrix.scenario == 'rust_consumer'
+        id: rust
+        run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+      - name: Set up Rust toolchain
+        if: matrix.scenario == 'rust_consumer'
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ steps.rust.outputs.channel }}
       - name: Build through the gem's task interface
         run: rake scenario:setup beni:build scenario:verify
         working-directory: test/scenarios/${{ matrix.scenario }}
