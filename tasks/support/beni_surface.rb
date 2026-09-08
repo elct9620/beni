@@ -4,22 +4,22 @@
 # =================================
 #
 # Backs the +api:surface+ rake task: scans the +beni+ crate for the
-# inherent +pub fn+ surface and verifies the
-# +full_api_surface_compiles_in_both_modes+ test references every
-# entry, keeping the placeholder contract honest — each public item
-# exists whether or not mruby is linked, and only a reference breaks
-# compilation when an item is cfg-gated out of one mode.
+# inherent +pub fn+ surface and verifies the drift net in +beni-tests+
+# names every entry. The net lives in consumer position, so a
+# reference there also carries the root re-exports its path runs
+# through; this scan is what keeps the net and the surface from
+# drifting apart as items are added or removed.
 #
 # Scope: inherent +pub fn+s declared in column-zero +impl+ blocks.
 # Trait items stay out — the compiler type-checks trait declarations
-# and default bodies in both modes without a reference. A fn carrying
-# a +#[cfg]+ attribute is a deliberate single-mode item and is
-# excluded from the expectation.
+# and default bodies without a reference. A fn carrying a +#[cfg]+
+# attribute is deliberately build-specific and is excluded from the
+# expectation.
 module BeniSurface
   ROOT = File.expand_path("../..", __dir__)
   CRATE_SRC = File.join(ROOT, "crates", "beni", "src")
-  SURFACE_TEST_FILE = File.join(CRATE_SRC, "lib.rs")
-  SURFACE_TEST = "full_api_surface_compiles_in_both_modes"
+  SURFACE_TEST_FILE = File.join(ROOT, "crates", "beni-tests", "src", "surface_test.rs")
+  SURFACE_TEST = "full_api_surface_is_reachable_from_outside"
 
   INHERENT_IMPL = /\Aimpl(?:<[^>]*>)?\s+(?<type>[A-Z]\w*)(?:<[^>]*>)?\s*(?:where[^{]*)?\{/
   PUB_FN = /\A\s*pub\s+(?:unsafe\s+)?(?:const\s+)?fn\s+(?<name>[a-z_]\w*)/
@@ -104,7 +104,8 @@ module BeniSurface
     start = lines.index { |l| l.include?("fn #{SURFACE_TEST}") }
     raise "#{SURFACE_TEST} not found in #{SURFACE_TEST_FILE}" unless start
 
-    stop = (start...lines.size).find { |i| lines[i].rstrip == "    }" }
+    indent = lines[start][/\A */]
+    stop = (start...lines.size).find { |i| lines[i].rstrip == "#{indent}}" }
     lines[start..stop].join
   end
 

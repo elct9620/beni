@@ -65,9 +65,9 @@ jobs:
         run: cargo fmt --all -- --check
       - name: cargo clippy (host placeholder)
         run: cargo clippy --workspace -- -D warnings
-      # Placeholder-mode unit tests: the full-API-surface compile
-      # check and the `Mrb::open` → Err contract (success criterion 3)
-      # only execute without a staged archive, which is this lane.
+      # Placeholder-mode unit tests: the `Mrb::open` → Err contract
+      # (success criterion 3) only executes without a staged archive,
+      # which is this lane.
       # No --workspace: the default members are the two published
       # crates, leaving out beni-tests, which needs a real archive.
       - name: cargo test (host placeholder)

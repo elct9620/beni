@@ -48,6 +48,8 @@ mod state_test;
 #[cfg(test)]
 mod string_test;
 #[cfg(test)]
+mod surface_test;
+#[cfg(test)]
 mod symbol_test;
 #[cfg(test)]
 mod value_test;

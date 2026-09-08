@@ -2,9 +2,9 @@
 
 require_relative "support/beni_surface"
 
-# Public-surface drift gate: the placeholder contract holds only while
-# the compile-surface test references every inherent pub fn, so the
-# reference list is verified mechanically instead of by hand.
+# Public-surface drift gate: the net in beni-tests only catches a
+# removal it names, so the reference list is checked against the
+# crate's own surface mechanically instead of by hand.
 namespace :api do
   desc "Verify the compile-surface test references every inherent pub fn"
   task :surface do
