@@ -1,0 +1,17 @@
+# The Rust half of the embedded_no_compiler scenario: a project outside
+# this repo's workspace that depends on beni the way an embedded
+# consumer does — default features off, so the surface that needs
+# mruby's compiler gem is not there to reach for.
+#
+# The dependency is a path rather than a version so the scenario
+# exercises the working tree; a registry dependency would only ever
+# verify the last release.
+
+[package]
+name = "embedded_no_compiler"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+beni = { path = "../../../crates/beni", default-features = false }

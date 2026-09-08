@@ -187,6 +187,11 @@ jobs:
   # workspace that links them; the linkers themselves are already
   # covered on all three OS by the verify lane, so what is new here —
   # discovery from outside the workspace — needs one OS.
+  # embedded_no_compiler is the other consumer posture: a build config
+  # that leaves mruby's compiler gem out and a crate with beni's default
+  # features off to match. What it pins — that the pair links and that
+  # the compile surface is absent — is platform-independent, so one OS
+  # suffices.
   scenario:
     runs-on: ${{ matrix.os }}
     name: Scenario ${{ matrix.scenario }} (${{ matrix.os }})
@@ -204,6 +209,10 @@ jobs:
             scenario: generated_config
           - os: ubuntu-latest
             scenario: rust_consumer
+            rust: true
+          - os: ubuntu-latest
+            scenario: embedded_no_compiler
+            rust: true
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -213,14 +222,15 @@ jobs:
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           ruby-version: '3.4'
-      # Only rust_consumer reaches for cargo; the channel comes from
-      # rust-toolchain.toml the same way every other lane sources it.
+      # Only the scenarios that carry on into a cargo project reach for
+      # cargo; the channel comes from rust-toolchain.toml the same way
+      # every other lane sources it.
       - name: Read Rust channel from rust-toolchain.toml
-        if: matrix.scenario == 'rust_consumer'
+        if: matrix.rust
         id: rust
         run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
       - name: Set up Rust toolchain
-        if: matrix.scenario == 'rust_consumer'
+        if: matrix.rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ steps.rust.outputs.channel }}
