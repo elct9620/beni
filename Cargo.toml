@@ -1,7 +1,11 @@
 # Cargo workspace for the beni crates; the beni Ruby gem cohabits at the
 # repo root (rb-sys uses the same gem + crates layout).
 [workspace]
-members = ["crates/beni-sys", "crates/beni"]
+members = ["crates/beni-sys", "crates/beni", "crates/beni-tests"]
+# beni-tests always needs a real libmruby.a, so it stays out of the
+# selection a bare cargo command uses; the gates that stage an archive
+# reach it with an explicit --workspace.
+default-members = ["crates/beni-sys", "crates/beni"]
 resolver = "2"
 
 [workspace.package]

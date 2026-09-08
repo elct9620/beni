@@ -58,7 +58,7 @@ module BeniRust
          RbConfig.ruby, "-S", "rake", "default", flags_mak,
          chdir: File.join(ROOT, "vendor", "mruby"))
     run!({ "MRUBY_LIB_DIR" => lib_dir },
-         "cargo", "test", "-p", "beni",
+         "cargo", "test", "-p", "beni", "-p", "beni-tests",
          "--target-dir", File.join(ROOT, "target", "default-abi"),
          chdir: ROOT)
   end

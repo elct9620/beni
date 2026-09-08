@@ -1,0 +1,34 @@
+# beni-tests — the typed wrapper's test suite, run from consumer position.
+#
+# Every test here reaches `beni` the way a consumer does: through the
+# crate's public paths only, from outside the crate that defines them.
+# A public item that stops being re-exported breaks this suite while
+# `beni`'s own in-crate tests stay green, so this is where the public
+# surface is held.
+#
+# The suite always runs against a real `libmruby.a` — there is one way
+# to consume a static archive, so nothing here is gated on whether one
+# is linked. Archive discovery comes from the environment the gem's
+# build chain populates (`rake rust:test`); without it the tests fail
+# at `Mrb::open` rather than compiling into a second contract.
+#
+# Tests live in `src/*_test.rs` rather than `tests/` so the suite links
+# the archive once rather than once per file.
+
+[package]
+name = "beni-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+autotests = false
+
+[lib]
+# The library is empty; it exists to carry the `#[cfg(test)]` modules.
+doc = false
+doctest = false
+bench = false
+
+[dependencies]
+beni = { path = "../beni" }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sdk and builds `libmruby.a` through Rake, and two Rust crates (`beni-sys` bindgen FFI, `beni` typed wrapper) bind the resulting archive — the magnus / rb-sys split applied at the mruby boundary. wasm32-wasip1 is a downstream verification target only (for kobako), not a product target. All three packages release in lockstep under one version.
+beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sdk and builds `libmruby.a` through Rake, and two Rust crates (`beni-sys` bindgen FFI, `beni` typed wrapper) bind the resulting archive — the magnus / rb-sys split applied at the mruby boundary. The unpublished `beni-tests` crate holds the typed suite in consumer position. wasm32-wasip1 is a downstream verification target only (for kobako), not a product target. All three published packages release in lockstep under one version.
 
 ## Principles
 
@@ -58,7 +58,7 @@ CI (`.github/workflows/main.yml`) runs four lanes: **test** (Ruby matrix, defaul
 
 ## Layering
 
-### Three packages around the staged archive
+### The packages around the staged archive
 
 ```
 beni gem (lib/)                          crates/
@@ -77,6 +77,11 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
              Downloader, Checksum,          flags.mak parse · bindgen +
              Tarball}                       wrap_static_fns (single C TU) ·
                                             links = "mruby" → DEP_MRUBY_LINKED
+
+                                          beni-tests  publish = false; the
+                                            typed suite run from consumer
+                                            position, always against a real
+                                            archive (outside default-members)
         │                                          ▲
         └── stages vendor/mruby/build/<name>/lib/ ─┘
             libmruby.a + libmruby.flags.mak (the staged path;
