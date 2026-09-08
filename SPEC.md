@@ -35,8 +35,12 @@ the resulting `libmruby.a`.
 - A fresh checkout running `rake beni:build` produces `libmruby.a` and its
   compile-flags sidecar at the staged path for every target the build
   config defines.
-- A Rust binary built with `BENI_VENDOR_DIR` pointing at that vendor tree
-  links the archive and runs an mruby interpreter through `Mrb::open`.
+- A consumer's own cargo project, depending on the `beni` crate with
+  `BENI_VENDOR_DIR` pointing at that vendor tree, links the archive and runs a
+  Ruby surface it defined through `Mrb::open`.
+- The `beni` crate's behavior is verified from outside the crate, through its
+  public paths alone, so every export those paths cross — the `sys` re-export
+  among them — fails the suite the moment it stops being public.
 - `cargo check` on the `beni` crate succeeds with no archive discovery
   variable set, and `Mrb::open` returns an error.
 - A `wasm32-wasip1` cross-build succeeds when a target declaration
@@ -54,17 +58,21 @@ the resulting `libmruby.a`.
 
 ## Packages
 
-One repository; the gem and both crates release in lockstep under a single
-version number.
+One repository; the gem and the two published crates release in lockstep under
+a single version number.
 
 | Package | Registry | Responsibility |
 |---|---|---|
 | `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build `libmruby.a` for the crates to consume |
 | `beni-sys` crate | crates.io | `-sys` style FFI surface over the mruby C API, generated against the discovered archive per supported mruby version |
 | `beni` crate | crates.io | safe typed wrapper over `beni-sys`, aligned with magnus idioms |
+| `beni-tests` crate | not published | the `beni` crate's behavior suite, held outside the crate so each test reaches it through public paths alone |
 
 Responsibility boundary: the gem stages toolchains and archives; `beni-sys`
 binds them; the `beni` crate is the only package consumers write Rust against.
+`beni-tests` ships to no one — it holds the `beni` crate's behavior from where
+a consumer stands. What no consumer can observe — an invariant internal to the
+crate — stays tested inside it.
 
 ## Features
 
@@ -951,7 +959,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of the compiler that built it, the flags that compiler was given, and the libraries it needs linked |
 | supported mruby floor | mruby 4.0 — the oldest release the crates build against; an archive states its own version in the header tree staged beside it |
 | linked signal | `DEP_MRUBY_LINKED`, the build-script metadata `beni-sys` publishes through its `links = "mruby"` key to direct dependents in every build — `1` with a real archive linked, `0` in placeholder mode |
-| placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set |
+| placeholder mode | host crate compilation with no archive linked — entered only when no archive discovery variable is set. Not a second way to consume an archive: a static `libmruby.a` links into the consumer's own artefact and admits no other shape, so this mode carries the transitive-dependency compilation the Impacts state and nothing else |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
 | declined symbol | public embedder API the typed surface deliberately does not carry, outside the coverage measure and recorded with what settles it |
