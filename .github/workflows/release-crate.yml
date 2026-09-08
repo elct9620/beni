@@ -1,8 +1,9 @@
 # Publishes `beni-sys` and `beni` to crates.io via OIDC Trusted
 # Publishing. `cargo publish --workspace` (stable since 1.90) orders the
 # uploads by dependency (beni-sys first) and waits for index propagation
-# between them; the verify builds run in placeholder mode, so no mruby
-# archive is needed. The manual-recovery shape mirrors the gem's —
+# between them. Its verify builds compile the packaged crates, which
+# needs an archive like any other build, so the gem stages one first and
+# names it through BENI_VENDOR_DIR. The manual-recovery shape mirrors the gem's —
 # `workflow_dispatch` defaults `push` to false, so a bare dispatch is a
 # `cargo publish --dry-run` rehearsal; tick `push` to publish for real.
 name: Release Crate
@@ -43,9 +44,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ steps.rust.outputs.channel }}
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+      # The archive the verify build compiles against. Built through the
+      # gem's own task surface, the way a consumer would.
+      - name: Build the archive
+        run: bundle exec rake beni:build
       - name: Dry-run publish
         if: ${{ !inputs.push }}
         run: cargo publish --workspace --dry-run
+        env:
+          BENI_VENDOR_DIR: ${{ github.workspace }}/vendor
       # Trusted Publishing: exchange the workflow's OIDC token for a
       # short-lived crates.io token. beni-sys and beni each name two
       # publishers on crates.io: release-please.yml for the chained
@@ -57,4 +69,5 @@ jobs:
         if: ${{ inputs.push }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          BENI_VENDOR_DIR: ${{ github.workspace }}/vendor
         run: cargo publish --workspace

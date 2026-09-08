@@ -38,7 +38,7 @@ The repo dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validat
 
 `beni-sys/build.rs` has two paths: bindgen against a discovered archive's headers, and the documentation build (`DOCS_RS` set) that stages the checked-in `src/bindings_docs.rs` into OUT_DIR and links nothing. Everything else panics naming what it looked for — no archive, no build. `rake docs:bindings` rewrites the checked-in file from an upstream-default mruby; regenerating it twice writes the same bytes, so a difference is drift.
 
-CI (`.github/workflows/main.yml`) runs four lanes: **test** (Ruby matrix, default task), **lint** (Rust fmt/clippy/doc in placeholder mode), **verify** (3 OS full `rust:verify` + linked clippy), **scenario** (consumer harnesses). Tarballs are deliberately not cached — the download path is itself under test.
+CI (`.github/workflows/main.yml`) runs four lanes, split by whether the work needs a staged archive: **test** (Ruby matrix, default task), **lint** (fmt + the `DOCS_RS` documentation build + the assertion that any other archive-free build fails), **verify** (3 OS full `rust:verify`, plus clippy, the private-item doc gate, and the coverage and documentation-bindings freshness gates on one OS), **scenario** (consumer harnesses). Tarballs are deliberately not cached — the download path is itself under test.
 
 ## Common Commands
 

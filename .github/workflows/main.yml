@@ -36,11 +36,12 @@ jobs:
       - name: Run the default task
         run: bundle exec rake
 
-  # Rust style lane: fmt + the host placeholder branch — the code a
-  # registry consumer's `cargo check` compiles without a staged
-  # libmruby.a. Only the host target has that mode (an explicit wasm32
-  # build without the toolchain panics by design), so the linked
-  # branches on both targets are linted in the verify lane instead.
+  # Archive-free lane: everything that can be judged without a staged
+  # libmruby.a. That is formatting, the documentation build a
+  # documentation host runs, and the contract that every other build
+  # without an archive fails. Anything needing the real FFI surface —
+  # clippy, tests, the private-item doc gate — waits for the verify
+  # lane, which stages one.
   lint:
     runs-on: ubuntu-latest
     name: Rust lint
@@ -58,26 +59,28 @@ jobs:
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ steps.rust.outputs.channel }}
-          components: clippy, rustfmt
+          components: rustfmt
       - name: Cache cargo
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
-      - name: cargo clippy (host placeholder)
-        run: cargo clippy --workspace -- -D warnings
-      # Placeholder-mode unit tests: the `Mrb::open` → Err contract
-      # (success criterion 3) only executes without a staged archive,
-      # which is this lane.
-      # No --workspace: the default members are the two published
-      # crates, leaving out beni-tests, which needs a real archive.
-      - name: cargo test (host placeholder)
-        run: cargo test
-      # Same doc gate as the local Stop hook — rustdoc warnings
-      # (broken intra-doc links, bad code fences) fail the lane.
-      - name: cargo doc
-        run: cargo doc --workspace --no-deps --document-private-items
+      # What the documentation host does: DOCS_RS set, no archive
+      # anywhere, the checked-in documentation bindings standing in for
+      # one. Scoped to the published crates, which are what it renders.
+      - name: cargo doc (documentation build)
+        run: cargo doc -p beni-sys -p beni --no-deps
         env:
+          DOCS_RS: '1'
           RUSTDOCFLAGS: -D warnings
+      # The other half of that contract: without DOCS_RS there is no
+      # second shape to fall back to, so the build fails naming what it
+      # looked for.
+      - name: Build without an archive fails
+        run: |
+          if cargo check -p beni-sys --target-dir target/no-archive; then
+            echo "expected the build to fail with no archive discovery variable set"
+            exit 1
+          fi
 
   # Integration lane: the repo's full dogfooding chain on every
   # WASI_SDK_PLATFORM detection branch. rust:verify drives a real
@@ -118,18 +121,34 @@ jobs:
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: Full compile verification
         run: bundle exec rake rust:verify
-      # clippy over the linked code paths the lint lane's placeholder
-      # mode never compiles — possible only here, where rust:verify
-      # has staged the vendor toolchain. Discovery is env-driven with
-      # no fallback, so the vendor artifacts are named explicitly.
-      # One OS suffices: the lints are target-shaped, not host-shaped.
+      # clippy over the whole surface, possible only here, where
+      # rust:verify has staged the vendor toolchain. Discovery is
+      # env-driven with no fallback, so the vendor artifacts are named
+      # explicitly. One OS suffices: the lints are target-shaped, not
+      # host-shaped.
       - name: cargo clippy (linked, host + wasm32-wasip1)
         if: matrix.os == 'ubuntu-latest'
         run: |
           BENI_VENDOR_DIR="$PWD/vendor" \
-            cargo clippy --workspace -- -D warnings
+            cargo clippy --workspace --all-targets -- -D warnings
           MRUBY_LIB_DIR="$PWD/vendor/mruby/build/wasi/lib" WASI_SDK_PATH="$PWD/vendor/wasi-sdk" \
             cargo clippy --workspace --target wasm32-wasip1 -- -D warnings
+      # Private items carry the reasoning the public surface leans on,
+      # so they are documented too — which needs the real FFI surface
+      # and therefore an archive.
+      - name: cargo doc (private items)
+        if: matrix.os == 'ubuntu-latest'
+        run: BENI_VENDOR_DIR="$PWD/vendor" cargo doc --workspace --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: -D warnings
+      # The documentation bindings are generated, so a difference after
+      # regenerating them is drift. rust:verify has already built the
+      # upstream-default mruby they come from.
+      - name: Documentation bindings freshness
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          bundle exec rake docs:bindings
+          git diff --exit-code crates/beni-sys/src/bindings_docs.rs
       # Coverage freshness: every alias relation the manifest claims must
       # still hold in the headers (api:coverage's prerequisite), the
       # committed report must match a fresh regeneration against the
