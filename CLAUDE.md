@@ -104,7 +104,7 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
 | Config generation | `lib/beni/build_config.rb` | Copies the staged upstream default (see Principle 4); `build_config/mruby.rb` is the repo's own validation config. |
 | Archive discovery / ABI alignment | `crates/beni-sys/build.rs` | The file-top comment is the authoritative mode/contract description. |
 | Typed wrapper | `crates/beni/src/lib.rs` | Module-level doc carries the L0–L2 tier map. |
-| Typed wrapper's tests | `crates/beni-tests/src/*_test.rs` | Consumer position: public paths only, always against a staged archive. Reached by `rake rust:test`, not by a bare `cargo test`. |
+| Typed wrapper's tests | `crates/beni-tests/src/*_test.rs` | Consumer position: public paths only, always against a staged archive. Holds the exports `api:surface` cannot reach (`beni::sys` among them). Reached by `rake rust:test`, not by a bare `cargo test`. |
 | Consumer scenarios | `test/scenarios/*/Rakefile` | Each documents the consumer path it pins; harness contract is `scenario:setup` → `beni:build` → `scenario:verify`. |
 | CI lanes | `.github/workflows/main.yml` | Lane rationale is commented inline (e.g. why wasm clippy lives in verify, not lint). |
 | RBS signatures | `sig/beni/` | Mirrors `lib/beni/` 1:1; stdlib via `Steepfile`, patches in `sig/patches/`. |

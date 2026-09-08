@@ -2,9 +2,10 @@
 #
 # Every test here reaches `beni` the way a consumer does: through the
 # crate's public paths only, from outside the crate that defines them.
-# A public item that stops being re-exported breaks this suite while
-# `beni`'s own in-crate tests stay green, so this is where the public
-# surface is held.
+# That covers what the crate's own compile-surface check cannot: an
+# export no inherent pub fn's signature passes through — `beni::sys`,
+# the raw-FFI escape hatch, among them — can stop being public with
+# every in-crate gate still green, and only this suite objects.
 #
 # The suite always runs against a real `libmruby.a` — there is one way
 # to consume a static archive, so nothing here is gated on whether one
