@@ -1,39 +1,25 @@
 #!/bin/sh
-# Stop-hook clippy gate. beni-sys's archive discovery is env-driven
-# with no fallback, so the staged vendor artifacts are named
-# explicitly: BENI_VENDOR_DIR lints the linked host code paths,
-# MRUBY_LIB_DIR + WASI_SDK_PATH the wasm32 ones. Without staged
-# artifacts the gate degrades — host lints placeholder mode, wasm32
-# is skipped — and reports the degradation via the hook's
-# systemMessage instead of failing, so a fresh clone is never
-# blocked but a weakened lint never passes silently.
+# Stop-hook clippy gate. There is one shape of this crate to lint and it
+# needs a staged libmruby.a, so a missing archive fails here and names
+# the command that produces one. A gate that skipped instead would read
+# as a warning nobody has to act on, which is how an unlinted branch
+# reaches a commit.
 set -eu
 
 root="${CLAUDE_PROJECT_DIR:?}"
-degraded=""
 
-# beni-tests only compiles against a real archive, so it joins the lint
-# when one is staged and drops to the default members when none is.
-if [ -f "$root/vendor/mruby/build/host/lib/libmruby.a" ]; then
-  export BENI_VENDOR_DIR="$root/vendor"
-  host_scope="--workspace"
-else
-  degraded="host archive not staged (placeholder lint only)"
-  host_scope=""
-fi
-# shellcheck disable=SC2086 # host_scope is a single flag or empty
-cargo clippy --manifest-path "$root/Cargo.toml" $host_scope --all-targets -q -- -D warnings >&2
+require() {
+  [ -e "$1" ] && return 0
+  printf 'clippy hook: %s is missing. Run bundle exec rake beni:build to stage the archives and the wasi toolchain.\n' "$1" >&2
+  exit 1
+}
 
-if rustc --target wasm32-wasip1 --print sysroot >/dev/null 2>&1; then
-  if [ -f "$root/vendor/mruby/build/wasi/lib/libmruby.a" ] \
-    && [ -x "$root/vendor/wasi-sdk/bin/clang" ]; then
-    MRUBY_LIB_DIR="$root/vendor/mruby/build/wasi/lib" WASI_SDK_PATH="$root/vendor/wasi-sdk" \
-      cargo clippy --target wasm32-wasip1 --manifest-path "$root/Cargo.toml" --workspace -q -- -D warnings >&2
-  else
-    degraded="${degraded:+$degraded; }wasm32 artifacts not staged (wasm32 lint skipped)"
-  fi
-fi
+require "$root/vendor/mruby/build/host/lib/libmruby.a"
+require "$root/vendor/mruby/build/wasi/lib/libmruby.a"
+require "$root/vendor/wasi-sdk/bin/clang"
 
-if [ -n "$degraded" ]; then
-  printf '{"systemMessage":"clippy hook degraded: %s — run \\u0060bundle exec rake beni:build\\u0060 for full coverage"}\n' "$degraded"
-fi
+BENI_VENDOR_DIR="$root/vendor" \
+  cargo clippy --manifest-path "$root/Cargo.toml" --workspace --all-targets -q -- -D warnings >&2
+
+MRUBY_LIB_DIR="$root/vendor/mruby/build/wasi/lib" WASI_SDK_PATH="$root/vendor/wasi-sdk" \
+  cargo clippy --target wasm32-wasip1 --manifest-path "$root/Cargo.toml" --workspace -q -- -D warnings >&2

@@ -58,7 +58,7 @@
           },
           {
             "type": "command",
-            "command": "RUSTDOCFLAGS=\"-D warnings\" cargo doc --manifest-path \"$CLAUDE_PROJECT_DIR/Cargo.toml\" --workspace --no-deps --document-private-items -q >&2 || exit 2"
+            "command": "BENI_VENDOR_DIR=\"$CLAUDE_PROJECT_DIR/vendor\" RUSTDOCFLAGS=\"-D warnings\" cargo doc --manifest-path \"$CLAUDE_PROJECT_DIR/Cargo.toml\" --workspace --no-deps --document-private-items -q >&2 || exit 2"
           },
           {
             "type": "command",
