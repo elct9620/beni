@@ -53,22 +53,37 @@ jobs:
       # gem's own task surface, the way a consumer would.
       - name: Build the archive
         run: bundle exec rake beni:build
+      # `--allow-dirty` below lets untracked files into the package, and
+      # what it lets in is whatever happens to be there. Proving the tree
+      # is clean here is what bounds it: the only thing written after
+      # this point is the one file the next step generates.
+      - name: The working tree is clean before anything is generated
+        run: |
+          test -z "$(git status --porcelain)" \
+            || { git status --porcelain; echo 'refusing to publish from a dirty tree'; exit 1; }
       # The documentation bindings the package carries and git does not.
       # A release is the one case where the host that writes them has to
       # be the host that will read them, and the task refuses anywhere
       # else — this runner is that host.
       - name: Generate the documentation bindings
         run: bundle exec rake docs:bindings:release
-      # `cargo package` would happily leave them out: the include globs
-      # match whatever is there, and nothing else in the build needs
-      # them. Only docs.rs would notice, and only after publishing.
-      - name: The package carries the documentation bindings
+      # `src/*.rs` is the include glob that matches whatever is there, so
+      # it is where both mistakes live: the bindings missing, which only
+      # docs.rs would notice and only after publishing, and some other
+      # generated file riding along on `--allow-dirty`. Naming the whole
+      # set rules out both at once.
+      - name: The package carries exactly the Rust sources it should
         run: |
-          cargo package -p beni-sys --list --allow-dirty \
-            | grep -qx 'src/bindings_docs.rs' \
-            || { echo 'beni-sys would publish without its documentation bindings'; exit 1; }
-      # --allow-dirty because the bindings are generated and untracked;
-      # the checkout is otherwise clean, so nothing else can ride along.
+          expected=$'src/bindings_docs.rs\nsrc/lib.rs'
+          actual=$(cargo package -p beni-sys --list --allow-dirty | grep '^src/.*\.rs$' | sort)
+          [ "$actual" = "$expected" ] || {
+            echo "beni-sys would publish these Rust sources:"; echo "$actual"
+            echo "expected:"; echo "$expected"; exit 1; }
+      # --allow-dirty because the bindings are generated and untracked.
+      # cargo has no narrower flag — --exclude-untracked is a proposal,
+      # not a release — so the bound comes from the clean-tree check
+      # above and the listing assertion beside it, between them naming
+      # the one file this is allowing.
       - name: Dry-run publish
         if: ${{ !inputs.push }}
         run: cargo publish --workspace --dry-run --allow-dirty
