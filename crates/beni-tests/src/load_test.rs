@@ -27,7 +27,7 @@ fn load_string_surfaces_a_raising_script_as_err() {
 
     match err {
         Error::Exception(_) => assert!(err.message(&mrb).contains("kaboom")),
-        Error::Panic(_) => panic!("a Ruby raise must surface as Error::Exception"),
+        other => panic!("a Ruby raise must surface as Error::Exception, got {other}"),
     }
     assert!(
         mrb.pending_exc().is_nil(),

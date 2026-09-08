@@ -178,6 +178,9 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <Symbol as IntoSym>::into_sym;
     let _ = Ccontext::new;
     let _ = Ccontext::load_nstring;
+    let _ = ParseMessage::line;
+    let _ = ParseMessage::column;
+    let _ = ParseMessage::message;
     let _ = <i32 as IntoValue>::into_value;
     let _ = <f64 as IntoValue>::into_value;
     let _ = <bool as IntoValue>::into_value;

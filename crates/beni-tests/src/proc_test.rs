@@ -3,7 +3,9 @@ use beni::{Ccontext, Error, FromValue, IntoValue, Mrb, Proc, Value};
 fn proc_from(mrb: &Mrb, src: &[u8]) -> Proc {
     let cxt =
         Ccontext::new(mrb, c"proc_test.rb").expect("allocating the compile context must succeed");
-    let value = cxt.load_nstring(src);
+    let value = cxt
+        .load_nstring(src)
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "compiling the proc literal must not raise: {}",
@@ -35,7 +37,7 @@ fn call_surfaces_a_raised_exception_as_err() {
 
     match err {
         Error::Exception(_) => assert!(err.message(&mrb).contains("boom from block")),
-        Error::Panic(_) => panic!("a Ruby raise must surface as Error::Exception"),
+        other => panic!("a Ruby raise must surface as Error::Exception, got {other}"),
     }
     // The VM stays usable after the protected raise.
     let again = proc_from(&mrb, b"proc { 7 }");

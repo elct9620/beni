@@ -51,8 +51,11 @@ fn set_surfaces_frozen_receiver_as_err() {
     // A frozen Hash still carries the Hash tag, so the downcast holds,
     // but assigning into it raises FrozenError — which protect catches
     // into Err rather than long-jumping.
-    let frozen = Hash::from_value(cxt.load_nstring(b"{}.freeze"))
-        .expect("a frozen Hash literal is Hash-tagged");
+    let frozen = Hash::from_value(
+        cxt.load_nstring(b"{}.freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen Hash literal is Hash-tagged");
     assert!(matches!(
         frozen.set(
             &mrb,
@@ -76,7 +79,7 @@ fn keyed_operations_surface_a_raising_key_as_err() {
     // entry forces the comparison to run even on a small hash.
     let key = cxt.load_nstring(
         b"class BeniBoomKey; def hash; raise 'no'; end; def eql?(o); raise 'no'; end; end; BeniBoomKey.new",
-    );
+    ).expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the key class must not raise"
@@ -111,8 +114,11 @@ fn read_surfaces_a_raising_default_as_err() {
     // A hash whose default block raises turns an absent-key read into
     // a raise protect must catch — the default path a read takes and
     // fetch does not.
-    let hash = Hash::from_value(cxt.load_nstring(b"Hash.new { raise 'no' }"))
-        .expect("a Hash is Hash-tagged");
+    let hash = Hash::from_value(
+        cxt.load_nstring(b"Hash.new { raise 'no' }")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a Hash is Hash-tagged");
     assert!(
         mrb.pending_exc().is_nil(),
         "building the hash must not raise"
@@ -233,8 +239,11 @@ fn clear_surfaces_frozen_receiver_as_err() {
 
     // clear checks frozen state before touching entries, so even a
     // populated frozen hash surfaces FrozenError as Err.
-    let frozen = Hash::from_value(cxt.load_nstring(b"{a: 1}.freeze"))
-        .expect("a frozen Hash literal is Hash-tagged");
+    let frozen = Hash::from_value(
+        cxt.load_nstring(b"{a: 1}.freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen Hash literal is Hash-tagged");
     assert!(matches!(frozen.clear(&mrb), Err(Error::Exception(_))));
 }
 
@@ -272,8 +281,11 @@ fn delete_surfaces_frozen_receiver_as_err() {
 
     // delete checks frozen state before touching entries, so even a
     // populated frozen hash surfaces FrozenError as Err.
-    let frozen = Hash::from_value(cxt.load_nstring(b"{a: 1}.freeze"))
-        .expect("a frozen Hash literal is Hash-tagged");
+    let frozen = Hash::from_value(
+        cxt.load_nstring(b"{a: 1}.freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen Hash literal is Hash-tagged");
     assert!(matches!(
         frozen.delete(&mrb, mrb.str_new(b"a").as_value()),
         Err(Error::Exception(_))
@@ -290,8 +302,11 @@ fn update_surfaces_frozen_receiver_as_err() {
 
     // merge checks frozen state before folding entries, so merging
     // into a frozen hash surfaces FrozenError as Err.
-    let frozen = Hash::from_value(cxt.load_nstring(b"{a: 1}.freeze"))
-        .expect("a frozen Hash literal is Hash-tagged");
+    let frozen = Hash::from_value(
+        cxt.load_nstring(b"{a: 1}.freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen Hash literal is Hash-tagged");
     let other = mrb.hash_new();
     other
         .set(

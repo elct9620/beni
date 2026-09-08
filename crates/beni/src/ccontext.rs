@@ -1,21 +1,17 @@
 //! RAII wrapper around mruby's `mrb_ccontext *`.
 //!
-//! Three guest entry points compile and evaluate Ruby source through
-//! the same four-step lifecycle:
+//! A compile context stamps a filename onto everything compiled
+//! through it, so the produced IREP carries `debug_info` and the
+//! exceptions the program raises answer `Exception#backtrace` (see
+//! `vendor/mruby/src/backtrace.c::pack_backtrace`). One context serves
+//! any number of loads and carries the top-level local variables
+//! across them, so successive loads see each other's locals.
 //!
-//!   1. `mrb_ccontext_new(mrb)` — allocate the compile context.
-//!   2. `mrb_ccontext_filename(mrb, cxt, name)` — stamp a filename so
-//!      the produced IREP carries `debug_info` (required for
-//!      `Exception#backtrace`, per
-//!      `vendor/mruby/src/backtrace.c::pack_backtrace`).
-//!   3. `mrb_load_nstring_cxt(mrb, ptr, len, cxt)` — compile + run.
-//!   4. `mrb_ccontext_free(mrb, cxt)` — release the context.
-//!
-//! The wrapper collapses that lifecycle to one
-//! `Ccontext::new(&mrb, c"...")` + `cxt.load_nstring(bytes)` pair;
-//! `Drop` runs the free unconditionally.
+//! The context also captures the compiler's diagnostics instead of
+//! letting mruby print them: a load hands back the first error as a
+//! `ParseMessage`, which is the only place that location surfaces.
 
-use crate::{Mrb, Value};
+use crate::{Error, Mrb, ParseMessage, Value};
 use beni_sys as sys;
 
 /// Owned mruby compile context, tied to the lifetime of an `Mrb`.
@@ -53,32 +49,73 @@ impl<'mrb> Ccontext<'mrb> {
         // matching `mrb_ccontext_new`; `filename.as_ptr()` is a
         // NUL-terminated `*const c_char` by `CStr`'s invariant.
         unsafe { sys::mrb_ccontext_filename(mrb.as_ptr(), raw, filename.as_ptr()) };
+        // Capture is not a choice a caller gets: `load_nstring` reads
+        // the parser's diagnostic buffer to build its `ParseMessage`,
+        // and an uncaptured parser writes that buffer nothing. Capture
+        // also keeps the diagnostic off the process's standard error,
+        // which is the host's to write, not a library's.
+        //
+        // SAFETY: `raw` points at the context just allocated above;
+        // the raw setter writes the bitfield through a pointer rather
+        // than forming a `&mut` to memory mruby owns.
+        unsafe { sys::mrb_ccontext::set_capture_errors_raw(raw, true) };
         Some(Self { mrb, raw })
     }
 
-    /// Compile and evaluate `source` under this context. `source` is
-    /// raw bytes (ptr + len), not NUL-terminated.
+    /// Compile and evaluate `source` under this context, yielding the
+    /// program's result value. `source` is raw bytes (ptr + len), not
+    /// NUL-terminated.
     ///
-    /// On a parse, codegen, or runtime failure the exception is parked on
-    /// the handle (`Mrb::pending_exc`) and a nil-ish `Value` returned —
-    /// unlike `Mrb::load_string`, which clears the exception into an
-    /// `Err`. Error reporting is deliberately deferred to the handle so
-    /// the parked exception keeps the filename stamp and its source-line
-    /// backtrace.
-    pub fn load_nstring(&self, source: &[u8]) -> Value {
+    /// Source that does not parse comes back `Err(Error::Syntax)`
+    /// carrying the compiler's first recorded diagnostic; a codegen
+    /// failure or a raise while the program runs comes back
+    /// `Err(Error::Exception)` with the pending exception cleared from
+    /// the handle. Only the exception answers a backtrace — a program
+    /// that never compiled never ran.
+    pub fn load_nstring(&self, source: &[u8]) -> Result<Value, Error> {
         // SAFETY: `self.mrb` is live by the borrow; `self.raw` was
         // produced by `mrb_ccontext_new` in `Self::new` and is owned
         // for the lifetime of `&self`; the source bytes outlive the
-        // call because `mrb_load_nstring_cxt` does not retain a
-        // reference past return.
-        Value::from_raw(unsafe {
-            sys::mrb_load_nstring_cxt(
+        // call because `mrb_parse_nstring` copies what it keeps.
+        let parser = unsafe {
+            sys::mrb_parse_nstring(
                 self.mrb.as_ptr(),
                 source.as_ptr() as *const core::ffi::c_char,
                 source.len(),
                 self.raw,
             )
-        })
+        };
+        if parser.is_null() {
+            return Err(Error::Syntax(ParseMessage::unrecorded()));
+        }
+
+        // SAFETY: `parser` is non-NULL and untouched since the parse.
+        let parsed = unsafe { (*parser).nerr == 0 && !(*parser).tree.is_null() };
+        if !parsed {
+            // SAFETY: as above; the buffer belongs to the live parser
+            // and nothing mutates it between the parse and this read.
+            let message = unsafe { ParseMessage::first_recorded(&(*parser).error_buffer) };
+            // The failing parser is beni's to release. Handing it to
+            // `mrb_load_exec` instead would have it format slot 0
+            // unconditionally, which is not always a slot the compiler
+            // wrote.
+            //
+            // SAFETY: `parser` is live and this is its only release.
+            unsafe { sys::mrb_parser_free(parser) };
+            return Err(Error::Syntax(message));
+        }
+
+        // SAFETY: `parser` parsed cleanly; `mrb_load_exec` takes
+        // ownership of it, frees it, and runs the generated Proc.
+        let value =
+            Value::from_raw(unsafe { sys::mrb_load_exec(self.mrb.as_ptr(), parser, self.raw) });
+        let exc = self.mrb.pending_exc();
+        if exc.is_nil() {
+            Ok(value)
+        } else {
+            self.mrb.clear_exc();
+            Err(Error::Exception(exc))
+        }
     }
 }
 

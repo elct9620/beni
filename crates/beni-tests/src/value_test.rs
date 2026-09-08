@@ -13,7 +13,7 @@ fn report_break(mrb: &Mrb, _self: Value) -> Value {
             Some(brk) => brk.value(),
             None => Value::from_int(mrb, -2),
         },
-        Err(Error::Panic(_)) => Value::from_int(mrb, -3),
+        Err(_) => Value::from_int(mrb, -3),
     }
 }
 
@@ -64,7 +64,7 @@ fn funcall_surfaces_a_raised_exception_as_err() {
         .expect_err("a raising dispatch must surface as Err");
     match err {
         Error::Exception(_) => {}
-        Error::Panic(_) => panic!("a Ruby raise must surface as Error::Exception"),
+        other => panic!("a Ruby raise must surface as Error::Exception, got {other}"),
     }
     // The VM stays usable after the protected raise.
     let again = 7i32
@@ -101,16 +101,27 @@ fn funcall_with_block_yields_to_the_passed_block() {
     // proves the block reached the dispatched method and ran.
     let cxt = Ccontext::new(&mrb, c"funcall_block.rb")
         .expect("allocating the compile context must succeed");
-    cxt.load_nstring(b"$seen = []");
-    let block = Proc::from_value(cxt.load_nstring(b"proc { |x| $seen << x * 2 }"))
-        .expect("a proc literal carries MRB_TT_PROC");
+    cxt.load_nstring(b"$seen = []")
+        .expect("the test source must compile and run");
+    let block = Proc::from_value(
+        cxt.load_nstring(b"proc { |x| $seen << x * 2 }")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a proc literal carries MRB_TT_PROC");
 
-    let receiver = cxt.load_nstring(b"[1, 2, 3]");
+    let receiver = cxt
+        .load_nstring(b"[1, 2, 3]")
+        .expect("the test source must compile and run");
     receiver
         .funcall_with_block(&mrb, c"each", &[], block)
         .expect("yielding through each must come back Ok");
 
-    assert_eq!(cxt.load_nstring(b"$seen").to_string(&mrb), "[2, 4, 6]");
+    assert_eq!(
+        cxt.load_nstring(b"$seen")
+            .expect("the test source must compile and run")
+            .to_string(&mrb),
+        "[2, 4, 6]"
+    );
 }
 
 #[test]
@@ -119,18 +130,23 @@ fn funcall_with_block_surfaces_a_raised_exception_as_err() {
 
     let cxt = Ccontext::new(&mrb, c"funcall_block_raise.rb")
         .expect("allocating the compile context must succeed");
-    let block = Proc::from_value(cxt.load_nstring(b"proc { raise 'boom from block' }"))
-        .expect("a proc literal carries MRB_TT_PROC");
+    let block = Proc::from_value(
+        cxt.load_nstring(b"proc { raise 'boom from block' }")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a proc literal carries MRB_TT_PROC");
 
     // The block raises while `each` yields to it; the protect frame
     // catches the raise into `Err` rather than long-jumping across FFI.
-    let receiver = cxt.load_nstring(b"[1]");
+    let receiver = cxt
+        .load_nstring(b"[1]")
+        .expect("the test source must compile and run");
     let err = receiver
         .funcall_with_block(&mrb, c"each", &[], block)
         .expect_err("a raising block must surface as Err");
     match err {
         Error::Exception(_) => assert!(err.message(&mrb).contains("boom from block")),
-        Error::Panic(_) => panic!("a Ruby raise must surface as Error::Exception"),
+        other => panic!("a Ruby raise must surface as Error::Exception, got {other}"),
     }
 
     // The VM stays usable after the protected raise.
@@ -157,9 +173,15 @@ fn tag_predicates_discriminate_module_range_and_exception() {
     let cxt =
         Ccontext::new(&mrb, c"tag_pred_test.rb").expect("allocating the context must succeed");
 
-    let module = cxt.load_nstring(b"Enumerable");
-    let range = cxt.load_nstring(b"(1..3)");
-    let exception = cxt.load_nstring(b"RuntimeError.new('boom')");
+    let module = cxt
+        .load_nstring(b"Enumerable")
+        .expect("the test source must compile and run");
+    let range = cxt
+        .load_nstring(b"(1..3)")
+        .expect("the test source must compile and run");
+    let exception = cxt
+        .load_nstring(b"RuntimeError.new('boom')")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "the literals must not raise: {}",
@@ -173,7 +195,9 @@ fn tag_predicates_discriminate_module_range_and_exception() {
 
     // A class is not a module: is_class and is_module split the
     // class-family tags, and neither claims the other's value.
-    let class = cxt.load_nstring(b"String");
+    let class = cxt
+        .load_nstring(b"String")
+        .expect("the test source must compile and run");
     assert!(class.is_class());
     assert!(!class.is_module());
     assert!(!module.is_class());
@@ -196,7 +220,7 @@ fn to_string_reads_a_string_subclass_result() {
     // an empty string.
     let obj = cxt.load_nstring(
         b"class BeniSubStr < String; end; class BeniHasSubToS; def to_s; BeniSubStr.new('sub'); end; end; BeniHasSubToS.new",
-    );
+    ).expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the classes must not raise: {}",
@@ -223,8 +247,9 @@ fn inspect_swallows_a_raising_inspect_as_empty() {
     let cxt = Ccontext::new(&mrb, c"inspect_test.rb")
         .expect("allocating the compile context must succeed");
 
-    let obj =
-        cxt.load_nstring(b"class BoomInspect; def inspect; raise 'no'; end; end; BoomInspect.new");
+    let obj = cxt
+        .load_nstring(b"class BoomInspect; def inspect; raise 'no'; end; end; BoomInspect.new")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the class must not raise: {}",
@@ -249,7 +274,9 @@ fn any_to_s_renders_the_default_object_form() {
     // A user class with no to_s override renders the default
     // `#<ClassName:0x...>` form, built from the class name without
     // dispatching the receiver's own to_s.
-    let obj = cxt.load_nstring(b"class Plain; end; Plain.new");
+    let obj = cxt
+        .load_nstring(b"class Plain; end; Plain.new")
+        .expect("the test source must compile and run");
     let rendered = obj.any_to_s(&mrb).to_bytes();
     assert!(
         rendered.starts_with(b"#<Plain:0x"),
@@ -301,7 +328,9 @@ fn equal_surfaces_a_raising_user_method_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"eq_test.rb").expect("allocating the context must succeed");
 
-    let obj = cxt.load_nstring(b"class Boom; def ==(o); raise 'no'; end; end; Boom.new");
+    let obj = cxt
+        .load_nstring(b"class Boom; def ==(o); raise 'no'; end; end; Boom.new")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the class must not raise: {}",
@@ -319,7 +348,9 @@ fn eql_surfaces_a_raising_user_method_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"eql_test.rb").expect("allocating the context must succeed");
 
-    let obj = cxt.load_nstring(b"class BoomEql; def eql?(o); raise 'no'; end; end; BoomEql.new");
+    let obj = cxt
+        .load_nstring(b"class BoomEql; def eql?(o); raise 'no'; end; end; BoomEql.new")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the class must not raise: {}",
@@ -367,8 +398,12 @@ fn cmp_ranks_a_custom_spaceship_by_sign_not_magnitude() {
     // A `<=>` is only obliged to return negative / zero / positive, so
     // a custom one can answer with any magnitude. `Wide#<=>` reports
     // "greater" as 2 and "less" as -3 to prove ranking keys on sign.
-    let greater = cxt.load_nstring(b"class Wide; def <=>(o); 2; end; end; Wide.new");
-    let less = cxt.load_nstring(b"class Narrow; def <=>(o); -3; end; end; Narrow.new");
+    let greater = cxt
+        .load_nstring(b"class Wide; def <=>(o); 2; end; end; Wide.new")
+        .expect("the test source must compile and run");
+    let less = cxt
+        .load_nstring(b"class Narrow; def <=>(o); -3; end; end; Narrow.new")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the classes must not raise: {}",
@@ -388,7 +423,9 @@ fn cmp_surfaces_a_raising_user_method_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"cmp_test.rb").expect("allocating the context must succeed");
 
-    let obj = cxt.load_nstring(b"class BoomCmp; def <=>(o); raise 'no'; end; end; BoomCmp.new");
+    let obj = cxt
+        .load_nstring(b"class BoomCmp; def <=>(o); raise 'no'; end; end; BoomCmp.new")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the class must not raise: {}",
@@ -406,9 +443,9 @@ fn dup_and_clone_surface_a_raising_initialize_copy_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"copy_test.rb").expect("allocating the context must succeed");
 
-    let obj = cxt.load_nstring(
-        b"class BoomCopy; def initialize_copy(o); raise 'no'; end; end; BoomCopy.new",
-    );
+    let obj = cxt
+        .load_nstring(b"class BoomCopy; def initialize_copy(o); raise 'no'; end; end; BoomCopy.new")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the class must not raise: {}",
@@ -440,7 +477,7 @@ fn check_frozen_guards_frozen_and_immediate_receivers() {
         Error::Exception(exc) => {
             assert_eq!(exc.classname(&mrb), "FrozenError");
         }
-        Error::Panic(_) => unreachable!("the guard must surface as Error::Exception"),
+        other => unreachable!("the guard must surface as Error::Exception, got {other}"),
     }
     assert!(
         mrb.pending_exc().is_nil(),
@@ -669,7 +706,9 @@ fn obj_dup_copies_state_into_an_independent_object() {
     let cxt =
         Ccontext::new(&mrb, c"dup_test.rb").expect("allocating the compile context must succeed");
 
-    let orig = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o");
+    let orig = cxt
+        .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     let dup = orig.obj_dup(&mrb).expect("dup does not raise");
@@ -692,7 +731,9 @@ fn iv_set_surfaces_frozen_and_non_object_receivers_as_err() {
 
     // A frozen receiver rejects the assignment — surfaced as Err
     // instead of unwinding across the call.
-    let frozen = cxt.load_nstring(b"Object.new.freeze");
+    let frozen = cxt
+        .load_nstring(b"Object.new.freeze")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
     assert!(matches!(
         frozen.iv_set(&mrb, x, one),
@@ -712,7 +753,9 @@ fn const_get_reads_a_constant_and_surfaces_an_absent_one_as_err() {
     let cxt =
         Ccontext::new(&mrb, c"const_get_test.rb").expect("allocating the context must succeed");
 
-    let module = cxt.load_nstring(b"module BeniConstHost; FOO = 7; end; BeniConstHost");
+    let module = cxt
+        .load_nstring(b"module BeniConstHost; FOO = 7; end; BeniConstHost")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A defined constant reads back its value.
@@ -736,7 +779,9 @@ fn cv_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"cv_get_test.rb").expect("allocating the context must succeed");
 
-    let class = cxt.load_nstring(b"class BeniCvHost; @@count = 3; end; BeniCvHost");
+    let class = cxt
+        .load_nstring(b"class BeniCvHost; @@count = 3; end; BeniCvHost")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A defined class variable reads back its value.
@@ -761,7 +806,9 @@ fn const_set_assigns_a_constant_and_surfaces_a_non_module_receiver_as_err() {
     let cxt =
         Ccontext::new(&mrb, c"const_set_test.rb").expect("allocating the context must succeed");
 
-    let module = cxt.load_nstring(b"module BeniConstWriteHost; end; BeniConstWriteHost");
+    let module = cxt
+        .load_nstring(b"module BeniConstWriteHost; end; BeniConstWriteHost")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A fresh constant assigned on a module reads back its value.
@@ -788,8 +835,9 @@ fn const_remove_removes_a_constant_and_surfaces_a_non_module_receiver_as_err() {
     let cxt =
         Ccontext::new(&mrb, c"const_remove_test.rb").expect("allocating the context must succeed");
 
-    let module =
-        cxt.load_nstring(b"module BeniConstRemoveHost; GONE = 5; end; BeniConstRemoveHost");
+    let module = cxt
+        .load_nstring(b"module BeniConstRemoveHost; GONE = 5; end; BeniConstRemoveHost")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // Removing a defined constant succeeds and clears its presence.
@@ -822,10 +870,12 @@ fn const_defined_at_answers_only_for_the_receivers_own_constant() {
     let cxt = Ccontext::new(&mrb, c"const_defined_at_test.rb")
         .expect("allocating the context must succeed");
 
-    let child = cxt.load_nstring(
-        b"class BeniConstAtParent; OWNED = 1; end; \
+    let child = cxt
+        .load_nstring(
+            b"class BeniConstAtParent; OWNED = 1; end; \
           class BeniConstAtChild < BeniConstAtParent; end; BeniConstAtChild",
-    );
+        )
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     let owned = mrb.intern_cstr(c"OWNED");
@@ -843,7 +893,9 @@ fn const_defined_at_answers_only_for_the_receivers_own_constant() {
     );
 
     // The constant on the receiver's own table is seen by the direct test.
-    let parent = cxt.load_nstring(b"BeniConstAtParent");
+    let parent = cxt
+        .load_nstring(b"BeniConstAtParent")
+        .expect("the test source must compile and run");
     assert!(
         parent.const_defined_at(&mrb, owned),
         "OWNED is on the parent's own table"
@@ -858,7 +910,9 @@ fn cv_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"cv_set_test.rb").expect("allocating the context must succeed");
 
-    let class = cxt.load_nstring(b"class BeniCvWriteHost; end; BeniCvWriteHost");
+    let class = cxt
+        .load_nstring(b"class BeniCvWriteHost; end; BeniCvWriteHost")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A class variable assigned on a class reads back its value.
@@ -873,7 +927,9 @@ fn cv_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
 
     // A frozen receiver rejects the assignment — surfaced as Err
     // instead of unwinding across the call.
-    let frozen = cxt.load_nstring(b"BeniCvWriteHost.freeze");
+    let frozen = cxt
+        .load_nstring(b"BeniCvWriteHost.freeze")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "freezing must not raise");
     assert!(matches!(
         frozen.cv_set(&mrb, total, 6i32.into_value(&mrb)),
@@ -887,10 +943,12 @@ fn cv_defined_tests_class_variable_presence_walking_the_ancestry() {
     let cxt =
         Ccontext::new(&mrb, c"cv_defined_test.rb").expect("allocating the context must succeed");
 
-    let child = cxt.load_nstring(
-        b"class BeniCvParent; @@inherited = 1; end; \
+    let child = cxt
+        .load_nstring(
+            b"class BeniCvParent; @@inherited = 1; end; \
           class BeniCvChild < BeniCvParent; end; BeniCvChild",
-    );
+        )
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A class variable defined on an ancestor is present on the
@@ -907,7 +965,7 @@ fn cv_defined_tests_class_variable_presence_walking_the_ancestry() {
 fn assert_type_error(mrb: &Mrb, err: Error) {
     match err {
         Error::Exception(exc) => assert_eq!(exc.classname(mrb), "TypeError"),
-        Error::Panic(msg) => panic!("expected a TypeError exception, got a panic: {msg}"),
+        other => panic!("expected a TypeError exception, got a panic, got {other}"),
     }
 }
 
@@ -969,7 +1027,9 @@ fn cv_accessors_accept_a_singleton_class_receiver() {
 
     // A singleton class carries `MRB_TT_SCLASS`, inside the guarded
     // family: the accessors must keep working through it.
-    let sclass = cxt.load_nstring(b"class BeniCvSclassHost; end; BeniCvSclassHost.singleton_class");
+    let sclass = cxt
+        .load_nstring(b"class BeniCvSclassHost; end; BeniCvSclassHost.singleton_class")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     let sym = mrb.intern_cstr(c"@@through_sclass");
@@ -988,7 +1048,9 @@ fn iv_defined_tests_instance_variable_presence() {
     let cxt =
         Ccontext::new(&mrb, c"iv_defined_test.rb").expect("allocating the context must succeed");
 
-    let obj = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o");
+    let obj = cxt
+        .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A set instance variable is present; an unset one is not — the
@@ -1005,7 +1067,9 @@ fn iv_remove_yields_the_former_value_and_clears_presence() {
     let cxt =
         Ccontext::new(&mrb, c"iv_remove_test.rb").expect("allocating the context must succeed");
 
-    let obj = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o");
+    let obj = cxt
+        .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // Removing a set variable hands back its former value and leaves
@@ -1022,7 +1086,9 @@ fn iv_remove_distinguishes_absent_from_a_removed_nil() {
     let cxt = Ccontext::new(&mrb, c"iv_remove_absent_test.rb")
         .expect("allocating the context must succeed");
 
-    let obj = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, nil); o");
+    let obj = cxt
+        .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, nil); o")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // An absent variable yields None — distinct from a variable that
@@ -1053,7 +1119,9 @@ fn iv_remove_surfaces_a_frozen_holder_as_err() {
 
     // A frozen instance-variable holder rejects removal — surfaced as
     // Err instead of unwinding across the call.
-    let frozen = cxt.load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o.freeze; o");
+    let frozen = cxt
+        .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o.freeze; o")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
     let x = mrb.intern_cstr(c"@x");
     assert!(matches!(
@@ -1068,7 +1136,9 @@ fn obj_clone_carries_frozen_state_where_dup_drops_it() {
     let cxt =
         Ccontext::new(&mrb, c"clone_test.rb").expect("allocating the compile context must succeed");
 
-    let frozen = cxt.load_nstring(b"Object.new.freeze");
+    let frozen = cxt
+        .load_nstring(b"Object.new.freeze")
+        .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // clone is the deeper copy — it preserves the frozen state;
@@ -1109,7 +1179,9 @@ fn as_break_views_a_real_escaping_break() {
     // reads its carried value back out.
     let cxt =
         Ccontext::new(&mrb, c"break_test.rb").expect("allocating the compile context must succeed");
-    let got = cxt.load_nstring(b"$beni_break_recv.run(:tag) { break 88 }");
+    let got = cxt
+        .load_nstring(b"$beni_break_recv.run(:tag) { break 88 }")
+        .expect("the test source must compile and run");
 
     assert!(
         mrb.pending_exc().is_nil(),
@@ -1508,7 +1580,9 @@ fn each_iv_visits_every_set_instance_variable() {
 
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"each_iv.rb").expect("allocating the context must succeed");
-    let obj = cxt.load_nstring(b"Object.new");
+    let obj = cxt
+        .load_nstring(b"Object.new")
+        .expect("the test source must compile and run");
     obj.iv_set(&mrb, mrb.intern_cstr(c"@a"), 1i32.into_value(&mrb))
         .expect("iv_set on a fresh object does not raise");
     obj.iv_set(&mrb, mrb.intern_cstr(c"@b"), 2i32.into_value(&mrb))
@@ -1558,7 +1632,9 @@ fn each_iv_stops_early_on_stop() {
 
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"each_iv_stop.rb").expect("allocating the context must succeed");
-    let obj = cxt.load_nstring(b"Object.new");
+    let obj = cxt
+        .load_nstring(b"Object.new")
+        .expect("the test source must compile and run");
     obj.iv_set(&mrb, mrb.intern_cstr(c"@a"), 1i32.into_value(&mrb))
         .expect("iv_set on a fresh object does not raise");
     obj.iv_set(&mrb, mrb.intern_cstr(c"@b"), 2i32.into_value(&mrb))
@@ -1583,7 +1659,9 @@ fn each_iv_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt =
         Ccontext::new(&mrb, c"each_iv_mutate.rb").expect("allocating the context must succeed");
-    let obj = cxt.load_nstring(b"Object.new");
+    let obj = cxt
+        .load_nstring(b"Object.new")
+        .expect("the test source must compile and run");
     let a = mrb.intern_cstr(c"@a");
     let b = mrb.intern_cstr(c"@b");
     let added = mrb.intern_cstr(c"@added");
@@ -1621,7 +1699,9 @@ fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
 
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"each_iv_gc.rb").expect("allocating the context must succeed");
-    let obj = cxt.load_nstring(b"Object.new");
+    let obj = cxt
+        .load_nstring(b"Object.new")
+        .expect("the test source must compile and run");
     let a = mrb.intern_cstr(c"@a");
     let b = mrb.intern_cstr(c"@b");
 
@@ -1663,7 +1743,9 @@ fn each_iv_resurfaces_a_closure_panic_on_the_rust_side() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt =
         Ccontext::new(&mrb, c"each_iv_panic.rb").expect("allocating the context must succeed");
-    let obj = cxt.load_nstring(b"Object.new");
+    let obj = cxt
+        .load_nstring(b"Object.new")
+        .expect("the test source must compile and run");
     obj.iv_set(&mrb, mrb.intern_cstr(c"@a"), 1i32.into_value(&mrb))
         .expect("iv_set on a fresh object does not raise");
     obj.iv_set(&mrb, mrb.intern_cstr(c"@b"), 2i32.into_value(&mrb))

@@ -51,7 +51,9 @@ fn init_gem_installs_the_gem_surface() {
     // embedder-shaped journey end to end.
     let cxt = beni::Ccontext::new(&mrb, c"gem_test.rb")
         .expect("allocating the compile context must succeed");
-    let got = cxt.load_nstring(b"BeniGem::Widget.new.answer");
+    let got = cxt
+        .load_nstring(b"BeniGem::Widget.new.answer")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "evaluating the gem surface must not raise: {}",
@@ -83,6 +85,6 @@ fn init_gem_catches_init_panic() {
         .expect_err("the panic must surface as Err");
     match err {
         Error::Panic(msg) => assert!(msg.contains("gem init went sideways")),
-        Error::Exception(_) => panic!("an init panic must surface as Error::Panic"),
+        other => panic!("an init panic must surface as Error::Panic, got {other}"),
     }
 }

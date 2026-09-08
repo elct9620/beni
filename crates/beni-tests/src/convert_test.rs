@@ -104,7 +104,9 @@ fn container_downcast_includes_subclass_instances() {
     let cxt = beni::Ccontext::new(&mrb, c"convert_test.rb")
         .expect("allocating the compile context must succeed");
 
-    let sub = cxt.load_nstring(b"class MyAry < Array; end; MyAry.new");
+    let sub = cxt
+        .load_nstring(b"class MyAry < Array; end; MyAry.new")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the Array subclass must not raise: {}",
@@ -128,8 +130,12 @@ fn class_downcast_admits_only_the_class_tag() {
     let cxt = beni::Ccontext::new(&mrb, c"convert_test.rb")
         .expect("allocating the compile context must succeed");
 
-    let class_val = cxt.load_nstring(b"String");
-    let module_val = cxt.load_nstring(b"Kernel");
+    let class_val = cxt
+        .load_nstring(b"String")
+        .expect("the test source must compile and run");
+    let module_val = cxt
+        .load_nstring(b"Kernel")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "looking up the constants must not raise: {}",

@@ -127,7 +127,9 @@ fn nrest_format_splits_the_leading_symbol() {
 
     let cxt =
         Ccontext::new(&mrb, c"nrest_test.rb").expect("allocating the compile context must succeed");
-    let got = cxt.load_nstring(b"$beni_nrest_recv.nrest_after_sym(:tag, 1, 2, 3)");
+    let got = cxt
+        .load_nstring(b"$beni_nrest_recv.nrest_after_sym(:tag, 1, 2, 3)")
+        .expect("the test source must compile and run");
 
     assert!(
         mrb.pending_exc().is_nil(),
@@ -232,7 +234,9 @@ fn rest_block_format_splits_rest_from_block() {
 
     // A block is given: the three positionals land in the rest
     // array, the block in its own slot — rest length 3.
-    let with_block = cxt.load_nstring(b"$beni_rest_block_recv.rest_block_report(1, 2, 3) { }");
+    let with_block = cxt
+        .load_nstring(b"$beni_rest_block_recv.rest_block_report(1, 2, 3) { }")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "the *& read must not raise: {}",
@@ -241,7 +245,9 @@ fn rest_block_format_splits_rest_from_block() {
     assert_eq!(i32::from_value(with_block), Some(3));
 
     // No block: the slot decodes as nil.
-    let without_block = cxt.load_nstring(b"$beni_rest_block_recv.rest_block_report(1, 2)");
+    let without_block = cxt
+        .load_nstring(b"$beni_rest_block_recv.rest_block_report(1, 2)")
+        .expect("the test source must compile and run");
     assert_eq!(i32::from_value(without_block), Some(-1));
 }
 
@@ -321,7 +327,7 @@ fn arg1_raises_argument_error_on_wrong_count() {
         .expect_err("a non-single argument count must surface as Err");
     match err {
         Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
-        Error::Panic(_) => panic!("a wrong argument count must raise, not panic"),
+        other => panic!("a wrong argument count must raise, not panic, got {other}"),
     }
 }
 
@@ -407,7 +413,9 @@ fn block_given_reports_whether_a_block_was_passed() {
         .expect("allocating the compile context must succeed");
 
     // No block: the predicate reports false.
-    let without = cxt.load_nstring(b"$beni_block_recv.block_report");
+    let without = cxt
+        .load_nstring(b"$beni_block_recv.block_report")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "the predicate must not raise: {}",
@@ -416,7 +424,9 @@ fn block_given_reports_whether_a_block_was_passed() {
     assert_eq!(bool::from_value(without), Some(false));
 
     // A block is given: the predicate reports true.
-    let with = cxt.load_nstring(b"$beni_block_recv.block_report { }");
+    let with = cxt
+        .load_nstring(b"$beni_block_recv.block_report { }")
+        .expect("the test source must compile and run");
     assert_eq!(bool::from_value(with), Some(true));
 }
 
@@ -436,7 +446,7 @@ fn rest_borrowed_survives_reentry(mrb: &Mrb, _self: Value) -> Value {
     let cxt = beni::Ccontext::new(mrb, c"reentry_probe.rb").expect("compile context");
     cxt.load_nstring(
         b"def __probe_deep(n); return 0 if n <= 0; Array.new(16){ 'y' * 40 }; __probe_deep(n - 1); end; __probe_deep(400)",
-    );
+    ).expect("the test source must compile and run");
     // The probe must actually run: a swallowed compile or runtime error
     // would leave the value stack unstressed, letting a dangling read slip
     // through as a false pass rather than exercising the re-entry contract.
@@ -526,7 +536,9 @@ fn kw_format_captures_keywords_and_empty_is_a_hash() {
         Ccontext::new(&mrb, c"kw_test.rb").expect("allocating the compile context must succeed");
 
     // Two keywords land in the bucket.
-    let two = cxt.load_nstring(b"$beni_kw_recv.kw_size(a: 1, b: 2)");
+    let two = cxt
+        .load_nstring(b"$beni_kw_recv.kw_size(a: 1, b: 2)")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "the : read must not raise: {}",
@@ -536,7 +548,9 @@ fn kw_format_captures_keywords_and_empty_is_a_hash() {
 
     // No keywords: the bucket is an empty Hash, not nil, so `size`
     // answers 0 rather than raising on a nil receiver.
-    let none = cxt.load_nstring(b"$beni_kw_recv.kw_size");
+    let none = cxt
+        .load_nstring(b"$beni_kw_recv.kw_size")
+        .expect("the test source must compile and run");
     assert_eq!(i32::from_value(none), Some(0));
 }
 
@@ -565,7 +579,9 @@ fn nrest_kwblock_separates_positionals_keywords_and_block() {
 
     // A brace-less keyword stays in its own bucket: rest [1], kwargs
     // {a: 1}, no block -> 1*100 + 1*10 + 0.
-    let kw = cxt.load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag, 1, a: 1)");
+    let kw = cxt
+        .load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag, 1, a: 1)")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "the n*:& read must not raise: {}",
@@ -575,16 +591,21 @@ fn nrest_kwblock_separates_positionals_keywords_and_block() {
 
     // An explicit positional Hash stays among the positionals: rest
     // [1, {a: 1}], kwargs {} -> 2*100.
-    let explicit = cxt.load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag, 1, {a: 1})");
+    let explicit = cxt
+        .load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag, 1, {a: 1})")
+        .expect("the test source must compile and run");
     assert_eq!(i32::from_value(explicit), Some(200));
 
     // A block fills its own slot: rest [1], kwargs {a: 1}, block -> 111.
-    let with_block =
-        cxt.load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag, 1, a: 1) { }");
+    let with_block = cxt
+        .load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag, 1, a: 1) { }")
+        .expect("the test source must compile and run");
     assert_eq!(i32::from_value(with_block), Some(111));
 
     // No positionals or keywords: kwargs is an empty Hash, not nil, so
     // the encode reaches 0 only because `size` answered on a real Hash.
-    let empty = cxt.load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag)");
+    let empty = cxt
+        .load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag)")
+        .expect("the test source must compile and run");
     assert_eq!(i32::from_value(empty), Some(0));
 }

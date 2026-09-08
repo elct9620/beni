@@ -50,8 +50,11 @@ fn cat_str_surfaces_frozen_receiver_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
-    let frozen = RString::from_value(cxt.load_nstring(b"'fixed'.freeze"))
-        .expect("a frozen String literal is String-tagged");
+    let frozen = RString::from_value(
+        cxt.load_nstring(b"'fixed'.freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen String literal is String-tagged");
     assert!(
         mrb.pending_exc().is_nil(),
         "freezing the string must not raise: {}",
@@ -83,8 +86,11 @@ fn cat_cstr_surfaces_frozen_receiver_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
-    let frozen = RString::from_value(cxt.load_nstring(b"'fixed'.freeze"))
-        .expect("a frozen String literal is String-tagged");
+    let frozen = RString::from_value(
+        cxt.load_nstring(b"'fixed'.freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen String literal is String-tagged");
     let result = frozen.cat_cstr(&mrb, c"more");
     assert!(matches!(result, Err(Error::Exception(_))));
 }
@@ -97,8 +103,11 @@ fn cat_surfaces_frozen_receiver_as_err() {
     // A frozen String still carries the String tag, so the downcast
     // holds, but appending to it raises FrozenError — which protect
     // catches into Err rather than long-jumping.
-    let frozen = RString::from_value(cxt.load_nstring(b"'fixed'.freeze"))
-        .expect("a frozen String literal is String-tagged");
+    let frozen = RString::from_value(
+        cxt.load_nstring(b"'fixed'.freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen String literal is String-tagged");
     assert!(
         mrb.pending_exc().is_nil(),
         "freezing the string must not raise: {}",
@@ -252,8 +261,11 @@ fn concat_surfaces_frozen_receiver_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
-    let frozen = RString::from_value(cxt.load_nstring(b"'fixed'.freeze"))
-        .expect("a frozen String literal is String-tagged");
+    let frozen = RString::from_value(
+        cxt.load_nstring(b"'fixed'.freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen String literal is String-tagged");
     let result = frozen.concat(&mrb, mrb.str_new(b"more").as_value());
     assert!(matches!(result, Err(Error::Exception(_))));
 }
@@ -280,8 +292,11 @@ fn resize_surfaces_frozen_receiver_as_err() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
-    let frozen = RString::from_value(cxt.load_nstring(b"'fixed'.freeze"))
-        .expect("a frozen String literal is String-tagged");
+    let frozen = RString::from_value(
+        cxt.load_nstring(b"'fixed'.freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen String literal is String-tagged");
     assert!(matches!(frozen.resize(&mrb, 2), Err(Error::Exception(_))));
 }
 

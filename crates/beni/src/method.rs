@@ -151,9 +151,13 @@ fn arg_type_error<T>(mrb: &Mrb) -> Error {
 }
 
 /// Convert `err` into a pending mruby exception and long-jump to the
-/// Ruby caller. A `Panic` is wrapped as a `RuntimeError`; its
-/// message `String` is dropped before the raise because the
-/// long-jump runs no Rust drops.
+/// Ruby caller. A `Syntax` is wrapped as a `SyntaxError` and a
+/// `Panic` as a `RuntimeError`; each message `String` is dropped
+/// before the raise because the long-jump runs no Rust drops.
+///
+/// The `SyntaxError` reads `line N: message`, the wording mruby's own
+/// compiler produces, so a Ruby caller cannot tell whether the source
+/// was compiled through beni or through mruby.
 ///
 /// # Safety
 ///
@@ -162,6 +166,13 @@ fn arg_type_error<T>(mrb: &Mrb) -> Error {
 unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
     let exc = match err {
         Error::Exception(exc) => exc,
+        Error::Syntax(parse) => {
+            let msg = format!("line {}: {}", parse.line(), parse.message());
+            let exc = core_exception(mrb, c"SyntaxError", &msg);
+            drop(msg);
+            drop(parse);
+            exc
+        }
         Error::Panic(msg) => {
             let exc = core_exception(mrb, c"RuntimeError", &msg);
             drop(msg);

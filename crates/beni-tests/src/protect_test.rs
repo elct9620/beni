@@ -30,7 +30,7 @@ fn protect_surfaces_a_raised_ruby_exception_as_err() {
 
     match err {
         Error::Exception(_) => assert!(err.message(&mrb).contains("boom from ruby")),
-        Error::Panic(_) => panic!("a Ruby raise must surface as Error::Exception"),
+        other => panic!("a Ruby raise must surface as Error::Exception, got {other}"),
     }
     // The VM stays usable after the protected raise.
     let again = mrb
@@ -49,7 +49,7 @@ fn protect_surfaces_a_panicking_body_as_err() {
 
     match err {
         Error::Panic(msg) => assert!(msg.contains("boom from rust")),
-        Error::Exception(_) => panic!("a Rust panic must surface as Error::Panic"),
+        other => panic!("a Rust panic must surface as Error::Panic, got {other}"),
     }
     // The VM stays usable after the caught panic.
     let again = mrb
@@ -142,7 +142,7 @@ fn rescue_propagates_an_exception_outside_the_class_list() {
 
     match err {
         Error::Exception(_) => assert!(err.message(&mrb).contains("wrong type")),
-        Error::Panic(_) => panic!("an unmatched Ruby raise stays Error::Exception"),
+        other => panic!("an unmatched Ruby raise stays Error::Exception, got {other}"),
     }
 }
 
@@ -163,7 +163,7 @@ fn rescue_surfaces_a_handler_raise_as_err() {
 
     match err {
         Error::Exception(_) => assert!(err.message(&mrb).contains("handler boom")),
-        Error::Panic(_) => panic!("a handler Ruby raise stays Error::Exception"),
+        other => panic!("a handler Ruby raise stays Error::Exception, got {other}"),
     }
 }
 
@@ -187,7 +187,7 @@ fn rescue_surfaces_a_handler_panic_as_err() {
 
     match err {
         Error::Panic(msg) => assert!(msg.contains("boom from handler")),
-        Error::Exception(_) => panic!("a handler Rust panic must surface as Error::Panic"),
+        other => panic!("a handler Rust panic must surface as Error::Panic, got {other}"),
     }
     // The VM stays usable after the caught handler panic.
     let again = mrb
@@ -210,7 +210,7 @@ fn rescue_with_an_empty_class_list_rescues_nothing() {
 
     match err {
         Error::Exception(_) => assert!(err.message(&mrb).contains("boom")),
-        Error::Panic(_) => panic!("the raise stays Error::Exception"),
+        other => panic!("the raise stays Error::Exception, got {other}"),
     }
 }
 
@@ -231,7 +231,7 @@ fn rescue_does_not_catch_a_body_panic() {
 
     match err {
         Error::Panic(msg) => assert!(msg.contains("boom from rust")),
-        Error::Exception(_) => panic!("a Rust panic must surface as Error::Panic"),
+        other => panic!("a Rust panic must surface as Error::Panic, got {other}"),
     }
     // The VM stays usable after the caught panic.
     let again = mrb

@@ -6,7 +6,7 @@
 //! instead of letting the raise long-jump across Rust frames, and a
 //! Rust panic caught at the FFI boundary travels the same channel.
 
-use crate::{Mrb, RClass, Value};
+use crate::{Mrb, ParseMessage, RClass, Value};
 use beni_sys as sys;
 
 /// Error surfaced to Rust callers when mruby rejects an operation or
@@ -17,6 +17,11 @@ pub enum Error {
     /// `Value` is the exception object; like every `Value` it is only
     /// meaningful while the originating VM is open.
     Exception(Value),
+    /// Source that did not parse, carrying the compiler's first
+    /// recorded diagnostic. Distinct from `Exception` because a
+    /// program that never compiled never ran: there is no exception
+    /// object and no backtrace behind it.
+    Syntax(ParseMessage),
     /// A Rust panic caught at the FFI boundary, carrying the panic
     /// payload's message. Surfaced to Rust callers (`Mrb::protect`
     /// bodies); inside a registered method the panic is re-raised to
@@ -72,10 +77,12 @@ impl Error {
     /// The error's message. An exception renders through the live VM
     /// (the carried `Value` cannot render itself without one),
     /// falling back to an empty string when the exception's `to_s`
-    /// itself fails; a panic carries its message directly.
+    /// itself fails; a syntax error and a panic each carry their
+    /// message directly.
     pub fn message(&self, mrb: &Mrb) -> String {
         match self {
             Error::Exception(exc) => exc.to_string(mrb),
+            Error::Syntax(parse) => parse.message().to_owned(),
             Error::Panic(msg) => msg.clone(),
         }
     }
@@ -87,6 +94,13 @@ impl std::fmt::Display for Error {
             Error::Exception(_) => {
                 f.write_str("mruby exception (Error::message(&mrb) renders the details)")
             }
+            Error::Syntax(parse) => write!(
+                f,
+                "syntax error at line {}, column {}: {}",
+                parse.line(),
+                parse.column(),
+                parse.message()
+            ),
             Error::Panic(msg) => write!(f, "panic in mruby-bound closure: {msg}"),
         }
     }

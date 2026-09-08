@@ -97,8 +97,11 @@ fn push_surfaces_frozen_receiver_as_err() {
     // A frozen Array still carries the Array tag, so the downcast
     // holds, but pushing to it raises FrozenError — which protect
     // catches into Err rather than long-jumping.
-    let frozen = Array::from_value(cxt.load_nstring(b"[].freeze"))
-        .expect("a frozen Array literal is Array-tagged");
+    let frozen = Array::from_value(
+        cxt.load_nstring(b"[].freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen Array literal is Array-tagged");
     assert!(matches!(
         frozen.push(&mrb, mrb.str_new(b"x").as_value()),
         Err(Error::Exception(_))
@@ -281,8 +284,11 @@ fn splice_surfaces_raising_edges_as_err() {
     // routes through mrb_ary_modify like the other mutators.
     let cxt =
         Ccontext::new(&mrb, c"frozen_splice.rb").expect("allocating the context must succeed");
-    let frozen = Array::from_value(cxt.load_nstring(b"[1].freeze"))
-        .expect("a frozen Array literal is Array-tagged");
+    let frozen = Array::from_value(
+        cxt.load_nstring(b"[1].freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen Array literal is Array-tagged");
     assert!(matches!(
         frozen.splice(&mrb, 0, 1, mrb.ary_new().as_value()),
         Err(Error::Exception(_))
@@ -323,9 +329,11 @@ fn join_surfaces_a_raising_element_to_s_as_err() {
 
     // An element whose to_s raises long-jumps out of mrb_ary_join;
     // protect catches it into Err rather than unwinding across FFI.
-    let ary =
-        Array::from_value(cxt.load_nstring(b"o = Object.new; def o.to_s; raise 'boom'; end; [o]"))
-            .expect("an Array literal is Array-tagged");
+    let ary = Array::from_value(
+        cxt.load_nstring(b"o = Object.new; def o.to_s; raise 'boom'; end; [o]")
+            .expect("the test source must compile and run"),
+    )
+    .expect("an Array literal is Array-tagged");
     assert!(matches!(ary.join(&mrb, None), Err(Error::Exception(_))));
 }
 
@@ -338,8 +346,11 @@ fn pop_surfaces_frozen_receiver_as_err() {
 
     // pop checks frozen state before touching the elements, so even a
     // populated frozen array surfaces FrozenError as Err.
-    let frozen = Array::from_value(cxt.load_nstring(b"[1].freeze"))
-        .expect("a frozen Array literal is Array-tagged");
+    let frozen = Array::from_value(
+        cxt.load_nstring(b"[1].freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen Array literal is Array-tagged");
     assert!(matches!(frozen.pop(&mrb), Err(Error::Exception(_))));
 }
 
@@ -354,8 +365,11 @@ fn remaining_mutators_surface_frozen_receiver_as_err() {
     // Every mutator routes through mrb_ary_modify, which raises
     // FrozenError on a frozen receiver — protect catches each into Err.
     // push and pop are pinned separately; this covers the rest.
-    let frozen = Array::from_value(cxt.load_nstring(b"[1].freeze"))
-        .expect("a frozen Array literal is Array-tagged");
+    let frozen = Array::from_value(
+        cxt.load_nstring(b"[1].freeze")
+            .expect("the test source must compile and run"),
+    )
+    .expect("a frozen Array literal is Array-tagged");
     let other = mrb.ary_new();
 
     assert!(matches!(

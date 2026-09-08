@@ -101,7 +101,7 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
             .expect_err("a wrong argument count must surface as Err");
         match err {
             Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
-            Error::Panic(_) => panic!("a wrong argument count must raise, not panic"),
+            other => panic!("a wrong argument count must raise, not panic, got {other}"),
         }
     }
 
@@ -239,7 +239,9 @@ fn block_accepting_method_yields_to_a_passed_block() {
     // `Some(Proc)` and yields the argument to it, here doubling it.
     let cxt = beni::Ccontext::new(&mrb, c"block_method_test.rb")
         .expect("allocating the compile context must succeed");
-    let got = cxt.load_nstring(b"BeniBlockApply.new.apply(21) { |x| x * 2 }");
+    let got = cxt
+        .load_nstring(b"BeniBlockApply.new.apply(21) { |x| x * 2 }")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "the block-yielding call must not raise: {}",
@@ -301,7 +303,7 @@ fn protect_surfaces_closure_panic_as_err() {
         .expect_err("the panic must surface as Err");
     match err {
         Error::Panic(msg) => assert!(msg.contains("pop goes the closure")),
-        Error::Exception(_) => panic!("a closure panic must surface as Error::Panic"),
+        other => panic!("a closure panic must surface as Error::Panic, got {other}"),
     }
 }
 

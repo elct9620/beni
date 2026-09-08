@@ -133,7 +133,9 @@ fn symbol_key_registers_private_singleton_and_module_function() {
     // registration.
     let cxt = beni::Ccontext::new(&mrb, c"sym_modfn.rb")
         .expect("allocating the compile context must succeed");
-    let got = cxt.load_nstring(b"BeniSymModFn.mod_seven");
+    let got = cxt
+        .load_nstring(b"BeniSymModFn.mod_seven")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "calling the Symbol-keyed module function must not raise: {}",
@@ -285,7 +287,8 @@ fn obj_new_surfaces_a_raising_initialize_as_err() {
     let cxt =
         beni::Ccontext::new(&mrb, c"obj_new_test.rb").expect("allocating the context must succeed");
 
-    cxt.load_nstring(b"class BeniBoomInit; def initialize; raise 'no'; end; end");
+    cxt.load_nstring(b"class BeniBoomInit; def initialize; raise 'no'; end; end")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the class must not raise"
@@ -308,7 +311,8 @@ fn registering_onto_a_frozen_class_surfaces_as_err() {
     // The handle still resolves once the class is frozen, but
     // registering onto it raises FrozenError — caught into Err the
     // same way the other definition rejections are.
-    cxt.load_nstring(b"class BeniFrozenReg; end; BeniFrozenReg.freeze");
+    cxt.load_nstring(b"class BeniFrozenReg; end; BeniFrozenReg.freeze")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining and freezing must not raise"
@@ -463,7 +467,9 @@ fn define_module_function_attaches_to_module_and_includers() {
         .expect("allocating the compile context must succeed");
 
     // Callable directly on the module object — the singleton form.
-    let direct = cxt.load_nstring(b"BeniModFn.seven");
+    let direct = cxt
+        .load_nstring(b"BeniModFn.seven")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "calling the module function must not raise: {}",
@@ -473,9 +479,11 @@ fn define_module_function_attaches_to_module_and_includers() {
 
     // Callable as a bare private helper inside a class that mixes the
     // module in — the private-instance form.
-    let included = cxt.load_nstring(
-        b"class BeniModUser; include BeniModFn; def go; seven; end; end; BeniModUser.new.go",
-    );
+    let included = cxt
+        .load_nstring(
+            b"class BeniModUser; include BeniModFn; def go; seven; end; end; BeniModUser.new.go",
+        )
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "calling the mixed-in private form must not raise: {}",
@@ -497,7 +505,8 @@ fn module_function_instance_form_is_private() {
 
     let cxt = beni::Ccontext::new(&mrb, c"modfn_priv_test.rb")
         .expect("allocating the compile context must succeed");
-    cxt.load_nstring(b"class BeniModUserPriv; include BeniModFnPriv; end");
+    cxt.load_nstring(b"class BeniModUserPriv; include BeniModFnPriv; end")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "defining the includer must not raise: {}",
@@ -507,13 +516,10 @@ fn module_function_instance_form_is_private() {
     // The mixed-in instance form is private: dispatching it with an
     // explicit receiver raises NoMethodError — the visibility half of
     // `module_function` the bare-helper call alone cannot prove.
-    let _ = cxt.load_nstring(b"BeniModUserPriv.new.seven");
-    let exc = mrb.pending_exc();
-    assert!(
-        !exc.is_nil(),
-        "explicit-receiver dispatch of the private instance form must raise"
-    );
-    let message = Error::Exception(exc).message(&mrb);
+    let err = cxt
+        .load_nstring(b"BeniModUserPriv.new.seven")
+        .expect_err("explicit-receiver dispatch of the private instance form must raise");
+    let message = err.message(&mrb);
     assert!(
         message.contains("private"),
         "the NoMethodError must name the visibility: {message}"
@@ -536,7 +542,9 @@ fn define_const_binds_a_constant_readable_from_ruby() {
     // consumer-visible end of the binding.
     let cxt = beni::Ccontext::new(&mrb, c"const_test.rb")
         .expect("allocating the compile context must succeed");
-    let got = cxt.load_nstring(b"BeniConstHost::ANSWER");
+    let got = cxt
+        .load_nstring(b"BeniConstHost::ANSWER")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "reading the constant must not raise: {}",
@@ -704,10 +712,10 @@ fn undef_method_marks_a_method_undefined_on_the_handle() {
     // consumer-visible point of marking the name as not defined.
     let cxt = beni::Ccontext::new(&mrb, c"undef_test.rb")
         .expect("allocating the compile context must succeed");
-    let _ = cxt.load_nstring(b"BeniUndef.new.answer");
-    let exc = mrb.pending_exc();
-    assert!(!exc.is_nil(), "dispatching an undefined method must raise");
-    let message = Error::Exception(exc).message(&mrb);
+    let err = cxt
+        .load_nstring(b"BeniUndef.new.answer")
+        .expect_err("dispatching an undefined method must raise");
+    let message = err.message(&mrb);
     assert!(
         message.contains("answer"),
         "the NoMethodError must name the undefined method: {message}"
@@ -822,13 +830,8 @@ fn undef_singleton_method_marks_a_class_method_undefined() {
     // NoMethodError — the singleton-method form of the contract.
     let cxt = beni::Ccontext::new(&mrb, c"undef_class_test.rb")
         .expect("allocating the compile context must succeed");
-    let _ = cxt.load_nstring(b"BeniUndefClassMethod.class_answer");
-    let exc = mrb.pending_exc();
-    assert!(
-        !exc.is_nil(),
-        "dispatching an undefined class method must raise"
-    );
-    mrb.clear_exc();
+    cxt.load_nstring(b"BeniUndefClassMethod.class_answer")
+        .expect_err("dispatching an undefined class method must raise");
 
     // Undefining an absent class method surfaces as Err.
     let err = class
@@ -900,7 +903,9 @@ fn real_resolves_a_singleton_class_to_its_attached_object_class() {
     // class pointer through the raw seam, is a singleton handle.
     let cxt = beni::Ccontext::new(&mrb, c"real_sclass.rb")
         .expect("allocating the compile context must succeed");
-    let sclass_val = cxt.load_nstring(b"BeniRealTarget.singleton_class");
+    let sclass_val = cxt
+        .load_nstring(b"BeniRealTarget.singleton_class")
+        .expect("the test source must compile and run");
     assert!(
         mrb.pending_exc().is_nil(),
         "reaching the singleton class must not raise: {}",

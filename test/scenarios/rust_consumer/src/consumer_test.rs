@@ -10,12 +10,9 @@ fn a_gem_installed_by_a_consumer_answers_from_ruby() {
     mrb.init_gem::<Doubler>().expect("installing the gem must succeed");
 
     let cxt = Ccontext::new(&mrb, c"consumer.rb").expect("allocating the context must succeed");
-    let got = cxt.load_nstring(b"Doubler.new.call(21)");
+    let got = cxt
+        .load_nstring(b"Doubler.new.call(21)")
+        .expect("evaluating the gem surface must compile and run");
 
-    assert!(
-        mrb.pending_exc().is_nil(),
-        "evaluating the gem surface must not raise: {}",
-        mrb.pending_exc().to_string(&mrb)
-    );
     assert_eq!(i32::from_value(got), Some(42));
 }

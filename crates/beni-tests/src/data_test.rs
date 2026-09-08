@@ -77,7 +77,7 @@ fn data_wrap_into_an_unmarked_class_errs_and_reclaims_the_box() {
     // unwound across the boundary.
     let exc = match err {
         beni::Error::Exception(v) => v,
-        beni::Error::Panic(_) => unreachable!("the allocation raise is a Ruby exception"),
+        other => unreachable!("the allocation raise is a Ruby exception, got {other}"),
     };
     assert_eq!(exc.classname(&mrb), "TypeError");
 

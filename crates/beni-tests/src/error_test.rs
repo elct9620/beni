@@ -25,7 +25,7 @@ fn argnum_renders_the_fixed_count_form() {
     assert!(matches!(err, Error::Exception(_)));
     let exc = match err {
         Error::Exception(v) => v,
-        Error::Panic(_) => unreachable!("argnum must surface as Error::Exception"),
+        other => unreachable!("argnum must surface as Error::Exception, got {other}"),
     };
     assert_eq!(exc.classname(&mrb), "ArgumentError");
     let message = Error::Exception(exc).message(&mrb);
