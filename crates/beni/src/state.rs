@@ -58,8 +58,6 @@ pub mod symbol;
 
 use crate::{RClass, Value};
 use beni_sys as sys;
-use core::cell::Cell;
-use core::marker::PhantomData;
 use core::ptr::NonNull;
 
 /// Owning handle to a live mruby VM. Closed automatically on drop.
@@ -87,9 +85,6 @@ use core::ptr::NonNull;
 #[repr(transparent)]
 pub struct Mrb {
     state: NonNull<sys::mrb_state>,
-    /// Withholds `Sync`: an interpreter moves between threads but is
-    /// never shared.
-    not_sync: PhantomData<Cell<()>>,
 }
 
 // SAFETY: an interpreter owns everything it runs on — heap, symbol
@@ -126,10 +121,7 @@ impl Mrb {
         let Some(state) = NonNull::new(raw) else {
             return Err(MrbOpenError);
         };
-        let mrb = Self {
-            state,
-            not_sync: PhantomData,
-        };
+        let mrb = Self { state };
         // `mrb_open` also signals failure by returning a state
         // with `mrb->exc` set — core or gem init failed (vendored
         // `src/state.c`). That state is not a usable interpreter;
@@ -183,8 +175,7 @@ impl Mrb {
     pub unsafe fn borrow_raw(mrb_ref: &*mut sys::mrb_state) -> &Mrb {
         debug_assert!(!mrb_ref.is_null());
         // SAFETY: `Mrb` is `#[repr(transparent)]` over
-        // `NonNull<mrb_state>` — its `not_sync` marker is zero-sized
-        // and so carries no layout — and `NonNull` is itself
+        // `NonNull<mrb_state>`, and `NonNull` is itself
         // `#[repr(transparent)]`
         // over `*mut mrb_state`. So a `*const *mut mrb_state` (the
         // address of the caller's pointer variable) and a `*const Mrb`
