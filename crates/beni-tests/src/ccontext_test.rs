@@ -152,3 +152,99 @@ fn warnings_answer_empty_before_a_load_and_after_a_clean_one() {
         "warnings answer the most recent load, not every load"
     );
 }
+
+#[test]
+fn compile_yields_a_program_that_has_not_run_yet() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    let program = cxt
+        .compile(b"$ran = true; 7")
+        .expect("plain source must compile");
+
+    let ran = mrb.intern_cstr(c"$ran");
+    assert!(
+        mrb.gv_get(ran).is_nil(),
+        "compiling must not run what it compiled"
+    );
+    let got = program
+        .call(&mrb, &[])
+        .unwrap_or_else(|_| panic!("the program must run when called"));
+    assert_eq!(i32::from_value(got), Some(7));
+    assert!(mrb.gv_get(ran).is_true(), "calling runs the program");
+}
+
+#[test]
+fn compile_surfaces_a_parse_failure_the_way_a_load_does() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    let Err(err) = cxt.compile(b"def broken\n") else {
+        panic!("source that does not parse must surface as Err");
+    };
+
+    match err {
+        Error::Syntax(message) => assert!(
+            message.line() > 0,
+            "the diagnostic carries the line it points at"
+        ),
+        other => panic!("a parse failure must surface as Error::Syntax, got {other}"),
+    }
+}
+
+#[test]
+fn compile_leaves_the_context_running_its_next_load() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    cxt.compile(b"1").expect("plain source must compile");
+    let got = cxt
+        .load_nstring(b"$after = 3")
+        .expect("the next load must run rather than compile");
+
+    assert_eq!(i32::from_value(got), Some(3));
+    assert_eq!(
+        i32::from_value(mrb.gv_get(mrb.intern_cstr(c"$after"))),
+        Some(3),
+        "stopping before the run is settled per call, never kept on the context"
+    );
+}
+
+#[test]
+fn compile_records_the_warnings_it_produced() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    cxt.compile(b"a = 1\na = 2\n").expect("source must compile");
+
+    assert!(
+        cxt.warnings().iter().all(|w| !w.message().is_empty()),
+        "a warning the compiler recorded carries its text"
+    );
+}
+
+#[test]
+fn a_compiled_program_starts_without_the_contexts_top_level_locals() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    cxt.load_nstring(b"x = 5").expect("the local must be set");
+    let seen_by_a_load = cxt
+        .load_nstring(b"x")
+        .expect("a load through the same context sees the local");
+    let program = cxt.compile(b"x").expect("the same source must compile");
+    let seen_by_the_program = program
+        .call(&mrb, &[])
+        .unwrap_or_else(|_| panic!("the program must run when called"));
+
+    assert_eq!(i32::from_value(seen_by_a_load), Some(5));
+    assert!(
+        seen_by_the_program.is_nil(),
+        "the context's locals reach a program it runs, not one the caller runs"
+    );
+}

@@ -7,12 +7,17 @@
 //! any number of loads and carries the top-level local variables
 //! across them, so successive loads see each other's locals.
 //!
+//! A context compiles source and runs it, or compiles it and stops,
+//! handing back the program as a Proc for a caller who means to dump or
+//! run it later. Which of the two happens is settled for that call
+//! alone; the context keeps no memory of it.
+//!
 //! The context also captures the compiler's diagnostics instead of
 //! letting mruby print them: a load hands back the first error as a
 //! `ParseMessage` and the context keeps that load's warnings as more
 //! of them, which is the only place either location surfaces.
 
-use crate::{Error, Mrb, ParseMessage, Value};
+use crate::{Error, Mrb, ParseMessage, Proc, Value};
 use beni_sys as sys;
 use core::cell::RefCell;
 
@@ -95,6 +100,74 @@ impl<'mrb> Ccontext<'mrb> {
     /// the handle. Only the exception answers a backtrace — a program
     /// that never compiled never ran.
     pub fn load_nstring(&self, source: &[u8]) -> Result<Value, Error> {
+        let parser = self.parse(source)?;
+        // SAFETY: `parser` parsed cleanly; `mrb_load_exec` takes
+        // ownership of it, frees it, and runs the generated Proc.
+        let value =
+            Value::from_raw(unsafe { sys::mrb_load_exec(self.mrb.as_ptr(), parser, self.raw) });
+        self.outcome(value)
+    }
+
+    /// Compile `source` under this context without running it, yielding
+    /// the compiled program.
+    ///
+    /// The failures are the ones a load answers, for the same reasons:
+    /// source that does not parse comes back `Err(Error::Syntax)`
+    /// carrying the compiler's first recorded diagnostic, and a codegen
+    /// failure comes back `Err(Error::Exception)`. The context's
+    /// warnings are recorded either way.
+    ///
+    /// `Proc::call` runs the program at the interpreter's top level. It
+    /// starts without the context's top-level local variables: those
+    /// reach a program the context itself runs. The program is a value
+    /// like any other, so carrying it past the arena scope that
+    /// produced it needs a `GcRoot`.
+    pub fn compile(&self, source: &[u8]) -> Result<Proc, Error> {
+        let parser = self.parse(source)?;
+        let value = self.outcome(self.generate(parser))?;
+        // SAFETY: under `no_exec` a successful `mrb_load_exec` answers
+        // `mrb_obj_value(proc)` for the Proc it generated
+        // (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7782`), and
+        // the codegen failure that would answer otherwise left the
+        // exception `outcome` has already returned.
+        Ok(unsafe { Proc::from_value_unchecked(value) })
+    }
+
+    /// Hand the parser to mruby with this context stopped before it
+    /// runs what it generates. Whether an operation stops is settled
+    /// for that operation alone, so the flag is cleared on the way out
+    /// and no later load reads it.
+    fn generate(&self, parser: *mut sys::mrb_parser_state) -> Value {
+        // SAFETY: `self.raw` came from `mrb_ccontext_new`; the raw
+        // setter writes the bitfield through a pointer rather than
+        // forming a `&mut` to memory mruby owns.
+        unsafe { sys::mrb_ccontext::set_no_exec_raw(self.raw, true) };
+        // SAFETY: `parser` parsed cleanly; `mrb_load_exec` takes
+        // ownership of it and frees it.
+        let value =
+            Value::from_raw(unsafe { sys::mrb_load_exec(self.mrb.as_ptr(), parser, self.raw) });
+        // SAFETY: as above.
+        unsafe { sys::mrb_ccontext::set_no_exec_raw(self.raw, false) };
+        value
+    }
+
+    /// What an operation that reached mruby answers: its value, or the
+    /// exception it raised, cleared from the handle as it crosses out.
+    fn outcome(&self, value: Value) -> Result<Value, Error> {
+        let exc = self.mrb.pending_exc();
+        if exc.is_nil() {
+            Ok(value)
+        } else {
+            self.mrb.clear_exc();
+            Err(Error::Exception(exc))
+        }
+    }
+
+    /// Parse `source` under this context, recording the warnings it
+    /// produced and handing back the parser for the caller to spend.
+    /// Source that does not parse is released here and reported as the
+    /// compiler's first recorded diagnostic.
+    fn parse(&self, source: &[u8]) -> Result<*mut sys::mrb_parser_state, Error> {
         // SAFETY: `self.mrb` is live by the borrow; `self.raw` was
         // produced by `mrb_ccontext_new` in `Self::new` and is owned
         // for the lifetime of `&self`; the source bytes outlive the
@@ -133,17 +206,7 @@ impl<'mrb> Ccontext<'mrb> {
             return Err(Error::Syntax(message));
         }
 
-        // SAFETY: `parser` parsed cleanly; `mrb_load_exec` takes
-        // ownership of it, frees it, and runs the generated Proc.
-        let value =
-            Value::from_raw(unsafe { sys::mrb_load_exec(self.mrb.as_ptr(), parser, self.raw) });
-        let exc = self.mrb.pending_exc();
-        if exc.is_nil() {
-            Ok(value)
-        } else {
-            self.mrb.clear_exc();
-            Err(Error::Exception(exc))
-        }
+        Ok(parser)
     }
 
     /// The warnings the compiler produced for the most recent load.

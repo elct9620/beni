@@ -331,6 +331,7 @@ fn typed_mrb_func_t_coerces_from_value_bridge() {
 fn compiler_surface_is_reachable_from_outside() {
     let _ = Ccontext::new;
     let _ = Ccontext::load_nstring;
+    let _ = Ccontext::compile;
     let _ = Ccontext::warnings;
     let _ = Mrb::load_string;
 }

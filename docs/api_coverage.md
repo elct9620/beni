@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 321 | 320 (100%) | 220 (69%) |
+| function | 321 | 320 (100%) | 221 (69%) |
 | macro | 111 | 28 (25%) | 68 (61%) |
-| total | 432 | 348 (81%) | 288 (67%) |
+| total | 432 | 348 (81%) | 289 (67%) |
 
 ## mruby.h
 
@@ -284,7 +284,7 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_ccontext_free` | fn | ✅ | ✅ | `Ccontext::drop` — carried by the `compiler` capability feature |
 | `mrb_ccontext_new` | fn | ✅ | ✅ | `Ccontext::new` — carried by the `compiler` capability feature |
 | `mrb_ccontext_partial_hook` | fn | ✅ | — |  |
-| `mrb_generate_code` | fn | ✅ | — |  |
+| `mrb_generate_code` | fn | ✅ | ✅ | subsumed: `Ccontext::compile` — the codegen half alone, taking the parser `mrb_parse_nstring` produced (`vendor/mruby/mrbgems/mruby-compiler/core/codegen.c:7336-7339`); the typed compile drives the parse and the codegen from source, so the parser the C form takes is what the Rust shape already carries, and beni hands a parser to no caller; carried by the `compiler` capability feature |
 | `mrb_load_detect_file_cxt` | fn | ✅ | — |  |
 | `mrb_load_exec` | fn | ✅ | ✅ | `Ccontext::load_nstring` — carried by the `compiler` capability feature |
 | `mrb_load_file` | fn | ✅ | — |  |
