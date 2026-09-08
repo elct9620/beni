@@ -471,7 +471,7 @@ raise/return contract:
 | Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
 | Wraps a Rust value as a data carrier — allocating a fresh instance of a marked class to carry it | the class cannot carry a data carrier — it was never marked — so the allocation raises a `TypeError`; the unwrapped Rust value is reclaimed rather than leaked | `Result` |
-| Compiles and runs Ruby source — under a compile context, or with none | the source does not parse, a codegen step fails, or the program raises while it runs | `Result` (under a context a parse failure carries a parse message, every other failure carries the exception; with none every failure carries the exception) |
+| Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
@@ -815,12 +815,13 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   surface.
 #### Compiling and running source
 
-- A compile context stamps a filename onto everything compiled through it, so
-  the exceptions the compiled program raises carry a source-line backtrace. It
-  is created against a live interpreter and released when it is dropped, never
-  outliving that interpreter and staying on the thread that made it. One
-  context serves any number of loads and carries the top-level local variables
-  across them, so successive loads see each other's locals.
+- A compile context is created against a live interpreter with a filename and
+  released when it is dropped, never outliving that interpreter and staying on
+  the thread that made it. The filename is stamped onto everything compiled
+  through it, so the exceptions the compiled program raises carry a
+  source-line backtrace. One context serves any number of loads and carries
+  the top-level local variables across them, so successive loads see each
+  other's locals.
 - Compiling and running a slice of Ruby source under a context yields the
   program's result value as a Rust `Ok`. The source is a byte slice carrying
   its own length, so it needs no terminating NUL; the bytes need not be valid
@@ -839,17 +840,18 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   produces warnings and no error still yields its result value as `Ok`. A
   context that has run no load, or whose most recent load produced no warning,
   answers none.
-- The compiler's diagnostics for a load under a context never reach the
-  process's standard error; the returned parse message and the context's
-  warnings are the only place they surface.
-- `Mrb` compiles and runs a slice of Ruby source with no compile context,
-  yielding the program's result value as a Rust `Ok` and any failure — a parse
-  error, a codegen error, or an exception raised while the program runs — as a
-  Rust `Err` carrying the exception, the pending exception cleared from the
-  handle as it crosses out. Having no context, it stamps no filename, so the
-  program's exceptions carry no source-line backtrace, it surfaces no parse
-  message for source that does not parse, and the compiler writes that
-  diagnostic to the process's standard error.
+- The compiler's diagnostics never reach the process's standard error. The
+  returned parse message and the context's warnings are the only place they
+  surface, so where a diagnostic is written is the host's choice, not beni's.
+- `Mrb` compiles and runs a slice of Ruby source without being given a compile
+  context, borrowing an unnamed one for the load and releasing it when the load
+  returns. A failure surfaces exactly as it does under a caller's context: a
+  parse failure as a parse message, a codegen failure or a raise as the
+  exception. The borrowed context differs only where a context is the thing
+  that would carry the difference — it stamps no filename, so the program's
+  exceptions carry no source-line backtrace, and it is gone by the time the
+  load returns, so the warnings it captured go with it. A caller who wants
+  either holds a context of their own.
 - An error answers its backtrace as a list of rendered frames. An error
   carrying no exception, and an exception holding no backtrace, answer an empty
   list.
@@ -967,10 +969,11 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | A `Mrb::rescue` handler itself panicking — the handler runs under exception protection | caught at the FFI boundary and surfaced as a Rust `Err` (`Error::Panic`), never rescued and never unwinds across FFI |
 | Creating a compile context against a live interpreter failing | returns no context, never aborts |
 | A codegen step failing, or the program raising while it runs, under a compile context | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle, never unwinds across FFI |
-| Source that does not parse, compiled under a compile context | surfaced as a Rust `Err` carrying a parse message with the first recorded diagnostic's line, column, and text; nothing written to standard error |
-| Source that does not parse, compiled under a compile context, the compiler having recorded no diagnostic | surfaced as a Rust `Err` carrying a parse message with zero line, zero column, and empty text |
-| Source that does not parse, compiled with no compile context | surfaced as a Rust `Err` carrying the exception; the compiler writes its diagnostic to standard error |
-| A load under a compile context producing compiler warnings | the load's outcome is unchanged; the context answers the warnings as parse messages |
+| Source that does not parse | surfaced as a Rust `Err` carrying a parse message with the first recorded diagnostic's line, column, and text; nothing written to standard error |
+| Source that does not parse, the compiler having recorded no diagnostic | surfaced as a Rust `Err` carrying a parse message with zero line, zero column, and empty text |
+| Allocating the context a load borrows failing | the load surfaces as a Rust `Err` carrying a parse message with zero line, zero column, and empty text, never aborts |
+| A load under a caller's compile context producing compiler warnings | the load's outcome is unchanged; the context answers the warnings as parse messages |
+| A load under a borrowed compile context producing compiler warnings | the load's outcome is unchanged; the warnings reach no caller, and none are written to standard error |
 | mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
@@ -984,7 +987,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 |---|---|
 | symbol-or-name key | a definition or lookup name given either as a string, which interns to a symbol, or as an already-interned `Symbol`, reused as-is — beni's mirror of `magnus`'s `IntoId` |
 | toolchain | a vendored build dependency (mruby source, wasi-sdk) |
-| compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under one raises exceptions carrying a source-line backtrace |
+| compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
