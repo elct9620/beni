@@ -51,6 +51,14 @@ categories = ["external-ffi-bindings"]
 # where two packages would link libmruby.
 links = "mruby"
 
+# docs.rs cross-compiles anything but its default target, and this
+# crate refuses a cross target it has no archive for. Building the
+# default alone keeps the rendered page to the platform the
+# documentation bindings describe.
+[package.metadata.docs.rs]
+default-target = "x86_64-unknown-linux-gnu"
+targets = []
+
 [lib]
 # `rlib` only — this crate produces no standalone artefact. It is
 # consumed as a path dependency by the `beni` wrapper crate, whose

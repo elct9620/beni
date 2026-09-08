@@ -45,8 +45,8 @@ the resulting `libmruby.a`.
   variable set fails on every cargo target, naming the variables archive
   discovery consults.
 - A documentation build renders the typed surface with no archive present,
-  and the documentation bindings it reads match what the upstream default
-  configuration generates.
+  and the documentation bindings it reads match what regenerating them on
+  the documentation host's platform produces.
 - A `wasm32-wasip1` cross-build succeeds when a target declaration
   references `wasi-sdk`, the build config defines a target cross-compiled
   for wasm32, `MRUBY_LIB_DIR` names that target's staged path, and
@@ -962,9 +962,9 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — beni's wasm32-wasip1 cross-compile settings, staged whenever `wasi-sdk` is selected and activated by a build config via `conf.toolchain :wasi` |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of the compiler that built it, the flags that compiler was given, and the libraries it needs linked |
 | supported mruby floor | mruby 4.0 — the oldest release the crates build against; an archive states its own version in the header tree staged beside it |
-| documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable |
+| documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable and builds on one platform, `x86_64-unknown-linux-gnu` |
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
-| documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated from an mruby built with the upstream default configuration and carrying that configuration's type widths, never hand-written; no other build reads them |
+| documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated on the documentation host's platform from an mruby built with the upstream default configuration, and carrying what that pairing decides — type widths, the form of `va_list`, the constants the platform's headers define. Never hand-written, and generated nowhere else, since another platform would write a different file; no other build reads them |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
 | declined symbol | public embedder API the typed surface deliberately does not carry, outside the coverage measure and recorded with what settles it |

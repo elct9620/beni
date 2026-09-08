@@ -7,8 +7,13 @@
 # +crates/beni-sys/src/bindings_docs.rs+, the declarations a
 # documentation build reads where no archive can be staged. They come
 # from an mruby built with its own upstream default config, so the
-# rendered surface carries the widths a consumer gets before editing
-# anything.
+# rendered surface carries what a consumer gets before editing anything.
+#
+# Bindings are shaped by the host as well as the config — the platform
+# decides +va_list+'s form and which constants its headers define — so
+# they are generated on the platform the documentation host builds on
+# and nowhere else. Another host would write a different file, which the
+# freshness gate would read as drift.
 #
 # The file is whatever the crate's own build script wrote for that
 # archive, taken from the +out_dir+ cargo reports for it. Nothing here
@@ -28,6 +33,9 @@ module BeniDocsBindings
   CRATE = "beni-sys"
   TARGET = File.join(ROOT, "crates", CRATE, "src", "bindings_docs.rs")
   BUILD_DIR = File.join(ROOT, "tmp", "docs-bindings-target")
+  # docs.rs builds every crate on this target and cross-compiles the
+  # rest, so this is the platform the checked-in bindings describe.
+  DOCUMENTATION_HOST = "x86_64-unknown-linux-gnu"
   HEADER = <<~RUST
     // Documentation bindings, written by `rake docs:bindings` — never
     // edited. Read by a documentation build alone, where no archive can
@@ -39,9 +47,28 @@ module BeniDocsBindings
 
   # Rewrite the checked-in bindings and return the path written.
   def generate
+    require_documentation_host!
     out_dir = build_out_dir(upstream_default_lib_dir)
     File.write(TARGET, HEADER + File.read(File.join(out_dir, "bindings.rs")))
     TARGET
+  end
+
+  # Refuse to write bindings this host would shape differently from the
+  # one that reads them.
+  def require_documentation_host!
+    return if rustc_host == DOCUMENTATION_HOST
+
+    abort "docs:bindings runs on #{DOCUMENTATION_HOST}, the target the documentation host " \
+          "builds on; this is #{rustc_host}. CI regenerates the file on every verify run and " \
+          "attaches it when it differs from the committed one."
+  end
+
+  # The triple rustc reports for this machine.
+  def rustc_host
+    out, status = Open3.capture2("rustc", "-vV")
+    raise "rustc -vV failed" unless status.success?
+
+    out[/^host: (.+)$/, 1]
   end
 
   # The mruby built with no MRUBY_CONFIG, so mruby's own
