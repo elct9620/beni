@@ -57,15 +57,7 @@ impl Symbol {
     /// `Symbol::new`; equivalent to symbolizing `mrb.intern_cstr(name)`.
     #[inline]
     pub fn new(mrb: &Mrb, name: &core::ffi::CStr) -> Self {
-        #[cfg(mruby_linked)]
-        {
-            Self::from_sym(mrb.intern_cstr(name))
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
+        Self::from_sym(mrb.intern_cstr(name))
     }
 
     /// Symbolize an already-interned id via mruby's boxing-agnostic
@@ -74,18 +66,10 @@ impl Symbol {
     /// touched — so the caller keeps the id's originating VM in scope.
     #[inline]
     pub fn from_sym(sym: sys::mrb_sym) -> Self {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb_symbol_value` boxes a sym id and touches no
-            // mrb_state; the resulting value is meaningful in the VM the
-            // id was interned against, which the caller holds.
-            Self(Value::from_raw(unsafe { sys::mrb_symbol_value(sym) }))
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = sym;
-            crate::not_linked()
-        }
+        // SAFETY: `mrb_symbol_value` boxes a sym id and touches no
+        // mrb_state; the resulting value is meaningful in the VM the
+        // id was interned against, which the caller holds.
+        Self(Value::from_raw(unsafe { sys::mrb_symbol_value(sym) }))
     }
 
     /// The interned id this symbol carries, via the `mrb_symbol_func`
@@ -94,15 +78,10 @@ impl Symbol {
     /// with.
     #[inline]
     pub fn to_sym(self) -> sys::mrb_sym {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self.0` is Symbol-tagged by the newtype's
-            // construction contract; `mrb_symbol` reads only the value
-            // payload and touches no mrb_state.
-            unsafe { sys::mrb_symbol_func(self.0.as_raw()) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `self.0` is Symbol-tagged by the newtype's
+        // construction contract; `mrb_symbol` reads only the value
+        // payload and touches no mrb_state.
+        unsafe { sys::mrb_symbol_func(self.0.as_raw()) }
     }
 
     /// The symbol's name as an owned `String`, via `to_sym` +
@@ -114,15 +93,7 @@ impl Symbol {
     /// so the name is copied out rather than borrowed.
     #[inline]
     pub fn name(self, mrb: &Mrb) -> Option<String> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.sym_name(self.to_sym())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.sym_name(self.to_sym())
     }
 
     /// The symbol's raw name bytes as an owned `Vec<u8>`, via `to_sym` +
@@ -133,15 +104,7 @@ impl Symbol {
     /// borrowed.
     #[inline]
     pub fn name_bytes(self, mrb: &Mrb) -> Option<Vec<u8>> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.sym_name_len(self.to_sym())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.sym_name_len(self.to_sym())
     }
 
     /// The symbol's dump form as an owned `String`, via `to_sym` +
@@ -153,15 +116,7 @@ impl Symbol {
     /// copied out rather than borrowed.
     #[inline]
     pub fn dump(self, mrb: &Mrb) -> Option<String> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.sym_dump(self.to_sym())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.sym_dump(self.to_sym())
     }
 
     /// The symbol's name reified as an mruby String, via `mrb_sym_str`
@@ -171,22 +126,14 @@ impl Symbol {
     /// the value without dispatching and never raises.
     #[inline]
     pub fn to_str(self, mrb: &Mrb) -> crate::RString {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self.to_sym()` is interned against `mrb`, whose
-            // pointer is live. `mrb_sym_str` reads the name and boxes a
-            // String value; the result is String-tagged by construction.
-            unsafe {
-                crate::RString::from_value_unchecked(Value::from_raw(sys::mrb_sym_str(
-                    mrb.as_ptr(),
-                    self.to_sym(),
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
+        // SAFETY: `self.to_sym()` is interned against `mrb`, whose
+        // pointer is live. `mrb_sym_str` reads the name and boxes a
+        // String value; the result is String-tagged by construction.
+        unsafe {
+            crate::RString::from_value_unchecked(Value::from_raw(sys::mrb_sym_str(
+                mrb.as_ptr(),
+                self.to_sym(),
+            )))
         }
     }
 }
@@ -205,15 +152,7 @@ impl IntoSym for &core::ffi::CStr {
     /// A name key interns through `Mrb::intern_cstr`.
     #[inline]
     fn into_sym(self, mrb: &Mrb) -> sys::mrb_sym {
-        #[cfg(mruby_linked)]
-        {
-            mrb.intern_cstr(self)
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.intern_cstr(self)
     }
 }
 
@@ -221,11 +160,6 @@ impl IntoSym for Symbol {
     /// An already-interned `Symbol` reuses its id with no re-intern.
     #[inline]
     fn into_sym(self, _mrb: &Mrb) -> sys::mrb_sym {
-        #[cfg(mruby_linked)]
-        {
-            self.to_sym()
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        self.to_sym()
     }
 }

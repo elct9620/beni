@@ -36,7 +36,7 @@ Apply these in order — earlier principles override later ones on conflict.
 
 The repo dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validation config `build_config/mruby.rb` (host + wasi targets, ABI-pinned with `MRB_INT32` + `MRB_WORDBOX_NO_INLINE_FLOAT`), while the gem's default stays mruby's untouched upstream config. `rake rust:verify` is the single local gate: `beni:build` → host `cargo check`/`test` → wasm32 `cargo check` → `rust:test:default` (tests against an upstream-default mruby build, catching int-width coincidences the MRB_INT32 config masks).
 
-`beni-sys/build.rs` has three modes: real archive linked (`mruby_linked` cfg, published downstream via `DEP_MRUBY_LINKED`), host placeholder (no archive — `cargo check` passes, no FFI surface), wasm32 without staged toolchain (panics; never a placeholder).
+`beni-sys/build.rs` has two paths: bindgen against a discovered archive's headers, and the documentation build (`DOCS_RS` set) that stages the checked-in `src/bindings_docs.rs` into OUT_DIR and links nothing. Everything else panics naming what it looked for — no archive, no build. `rake docs:bindings` rewrites the checked-in file from an upstream-default mruby; regenerating it twice writes the same bytes, so a difference is drift.
 
 CI (`.github/workflows/main.yml`) runs four lanes: **test** (Ruby matrix, default task), **lint** (Rust fmt/clippy/doc in placeholder mode), **verify** (3 OS full `rust:verify` + linked clippy), **scenario** (consumer harnesses). Tarballs are deliberately not cached — the download path is itself under test.
 
@@ -76,7 +76,7 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
              Vendor::{Toolchain,            build.rs: archive discovery ·
              Downloader, Checksum,          flags.mak parse · bindgen +
              Tarball}                       wrap_static_fns (single C TU) ·
-                                            links = "mruby" → DEP_MRUBY_LINKED
+                                            links = "mruby" (one linker)
 
                                           beni-tests  publish = false; the
                                             typed suite run from consumer

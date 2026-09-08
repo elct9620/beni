@@ -4,7 +4,6 @@
 //! blob — into the live mruby VM and run its top-level Proc.
 
 use crate::{Error, Mrb, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 impl Mrb {
@@ -21,32 +20,24 @@ impl Mrb {
     /// surfaces a failure as an `Err` rather than leaving the pending
     /// exception on the handle.
     pub fn load_string(&self, source: &[u8]) -> Result<Value, Error> {
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = source;
-            crate::not_linked()
-        }
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is alive by the &self borrow; `source` is
-            // borrowed for the synchronous call and `mrb_load_nstring`
-            // retains no reference past return. The load path runs
-            // Ruby but parks any failure in `mrb->exc` rather than
-            // long-jumping, so no `protect` frame is needed.
-            let value = Value::from_raw(unsafe {
-                sys::mrb_load_nstring(
-                    self.as_ptr(),
-                    source.as_ptr() as *const core::ffi::c_char,
-                    source.len(),
-                )
-            });
-            let exc = self.pending_exc();
-            if exc.is_nil() {
-                Ok(value)
-            } else {
-                self.clear_exc();
-                Err(Error::Exception(exc))
-            }
+        // SAFETY: `self` is alive by the &self borrow; `source` is
+        // borrowed for the synchronous call and `mrb_load_nstring`
+        // retains no reference past return. The load path runs
+        // Ruby but parks any failure in `mrb->exc` rather than
+        // long-jumping, so no `protect` frame is needed.
+        let value = Value::from_raw(unsafe {
+            sys::mrb_load_nstring(
+                self.as_ptr(),
+                source.as_ptr() as *const core::ffi::c_char,
+                source.len(),
+            )
+        });
+        let exc = self.pending_exc();
+        if exc.is_nil() {
+            Ok(value)
+        } else {
+            self.clear_exc();
+            Err(Error::Exception(exc))
         }
     }
 
@@ -56,23 +47,15 @@ impl Mrb {
     /// `Mrb::pending_exc` before continuing.
     #[inline]
     pub fn load_irep_buf(&self, bytes: &[u8]) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is alive; `bytes` is borrowed for the
-            // synchronous call.
-            Value::from_raw(unsafe {
-                sys::mrb_load_irep_buf(
-                    self.as_ptr(),
-                    bytes.as_ptr() as *const core::ffi::c_void,
-                    bytes.len(),
-                )
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = bytes;
-            crate::not_linked()
-        }
+        // SAFETY: `self` is alive; `bytes` is borrowed for the
+        // synchronous call.
+        Value::from_raw(unsafe {
+            sys::mrb_load_irep_buf(
+                self.as_ptr(),
+                bytes.as_ptr() as *const core::ffi::c_void,
+                bytes.len(),
+            )
+        })
     }
 
     /// Load + validate + execute a precompiled bytecode blob.
@@ -91,21 +74,12 @@ impl Mrb {
     /// header" / "wrong ident" / "version mismatch" / "corrupt
     /// body".
     pub fn load_bytecode(&self, bytes: &[u8]) -> core::ffi::c_int {
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = bytes;
-            crate::not_linked()
-        }
-        #[cfg(mruby_linked)]
-        {
-            self.load_bytecode_linked(bytes)
-        }
+        self.load_bytecode_linked(bytes)
     }
 
     /// Linked-mode body of `Mrb::load_bytecode`, split out because the
     /// multi-step arena/IREP dance reads better without an extra cfg
     /// indentation level.
-    #[cfg(mruby_linked)]
     fn load_bytecode_linked(&self, bytes: &[u8]) -> core::ffi::c_int {
         // mruby/irep.h documents that `mrb_load_irep*` calls retain
         // one RProc per invocation in the arena; bracketing with
@@ -161,7 +135,6 @@ impl Mrb {
     /// returning NULL without setting `mrb->exc`). The caller's
     /// existing pending-exception extraction picks the synthesised
     /// exception up uniformly with mruby-native raises.
-    #[cfg(mruby_linked)]
     fn set_bytecode_exc(&self, msg: &str) {
         // SAFETY: `self` is alive; `c"RuntimeError"` is a static
         // NUL-terminated literal.
@@ -191,7 +164,6 @@ impl Mrb {
 /// (each is a 5-byte slice with a trailing NUL — compare the first
 /// 4 bytes against the magic / version bytes the header actually
 /// carries).
-#[cfg(mruby_linked)]
 fn classify_structural_failure(bytes: &[u8]) -> &'static str {
     if bytes.len() < core::mem::size_of::<sys::rite_binary_header>() {
         return "bytecode shorter than RITE binary header";

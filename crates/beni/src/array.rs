@@ -61,24 +61,16 @@ impl Array {
     /// surfaces as `Err` rather than long-jumping.
     #[inline]
     pub fn push(self, mrb: &Mrb, val: Value) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // is Array-tagged by the `from_value_unchecked` contract;
-                // `val` originates from the same VM. `mrb_ary_push` calls
-                // `mrb_ary_modify`, which raises `FrozenError` on a frozen
-                // array — caught by `protect` into `Err`.
-                unsafe { sys::mrb_ary_push(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, val);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // is Array-tagged by the `from_value_unchecked` contract;
+            // `val` originates from the same VM. `mrb_ary_push` calls
+            // `mrb_ary_modify`, which raises `FrozenError` on a frozen
+            // array — caught by `protect` into `Err`.
+            unsafe { sys::mrb_ary_push(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_ary_entry(self, idx)` — read the element at `idx`
@@ -90,20 +82,12 @@ impl Array {
     /// this safe for any `idx`.
     #[inline]
     pub fn entry(self, idx: isize) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            let Ok(idx) = sys::mrb_int::try_from(idx) else {
-                return Value::nil();
-            };
-            // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
-            // contract; `mrb_ary_entry` is bounds-tolerant.
-            Value::from_raw(unsafe { sys::mrb_ary_entry(self.0.as_raw(), idx) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = idx;
-            crate::not_linked()
-        }
+        let Ok(idx) = sys::mrb_int::try_from(idx) else {
+            return Value::nil();
+        };
+        // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
+        // contract; `mrb_ary_entry` is bounds-tolerant.
+        Value::from_raw(unsafe { sys::mrb_ary_entry(self.0.as_raw(), idx) })
     }
 
     /// `mrb_ary_set(mrb, self, idx, val)` — write `val` at `idx`,
@@ -113,34 +97,26 @@ impl Array {
     /// raises `IndexError`, surfaced here as `Err`.
     #[inline]
     pub fn store(self, mrb: &Mrb, idx: isize, val: Value) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            // An index outside the archive's `mrb_int` width names no
-            // slot; saturate it to the nearest bound so mruby's own
-            // range check raises the matching `IndexError` (too large,
-            // or past the beginning) rather than a truncated index
-            // silently hitting the wrong slot.
-            let n = sys::mrb_int::try_from(idx).unwrap_or(if idx < 0 {
-                sys::mrb_int::MIN
-            } else {
-                sys::mrb_int::MAX
-            });
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive; `self` is Array-tagged by the
-                // `from_value_unchecked` contract; `val` shares the VM
-                // by the single-VM contract. `mrb_ary_set` range-checks
-                // `n` and may raise `IndexError`, which `protect` catches
-                // into `Err`.
-                unsafe { sys::mrb_ary_set(mrb.as_ptr(), self.0.as_raw(), n, val.as_raw()) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, idx, val);
-            crate::not_linked()
-        }
+        // An index outside the archive's `mrb_int` width names no
+        // slot; saturate it to the nearest bound so mruby's own
+        // range check raises the matching `IndexError` (too large,
+        // or past the beginning) rather than a truncated index
+        // silently hitting the wrong slot.
+        let n = sys::mrb_int::try_from(idx).unwrap_or(if idx < 0 {
+            sys::mrb_int::MIN
+        } else {
+            sys::mrb_int::MAX
+        });
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive; `self` is Array-tagged by the
+            // `from_value_unchecked` contract; `val` shares the VM
+            // by the single-VM contract. `mrb_ary_set` range-checks
+            // `n` and may raise `IndexError`, which `protect` catches
+            // into `Err`.
+            unsafe { sys::mrb_ary_set(mrb.as_ptr(), self.0.as_raw(), n, val.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_ary_resize(mrb, self, new_len)` — set the array's length:
@@ -150,25 +126,17 @@ impl Array {
     /// saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn resize(self, mrb: &Mrb, new_len: usize) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let new_len = new_len.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // is Array-tagged by the `from_value_unchecked` contract.
-                // `mrb_ary_resize` routes through `mrb_ary_modify`, which
-                // raises `FrozenError` on a frozen array — caught by
-                // `protect` into `Err`.
-                unsafe { sys::mrb_ary_resize(mrb.as_ptr(), self.0.as_raw(), new_len) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, new_len);
-            crate::not_linked()
-        }
+        let new_len = new_len.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // is Array-tagged by the `from_value_unchecked` contract.
+            // `mrb_ary_resize` routes through `mrb_ary_modify`, which
+            // raises `FrozenError` on a frozen array — caught by
+            // `protect` into `Err`.
+            unsafe { sys::mrb_ary_resize(mrb.as_ptr(), self.0.as_raw(), new_len) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_ary_pop(mrb, self)` — remove and return the last element,
@@ -176,21 +144,13 @@ impl Array {
     /// frozen array raises `FrozenError`, surfaced here as `Err`.
     #[inline]
     pub fn pop(self, mrb: &Mrb) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // is Array-tagged by the `from_value_unchecked` contract.
-                // `mrb_ary_pop` checks frozen state and may raise
-                // `FrozenError` — caught by `protect`.
-                Value::from_raw(unsafe { sys::mrb_ary_pop(mrb.as_ptr(), self.0.as_raw()) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // is Array-tagged by the `from_value_unchecked` contract.
+            // `mrb_ary_pop` checks frozen state and may raise
+            // `FrozenError` — caught by `protect`.
+            Value::from_raw(unsafe { sys::mrb_ary_pop(mrb.as_ptr(), self.0.as_raw()) })
+        })
     }
 
     /// `mrb_ary_shift(mrb, self)` — remove and return the first element,
@@ -198,19 +158,11 @@ impl Array {
     /// frozen array raises `FrozenError`, surfaced as `Err`.
     #[inline]
     pub fn shift(self, mrb: &Mrb) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: as `pop`; `mrb_ary_shift` checks frozen state and
-                // may raise `FrozenError` — caught by `protect`.
-                Value::from_raw(unsafe { sys::mrb_ary_shift(mrb.as_ptr(), self.0.as_raw()) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: as `pop`; `mrb_ary_shift` checks frozen state and
+            // may raise `FrozenError` — caught by `protect`.
+            Value::from_raw(unsafe { sys::mrb_ary_shift(mrb.as_ptr(), self.0.as_raw()) })
+        })
     }
 
     /// `mrb_ary_unshift(mrb, self, val)` — prepend `val`, Ruby's
@@ -218,21 +170,13 @@ impl Array {
     /// surfaced as `Err`.
     #[inline]
     pub fn unshift(self, mrb: &Mrb, val: Value) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: as `push`; `mrb_ary_unshift` modifies and may
-                // raise `FrozenError` — caught by `protect`.
-                unsafe { sys::mrb_ary_unshift(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, val);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: as `push`; `mrb_ary_unshift` modifies and may
+            // raise `FrozenError` — caught by `protect`.
+            unsafe { sys::mrb_ary_unshift(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_ary_concat(mrb, self, other)` — append `other`'s elements,
@@ -240,22 +184,14 @@ impl Array {
     /// `FrozenError`, surfaced as `Err`.
     #[inline]
     pub fn concat(self, mrb: &Mrb, other: Array) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: as `push`; `self` and `other` are Array-tagged
-                // and share the VM. `mrb_ary_concat` modifies `self` and
-                // may raise `FrozenError` — caught by `protect`.
-                unsafe { sys::mrb_ary_concat(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: as `push`; `self` and `other` are Array-tagged
+            // and share the VM. `mrb_ary_concat` modifies `self` and
+            // may raise `FrozenError` — caught by `protect`.
+            unsafe { sys::mrb_ary_concat(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_ary_replace(mrb, self, other)` — make the receiver's contents
@@ -263,22 +199,14 @@ impl Array {
     /// frozen receiver raises `FrozenError`, surfaced as `Err`.
     #[inline]
     pub fn replace(self, mrb: &Mrb, other: Array) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: as `concat`; `self` and `other` are Array-tagged
-                // and share the VM. `mrb_ary_replace` modifies `self` and
-                // may raise `FrozenError` — caught by `protect`.
-                unsafe { sys::mrb_ary_replace(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: as `concat`; `self` and `other` are Array-tagged
+            // and share the VM. `mrb_ary_replace` modifies `self` and
+            // may raise `FrozenError` — caught by `protect`.
+            unsafe { sys::mrb_ary_replace(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_ary_splice(mrb, self, head, len, rpl)` — replace the `len`
@@ -295,37 +223,29 @@ impl Array {
     /// rather than a truncated index hitting the wrong slot.
     #[inline]
     pub fn splice(self, mrb: &Mrb, head: i64, len: i64, rpl: Value) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let head = sys::mrb_int::try_from(head).unwrap_or(if head < 0 {
-                sys::mrb_int::MIN
-            } else {
-                sys::mrb_int::MAX
-            });
-            let len = sys::mrb_int::try_from(len).unwrap_or(if len < 0 {
-                sys::mrb_int::MIN
-            } else {
-                sys::mrb_int::MAX
-            });
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // is Array-tagged by the `from_value_unchecked` contract;
-                // `rpl` shares the VM by the single-VM contract and is
-                // handled for any tag (an array splices its elements, any
-                // other value inserts as one — no unsafe unbox).
-                // `mrb_ary_splice` routes through `mrb_ary_modify` and
-                // range-checks `head`/`len`, raising `FrozenError` or
-                // `IndexError` — caught by `protect` into `Err`.
-                Value::from_raw(unsafe {
-                    sys::mrb_ary_splice(mrb.as_ptr(), self.0.as_raw(), head, len, rpl.as_raw())
-                })
+        let head = sys::mrb_int::try_from(head).unwrap_or(if head < 0 {
+            sys::mrb_int::MIN
+        } else {
+            sys::mrb_int::MAX
+        });
+        let len = sys::mrb_int::try_from(len).unwrap_or(if len < 0 {
+            sys::mrb_int::MIN
+        } else {
+            sys::mrb_int::MAX
+        });
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // is Array-tagged by the `from_value_unchecked` contract;
+            // `rpl` shares the VM by the single-VM contract and is
+            // handled for any tag (an array splices its elements, any
+            // other value inserts as one — no unsafe unbox).
+            // `mrb_ary_splice` routes through `mrb_ary_modify` and
+            // range-checks `head`/`len`, raising `FrozenError` or
+            // `IndexError` — caught by `protect` into `Err`.
+            Value::from_raw(unsafe {
+                sys::mrb_ary_splice(mrb.as_ptr(), self.0.as_raw(), head, len, rpl.as_raw())
             })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, head, len, rpl);
-            crate::not_linked()
-        }
+        })
     }
 
     /// `mrb_ary_clear(mrb, self)` — remove all elements, Ruby's
@@ -333,21 +253,13 @@ impl Array {
     /// surfaced as `Err`.
     #[inline]
     pub fn clear(self, mrb: &Mrb) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: as `push`; `mrb_ary_clear` modifies and may raise
-                // `FrozenError` — caught by `protect`.
-                unsafe { sys::mrb_ary_clear(mrb.as_ptr(), self.0.as_raw()) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: as `push`; `mrb_ary_clear` modifies and may raise
+            // `FrozenError` — caught by `protect`.
+            unsafe { sys::mrb_ary_clear(mrb.as_ptr(), self.0.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_ary_join(mrb, self, sep)` — render the elements into one
@@ -357,49 +269,33 @@ impl Array {
     /// the way Ruby's `join` treats a `nil` argument.
     #[inline]
     pub fn join(self, mrb: &Mrb, sep: Option<RString>) -> Result<RString, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sep = sep.map_or_else(Value::nil, RString::as_value);
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // is Array-tagged by the `from_value_unchecked` contract;
-                // `sep` is nil or a String-tagged value from the same VM.
-                // `mrb_ary_join` dispatches each element's `to_s`, which may
-                // raise — caught by `protect` into `Err`.
-                Value::from_raw(unsafe {
-                    sys::mrb_ary_join(mrb.as_ptr(), self.0.as_raw(), sep.as_raw())
-                })
+        let sep = sep.map_or_else(Value::nil, RString::as_value);
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // is Array-tagged by the `from_value_unchecked` contract;
+            // `sep` is nil or a String-tagged value from the same VM.
+            // `mrb_ary_join` dispatches each element's `to_s`, which may
+            // raise — caught by `protect` into `Err`.
+            Value::from_raw(unsafe {
+                sys::mrb_ary_join(mrb.as_ptr(), self.0.as_raw(), sep.as_raw())
             })
-            // SAFETY: `mrb_ary_join` returns a String-tagged value.
-            .map(|v| unsafe { RString::from_value_unchecked(v) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sep);
-            crate::not_linked()
-        }
+        })
+        // SAFETY: `mrb_ary_join` returns a String-tagged value.
+        .map(|v| unsafe { RString::from_value_unchecked(v) })
     }
 
     /// `mrb_ary_dup(mrb, self)` — a shallow copy, Ruby's `Array#dup`. It
     /// does not mutate the receiver, so it never fails.
     #[inline]
     pub fn dup(self, mrb: &Mrb) -> Array {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
-            // contract; `mrb_ary_dup` returns a fresh Array-tagged value,
-            // so the unchecked wrap is sound.
-            unsafe {
-                Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_dup(
-                    mrb.as_ptr(),
-                    self.0.as_raw(),
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
+        // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
+        // contract; `mrb_ary_dup` returns a fresh Array-tagged value,
+        // so the unchecked wrap is sound.
+        unsafe {
+            Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_dup(
+                mrb.as_ptr(),
+                self.0.as_raw(),
+            )))
         }
     }
 
@@ -410,14 +306,9 @@ impl Array {
     /// is returned as `usize`.
     #[inline]
     pub fn len(self) -> usize {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
-            // contract; `RARRAY_LEN` reads only the array header.
-            (unsafe { sys::mrb_rarray_len_func(self.0.as_raw()) }) as usize
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
+        // contract; `RARRAY_LEN` reads only the array header.
+        (unsafe { sys::mrb_rarray_len_func(self.0.as_raw()) }) as usize
     }
 
     /// TRUE when the array holds no elements.

@@ -82,18 +82,10 @@ impl Range {
     /// nothing, so it never raises.
     #[inline]
     pub fn begin(self, mrb: &Mrb) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is Range-tagged by the `from_value_unchecked`
-            // contract; `mrb` is alive by the borrow. `mrb_range_beg_func`
-            // reads only the `RRange` begin field.
-            Value::from_raw(unsafe { sys::mrb_range_beg_func(mrb.as_ptr(), self.0.as_raw()) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        // SAFETY: `self` is Range-tagged by the `from_value_unchecked`
+        // contract; `mrb` is alive by the borrow. `mrb_range_beg_func`
+        // reads only the `RRange` begin field.
+        Value::from_raw(unsafe { sys::mrb_range_beg_func(mrb.as_ptr(), self.0.as_raw()) })
     }
 
     /// `mrb_range_end(mrb, self)` — the end value, Ruby's `Range#end`,
@@ -101,17 +93,9 @@ impl Range {
     /// keyword; a pure field read that never raises.
     #[inline]
     pub fn end_(self, mrb: &Mrb) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `begin`; `mrb_range_end_func` reads only the
-            // `RRange` end field.
-            Value::from_raw(unsafe { sys::mrb_range_end_func(mrb.as_ptr(), self.0.as_raw()) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        // SAFETY: as `begin`; `mrb_range_end_func` reads only the
+        // `RRange` end field.
+        Value::from_raw(unsafe { sys::mrb_range_end_func(mrb.as_ptr(), self.0.as_raw()) })
     }
 
     /// `mrb_range_excl_p(mrb, self)` — TRUE when the range excludes its
@@ -119,17 +103,9 @@ impl Range {
     /// dispatches nothing, so it never raises.
     #[inline]
     pub fn is_exclusive(self, mrb: &Mrb) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `begin`; `mrb_range_excl_p_func` reads only the
-            // `RRange` exclude-end flag.
-            unsafe { sys::mrb_range_excl_p_func(mrb.as_ptr(), self.0.as_raw()) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        // SAFETY: as `begin`; `mrb_range_excl_p_func` reads only the
+        // `RRange` exclude-end flag.
+        unsafe { sys::mrb_range_excl_p_func(mrb.as_ptr(), self.0.as_raw()) }
     }
 
     /// `mrb_range_beg_len(mrb, self, &beg, &len, len, trunc)` — the
@@ -147,60 +123,52 @@ impl Range {
     /// which collapses the two non-`Ok` outcomes into one `Err`.
     #[inline]
     pub fn beg_len(self, mrb: &Mrb, len: i64, trunc: bool) -> Result<RangeBegLen, Error> {
-        #[cfg(mruby_linked)]
-        {
-            use core::cell::Cell;
+        use core::cell::Cell;
 
-            // The outcome and out-params live on this frame so the protected
-            // closure only borrows them (all `Copy`); the raise long-jump,
-            // which does not run Rust drops, leaves them owned here.
-            let outcome: Cell<sys::mrb_range_beg_len> = Cell::new(sys::MRB_RANGE_TYPE_MISMATCH);
-            let begp: Cell<sys::mrb_int> = Cell::new(0);
-            let lenp: Cell<sys::mrb_int> = Cell::new(0);
+        // The outcome and out-params live on this frame so the protected
+        // closure only borrows them (all `Copy`); the raise long-jump,
+        // which does not run Rust drops, leaves them owned here.
+        let outcome: Cell<sys::mrb_range_beg_len> = Cell::new(sys::MRB_RANGE_TYPE_MISMATCH);
+        let begp: Cell<sys::mrb_int> = Cell::new(0);
+        let lenp: Cell<sys::mrb_int> = Cell::new(0);
 
-            // A length wider than the archive's `mrb_int` names no
-            // reachable extent; saturate it up (length is non-negative) so
-            // the clamp sees "as large as representable" rather than a
-            // wrapped value landing on a wrong span.
-            let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
+        // A length wider than the archive's `mrb_int` names no
+        // reachable extent; saturate it up (length is non-negative) so
+        // the clamp sees "as large as representable" rather than a
+        // wrapped value landing on a wrong span.
+        let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
 
-            mrb.protect(|mrb| {
-                let mut beg: sys::mrb_int = 0;
-                let mut sel: sys::mrb_int = 0;
-                // SAFETY: `self` is Range-tagged by the newtype contract (a
-                // non-Range receiver returns `MRB_RANGE_TYPE_MISMATCH` without
-                // a field read); `mrb` is alive inside the protect frame.
-                // `mrb_range_beg_len` writes `beg`/`sel` only on
-                // `MRB_RANGE_OK`. A non-integer bound raises `TypeError`,
-                // caught by `protect` into `Err`.
-                outcome.set(unsafe {
-                    sys::mrb_range_beg_len(
-                        mrb.as_ptr(),
-                        self.0.as_raw(),
-                        &mut beg,
-                        &mut sel,
-                        len,
-                        trunc,
-                    )
-                });
-                begp.set(beg);
-                lenp.set(sel);
-                Value::nil()
-            })?;
+        mrb.protect(|mrb| {
+            let mut beg: sys::mrb_int = 0;
+            let mut sel: sys::mrb_int = 0;
+            // SAFETY: `self` is Range-tagged by the newtype contract (a
+            // non-Range receiver returns `MRB_RANGE_TYPE_MISMATCH` without
+            // a field read); `mrb` is alive inside the protect frame.
+            // `mrb_range_beg_len` writes `beg`/`sel` only on
+            // `MRB_RANGE_OK`. A non-integer bound raises `TypeError`,
+            // caught by `protect` into `Err`.
+            outcome.set(unsafe {
+                sys::mrb_range_beg_len(
+                    mrb.as_ptr(),
+                    self.0.as_raw(),
+                    &mut beg,
+                    &mut sel,
+                    len,
+                    trunc,
+                )
+            });
+            begp.set(beg);
+            lenp.set(sel);
+            Value::nil()
+        })?;
 
-            Ok(match outcome.get() {
-                sys::MRB_RANGE_OK => RangeBegLen::Ok {
-                    beg: begp.get(),
-                    len: lenp.get(),
-                },
-                sys::MRB_RANGE_OUT => RangeBegLen::Out,
-                _ => RangeBegLen::TypeMismatch,
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, len, trunc);
-            crate::not_linked()
-        }
+        Ok(match outcome.get() {
+            sys::MRB_RANGE_OK => RangeBegLen::Ok {
+                beg: begp.get(),
+                len: lenp.get(),
+            },
+            sys::MRB_RANGE_OUT => RangeBegLen::Out,
+            _ => RangeBegLen::TypeMismatch,
+        })
     }
 }

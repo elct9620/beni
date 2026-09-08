@@ -8,21 +8,18 @@
 //! into mruby's C frames.
 
 use crate::{Error, Mrb, RClass, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 /// Trampoline-slot state for `Mrb::protect`. Starts as `Body`; the
 /// trampoline takes the closure out to run it and, when the body
 /// panics, parks the panic message back in the slot so the Rust side
 /// of the FFI call can surface it as `Error::Panic`.
-#[cfg(mruby_linked)]
 enum Slot<F> {
     Body(F),
     Taken,
     Panicked(String),
 }
 
-#[cfg(mruby_linked)]
 use crate::error::panic_message;
 
 impl Mrb {
@@ -60,21 +57,12 @@ impl Mrb {
     where
         F: FnOnce(&Mrb) -> Value,
     {
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = body;
-            crate::not_linked()
-        }
-        #[cfg(mruby_linked)]
-        {
-            self.protect_linked(body)
-        }
+        self.protect_linked(body)
     }
 
     /// Linked-mode body of `Mrb::protect`, split out because the
     /// trampoline + closure-slot dance reads better without an extra
     /// cfg indentation level.
-    #[cfg(mruby_linked)]
     fn protect_linked<F>(&self, body: F) -> Result<Value, Error>
     where
         F: FnOnce(&Mrb) -> Value,

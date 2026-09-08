@@ -64,34 +64,26 @@ impl Proc {
     /// the unsafe `beni::sys` escape hatch.
     #[inline]
     pub fn call(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let block_raw = self.0.as_raw();
-            mrb.protect(|inner| {
-                // `Value` is `#[repr(transparent)]` over `mrb_value`, so
-                // the slice layout is mruby's argv exactly — the cast is
-                // a no-op at codegen level.
-                let argv = args.as_ptr() as *const sys::mrb_value;
-                // SAFETY: `inner` is the live VM inside the protected
-                // frame; `block_raw` is Proc-tagged by the
-                // `from_value_unchecked` contract; every `args` entry
-                // originates from the same VM and the slice outlives the
-                // call.
-                let raw = unsafe {
-                    sys::mrb_yield_argv(
-                        inner.as_ptr(),
-                        block_raw,
-                        sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
-                        argv,
-                    )
-                };
-                Value::from_raw(raw)
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, args);
-            crate::not_linked()
-        }
+        let block_raw = self.0.as_raw();
+        mrb.protect(|inner| {
+            // `Value` is `#[repr(transparent)]` over `mrb_value`, so
+            // the slice layout is mruby's argv exactly — the cast is
+            // a no-op at codegen level.
+            let argv = args.as_ptr() as *const sys::mrb_value;
+            // SAFETY: `inner` is the live VM inside the protected
+            // frame; `block_raw` is Proc-tagged by the
+            // `from_value_unchecked` contract; every `args` entry
+            // originates from the same VM and the slice outlives the
+            // call.
+            let raw = unsafe {
+                sys::mrb_yield_argv(
+                    inner.as_ptr(),
+                    block_raw,
+                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
+                    argv,
+                )
+            };
+            Value::from_raw(raw)
+        })
     }
 }

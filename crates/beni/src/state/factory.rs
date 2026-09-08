@@ -11,7 +11,6 @@
 //! raise — comparing incomparable bounds — so it returns a `Result`.
 
 use crate::{Array, Error, Hash, Mrb, RString, Range, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 impl Mrb {
@@ -23,24 +22,16 @@ impl Mrb {
     /// configured integer width). Real callers stay far below that.
     #[inline]
     pub fn str_new(&self, bytes: &[u8]) -> RString {
-        #[cfg(mruby_linked)]
-        {
-            let len = bytes.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-            // SAFETY: `self` is alive by the `&self` borrow; `bytes`
-            // outlives the synchronous call. `mrb_str_new` always returns
-            // a String-tagged value, so the unchecked wrap is sound.
-            unsafe {
-                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new(
-                    self.as_ptr(),
-                    bytes.as_ptr() as *const core::ffi::c_char,
-                    len,
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = bytes;
-            crate::not_linked()
+        let len = bytes.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        // SAFETY: `self` is alive by the `&self` borrow; `bytes`
+        // outlives the synchronous call. `mrb_str_new` always returns
+        // a String-tagged value, so the unchecked wrap is sound.
+        unsafe {
+            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new(
+                self.as_ptr(),
+                bytes.as_ptr() as *const core::ffi::c_char,
+                len,
+            )))
         }
     }
 
@@ -49,22 +40,14 @@ impl Mrb {
     /// terminator.
     #[inline]
     pub fn str_new_cstr(&self, s: &core::ffi::CStr) -> RString {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is alive; `s.as_ptr()` is NUL-terminated by
-            // the `&CStr` contract. `mrb_str_new_cstr` always returns a
-            // String-tagged value, so the unchecked wrap is sound.
-            unsafe {
-                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_cstr(
-                    self.as_ptr(),
-                    s.as_ptr(),
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = s;
-            crate::not_linked()
+        // SAFETY: `self` is alive; `s.as_ptr()` is NUL-terminated by
+        // the `&CStr` contract. `mrb_str_new_cstr` always returns a
+        // String-tagged value, so the unchecked wrap is sound.
+        unsafe {
+            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_cstr(
+                self.as_ptr(),
+                s.as_ptr(),
+            )))
         }
     }
 
@@ -76,22 +59,14 @@ impl Mrb {
     /// `mrb_int` width, mirroring `ary_new_capa`.
     #[inline]
     pub fn str_new_capa(&self, capa: usize) -> RString {
-        #[cfg(mruby_linked)]
-        {
-            let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-            // SAFETY: `self` is alive; `mrb_str_new_capa` always returns
-            // a String-tagged value, so the unchecked wrap is sound.
-            unsafe {
-                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_capa(
-                    self.as_ptr(),
-                    capa,
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = capa;
-            crate::not_linked()
+        let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        // SAFETY: `self` is alive; `mrb_str_new_capa` always returns
+        // a String-tagged value, so the unchecked wrap is sound.
+        unsafe {
+            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_capa(
+                self.as_ptr(),
+                capa,
+            )))
         }
     }
 
@@ -108,25 +83,17 @@ impl Mrb {
     /// configured integer width). Real callers stay far below that.
     #[inline]
     pub fn str_new_static(&self, bytes: &'static [u8]) -> RString {
-        #[cfg(mruby_linked)]
-        {
-            let len = bytes.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-            // SAFETY: `self` is alive by the `&self` borrow; `bytes` is
-            // `'static`, so the aliased buffer outlives the VM as mruby's
-            // NOFREE contract requires. `mrb_str_new_static` always returns
-            // a String-tagged value, so the unchecked wrap is sound.
-            unsafe {
-                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_static(
-                    self.as_ptr(),
-                    bytes.as_ptr() as *const core::ffi::c_char,
-                    len,
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = bytes;
-            crate::not_linked()
+        let len = bytes.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        // SAFETY: `self` is alive by the `&self` borrow; `bytes` is
+        // `'static`, so the aliased buffer outlives the VM as mruby's
+        // NOFREE contract requires. `mrb_str_new_static` always returns
+        // a String-tagged value, so the unchecked wrap is sound.
+        unsafe {
+            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_static(
+                self.as_ptr(),
+                bytes.as_ptr() as *const core::ffi::c_char,
+                len,
+            )))
         }
     }
 
@@ -135,14 +102,9 @@ impl Mrb {
     /// on the returned newtype.
     #[inline]
     pub fn ary_new(&self) -> Array {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is alive; `mrb_ary_new` always returns an
-            // Array-tagged value, so the unchecked wrap is sound.
-            unsafe { Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_new(self.as_ptr()))) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `self` is alive; `mrb_ary_new` always returns an
+        // Array-tagged value, so the unchecked wrap is sound.
+        unsafe { Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_new(self.as_ptr()))) }
     }
 
     /// `mrb_ary_new_capa(mrb, capa)` — construct an empty mruby `Array`
@@ -151,22 +113,11 @@ impl Mrb {
     /// `capa` saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn ary_new_capa(&self, capa: usize) -> Array {
-        #[cfg(mruby_linked)]
-        {
-            let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-            // SAFETY: `self` is alive; `mrb_ary_new_capa` always returns
-            // an Array-tagged value, so the unchecked wrap is sound.
-            unsafe {
-                Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_new_capa(
-                    self.as_ptr(),
-                    capa,
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = capa;
-            crate::not_linked()
+        let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        // SAFETY: `self` is alive; `mrb_ary_new_capa` always returns
+        // an Array-tagged value, so the unchecked wrap is sound.
+        unsafe {
+            Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_new_capa(self.as_ptr(), capa)))
         }
     }
 
@@ -175,25 +126,17 @@ impl Mrb {
     /// saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn ary_new_from_values(&self, values: &[Value]) -> Array {
-        #[cfg(mruby_linked)]
-        {
-            let len = values.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-            // SAFETY: `self` is alive; `Value` is `#[repr(transparent)]`
-            // over `mrb_value` (pinned by the ABI test), so the slice
-            // pointer is a valid `*const mrb_value` for `len` elements,
-            // which the call copies before returning.
-            unsafe {
-                Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_new_from_values(
-                    self.as_ptr(),
-                    len,
-                    values.as_ptr() as *const sys::mrb_value,
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = values;
-            crate::not_linked()
+        let len = values.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        // SAFETY: `self` is alive; `Value` is `#[repr(transparent)]`
+        // over `mrb_value` (pinned by the ABI test), so the slice
+        // pointer is a valid `*const mrb_value` for `len` elements,
+        // which the call copies before returning.
+        unsafe {
+            Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_new_from_values(
+                self.as_ptr(),
+                len,
+                values.as_ptr() as *const sys::mrb_value,
+            )))
         }
     }
 
@@ -202,14 +145,9 @@ impl Mrb {
     /// live on the returned newtype.
     #[inline]
     pub fn hash_new(&self) -> Hash {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is alive; `mrb_hash_new` always returns a
-            // Hash-tagged value, so the unchecked wrap is sound.
-            unsafe { Hash::from_value_unchecked(Value::from_raw(sys::mrb_hash_new(self.as_ptr()))) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `self` is alive; `mrb_hash_new` always returns a
+        // Hash-tagged value, so the unchecked wrap is sound.
+        unsafe { Hash::from_value_unchecked(Value::from_raw(sys::mrb_hash_new(self.as_ptr()))) }
     }
 
     /// `mrb_hash_new_capa(mrb, capa)` — construct an empty mruby `Hash`
@@ -218,22 +156,11 @@ impl Mrb {
     /// saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn hash_new_capa(&self, capa: usize) -> Hash {
-        #[cfg(mruby_linked)]
-        {
-            let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-            // SAFETY: `self` is alive; `mrb_hash_new_capa` always returns
-            // a Hash-tagged value, so the unchecked wrap is sound.
-            unsafe {
-                Hash::from_value_unchecked(Value::from_raw(sys::mrb_hash_new_capa(
-                    self.as_ptr(),
-                    capa,
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = capa;
-            crate::not_linked()
+        let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        // SAFETY: `self` is alive; `mrb_hash_new_capa` always returns
+        // a Hash-tagged value, so the unchecked wrap is sound.
+        unsafe {
+            Hash::from_value_unchecked(Value::from_raw(sys::mrb_hash_new_capa(self.as_ptr(), capa)))
         }
     }
 
@@ -242,23 +169,15 @@ impl Mrb {
     /// into a fresh array, so it never raises.
     #[inline]
     pub fn assoc_new(&self, car: Value, cdr: Value) -> Array {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is alive; `car` and `cdr` share the VM by the
-            // single-VM contract. `mrb_assoc_new` always returns an
-            // Array-tagged value, so the unchecked wrap is sound.
-            unsafe {
-                Array::from_value_unchecked(Value::from_raw(sys::mrb_assoc_new(
-                    self.as_ptr(),
-                    car.as_raw(),
-                    cdr.as_raw(),
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (car, cdr);
-            crate::not_linked()
+        // SAFETY: `self` is alive; `car` and `cdr` share the VM by the
+        // single-VM contract. `mrb_assoc_new` always returns an
+        // Array-tagged value, so the unchecked wrap is sound.
+        unsafe {
+            Array::from_value_unchecked(Value::from_raw(sys::mrb_assoc_new(
+                self.as_ptr(),
+                car.as_raw(),
+                cdr.as_raw(),
+            )))
         }
     }
 
@@ -271,26 +190,18 @@ impl Mrb {
     /// and a numeric pair always succeed.
     #[inline]
     pub fn range_new(&self, begin: Value, end: Value, exclusive: bool) -> Result<Range, Error> {
-        #[cfg(mruby_linked)]
-        {
-            self.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `begin`
-                // and `end` share the VM by the single-VM contract.
-                // `mrb_range_new` compares the bounds and raises
-                // `ArgumentError` on an incomparable pair — caught by
-                // `protect` into `Err`.
-                Value::from_raw(unsafe {
-                    sys::mrb_range_new(mrb.as_ptr(), begin.as_raw(), end.as_raw(), exclusive)
-                })
+        self.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `begin`
+            // and `end` share the VM by the single-VM contract.
+            // `mrb_range_new` compares the bounds and raises
+            // `ArgumentError` on an incomparable pair — caught by
+            // `protect` into `Err`.
+            Value::from_raw(unsafe {
+                sys::mrb_range_new(mrb.as_ptr(), begin.as_raw(), end.as_raw(), exclusive)
             })
-            // SAFETY: an `Ok` result came from `mrb_range_new`, which
-            // returns a Range-tagged value on success.
-            .map(|v| unsafe { Range::from_value_unchecked(v) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (begin, end, exclusive);
-            crate::not_linked()
-        }
+        })
+        // SAFETY: an `Ok` result came from `mrb_range_new`, which
+        // returns a Range-tagged value on success.
+        .map(|v| unsafe { Range::from_value_unchecked(v) })
     }
 }

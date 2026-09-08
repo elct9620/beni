@@ -64,32 +64,24 @@ impl RString {
     /// long-jumping.
     #[inline]
     pub fn cat(self, mrb: &Mrb, bytes: &[u8]) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `self` is String-tagged by the newtype
-                // contract; `mrb` is alive inside the protect frame;
-                // `bytes` is read-only and copied into the string's
-                // buffer before the call returns. `mrb_str_cat` calls
-                // `mrb_str_modify`, which raises `FrozenError` on a
-                // frozen string — caught by `protect` into `Err`.
-                unsafe {
-                    sys::mrb_str_cat(
-                        mrb.as_ptr(),
-                        self.0.as_raw(),
-                        bytes.as_ptr() as *const core::ffi::c_char,
-                        bytes.len(),
-                    );
-                }
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, bytes);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `self` is String-tagged by the newtype
+            // contract; `mrb` is alive inside the protect frame;
+            // `bytes` is read-only and copied into the string's
+            // buffer before the call returns. `mrb_str_cat` calls
+            // `mrb_str_modify`, which raises `FrozenError` on a
+            // frozen string — caught by `protect` into `Err`.
+            unsafe {
+                sys::mrb_str_cat(
+                    mrb.as_ptr(),
+                    self.0.as_raw(),
+                    bytes.as_ptr() as *const core::ffi::c_char,
+                    bytes.len(),
+                );
+            }
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_str_cat_str(mrb, self, other)` — append `other`'s bytes to
@@ -102,26 +94,18 @@ impl RString {
     /// by `mrb_str_cat_str`, which snapshots the source before growing.
     #[inline]
     pub fn cat_str(self, mrb: &Mrb, other: RString) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `self` and `other` are String-tagged by the
-                // newtype contract; `mrb` is alive inside the protect
-                // frame. `mrb_str_cat_str` calls `mrb_str_modify`, which
-                // raises `FrozenError` on a frozen receiver — caught by
-                // `protect` into `Err`.
-                unsafe {
-                    sys::mrb_str_cat_str(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw());
-                }
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `self` and `other` are String-tagged by the
+            // newtype contract; `mrb` is alive inside the protect
+            // frame. `mrb_str_cat_str` calls `mrb_str_modify`, which
+            // raises `FrozenError` on a frozen receiver — caught by
+            // `protect` into `Err`.
+            unsafe {
+                sys::mrb_str_cat_str(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw());
+            }
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_str_cat_cstr(mrb, self, ptr)` — append a NUL-terminated C
@@ -133,28 +117,20 @@ impl RString {
     /// `Mrb::protect`, so that surfaces as `Err` rather than long-jumping.
     #[inline]
     pub fn cat_cstr(self, mrb: &Mrb, s: &core::ffi::CStr) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `self` is String-tagged by the newtype contract;
-                // `mrb` is alive inside the protect frame; `s` is a
-                // NUL-terminated buffer read up to its terminator and
-                // copied into the string before the call returns.
-                // `mrb_str_cat_cstr` calls `mrb_str_modify`, which raises
-                // `FrozenError` on a frozen receiver — caught by `protect`
-                // into `Err`.
-                unsafe {
-                    sys::mrb_str_cat_cstr(mrb.as_ptr(), self.0.as_raw(), s.as_ptr());
-                }
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, s);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `mrb` is alive inside the protect frame; `s` is a
+            // NUL-terminated buffer read up to its terminator and
+            // copied into the string before the call returns.
+            // `mrb_str_cat_cstr` calls `mrb_str_modify`, which raises
+            // `FrozenError` on a frozen receiver — caught by `protect`
+            // into `Err`.
+            unsafe {
+                sys::mrb_str_cat_cstr(mrb.as_ptr(), self.0.as_raw(), s.as_ptr());
+            }
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_str_concat(mrb, self, other)` — append `other` coerced to a
@@ -167,27 +143,19 @@ impl RString {
     /// surfaces as `Err` rather than long-jumping.
     #[inline]
     pub fn concat(self, mrb: &Mrb, other: Value) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `self` is String-tagged by the newtype
-                // contract; `mrb` is alive inside the protect frame;
-                // `other` shares the VM. `mrb_str_concat` coerces
-                // `other` to a String (dispatching `to_s` where needed)
-                // and calls `mrb_str_modify`; a frozen receiver or a
-                // raising coercion long-jumps — caught by `protect`.
-                unsafe {
-                    sys::mrb_str_concat(mrb.as_ptr(), self.0.as_raw(), other.as_raw());
-                }
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `self` is String-tagged by the newtype
+            // contract; `mrb` is alive inside the protect frame;
+            // `other` shares the VM. `mrb_str_concat` coerces
+            // `other` to a String (dispatching `to_s` where needed)
+            // and calls `mrb_str_modify`; a frozen receiver or a
+            // raising coercion long-jumps — caught by `protect`.
+            unsafe {
+                sys::mrb_str_concat(mrb.as_ptr(), self.0.as_raw(), other.as_raw());
+            }
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_str_resize(mrb, self, len)` — set this string's byte length
@@ -200,45 +168,36 @@ impl RString {
     /// long-jumping.
     #[inline]
     pub fn resize(self, mrb: &Mrb, len: usize) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                match sys::mrb_int::try_from(len) {
-                    // SAFETY: `self` is String-tagged by the newtype
-                    // contract; `mrb` is alive inside the protect frame.
-                    // `mrb_str_resize` calls `mrb_str_modify` (raises
-                    // `FrozenError` on a frozen receiver) and
-                    // `str_check_length` (raises `ArgumentError` on a
-                    // length at the integer maximum) — both long-jump,
-                    // caught by `protect`.
-                    Ok(len) => unsafe {
-                        sys::mrb_str_resize(mrb.as_ptr(), self.0.as_raw(), len);
-                    },
-                    // A `usize` past mruby's integer range can never be a
-                    // valid string length; raise the same `ArgumentError`
-                    // mruby raises for an overflowed length so the caller
-                    // sees one error shape regardless of where the bound
-                    // is hit.
-                    Err(_) => {
-                        // SAFETY: `mrb` is alive; `E_ARGUMENT_ERROR` is a
-                        // core class so the lookup cannot fail;
-                        // `mrb_raise` long-jumps to the protect frame.
-                        unsafe {
-                            let argerr =
-                                sys::mrb_class_get(mrb.as_ptr(), c"ArgumentError".as_ptr());
-                            sys::mrb_raise(mrb.as_ptr(), argerr, c"string size too large".as_ptr());
-                        }
+        mrb.protect(|mrb| {
+            match sys::mrb_int::try_from(len) {
+                // SAFETY: `self` is String-tagged by the newtype
+                // contract; `mrb` is alive inside the protect frame.
+                // `mrb_str_resize` calls `mrb_str_modify` (raises
+                // `FrozenError` on a frozen receiver) and
+                // `str_check_length` (raises `ArgumentError` on a
+                // length at the integer maximum) — both long-jump,
+                // caught by `protect`.
+                Ok(len) => unsafe {
+                    sys::mrb_str_resize(mrb.as_ptr(), self.0.as_raw(), len);
+                },
+                // A `usize` past mruby's integer range can never be a
+                // valid string length; raise the same `ArgumentError`
+                // mruby raises for an overflowed length so the caller
+                // sees one error shape regardless of where the bound
+                // is hit.
+                Err(_) => {
+                    // SAFETY: `mrb` is alive; `E_ARGUMENT_ERROR` is a
+                    // core class so the lookup cannot fail;
+                    // `mrb_raise` long-jumps to the protect frame.
+                    unsafe {
+                        let argerr = sys::mrb_class_get(mrb.as_ptr(), c"ArgumentError".as_ptr());
+                        sys::mrb_raise(mrb.as_ptr(), argerr, c"string size too large".as_ptr());
                     }
                 }
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, len);
-            crate::not_linked()
-        }
+            }
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_str_substr(mrb, self, beg, len)` — a substring by character
@@ -249,40 +208,32 @@ impl RString {
     /// never raises. Mirrors magnus's `RString` substring read.
     #[inline]
     pub fn substr(self, mrb: &Mrb, beg: i64, len: i64) -> Option<RString> {
-        #[cfg(mruby_linked)]
-        {
-            // An offset or length outside the archive's `mrb_int` width
-            // names no position; saturate it to the nearest bound so the
-            // clamp still sees "past the beginning" / "past the end" rather
-            // than a truncated value landing on a wrong in-range position.
-            let beg = sys::mrb_int::try_from(beg).unwrap_or(if beg < 0 {
-                sys::mrb_int::MIN
-            } else {
-                sys::mrb_int::MAX
-            });
-            let len = sys::mrb_int::try_from(len).unwrap_or(if len < 0 {
-                sys::mrb_int::MIN
-            } else {
-                sys::mrb_int::MAX
-            });
-            // SAFETY: `self` is String-tagged by the newtype contract;
-            // `mrb` is alive; `mrb_str_substr` clamps the range and reads
-            // only the byte buffer, returning a fresh String or `nil`.
-            let v = Value::from_raw(unsafe {
-                sys::mrb_str_substr(mrb.as_ptr(), self.0.as_raw(), beg, len)
-            });
-            if v.is_nil() {
-                None
-            } else {
-                // SAFETY: a non-nil `mrb_str_substr` result is
-                // String-tagged.
-                Some(unsafe { RString::from_value_unchecked(v) })
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, beg, len);
-            crate::not_linked()
+        // An offset or length outside the archive's `mrb_int` width
+        // names no position; saturate it to the nearest bound so the
+        // clamp still sees "past the beginning" / "past the end" rather
+        // than a truncated value landing on a wrong in-range position.
+        let beg = sys::mrb_int::try_from(beg).unwrap_or(if beg < 0 {
+            sys::mrb_int::MIN
+        } else {
+            sys::mrb_int::MAX
+        });
+        let len = sys::mrb_int::try_from(len).unwrap_or(if len < 0 {
+            sys::mrb_int::MIN
+        } else {
+            sys::mrb_int::MAX
+        });
+        // SAFETY: `self` is String-tagged by the newtype contract;
+        // `mrb` is alive; `mrb_str_substr` clamps the range and reads
+        // only the byte buffer, returning a fresh String or `nil`.
+        let v = Value::from_raw(unsafe {
+            sys::mrb_str_substr(mrb.as_ptr(), self.0.as_raw(), beg, len)
+        });
+        if v.is_nil() {
+            None
+        } else {
+            // SAFETY: a non-nil `mrb_str_substr` result is
+            // String-tagged.
+            Some(unsafe { RString::from_value_unchecked(v) })
         }
     }
 
@@ -296,44 +247,36 @@ impl RString {
     /// The byte-index sibling of the character-range `substr` read.
     #[inline]
     pub fn index(self, mrb: &Mrb, needle: &[u8], offset: i64) -> Option<usize> {
-        #[cfg(mruby_linked)]
-        {
-            // An offset outside the archive's `mrb_int` width names no
-            // position; saturate it to the nearest bound so the scan still
-            // sees "past the beginning" / "past the end" rather than a
-            // truncated value landing on a wrong in-range offset. The needle
-            // length is non-negative; a length past `mrb_int::MAX` cannot fit
-            // before the end either, so it saturates upward to stay "not
-            // found".
-            let offset = sys::mrb_int::try_from(offset).unwrap_or(if offset < 0 {
-                sys::mrb_int::MIN
-            } else {
-                sys::mrb_int::MAX
-            });
-            let slen = sys::mrb_int::try_from(needle.len()).unwrap_or(sys::mrb_int::MAX);
-            // SAFETY: `self` is String-tagged by the newtype contract;
-            // `mrb` is alive; `needle` is read-only and only scanned for
-            // its `len` bytes. `mrb_str_index` does a pure `mrb_memsearch`
-            // over the byte buffers, returning the byte index or -1.
-            let pos = unsafe {
-                sys::mrb_str_index(
-                    mrb.as_ptr(),
-                    self.0.as_raw(),
-                    needle.as_ptr() as *const core::ffi::c_char,
-                    slen,
-                    offset,
-                )
-            };
-            if pos < 0 {
-                None
-            } else {
-                Some(pos as usize)
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, needle, offset);
-            crate::not_linked()
+        // An offset outside the archive's `mrb_int` width names no
+        // position; saturate it to the nearest bound so the scan still
+        // sees "past the beginning" / "past the end" rather than a
+        // truncated value landing on a wrong in-range offset. The needle
+        // length is non-negative; a length past `mrb_int::MAX` cannot fit
+        // before the end either, so it saturates upward to stay "not
+        // found".
+        let offset = sys::mrb_int::try_from(offset).unwrap_or(if offset < 0 {
+            sys::mrb_int::MIN
+        } else {
+            sys::mrb_int::MAX
+        });
+        let slen = sys::mrb_int::try_from(needle.len()).unwrap_or(sys::mrb_int::MAX);
+        // SAFETY: `self` is String-tagged by the newtype contract;
+        // `mrb` is alive; `needle` is read-only and only scanned for
+        // its `len` bytes. `mrb_str_index` does a pure `mrb_memsearch`
+        // over the byte buffers, returning the byte index or -1.
+        let pos = unsafe {
+            sys::mrb_str_index(
+                mrb.as_ptr(),
+                self.0.as_raw(),
+                needle.as_ptr() as *const core::ffi::c_char,
+                slen,
+                offset,
+            )
+        };
+        if pos < 0 {
+            None
+        } else {
+            Some(pos as usize)
         }
     }
 
@@ -354,19 +297,14 @@ impl RString {
     /// the string's backing buffer before consuming the slice.
     #[inline]
     pub unsafe fn as_bytes(self, _mrb: &Mrb) -> &[u8] {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is String-tagged by the newtype contract;
-            // the wrapper-h inline helpers expand the RSTRING_PTR /
-            // RSTRING_LEN macros against mruby's own headers.
-            let ptr = unsafe { sys::mrb_rstring_ptr(self.0.as_raw()) } as *const u8;
-            let len = unsafe { sys::mrb_rstring_len(self.0.as_raw()) } as usize;
-            // SAFETY: ptr / len pair describes a buffer owned by mruby
-            // and alive while the borrowed `&Mrb` outlives this slice.
-            unsafe { core::slice::from_raw_parts(ptr, len) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `self` is String-tagged by the newtype contract;
+        // the wrapper-h inline helpers expand the RSTRING_PTR /
+        // RSTRING_LEN macros against mruby's own headers.
+        let ptr = unsafe { sys::mrb_rstring_ptr(self.0.as_raw()) } as *const u8;
+        let len = unsafe { sys::mrb_rstring_len(self.0.as_raw()) } as usize;
+        // SAFETY: ptr / len pair describes a buffer owned by mruby
+        // and alive while the borrowed `&Mrb` outlives this slice.
+        unsafe { core::slice::from_raw_parts(ptr, len) }
     }
 
     /// Copy this string's bytes into an owned `Vec<u8>`. The bytes are
@@ -375,22 +313,17 @@ impl RString {
     /// Backs `FromValue for String` and `FromValue for Vec<u8>`.
     #[inline]
     pub fn to_bytes(self) -> Vec<u8> {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is String-tagged by the newtype contract;
-            // `mrb_rstring_ptr` / `mrb_rstring_len` read the RString
-            // header without touching `mrb_state`, and the slice is
-            // copied immediately, so no borrow escapes the VM-alive
-            // window every `Value` already assumes.
-            let bytes = unsafe {
-                let ptr = sys::mrb_rstring_ptr(self.0.as_raw()) as *const u8;
-                let len = sys::mrb_rstring_len(self.0.as_raw()) as usize;
-                core::slice::from_raw_parts(ptr, len)
-            };
-            bytes.to_vec()
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `self` is String-tagged by the newtype contract;
+        // `mrb_rstring_ptr` / `mrb_rstring_len` read the RString
+        // header without touching `mrb_state`, and the slice is
+        // copied immediately, so no borrow escapes the VM-alive
+        // window every `Value` already assumes.
+        let bytes = unsafe {
+            let ptr = sys::mrb_rstring_ptr(self.0.as_raw()) as *const u8;
+            let len = sys::mrb_rstring_len(self.0.as_raw()) as usize;
+            core::slice::from_raw_parts(ptr, len)
+        };
+        bytes.to_vec()
     }
 
     /// `RSTRING_LEN(self)` — the number of bytes in this string, via the
@@ -402,14 +335,9 @@ impl RString {
     /// buffer out first.
     #[inline]
     pub fn len(self) -> usize {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is String-tagged by the newtype contract;
-            // `RSTRING_LEN` reads only the string header.
-            (unsafe { sys::mrb_rstring_len(self.0.as_raw()) }) as usize
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `self` is String-tagged by the newtype contract;
+        // `RSTRING_LEN` reads only the string header.
+        (unsafe { sys::mrb_rstring_len(self.0.as_raw()) }) as usize
     }
 
     /// TRUE when the string holds no bytes.
@@ -424,22 +352,14 @@ impl RString {
     /// share here, so the bytes are copied outright.
     #[inline]
     pub fn dup(self, mrb: &Mrb) -> RString {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is String-tagged by the newtype contract;
-            // `mrb_str_dup` returns a fresh String-tagged value, so the
-            // unchecked wrap is sound.
-            unsafe {
-                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_dup(
-                    mrb.as_ptr(),
-                    self.0.as_raw(),
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
+        // SAFETY: `self` is String-tagged by the newtype contract;
+        // `mrb_str_dup` returns a fresh String-tagged value, so the
+        // unchecked wrap is sound.
+        unsafe {
+            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_dup(
+                mrb.as_ptr(),
+                self.0.as_raw(),
+            )))
         }
     }
 
@@ -451,24 +371,16 @@ impl RString {
     /// raises, so it returns the new `RString` directly. Mirrors `dup`.
     #[inline]
     pub fn plus(self, mrb: &Mrb, other: RString) -> RString {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` and `other` are String-tagged by the newtype
-            // contract and share the VM; `mrb_str_plus` reads only their
-            // byte buffers and returns a fresh String-tagged value, so the
-            // unchecked wrap is sound.
-            unsafe {
-                RString::from_value_unchecked(Value::from_raw(sys::mrb_str_plus(
-                    mrb.as_ptr(),
-                    self.0.as_raw(),
-                    other.0.as_raw(),
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
+        // SAFETY: `self` and `other` are String-tagged by the newtype
+        // contract and share the VM; `mrb_str_plus` reads only their
+        // byte buffers and returns a fresh String-tagged value, so the
+        // unchecked wrap is sound.
+        unsafe {
+            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_plus(
+                mrb.as_ptr(),
+                self.0.as_raw(),
+                other.0.as_raw(),
+            )))
         }
     }
 
@@ -481,19 +393,11 @@ impl RString {
     /// `RString::cmp`.
     #[inline]
     pub fn cmp(self, mrb: &Mrb, other: RString) -> core::cmp::Ordering {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` and `other` are String-tagged by the newtype
-            // contract and share the VM; `mrb_str_cmp` reads only their
-            // byte buffers and returns -1 / 0 / 1.
-            let ord = unsafe { sys::mrb_str_cmp(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
-            ord.cmp(&0)
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        // SAFETY: `self` and `other` are String-tagged by the newtype
+        // contract and share the VM; `mrb_str_cmp` reads only their
+        // byte buffers and returns -1 / 0 / 1.
+        let ord = unsafe { sys::mrb_str_cmp(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
+        ord.cmp(&0)
     }
 
     /// `mrb_str_equal(mrb, self, other)` — TRUE when the two strings hold the
@@ -504,18 +408,10 @@ impl RString {
     /// the ordering `cmp`.
     #[inline]
     pub fn eq(self, mrb: &Mrb, other: RString) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` and `other` are String-tagged by the newtype
-            // contract and share the VM; `mrb_str_equal` reads only their byte
-            // buffers and returns a boolean.
-            unsafe { sys::mrb_str_equal(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        // SAFETY: `self` and `other` are String-tagged by the newtype
+        // contract and share the VM; `mrb_str_equal` reads only their byte
+        // buffers and returns a boolean.
+        unsafe { sys::mrb_str_equal(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) }
     }
 
     /// `mrb_str_intern(mrb, self)` — the typed `Symbol` naming this
@@ -526,22 +422,14 @@ impl RString {
     /// coerces an arbitrary value and can raise.
     #[inline]
     pub fn intern(self, mrb: &Mrb) -> crate::Symbol {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is String-tagged by the newtype contract and
-            // shares the VM; `mrb_str_intern` reads its bytes and returns a
-            // Symbol-tagged value, so the unchecked wrap is sound.
-            unsafe {
-                crate::Symbol::from_value_unchecked(Value::from_raw(sys::mrb_str_intern(
-                    mrb.as_ptr(),
-                    self.0.as_raw(),
-                )))
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
+        // SAFETY: `self` is String-tagged by the newtype contract and
+        // shares the VM; `mrb_str_intern` reads its bytes and returns a
+        // Symbol-tagged value, so the unchecked wrap is sound.
+        unsafe {
+            crate::Symbol::from_value_unchecked(Value::from_raw(sys::mrb_str_intern(
+                mrb.as_ptr(),
+                self.0.as_raw(),
+            )))
         }
     }
 
@@ -553,30 +441,22 @@ impl RString {
     /// anchors on mruby's own `mrb_string_cstr`.
     #[inline]
     pub fn to_cstr(self, mrb: &Mrb) -> Result<std::ffi::CString, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `self` is String-tagged by the newtype contract;
-                // `mrb` is alive inside the protect frame. `mrb_string_cstr`
-                // NUL-terminates the buffer in place, raising `ArgumentError`
-                // on an embedded NUL — caught by `protect` into `Err`. The
-                // returned pointer is discarded; the CString is rebuilt from
-                // the receiver's now-NUL-free bytes after protect returns.
-                unsafe {
-                    sys::mrb_string_cstr(mrb.as_ptr(), self.0.as_raw());
-                }
-                Value::nil()
-            })?;
-            // On the success path `mrb_string_cstr` proved the bytes hold no
-            // NUL, so the CString build cannot fail.
-            Ok(std::ffi::CString::new(self.to_bytes())
-                .expect("mrb_string_cstr rejected any embedded NUL"))
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `mrb` is alive inside the protect frame. `mrb_string_cstr`
+            // NUL-terminates the buffer in place, raising `ArgumentError`
+            // on an embedded NUL — caught by `protect` into `Err`. The
+            // returned pointer is discarded; the CString is rebuilt from
+            // the receiver's now-NUL-free bytes after protect returns.
+            unsafe {
+                sys::mrb_string_cstr(mrb.as_ptr(), self.0.as_raw());
+            }
+            Value::nil()
+        })?;
+        // On the success path `mrb_string_cstr` proved the bytes hold no
+        // NUL, so the CString build cannot fail.
+        Ok(std::ffi::CString::new(self.to_bytes())
+            .expect("mrb_string_cstr rejected any embedded NUL"))
     }
 
     /// `mrb_str_to_integer(mrb, self, base, TRUE)` — parse the bytes to an
@@ -590,32 +470,19 @@ impl RString {
     /// `-n` aliases the radix `n` with prefix detection disabled.
     #[inline]
     pub fn to_i(self, mrb: &Mrb, base: i32) -> Result<sys::mrb_int, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `self` is String-tagged by the newtype contract;
-                // `mrb` is alive inside the protect frame. `mrb_str_to_integer`
-                // with `badcheck` TRUE raises `ArgumentError` on any input that
-                // is not a clean integer in the base — caught by `protect` into
-                // `Err`. On success it returns an Integer-tagged value.
-                Value::from_raw(unsafe {
-                    sys::mrb_str_to_integer(
-                        mrb.as_ptr(),
-                        self.0.as_raw(),
-                        base as sys::mrb_int,
-                        true,
-                    )
-                })
+        mrb.protect(|mrb| {
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `mrb` is alive inside the protect frame. `mrb_str_to_integer`
+            // with `badcheck` TRUE raises `ArgumentError` on any input that
+            // is not a clean integer in the base — caught by `protect` into
+            // `Err`. On success it returns an Integer-tagged value.
+            Value::from_raw(unsafe {
+                sys::mrb_str_to_integer(mrb.as_ptr(), self.0.as_raw(), base as sys::mrb_int, true)
             })
-            // SAFETY: a successful `mrb_str_to_integer` returns an
-            // Integer-tagged value, so the unbox accepts it.
-            .map(|v| unsafe { v.unbox_integer() })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, base);
-            crate::not_linked()
-        }
+        })
+        // SAFETY: a successful `mrb_str_to_integer` returns an
+        // Integer-tagged value, so the unbox accepts it.
+        .map(|v| unsafe { v.unbox_integer() })
     }
 
     /// `mrb_str_to_inum(mrb, self, base, FALSE)` — parse the bytes to an
@@ -632,33 +499,20 @@ impl RString {
     /// `n` with prefix detection disabled.
     #[inline]
     pub fn to_inum(self, mrb: &Mrb, base: i32) -> Result<sys::mrb_int, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `self` is String-tagged by the newtype contract;
-                // `mrb` is alive inside the protect frame. `mrb_str_to_integer`
-                // with `badcheck` FALSE never raises on malformed content — it
-                // returns the leading integer or 0 — but still raises
-                // `ArgumentError` on an out-of-domain radix, caught by `protect`
-                // into `Err`. On success it returns an Integer-tagged value.
-                Value::from_raw(unsafe {
-                    sys::mrb_str_to_integer(
-                        mrb.as_ptr(),
-                        self.0.as_raw(),
-                        base as sys::mrb_int,
-                        false,
-                    )
-                })
+        mrb.protect(|mrb| {
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `mrb` is alive inside the protect frame. `mrb_str_to_integer`
+            // with `badcheck` FALSE never raises on malformed content — it
+            // returns the leading integer or 0 — but still raises
+            // `ArgumentError` on an out-of-domain radix, caught by `protect`
+            // into `Err`. On success it returns an Integer-tagged value.
+            Value::from_raw(unsafe {
+                sys::mrb_str_to_integer(mrb.as_ptr(), self.0.as_raw(), base as sys::mrb_int, false)
             })
-            // SAFETY: a successful `mrb_str_to_integer` returns an
-            // Integer-tagged value, so the unbox accepts it.
-            .map(|v| unsafe { v.unbox_integer() })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, base);
-            crate::not_linked()
-        }
+        })
+        // SAFETY: a successful `mrb_str_to_integer` returns an
+        // Integer-tagged value, so the unbox accepts it.
+        .map(|v| unsafe { v.unbox_integer() })
     }
 
     /// `mrb_str_to_dbl(mrb, self, TRUE)` — parse the bytes to a float, the
@@ -669,26 +523,18 @@ impl RString {
     /// long-jumping. The `to_i` sibling for the integer parse.
     #[inline]
     pub fn to_f(self, mrb: &Mrb) -> Result<sys::mrb_float, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `self` is String-tagged by the newtype contract;
-                // `mrb` is alive inside the protect frame. `mrb_str_to_dbl`
-                // with `badcheck` TRUE raises `ArgumentError` on any input
-                // that is not a clean float — caught by `protect` into `Err`.
-                // The C `double` is boxed into a Float value so it rides the
-                // protect frame's `Value` return.
-                let d = unsafe { sys::mrb_str_to_dbl(mrb.as_ptr(), self.0.as_raw(), true) };
-                Value::from_float(mrb, d)
-            })
-            // SAFETY: the `Ok` value was boxed by `Value::from_float`, so
-            // the unbox accepts it.
-            .map(|v| unsafe { v.unbox_float() })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `mrb` is alive inside the protect frame. `mrb_str_to_dbl`
+            // with `badcheck` TRUE raises `ArgumentError` on any input
+            // that is not a clean float — caught by `protect` into `Err`.
+            // The C `double` is boxed into a Float value so it rides the
+            // protect frame's `Value` return.
+            let d = unsafe { sys::mrb_str_to_dbl(mrb.as_ptr(), self.0.as_raw(), true) };
+            Value::from_float(mrb, d)
+        })
+        // SAFETY: the `Ok` value was boxed by `Value::from_float`, so
+        // the unbox accepts it.
+        .map(|v| unsafe { v.unbox_float() })
     }
 }

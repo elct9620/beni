@@ -7,7 +7,6 @@
 //! Rust panic caught at the FFI boundary travels the same channel.
 
 use crate::{Mrb, RClass, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 /// Error surfaced to Rust callers when mruby rejects an operation or
@@ -49,32 +48,24 @@ impl Error {
     /// `Mrb::str_new`; real argument counts stay far below that.
     #[inline]
     pub fn argnum(mrb: &Mrb, given: i64, min: i32, max: i32) -> Self {
-        #[cfg(mruby_linked)]
-        {
-            let argc = given.min(sys::mrb_int::MAX as i64) as sys::mrb_int;
-            match mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `mrb_argnum_error` raises `ArgumentError`, caught by
-                // `protect` and surfaced as the `Err` below.
-                unsafe {
-                    sys::mrb_argnum_error(
-                        mrb.as_ptr(),
-                        argc,
-                        min as core::ffi::c_int,
-                        max as core::ffi::c_int,
-                    );
-                }
-            }) {
-                Err(err) => err,
-                // `mrb_argnum_error` always raises, so `protect` returns
-                // `Err`; an `Ok` would mean the symbol did not raise.
-                Ok(_) => unreachable!("mrb_argnum_error must raise ArgumentError"),
+        let argc = given.min(sys::mrb_int::MAX as i64) as sys::mrb_int;
+        match mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `mrb_argnum_error` raises `ArgumentError`, caught by
+            // `protect` and surfaced as the `Err` below.
+            unsafe {
+                sys::mrb_argnum_error(
+                    mrb.as_ptr(),
+                    argc,
+                    min as core::ffi::c_int,
+                    max as core::ffi::c_int,
+                );
             }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, given, min, max);
-            crate::not_linked()
+        }) {
+            Err(err) => err,
+            // `mrb_argnum_error` always raises, so `protect` returns
+            // `Err`; an `Ok` would mean the symbol did not raise.
+            Ok(_) => unreachable!("mrb_argnum_error must raise ArgumentError"),
         }
     }
 
@@ -107,7 +98,6 @@ impl std::error::Error for Error {}
 /// `String` payloads (the `panic!` macro's products) pass through,
 /// anything else falls back to a fixed marker. Shared by every panic
 /// boundary in the crate (`Mrb::protect`, registered methods).
-#[cfg(mruby_linked)]
 pub(crate) fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
     match payload.downcast::<String>() {
         Ok(msg) => *msg,
@@ -118,7 +108,7 @@ pub(crate) fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
     }
 }
 
-#[cfg(all(test, mruby_linked))]
+#[cfg(test)]
 mod tests {
     use super::*;
 

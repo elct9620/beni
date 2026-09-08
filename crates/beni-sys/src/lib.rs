@@ -57,17 +57,14 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 
-#[cfg(not(mruby_linked))]
-use core::ffi::c_void;
-
 // --------------------------------------------------------------------
-// bindgen-generated FFI surface (`mruby_linked` builds).
+// bindgen-generated FFI surface.
 // --------------------------------------------------------------------
 //
-// When no vendored `libmruby.a` is staged the FFI block is absent.
-// Code that compiles without linking mruby still needs `mrb_value` /
-// `mrb_state` / `RClass` etc. to resolve as types — the stub aliases
-// below cover that.
+// The build script leaves the bindings at `$OUT_DIR/bindings.rs`
+// whatever produced them — bindgen against a discovered archive's
+// headers, or the checked-in documentation bindings staged there — so
+// this file includes one path and the crate carries one surface.
 //
 // The generated `bindings.rs` is `include!`-d into a private
 // submodule so the `#![allow(clippy::all)]` / `#![allow(warnings)]`
@@ -76,7 +73,6 @@ use core::ffi::c_void;
 // re-exports every name at the crate root, keeping the consumer
 // import path unchanged.
 
-#[cfg(mruby_linked)]
 #[allow(clippy::all)]
 #[allow(warnings)]
 mod bindings {
@@ -89,10 +85,8 @@ mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-#[cfg(mruby_linked)]
 pub use bindings::*;
 
-#[cfg(mruby_linked)]
 impl mrb_value {
     /// All-zero `mrb_value`. Under beni's pinned word-boxing mruby
     /// configuration this matches `mrb_nil_value()` (MRB_Qnil = 0).
@@ -107,9 +101,8 @@ impl mrb_value {
 
 // Compile-time pin on the mrb_value layout. Under word boxing the
 // value is a single machine word on every target (4 bytes on wasm32,
-// 8 on 64-bit hosts), and the placeholder stub holds to the same word
-// so both builds present one layout. Catches a future bindgen /
-// build_config drift before it silently breaks ABI.
+// 8 on 64-bit hosts). Catches a future bindgen / build_config drift
+// before it silently breaks ABI.
 const _: () = assert!(
     core::mem::size_of::<mrb_value>() == core::mem::size_of::<usize>(),
     "mrb_value size diverged from the MRB_WORDBOX_NO_INLINE_FLOAT word-boxing layout"
@@ -128,7 +121,6 @@ const _: () = assert!(
 // `globals` (four pointer-sized fields); `mrb_gc` (which carries
 // the bitfield workaround) lives further down the struct, so the
 // bitfield mis-pack does not affect this offset.
-#[cfg(mruby_linked)]
 const _: () = assert!(
     core::mem::offset_of!(mrb_state, exc) == 4 * core::mem::size_of::<*const core::ffi::c_void>(),
     "mrb_state.exc offset diverged from the vendored mruby layout — \
@@ -148,63 +140,9 @@ const _: () = assert!(
 /// `mrb` must be a live mruby state. The returned pointer aliases the
 /// state's interior `object_class` field; it remains valid for the
 /// state's lifetime and must not be passed to `mrb_close` or freed.
-#[cfg(mruby_linked)]
 #[inline]
 pub unsafe fn mrb_object_class(mrb: *mut mrb_state) -> *mut RClass {
     unsafe { (*mrb).object_class }
-}
-
-// --------------------------------------------------------------------
-// Placeholder types (no staged toolchain).
-// --------------------------------------------------------------------
-//
-// bindgen does not run when no `libmruby.a` is staged (see
-// `build.rs`'s early return), so the rlib needs hand-written
-// placeholders for the type names consumers reference. These types
-// are not link-checked against any C definition; they exist only to
-// make signatures compile so `mrb_func_t` shape tests and plain
-// `cargo check` for registry consumers keep working.
-
-#[cfg(not(mruby_linked))]
-pub type mrb_state = c_void;
-#[cfg(not(mruby_linked))]
-pub type RClass = c_void;
-#[cfg(not(mruby_linked))]
-pub type RObject = c_void;
-#[cfg(not(mruby_linked))]
-pub type mrb_sym = u32;
-#[cfg(not(mruby_linked))]
-pub type mrb_aspec = u32;
-#[cfg(not(mruby_linked))]
-pub type mrb_bool = bool;
-/// Mirrors mrbconf.h's platform default (`MRB_INT64` on 64-bit,
-/// `MRB_INT32` on 32-bit) so placeholder signatures match what
-/// bindgen would emit for an upstream-default archive on the same
-/// target. Build configs that pin a width override this via the
-/// real bindings, not the placeholder.
-#[cfg(all(not(mruby_linked), target_pointer_width = "64"))]
-pub type mrb_int = i64;
-#[cfg(all(not(mruby_linked), not(target_pointer_width = "64")))]
-pub type mrb_int = i32;
-#[cfg(not(mruby_linked))]
-pub type mrb_float = f64;
-#[cfg(not(mruby_linked))]
-pub type mrb_ccontext = c_void;
-
-#[cfg(not(mruby_linked))]
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct mrb_value {
-    /// The word boxing puts the value in, carried here so a
-    /// placeholder build presents the layout it would link against.
-    _payload: usize,
-}
-#[cfg(not(mruby_linked))]
-impl mrb_value {
-    /// All-zero `mrb_value`, as in a linked build.
-    pub const fn zeroed() -> Self {
-        Self { _payload: 0 }
-    }
 }
 
 // --------------------------------------------------------------------
@@ -238,7 +176,6 @@ pub type mrb_func_t = unsafe extern "C" fn(mrb: *mut mrb_state, self_: mrb_value
 // could.
 
 /// `MRB_ARGS_NONE()` — no arguments.
-#[cfg(mruby_linked)]
 #[inline]
 pub fn mrb_args_none() -> mrb_aspec {
     // SAFETY: pure value computation; touches no mrb_state.
@@ -246,7 +183,6 @@ pub fn mrb_args_none() -> mrb_aspec {
 }
 
 /// `MRB_ARGS_ANY()` — accept any number of arguments.
-#[cfg(mruby_linked)]
 #[inline]
 pub fn mrb_args_any() -> mrb_aspec {
     // SAFETY: as `mrb_args_none`.
@@ -254,7 +190,6 @@ pub fn mrb_args_any() -> mrb_aspec {
 }
 
 /// `MRB_ARGS_REQ(n)` — `n` required positional arguments.
-#[cfg(mruby_linked)]
 #[inline]
 pub fn mrb_args_req(n: u32) -> mrb_aspec {
     // SAFETY: as `mrb_args_none`.
@@ -263,7 +198,6 @@ pub fn mrb_args_req(n: u32) -> mrb_aspec {
 
 /// `MRB_ARGS_ARG(req, opt)` — `req` required followed by `opt`
 /// optional positional arguments.
-#[cfg(mruby_linked)]
 #[inline]
 pub fn mrb_args_arg(req: u32, opt: u32) -> mrb_aspec {
     // SAFETY: as `mrb_args_none`.
@@ -272,7 +206,6 @@ pub fn mrb_args_arg(req: u32, opt: u32) -> mrb_aspec {
 
 /// `MRB_ARGS_BLOCK()` — the method accepts a block. OR this into a
 /// positional aspec to declare both.
-#[cfg(mruby_linked)]
 #[inline]
 pub fn mrb_args_block() -> mrb_aspec {
     // SAFETY: as `mrb_args_none`.

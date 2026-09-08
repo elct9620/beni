@@ -14,7 +14,6 @@
 //! enforce the rule; the consumer upholds it.
 
 use crate::{Mrb, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 /// RAII guard over a GC arena region. Dropping it restores the
@@ -31,7 +30,6 @@ use beni_sys as sys;
 /// ```
 pub struct ArenaScope<'mrb> {
     mrb: &'mrb Mrb,
-    #[cfg(mruby_linked)]
     idx: core::ffi::c_int,
 }
 
@@ -41,17 +39,12 @@ impl Mrb {
     /// of the region skips the restore along with the whole C
     /// frame — mruby unwinds the arena with its own handler.
     pub fn arena_scope(&self) -> ArenaScope<'_> {
-        #[cfg(mruby_linked)]
-        {
-            ArenaScope {
-                mrb: self,
-                // SAFETY: `self` is alive; the save helper only reads
-                // the index.
-                idx: unsafe { sys::mrb_gc_arena_save_func(self.as_ptr()) },
-            }
+        ArenaScope {
+            mrb: self,
+            // SAFETY: `self` is alive; the save helper only reads
+            // the index.
+            idx: unsafe { sys::mrb_gc_arena_save_func(self.as_ptr()) },
         }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
     }
 }
 
@@ -61,42 +54,25 @@ impl ArenaScope<'_> {
     /// first is what frees the slot the survivor is re-protected
     /// into.
     pub fn keep(self, v: Value) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            let mrb = self.mrb;
-            let idx = self.idx;
-            // The restore below replaces the one Drop would run.
-            core::mem::forget(self);
-            // SAFETY: `mrb` is alive; `idx` was produced by
-            // `arena_scope` against the same VM.
-            unsafe { sys::mrb_gc_arena_restore_func(mrb.as_ptr(), idx) };
-            // SAFETY: `v` originates from the same VM; the arena has
-            // a free slot after the restore.
-            unsafe { sys::mrb_gc_protect(mrb.as_ptr(), v.as_raw()) };
-            v
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (self.mrb, v);
-            crate::not_linked()
-        }
+        let mrb = self.mrb;
+        let idx = self.idx;
+        // The restore below replaces the one Drop would run.
+        core::mem::forget(self);
+        // SAFETY: `mrb` is alive; `idx` was produced by
+        // `arena_scope` against the same VM.
+        unsafe { sys::mrb_gc_arena_restore_func(mrb.as_ptr(), idx) };
+        // SAFETY: `v` originates from the same VM; the arena has
+        // a free slot after the restore.
+        unsafe { sys::mrb_gc_protect(mrb.as_ptr(), v.as_raw()) };
+        v
     }
 }
 
 impl Drop for ArenaScope<'_> {
     fn drop(&mut self) {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self.mrb` is alive for the guard's lifetime;
-            // `self.idx` was produced by `arena_scope` against the
-            // same VM.
-            unsafe { sys::mrb_gc_arena_restore_func(self.mrb.as_ptr(), self.idx) };
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            // Unreachable: `arena_scope` diverges before a guard can
-            // be constructed.
-            let _ = self.mrb;
-        }
+        // SAFETY: `self.mrb` is alive for the guard's lifetime;
+        // `self.idx` was produced by `arena_scope` against the
+        // same VM.
+        unsafe { sys::mrb_gc_arena_restore_func(self.mrb.as_ptr(), self.idx) };
     }
 }

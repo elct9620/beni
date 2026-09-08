@@ -42,7 +42,6 @@
 use beni_sys as sys;
 
 use crate::{Error, Mrb, RClass};
-#[cfg(mruby_linked)]
 use crate::{FromValue, RString};
 
 /// Compile-time NUL-terminated C-string literal pointer.
@@ -81,7 +80,6 @@ pub const fn cstr_ptr(b: &[u8]) -> *const core::ffi::c_char {
 // a cross-FFI call every time a hot path wants `nil` / `true` /
 // `false`.
 
-#[cfg(mruby_linked)]
 struct Immediates {
     qnil: sys::mrb_value,
     qtrue: sys::mrb_value,
@@ -92,13 +90,10 @@ struct Immediates {
 // holding a single integer word — plain old data with no interior
 // mutability. `Immediates` therefore shares only `Copy` snapshots,
 // which is sound to read from any thread.
-#[cfg(mruby_linked)]
 unsafe impl Sync for Immediates {}
 
-#[cfg(mruby_linked)]
 static IMMEDIATES: std::sync::OnceLock<Immediates> = std::sync::OnceLock::new();
 
-#[cfg(mruby_linked)]
 impl Immediates {
     /// Return the cached snapshot, capturing it on first call.
     fn get() -> &'static Immediates {
@@ -140,17 +135,11 @@ impl Immediates {
 /// later as `pub struct MString(Value)` newtypes if the call sites
 /// justify them.
 ///
-/// ## Cross-target availability
+/// ## ABI invariant
 ///
-/// The whole `Value` surface compiles on every target and in
-/// placeholder mode alike. Pure layout operations (`from_raw` /
-/// `as_raw` / `into_raw` / `zeroed`) work everywhere; methods that
-/// talk to mruby keep their signatures in placeholder mode but
-/// divert to `crate::not_linked` because the mruby symbols they
-/// wrap are not linked. The ABI invariant checks
-/// (`value::tests::value_shares_abi_with_mrb_value` here,
-/// `tests::typed_mrb_func_t_coerces_from_value_bridge` at the crate
-/// root) pin the `#[repr(transparent)]` contract that
+/// `value::tests::value_shares_abi_with_mrb_value` here and
+/// `surface_test::typed_mrb_func_t_coerces_from_value_bridge` in
+/// `beni-tests` pin the `#[repr(transparent)]` contract that
 /// `Class::define_method`'s `mem::transmute` depends on.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -218,34 +207,19 @@ impl Value {
     /// `Immediates` cache; capture is lazy and one-shot.
     #[inline]
     pub fn nil() -> Self {
-        #[cfg(mruby_linked)]
-        {
-            Self(Immediates::get().qnil)
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        Self(Immediates::get().qnil)
     }
 
     /// Canonical mruby `true`. See `Value::nil`.
     #[inline]
     pub fn true_() -> Self {
-        #[cfg(mruby_linked)]
-        {
-            Self(Immediates::get().qtrue)
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        Self(Immediates::get().qtrue)
     }
 
     /// Canonical mruby `false`. See `Value::nil`.
     #[inline]
     pub fn false_() -> Self {
-        #[cfg(mruby_linked)]
-        {
-            Self(Immediates::get().qfalse)
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        Self(Immediates::get().qfalse)
     }
 
     /// `mrb_int_value(mrb, n)` — construct an mruby Integer from `n`,
@@ -256,16 +230,8 @@ impl Value {
     /// platform default, 32-bit under `MRB_INT32` or on wasm32.
     #[inline]
     pub fn from_int(mrb: &Mrb, n: sys::mrb_int) -> Self {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive by the `&Mrb` borrow.
-            Self(unsafe { sys::mrb_int_value(mrb.as_ptr(), n) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, n);
-            crate::not_linked()
-        }
+        // SAFETY: `mrb` is alive by the `&Mrb` borrow.
+        Self(unsafe { sys::mrb_int_value(mrb.as_ptr(), n) })
     }
 
     /// `mrb_float_value(mrb, f)` — construct an mruby Float from `f`,
@@ -273,16 +239,8 @@ impl Value {
     /// trampoline route as `Value::from_int`).
     #[inline]
     pub fn from_float(mrb: &Mrb, f: sys::mrb_float) -> Self {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive by the `&Mrb` borrow.
-            Self(unsafe { sys::mrb_float_value(mrb.as_ptr(), f) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, f);
-            crate::not_linked()
-        }
+        // SAFETY: `mrb` is alive by the `&Mrb` borrow.
+        Self(unsafe { sys::mrb_float_value(mrb.as_ptr(), f) })
     }
 
     /// Render this Integer value to a new `RString` in `base`, the way
@@ -296,42 +254,34 @@ impl Value {
     /// this anchors on mruby's own `mrb_integer_to_str`.
     #[inline]
     pub fn int_to_str(self, mrb: &Mrb, base: i32) -> Result<crate::RString, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                if !self.is_integer() {
-                    // SAFETY: `mrb` is alive inside the protect frame;
-                    // `TypeError` is a core class so the lookup cannot fail;
-                    // `mrb_raise` long-jumps to the protect frame. The guard
-                    // is strict — a Float is rejected, not coerced — because
-                    // `mrb_integer_to_str` unboxes its receiver without a tag
-                    // check.
-                    unsafe {
-                        let typeerr = sys::mrb_class_get(mrb.as_ptr(), c"TypeError".as_ptr());
-                        sys::mrb_raise(
-                            mrb.as_ptr(),
-                            typeerr,
-                            c"no implicit conversion to Integer".as_ptr(),
-                        );
-                    }
+        mrb.protect(|mrb| {
+            if !self.is_integer() {
+                // SAFETY: `mrb` is alive inside the protect frame;
+                // `TypeError` is a core class so the lookup cannot fail;
+                // `mrb_raise` long-jumps to the protect frame. The guard
+                // is strict — a Float is rejected, not coerced — because
+                // `mrb_integer_to_str` unboxes its receiver without a tag
+                // check.
+                unsafe {
+                    let typeerr = sys::mrb_class_get(mrb.as_ptr(), c"TypeError".as_ptr());
+                    sys::mrb_raise(
+                        mrb.as_ptr(),
+                        typeerr,
+                        c"no implicit conversion to Integer".as_ptr(),
+                    );
                 }
-                // SAFETY: `self` is Integer-tagged past the guard; `mrb` is
-                // alive inside the protect frame. `mrb_integer_to_str` raises
-                // `ArgumentError` on a base outside 2 through 36 — caught by
-                // `protect` into `Err` — and otherwise returns a String value.
-                Value::from_raw(unsafe {
-                    sys::mrb_integer_to_str(mrb.as_ptr(), self.0, base as sys::mrb_int)
-                })
+            }
+            // SAFETY: `self` is Integer-tagged past the guard; `mrb` is
+            // alive inside the protect frame. `mrb_integer_to_str` raises
+            // `ArgumentError` on a base outside 2 through 36 — caught by
+            // `protect` into `Err` — and otherwise returns a String value.
+            Value::from_raw(unsafe {
+                sys::mrb_integer_to_str(mrb.as_ptr(), self.0, base as sys::mrb_int)
             })
-            // SAFETY: a successful `mrb_integer_to_str` returns a
-            // String-tagged value, so the unchecked wrap accepts it.
-            .map(|v| unsafe { RString::from_value_unchecked(v) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, base);
-            crate::not_linked()
-        }
+        })
+        // SAFETY: a successful `mrb_integer_to_str` returns a
+        // String-tagged value, so the unchecked wrap accepts it.
+        .map(|v| unsafe { RString::from_value_unchecked(v) })
     }
 
     /// Convert this Float value to the Integer value it truncates toward
@@ -345,22 +295,14 @@ impl Value {
     /// such conversion, so this anchors on mruby's own `mrb_float_to_integer`.
     #[inline]
     pub fn float_to_int(self, mrb: &Mrb) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_float_to_integer` raises
-                // `TypeError` on a non-Float receiver and `RangeError` on an
-                // infinite or NaN float — both caught by `protect` into `Err`
-                // — and otherwise returns an Integer value.
-                Value(unsafe { sys::mrb_float_to_integer(mrb.as_ptr(), self.0) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_float_to_integer` raises
+            // `TypeError` on a non-Float receiver and `RangeError` on an
+            // infinite or NaN float — both caught by `protect` into `Err`
+            // — and otherwise returns an Integer value.
+            Value(unsafe { sys::mrb_float_to_integer(mrb.as_ptr(), self.0) })
+        })
     }
 
     /// Add `other` to `self`, Ruby's `+` on `Integer` and `Float` — `2 + 3`
@@ -376,22 +318,14 @@ impl Value {
     /// mruby's own `mrb_num_add` (the obsolete macro `mrb_num_plus` aliases it).
     #[inline]
     pub fn add(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self` and
-                // `other` originate from the same VM. `mrb_num_add` raises
-                // `TypeError` on a non-numeric operand and `RangeError` on an
-                // integer result past the configured width — both caught by
-                // `protect` into `Err`.
-                Value(unsafe { sys::mrb_num_add(mrb.as_ptr(), self.0, other.0) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self` and
+            // `other` originate from the same VM. `mrb_num_add` raises
+            // `TypeError` on a non-numeric operand and `RangeError` on an
+            // integer result past the configured width — both caught by
+            // `protect` into `Err`.
+            Value(unsafe { sys::mrb_num_add(mrb.as_ptr(), self.0, other.0) })
+        })
     }
 
     /// Subtract `other` from `self`, Ruby's `-` on `Integer` and `Float`. The
@@ -403,20 +337,12 @@ impl Value {
     /// obsolete macro `mrb_num_minus` aliases it).
     #[inline]
     pub fn sub(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: as `Value::add`. `mrb_num_sub` raises `TypeError` on
-                // a non-numeric operand and `RangeError` on an integer result
-                // past the configured width — both caught by `protect`.
-                Value(unsafe { sys::mrb_num_sub(mrb.as_ptr(), self.0, other.0) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: as `Value::add`. `mrb_num_sub` raises `TypeError` on
+            // a non-numeric operand and `RangeError` on an integer result
+            // past the configured width — both caught by `protect`.
+            Value(unsafe { sys::mrb_num_sub(mrb.as_ptr(), self.0, other.0) })
+        })
     }
 
     /// Multiply `self` by `other`, Ruby's `*` on `Integer` and `Float`. The
@@ -427,20 +353,12 @@ impl Value {
     /// caught by `Mrb::protect`. Anchors on mruby's own `mrb_num_mul`.
     #[inline]
     pub fn mul(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: as `Value::add`. `mrb_num_mul` raises `TypeError` on
-                // a non-numeric operand and `RangeError` on an integer result
-                // past the configured width — both caught by `protect`.
-                Value(unsafe { sys::mrb_num_mul(mrb.as_ptr(), self.0, other.0) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: as `Value::add`. `mrb_num_mul` raises `TypeError` on
+            // a non-numeric operand and `RangeError` on an integer result
+            // past the configured width — both caught by `protect`.
+            Value(unsafe { sys::mrb_num_mul(mrb.as_ptr(), self.0, other.0) })
+        })
     }
 
     /// Coerce `self` to a string value — `self` unchanged when it is
@@ -449,20 +367,12 @@ impl Value {
     /// does not return a string. Mirrors mruby's `mrb_obj_as_string`.
     #[inline]
     pub fn obj_as_string(self, mrb: &Mrb) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_obj_as_string` may run
-                // `to_s` and raise — caught by `protect` into `Err`.
-                Value(unsafe { sys::mrb_obj_as_string(mrb.as_ptr(), self.0) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_obj_as_string` may run
+            // `to_s` and raise — caught by `protect` into `Err`.
+            Value(unsafe { sys::mrb_obj_as_string(mrb.as_ptr(), self.0) })
+        })
     }
 
     /// Coerce `self` to a typed `RString` handle by its String tag,
@@ -479,26 +389,18 @@ impl Value {
     /// `mrb_ensure_string_type`.
     #[inline]
     pub fn ensure_string(self, mrb: &Mrb) -> Result<crate::RString, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_ensure_string_type`
-                // raises `TypeError` on a non-String tag — caught by
-                // `protect` into `Err` — and otherwise returns `self`
-                // unchanged.
-                Value(unsafe { sys::mrb_ensure_string_type(mrb.as_ptr(), self.0) })
-            })
-            // SAFETY: an `Ok` result passed `mrb_string_p` inside
-            // `mrb_ensure_string_type`, so it carries the String tag the
-            // unchecked wrap requires.
-            .map(|v| unsafe { RString::from_value_unchecked(v) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_ensure_string_type`
+            // raises `TypeError` on a non-String tag — caught by
+            // `protect` into `Err` — and otherwise returns `self`
+            // unchanged.
+            Value(unsafe { sys::mrb_ensure_string_type(mrb.as_ptr(), self.0) })
+        })
+        // SAFETY: an `Ok` result passed `mrb_string_p` inside
+        // `mrb_ensure_string_type`, so it carries the String tag the
+        // unchecked wrap requires.
+        .map(|v| unsafe { RString::from_value_unchecked(v) })
     }
 
     /// Coerce `self` to a typed `Array` handle by its Array tag,
@@ -514,26 +416,18 @@ impl Value {
     /// `mrb_ensure_array_type`.
     #[inline]
     pub fn ensure_array(self, mrb: &Mrb) -> Result<crate::Array, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_ensure_array_type`
-                // raises `TypeError` on a non-Array tag — caught by
-                // `protect` into `Err` — and otherwise returns `self`
-                // unchanged.
-                Value(unsafe { sys::mrb_ensure_array_type(mrb.as_ptr(), self.0) })
-            })
-            // SAFETY: an `Ok` result passed `mrb_array_p` inside
-            // `mrb_ensure_array_type`, so it carries the Array tag the
-            // unchecked wrap requires.
-            .map(|v| unsafe { crate::Array::from_value_unchecked(v) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_ensure_array_type`
+            // raises `TypeError` on a non-Array tag — caught by
+            // `protect` into `Err` — and otherwise returns `self`
+            // unchanged.
+            Value(unsafe { sys::mrb_ensure_array_type(mrb.as_ptr(), self.0) })
+        })
+        // SAFETY: an `Ok` result passed `mrb_array_p` inside
+        // `mrb_ensure_array_type`, so it carries the Array tag the
+        // unchecked wrap requires.
+        .map(|v| unsafe { crate::Array::from_value_unchecked(v) })
     }
 
     /// Spread `self` into a new typed `Array`, Ruby's `*` splat coercion:
@@ -549,25 +443,17 @@ impl Value {
     /// Mirrors mruby's `mrb_ary_splat`.
     #[inline]
     pub fn to_ary(self, mrb: &Mrb) -> Result<crate::Array, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_ary_splat` dispatches
-                // `to_a` for a non-array — a raise inside it, or a non-array
-                // non-`nil` return, long-jumps a `TypeError` caught by
-                // `protect` into `Err` — and otherwise returns an array.
-                Value(unsafe { sys::mrb_ary_splat(mrb.as_ptr(), self.0) })
-            })
-            // SAFETY: `mrb_ary_splat` always returns an Array-tagged value
-            // on the `Ok` path, the tag the unchecked wrap requires.
-            .map(|v| unsafe { crate::Array::from_value_unchecked(v) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_ary_splat` dispatches
+            // `to_a` for a non-array — a raise inside it, or a non-array
+            // non-`nil` return, long-jumps a `TypeError` caught by
+            // `protect` into `Err` — and otherwise returns an array.
+            Value(unsafe { sys::mrb_ary_splat(mrb.as_ptr(), self.0) })
+        })
+        // SAFETY: `mrb_ary_splat` always returns an Array-tagged value
+        // on the `Ok` path, the tag the unchecked wrap requires.
+        .map(|v| unsafe { crate::Array::from_value_unchecked(v) })
     }
 
     /// Coerce `self` to a typed `Hash` handle by its Hash tag,
@@ -583,26 +469,18 @@ impl Value {
     /// `mrb_ensure_hash_type`.
     #[inline]
     pub fn ensure_hash(self, mrb: &Mrb) -> Result<crate::Hash, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_ensure_hash_type`
-                // raises `TypeError` on a non-Hash tag — caught by
-                // `protect` into `Err` — and otherwise returns `self`
-                // unchanged.
-                Value(unsafe { sys::mrb_ensure_hash_type(mrb.as_ptr(), self.0) })
-            })
-            // SAFETY: an `Ok` result passed `mrb_hash_p` inside
-            // `mrb_ensure_hash_type`, so it carries the Hash tag the
-            // unchecked wrap requires.
-            .map(|v| unsafe { crate::Hash::from_value_unchecked(v) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_ensure_hash_type`
+            // raises `TypeError` on a non-Hash tag — caught by
+            // `protect` into `Err` — and otherwise returns `self`
+            // unchanged.
+            Value(unsafe { sys::mrb_ensure_hash_type(mrb.as_ptr(), self.0) })
+        })
+        // SAFETY: an `Ok` result passed `mrb_hash_p` inside
+        // `mrb_ensure_hash_type`, so it carries the Hash tag the
+        // unchecked wrap requires.
+        .map(|v| unsafe { crate::Hash::from_value_unchecked(v) })
     }
 
     /// Coerce `self` by numeric type to an Integer `Value`, staying in
@@ -619,22 +497,14 @@ impl Value {
     /// which the width narrowing wraps).
     #[inline]
     pub fn ensure_int(self, mrb: &Mrb) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_ensure_int_type` raises
-                // `TypeError` on a non-numeric value and `RangeError` on an
-                // infinite or NaN Float — both caught by `protect` into
-                // `Err` — and otherwise returns an Integer value.
-                Value(unsafe { sys::mrb_ensure_int_type(mrb.as_ptr(), self.0) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_ensure_int_type` raises
+            // `TypeError` on a non-numeric value and `RangeError` on an
+            // infinite or NaN Float — both caught by `protect` into
+            // `Err` — and otherwise returns an Integer value.
+            Value(unsafe { sys::mrb_ensure_int_type(mrb.as_ptr(), self.0) })
+        })
     }
 
     /// Coerce `self` by numeric type to a Float `Value`, staying in mruby's
@@ -648,21 +518,13 @@ impl Value {
     /// `mrb_ensure_float_type`.
     #[inline]
     pub fn ensure_float(self, mrb: &Mrb) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_ensure_float_type` raises
-                // `TypeError` on a non-numeric value — caught by `protect`
-                // into `Err` — and otherwise returns a Float value.
-                Value(unsafe { sys::mrb_ensure_float_type(mrb.as_ptr(), self.0) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_ensure_float_type` raises
+            // `TypeError` on a non-numeric value — caught by `protect`
+            // into `Err` — and otherwise returns a Float value.
+            Value(unsafe { sys::mrb_ensure_float_type(mrb.as_ptr(), self.0) })
+        })
     }
 
     /// Coerce `self` into a typed `Symbol`: a Symbol value yields its own
@@ -675,26 +537,18 @@ impl Value {
     /// `mrb_obj_to_sym`.
     #[inline]
     pub fn to_sym(self, mrb: &Mrb) -> Result<crate::Symbol, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_obj_to_sym` raises
-                // `TypeError` for a value that is neither a symbol nor a
-                // string — caught by `protect` into `Err` — and otherwise
-                // returns the interned id.
-                let sym = unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) };
-                crate::Symbol::from_sym(sym).as_value()
-            })
-            // SAFETY: an `Ok` result came from `Symbol::from_sym`, so it
-            // carries the Symbol tag the unchecked wrap requires.
-            .map(|v| unsafe { crate::Symbol::from_value_unchecked(v) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_obj_to_sym` raises
+            // `TypeError` for a value that is neither a symbol nor a
+            // string — caught by `protect` into `Err` — and otherwise
+            // returns the interned id.
+            let sym = unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) };
+            crate::Symbol::from_sym(sym).as_value()
+        })
+        // SAFETY: an `Ok` result came from `Symbol::from_sym`, so it
+        // carries the Symbol tag the unchecked wrap requires.
+        .map(|v| unsafe { crate::Symbol::from_value_unchecked(v) })
     }
 
     /// `obj.dup` — a shallow copy of `self`: its instance variables are
@@ -705,20 +559,12 @@ impl Value {
     /// Mirrors mruby's `mrb_obj_dup`.
     #[inline]
     pub fn obj_dup(self, mrb: &Mrb) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_obj_dup` runs
-                // `initialize_copy` and may raise — caught by `protect`.
-                Value(unsafe { sys::mrb_obj_dup(mrb.as_ptr(), self.0) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_obj_dup` runs
+            // `initialize_copy` and may raise — caught by `protect`.
+            Value(unsafe { sys::mrb_obj_dup(mrb.as_ptr(), self.0) })
+        })
     }
 
     /// `obj.clone` — like `dup` but also copies the singleton class and
@@ -728,20 +574,12 @@ impl Value {
     /// `initialize_copy` raises. Mirrors mruby's `mrb_obj_clone`.
     #[inline]
     pub fn obj_clone(self, mrb: &Mrb) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_obj_clone` runs
-                // `initialize_copy` and may raise — caught by `protect`.
-                Value(unsafe { sys::mrb_obj_clone(mrb.as_ptr(), self.0) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_obj_clone` runs
+            // `initialize_copy` and may raise — caught by `protect`.
+            Value(unsafe { sys::mrb_obj_clone(mrb.as_ptr(), self.0) })
+        })
     }
 
     /// `mrb_obj_classname(mrb, self)` — the Ruby class name of `self`
@@ -750,27 +588,19 @@ impl Value {
     /// copied out at once rather than borrowed.
     #[inline]
     pub fn classname(self, mrb: &Mrb) -> String {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive by the borrow; `self` originates
-            // from the same VM by the single-VM contract.
-            let ptr = unsafe { sys::mrb_obj_classname(mrb.as_ptr(), self.0) };
-            if ptr.is_null() {
-                return String::new();
-            }
-            // SAFETY: `ptr` is a valid C string for the duration of this
-            // call; copy its bytes before the temporary it points into
-            // can be collected.
-            unsafe { core::ffi::CStr::from_ptr(ptr) }
-                .to_str()
-                .unwrap_or("")
-                .to_owned()
+        // SAFETY: `mrb` is alive by the borrow; `self` originates
+        // from the same VM by the single-VM contract.
+        let ptr = unsafe { sys::mrb_obj_classname(mrb.as_ptr(), self.0) };
+        if ptr.is_null() {
+            return String::new();
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        // SAFETY: `ptr` is a valid C string for the duration of this
+        // call; copy its bytes before the temporary it points into
+        // can be collected.
+        unsafe { core::ffi::CStr::from_ptr(ptr) }
+            .to_str()
+            .unwrap_or("")
+            .to_owned()
     }
 
     /// Coerce to a Rust `String` by calling `Object#to_s` and copying
@@ -795,18 +625,10 @@ impl Value {
     /// `mrb->exc` to corrupt subsequent mruby calls in the same C bridge.
     #[inline]
     pub fn to_string(self, mrb: &Mrb) -> String {
-        #[cfg(mruby_linked)]
-        {
-            let Ok(s_val) = self.funcall(mrb, c"to_s", &[]) else {
-                return String::new();
-            };
-            s_val.string_lossy(mrb)
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        let Ok(s_val) = self.funcall(mrb, c"to_s", &[]) else {
+            return String::new();
+        };
+        s_val.string_lossy(mrb)
     }
 
     /// Read a String-tagged value into an owned UTF-8 `String`,
@@ -815,7 +637,6 @@ impl Value {
     /// The String tag, not the classname, decides: a String subclass
     /// instance reads its bytes the same way a plain String does, the
     /// rule the `FromValue` downcasts follow.
-    #[cfg(mruby_linked)]
     #[inline]
     fn string_lossy(self, mrb: &Mrb) -> String {
         let Some(s) = RString::from_value(self) else {
@@ -843,25 +664,17 @@ impl Value {
     /// valid UTF-8 likewise collapse to an empty `String`.
     #[inline]
     pub fn inspect(self, mrb: &Mrb) -> String {
-        #[cfg(mruby_linked)]
-        {
-            let Ok(s_val) = mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_inspect` dispatches
-                // `inspect` and may raise — caught by `protect` into `Err`.
-                Value::from_raw(unsafe { sys::mrb_inspect(mrb.as_ptr(), self.0) })
-            }) else {
-                return String::new();
-            };
-            // `mrb_inspect` returns a String on success; read it by tag the
-            // same way `to_string` does.
-            s_val.string_lossy(mrb)
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        let Ok(s_val) = mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_inspect` dispatches
+            // `inspect` and may raise — caught by `protect` into `Err`.
+            Value::from_raw(unsafe { sys::mrb_inspect(mrb.as_ptr(), self.0) })
+        }) else {
+            return String::new();
+        };
+        // `mrb_inspect` returns a String on success; read it by tag the
+        // same way `to_string` does.
+        s_val.string_lossy(mrb)
     }
 
     /// `mrb_any_to_s(mrb, self)` — the value's default `to_s` render as a
@@ -871,20 +684,12 @@ impl Value {
     /// and runs no user Ruby — total, returning the string directly.
     #[inline]
     pub fn any_to_s(self, mrb: &Mrb) -> crate::RString {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive; `self` originates from the same VM.
-            // `mrb_any_to_s` reads the class name and object id only, so it
-            // returns a String-tagged value without dispatching user Ruby —
-            // the unchecked wrap accepts it.
-            let v = Value::from_raw(unsafe { sys::mrb_any_to_s(mrb.as_ptr(), self.0) });
-            unsafe { RString::from_value_unchecked(v) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        // SAFETY: `mrb` is alive; `self` originates from the same VM.
+        // `mrb_any_to_s` reads the class name and object id only, so it
+        // returns a String-tagged value without dispatching user Ruby —
+        // the unchecked wrap accepts it.
+        let v = Value::from_raw(unsafe { sys::mrb_any_to_s(mrb.as_ptr(), self.0) });
+        unsafe { RString::from_value_unchecked(v) }
     }
 
     /// Recover the `*mut RClass` pointer from a class-tagged
@@ -898,13 +703,8 @@ impl Value {
     /// `self` must be a class-tagged `Value`.
     #[inline]
     pub unsafe fn as_class_ptr(self) -> *mut sys::RClass {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: forwarded from caller.
-            unsafe { sys::mrb_class_ptr_func(self.0) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: forwarded from caller.
+        unsafe { sys::mrb_class_ptr_func(self.0) }
     }
 
     /// Invoke `self.<method>(args...)`, naming the method by a
@@ -923,16 +723,8 @@ impl Value {
         name: K,
         args: &[Value],
     ) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            self.funcall_argv(mrb, sym, args)
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name, args);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        self.funcall_argv(mrb, sym, args)
     }
 
     /// `mrb_funcall_argv(mrb, self, sym, argc, argv)` — invoke the method
@@ -953,31 +745,23 @@ impl Value {
         sym: sys::mrb_sym,
         args: &[Value],
     ) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                let argv = args.as_ptr() as *const sys::mrb_value;
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // and every `args` entry originate from the same VM by the
-                // single-VM contract; `sym` was interned against the same
-                // VM (caller contract). `mrb_funcall_argv` dispatches
-                // arbitrary Ruby and may raise — caught by `protect`.
-                Value(unsafe {
-                    sys::mrb_funcall_argv(
-                        mrb.as_ptr(),
-                        self.0,
-                        sym,
-                        sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
-                        argv,
-                    )
-                })
+        mrb.protect(|mrb| {
+            let argv = args.as_ptr() as *const sys::mrb_value;
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // and every `args` entry originate from the same VM by the
+            // single-VM contract; `sym` was interned against the same
+            // VM (caller contract). `mrb_funcall_argv` dispatches
+            // arbitrary Ruby and may raise — caught by `protect`.
+            Value(unsafe {
+                sys::mrb_funcall_argv(
+                    mrb.as_ptr(),
+                    self.0,
+                    sym,
+                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
+                    argv,
+                )
             })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym, args);
-            crate::not_linked()
-        }
+        })
     }
 
     /// `mrb_funcall_with_block(mrb, self, sym, argc, argv, block)` —
@@ -996,37 +780,29 @@ impl Value {
         args: &[Value],
         block: crate::Proc,
     ) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            let block_raw = block.as_raw();
-            mrb.protect(|mrb| {
-                // `Value` is `#[repr(transparent)]` over `mrb_value`, so the
-                // slice layout matches mruby's argv exactly — the cast is a
-                // no-op at codegen level.
-                let argv = args.as_ptr() as *const sys::mrb_value;
-                // SAFETY: `mrb` is alive inside the protect frame; `self`,
-                // every `args` entry, and `block` originate from the same VM
-                // by the single-VM contract; `sym` was interned against the
-                // same VM. `mrb_funcall_with_block` dispatches arbitrary Ruby
-                // and may raise — caught by `protect`.
-                Value(unsafe {
-                    sys::mrb_funcall_with_block(
-                        mrb.as_ptr(),
-                        self.0,
-                        sym,
-                        sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
-                        argv,
-                        block_raw,
-                    )
-                })
+        let sym = name.into_sym(mrb);
+        let block_raw = block.as_raw();
+        mrb.protect(|mrb| {
+            // `Value` is `#[repr(transparent)]` over `mrb_value`, so the
+            // slice layout matches mruby's argv exactly — the cast is a
+            // no-op at codegen level.
+            let argv = args.as_ptr() as *const sys::mrb_value;
+            // SAFETY: `mrb` is alive inside the protect frame; `self`,
+            // every `args` entry, and `block` originate from the same VM
+            // by the single-VM contract; `sym` was interned against the
+            // same VM. `mrb_funcall_with_block` dispatches arbitrary Ruby
+            // and may raise — caught by `protect`.
+            Value(unsafe {
+                sys::mrb_funcall_with_block(
+                    mrb.as_ptr(),
+                    self.0,
+                    sym,
+                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
+                    argv,
+                    block_raw,
+                )
             })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name, args, block);
-            crate::not_linked()
-        }
+        })
     }
 
     /// TRUE when `self` is `nil`. Pure tag predicate via mruby's
@@ -1035,14 +811,9 @@ impl Value {
     /// the boxing-config layout libmruby.a was built with.
     #[inline]
     pub fn is_nil(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: mrb_nil_p is a pure predicate over the value tag and
-            // does not touch `mrb_state`.
-            unsafe { sys::mrb_nil_p_func(self.0) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: mrb_nil_p is a pure predicate over the value tag and
+        // does not touch `mrb_state`.
+        unsafe { sys::mrb_nil_p_func(self.0) }
     }
 
     /// Ruby truthiness: TRUE for every value except `nil` and `false`.
@@ -1052,28 +823,18 @@ impl Value {
     /// which reads a value through this rule.
     #[inline]
     pub fn to_bool(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: mrb_test is a pure predicate over the value tag and
-            // does not touch `mrb_state`.
-            unsafe { sys::mrb_test_func(self.0) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: mrb_test is a pure predicate over the value tag and
+        // does not touch `mrb_state`.
+        unsafe { sys::mrb_test_func(self.0) }
     }
 
     /// TRUE when `self` is exactly Ruby `true`. See `Value::is_nil` for
     /// the boxing-config routing.
     #[inline]
     pub fn is_true(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: mrb_true_p is a pure predicate over the value tag and
-            // does not touch `mrb_state`.
-            unsafe { sys::mrb_true_p_func(self.0) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: mrb_true_p is a pure predicate over the value tag and
+        // does not touch `mrb_state`.
+        unsafe { sys::mrb_true_p_func(self.0) }
     }
 
     /// TRUE when `self` is exactly Ruby `false` — `nil` is excluded.
@@ -1082,14 +843,9 @@ impl Value {
     /// rather than a tag test, which would misread `nil`.
     #[inline]
     pub fn is_false(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: mrb_false_p is a pure predicate over the value tag and
-            // does not touch `mrb_state`.
-            unsafe { sys::mrb_false_p_func(self.0) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: mrb_false_p is a pure predicate over the value tag and
+        // does not touch `mrb_state`.
+        unsafe { sys::mrb_false_p_func(self.0) }
     }
 
     /// TRUE when `self` carries `MRB_TT_INTEGER`. Pure tag predicate
@@ -1098,53 +854,33 @@ impl Value {
     /// `Value::unbox_integer` for the direct-unbox path.
     #[inline]
     pub fn is_integer(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: mrb_type is a pure predicate over the value tag and
-            // does not touch `mrb_state`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_INTEGER }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: mrb_type is a pure predicate over the value tag and
+        // does not touch `mrb_state`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_INTEGER }
     }
 
     /// TRUE when `self` carries `MRB_TT_FLOAT`. See `Value::is_integer`.
     /// Pair with `Value::unbox_float`.
     #[inline]
     pub fn is_float(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_FLOAT }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_FLOAT }
     }
 
     /// TRUE when `self` carries `MRB_TT_ARRAY`. See `Value::is_integer`.
     /// Pair with `Array::from_value_unchecked` for the direct-wrap path.
     #[inline]
     pub fn is_array(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_ARRAY }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_ARRAY }
     }
 
     /// TRUE when `self` carries `MRB_TT_HASH`. See `Value::is_integer`.
     /// Pair with `Hash::from_value_unchecked` for the direct-wrap path.
     #[inline]
     pub fn is_hash(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_HASH }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_HASH }
     }
 
     /// TRUE when `self` carries `MRB_TT_CLASS` — the class tag only;
@@ -1154,13 +890,8 @@ impl Value {
     /// direct-unbox path.
     #[inline]
     pub fn is_class(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CLASS }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CLASS }
     }
 
     /// TRUE when `self` carries `MRB_TT_MODULE` — the module tag only;
@@ -1169,26 +900,16 @@ impl Value {
     /// this tag yet, so the predicate stands alone.
     #[inline]
     pub fn is_module(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_MODULE }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_MODULE }
     }
 
     /// TRUE when `self` carries `MRB_TT_PROC`. See `Value::is_integer`.
     /// Pair with `Proc::from_value_unchecked` for the direct-wrap path.
     #[inline]
     pub fn is_proc(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_PROC }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_PROC }
     }
 
     /// TRUE when `self` carries `MRB_TT_CDATA` — a Rust value wrapped
@@ -1196,52 +917,32 @@ impl Value {
     /// with `Value::data_get` for the type-checked extraction path.
     #[inline]
     pub fn is_data(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CDATA }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CDATA }
     }
 
     /// TRUE when `self` carries `MRB_TT_STRING`. See `Value::is_integer`.
     /// Pair with `RString::as_bytes` for the byte-borrow path.
     #[inline]
     pub fn is_string(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_STRING }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_STRING }
     }
 
     /// TRUE when `self` carries `MRB_TT_SYMBOL`. See `Value::is_integer`.
     /// Pair with `Symbol::from_value` for the checked downcast path.
     #[inline]
     pub fn is_symbol(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_SYMBOL }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_SYMBOL }
     }
 
     /// TRUE when `self` carries `MRB_TT_RANGE`. See `Value::is_integer`.
     /// No typed handle binds this tag yet, so the predicate stands alone.
     #[inline]
     pub fn is_range(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_RANGE }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_RANGE }
     }
 
     /// TRUE when `self` carries `MRB_TT_EXCEPTION` — the exception-object
@@ -1251,13 +952,8 @@ impl Value {
     /// so the predicate stands alone.
     #[inline]
     pub fn is_exception(self) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_integer`.
-            unsafe { sys::mrb_type(self.0) == sys::MRB_TT_EXCEPTION }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_EXCEPTION }
     }
 
     /// View `self` as a typed `Break` when it carries mruby's break
@@ -1267,15 +963,10 @@ impl Value {
     /// `return`; classifying that exit is the caller's policy.
     #[inline]
     pub fn as_break(self) -> Option<Break> {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: mrb_break_p_func is a pure predicate over the
-            // value tag and does not touch mrb_state. The tag check
-            // establishes the `Break` newtype's invariant.
-            unsafe { sys::mrb_break_p_func(self.0) }.then_some(Break(self))
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: mrb_break_p_func is a pure predicate over the
+        // value tag and does not touch mrb_state. The tag check
+        // establishes the `Break` newtype's invariant.
+        unsafe { sys::mrb_break_p_func(self.0) }.then_some(Break(self))
     }
 
     /// Direct `mrb_integer(v)` unbox via mruby's own
@@ -1289,13 +980,8 @@ impl Value {
     /// behaviour per mruby's macro contract.
     #[inline]
     pub unsafe fn unbox_integer(self) -> sys::mrb_int {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: forwarded from caller.
-            unsafe { sys::mrb_integer_func(self.0) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: forwarded from caller.
+        unsafe { sys::mrb_integer_func(self.0) }
     }
 
     /// Direct `mrb_float(v)` unbox via the `mrb_float_func`
@@ -1310,13 +996,8 @@ impl Value {
     /// As `Value::unbox_integer`: caller has confirmed Float-tagging.
     #[inline]
     pub unsafe fn unbox_float(self) -> sys::mrb_float {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: forwarded from caller.
-            unsafe { sys::mrb_float_func(self.0) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: forwarded from caller.
+        unsafe { sys::mrb_float_func(self.0) }
     }
 
     /// `mrb_ary_entry(self, idx)` — read the element at `idx` from
@@ -1330,16 +1011,8 @@ impl Value {
     /// passing a non-Array yields an undefined `Value`.
     #[inline]
     pub unsafe fn ary_entry(self, idx: sys::mrb_int) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: forwarded from caller.
-            Value(unsafe { sys::mrb_ary_entry(self.0, idx) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = idx;
-            crate::not_linked()
-        }
+        // SAFETY: forwarded from caller.
+        Value(unsafe { sys::mrb_ary_entry(self.0, idx) })
     }
 
     // ----------------------------------------------------------------
@@ -1360,40 +1033,24 @@ impl Value {
     /// frozen or cannot hold instance variables.
     #[inline]
     pub fn iv_set(self, mrb: &Mrb, sym: sys::mrb_sym, val: Value) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` and `val` originate from the same VM.
-                // `mrb_iv_set` raises `FrozenError` on a frozen
-                // receiver and `ArgumentError` on one that cannot hold
-                // instance variables — both caught by `protect`.
-                unsafe { sys::mrb_iv_set(mrb.as_ptr(), self.0, sym, val.0) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym, val);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` and `val` originate from the same VM.
+            // `mrb_iv_set` raises `FrozenError` on a frozen
+            // receiver and `ArgumentError` on one that cannot hold
+            // instance variables — both caught by `protect`.
+            unsafe { sys::mrb_iv_set(mrb.as_ptr(), self.0, sym, val.0) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_iv_get(mrb, self, sym)` — return instance variable `sym`
     /// from `self`, or `nil` when unset.
     #[inline]
     pub fn iv_get(self, mrb: &Mrb, sym: sys::mrb_sym) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `iv_set`.
-            Value(unsafe { sys::mrb_iv_get(mrb.as_ptr(), self.0, sym) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym);
-            crate::not_linked()
-        }
+        // SAFETY: as `iv_set`.
+        Value(unsafe { sys::mrb_iv_get(mrb.as_ptr(), self.0, sym) })
     }
 
     /// `mrb_iv_defined(mrb, self, sym)` — TRUE when instance variable
@@ -1403,16 +1060,8 @@ impl Value {
     /// in `sys`.
     #[inline]
     pub fn iv_defined(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `iv_set`.
-            unsafe { sys::mrb_iv_defined(mrb.as_ptr(), self.0, sym) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym);
-            crate::not_linked()
-        }
+        // SAFETY: as `iv_set`.
+        unsafe { sys::mrb_iv_defined(mrb.as_ptr(), self.0, sym) }
     }
 
     /// `mrb_iv_remove(mrb, self, sym)` — remove instance variable `sym`
@@ -1423,29 +1072,21 @@ impl Value {
     /// can hold instance variables.
     #[inline]
     pub fn iv_remove(self, mrb: &Mrb, sym: sys::mrb_sym) -> Result<Option<Value>, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` originates from the same VM. `mrb_iv_remove`
-                // raises `FrozenError` on a frozen instance-variable
-                // holder — caught by `protect`.
-                Value(unsafe { sys::mrb_iv_remove(mrb.as_ptr(), self.0, sym) })
-            })
-            .map(|removed| {
-                // SAFETY: a total tag read on the protected result.
-                if unsafe { sys::mrb_undef_p_func(removed.0) } {
-                    None
-                } else {
-                    Some(removed)
-                }
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` originates from the same VM. `mrb_iv_remove`
+            // raises `FrozenError` on a frozen instance-variable
+            // holder — caught by `protect`.
+            Value(unsafe { sys::mrb_iv_remove(mrb.as_ptr(), self.0, sym) })
+        })
+        .map(|removed| {
+            // SAFETY: a total tag read on the protected result.
+            if unsafe { sys::mrb_undef_p_func(removed.0) } {
+                None
+            } else {
+                Some(removed)
+            }
+        })
     }
 
     /// `mrb_iv_foreach(mrb, self, …)` — visit each instance variable set
@@ -1470,67 +1111,58 @@ impl Value {
     where
         F: FnMut(crate::Symbol, Value) -> crate::ForEach,
     {
-        #[cfg(mruby_linked)]
-        {
-            // Snapshot the (name, value) pairs before any caller code
-            // runs: the C foreach walks the live iv table, which `body`
-            // re-entering the VM could free and reallocate mid-walk, so
-            // `body` only ever runs against this collected copy. Each
-            // value is arena-protected as it is collected — the receiver
-            // stops referencing a value `body` removes, and the snapshot
-            // must outlive any collection `body` triggers.
-            unsafe extern "C" fn collect(
-                mrb: *mut sys::mrb_state,
-                name: sys::mrb_sym,
-                val: sys::mrb_value,
-                data: *mut core::ffi::c_void,
-            ) -> core::ffi::c_int {
-                // SAFETY: `data` is the `&mut Vec<…>` handed to
-                // `mrb_iv_foreach` below, borrowed for the duration of
-                // the walk on this same thread; `mrb` is the live state
-                // driving the walk, and protecting into the arena leaves
-                // the iv table untouched.
-                let pairs: &mut Vec<(crate::Symbol, Value)> =
-                    unsafe { &mut *(data as *mut Vec<(crate::Symbol, Value)>) };
-                unsafe { sys::mrb_gc_protect(mrb, val) };
-                pairs.push((crate::Symbol::from_sym(name), Value::from_raw(val)));
-                0
-            }
-
-            let mut pairs: Vec<(crate::Symbol, Value)> = Vec::new();
-            // SAFETY: `mrb` is alive; `self` originates from the same VM.
-            // `mrb_iv_foreach` guards a receiver that cannot hold instance
-            // variables and returns without calling back. `collect`
-            // upholds the `mrb_iv_foreach_func` ABI and runs no caller
-            // code; `data` points to `pairs` on this frame, which outlives
-            // the call. bindgen wraps the function-typedef parameter in
-            // `Option`, so the collector is passed via `Some`.
-            unsafe {
-                sys::mrb_iv_foreach(
-                    mrb.as_ptr(),
-                    self.0,
-                    Some(collect),
-                    &mut pairs as *mut Vec<(crate::Symbol, Value)> as *mut core::ffi::c_void,
-                );
-            }
-            let mut body = body;
-            for (name, val) in pairs {
-                if let crate::ForEach::Stop = body(name, val) {
-                    break;
-                }
-            }
+        // Snapshot the (name, value) pairs before any caller code
+        // runs: the C foreach walks the live iv table, which `body`
+        // re-entering the VM could free and reallocate mid-walk, so
+        // `body` only ever runs against this collected copy. Each
+        // value is arena-protected as it is collected — the receiver
+        // stops referencing a value `body` removes, and the snapshot
+        // must outlive any collection `body` triggers.
+        unsafe extern "C" fn collect(
+            mrb: *mut sys::mrb_state,
+            name: sys::mrb_sym,
+            val: sys::mrb_value,
+            data: *mut core::ffi::c_void,
+        ) -> core::ffi::c_int {
+            // SAFETY: `data` is the `&mut Vec<…>` handed to
+            // `mrb_iv_foreach` below, borrowed for the duration of
+            // the walk on this same thread; `mrb` is the live state
+            // driving the walk, and protecting into the arena leaves
+            // the iv table untouched.
+            let pairs: &mut Vec<(crate::Symbol, Value)> =
+                unsafe { &mut *(data as *mut Vec<(crate::Symbol, Value)>) };
+            unsafe { sys::mrb_gc_protect(mrb, val) };
+            pairs.push((crate::Symbol::from_sym(name), Value::from_raw(val)));
+            0
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, body);
-            crate::not_linked()
+
+        let mut pairs: Vec<(crate::Symbol, Value)> = Vec::new();
+        // SAFETY: `mrb` is alive; `self` originates from the same VM.
+        // `mrb_iv_foreach` guards a receiver that cannot hold instance
+        // variables and returns without calling back. `collect`
+        // upholds the `mrb_iv_foreach_func` ABI and runs no caller
+        // code; `data` points to `pairs` on this frame, which outlives
+        // the call. bindgen wraps the function-typedef parameter in
+        // `Option`, so the collector is passed via `Some`.
+        unsafe {
+            sys::mrb_iv_foreach(
+                mrb.as_ptr(),
+                self.0,
+                Some(collect),
+                &mut pairs as *mut Vec<(crate::Symbol, Value)> as *mut core::ffi::c_void,
+            );
+        }
+        let mut body = body;
+        for (name, val) in pairs {
+            if let crate::ForEach::Stop = body(name, val) {
+                break;
+            }
         }
     }
 
     /// TRUE when `self` is a class, module, or singleton class — the
     /// receiver family that owns constants and class variables, the
     /// same set mruby's own constant accessors accept.
-    #[cfg(mruby_linked)]
     fn is_class_or_module(self) -> bool {
         // SAFETY: as `is_integer`.
         matches!(
@@ -1542,7 +1174,6 @@ impl Value {
     /// The `TypeError` the class-variable accessors surface for a
     /// receiver that is not a class or module — the rejection the
     /// constant accessors inherit from mruby's own receiver check.
-    #[cfg(mruby_linked)]
     fn not_class_or_module_error(self, mrb: &Mrb) -> Error {
         let msg = format!("{} is not a class/module", self.classname(mrb));
         Error::Exception(crate::method::core_exception(mrb, c"TypeError", &msg))
@@ -1553,21 +1184,13 @@ impl Value {
     /// ancestry. Answers false when `self` is not a class or module.
     #[inline]
     pub fn const_defined(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            if !self.is_class_or_module() {
-                return false;
-            }
-            // SAFETY: as `iv_set`, with the class-or-module receiver
-            // `mrb_const_defined` dereferences unchecked established
-            // by the guard above.
-            unsafe { sys::mrb_const_defined(mrb.as_ptr(), self.0, sym) }
+        if !self.is_class_or_module() {
+            return false;
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym);
-            crate::not_linked()
-        }
+        // SAFETY: as `iv_set`, with the class-or-module receiver
+        // `mrb_const_defined` dereferences unchecked established
+        // by the guard above.
+        unsafe { sys::mrb_const_defined(mrb.as_ptr(), self.0, sym) }
     }
 
     /// `mrb_const_defined_at(mrb, self, sym)` — TRUE when constant `sym`
@@ -1576,21 +1199,13 @@ impl Value {
     /// Answers false when `self` is not a class or module.
     #[inline]
     pub fn const_defined_at(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            if !self.is_class_or_module() {
-                return false;
-            }
-            // SAFETY: as `iv_set`, with the class-or-module receiver
-            // `mrb_const_defined_at` dereferences unchecked established
-            // by the guard above.
-            unsafe { sys::mrb_const_defined_at(mrb.as_ptr(), self.0, sym) }
+        if !self.is_class_or_module() {
+            return false;
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym);
-            crate::not_linked()
-        }
+        // SAFETY: as `iv_set`, with the class-or-module receiver
+        // `mrb_const_defined_at` dereferences unchecked established
+        // by the guard above.
+        unsafe { sys::mrb_const_defined_at(mrb.as_ptr(), self.0, sym) }
     }
 
     /// `mrb_const_get(mrb, self, sym)` — fetch the constant value at
@@ -1598,22 +1213,14 @@ impl Value {
     /// constant or its `const_missing` hook raises.
     #[inline]
     pub fn const_get(self, mrb: &Mrb, sym: sys::mrb_sym) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` originates from the same VM. `mrb_const_get`
-                // raises `NameError` for an undefined constant and runs
-                // a `const_missing` hook that may raise — both caught
-                // by `protect`.
-                Value(unsafe { sys::mrb_const_get(mrb.as_ptr(), self.0, sym) })
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` originates from the same VM. `mrb_const_get`
+            // raises `NameError` for an undefined constant and runs
+            // a `const_missing` hook that may raise — both caught
+            // by `protect`.
+            Value(unsafe { sys::mrb_const_get(mrb.as_ptr(), self.0, sym) })
+        })
     }
 
     /// `mrb_const_set(mrb, self, sym, val)` — assign constant `sym` on
@@ -1623,25 +1230,17 @@ impl Value {
     /// complementing `const_get`.
     #[inline]
     pub fn const_set(self, mrb: &Mrb, sym: sys::mrb_sym, val: Value) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` and `val` originate from the same VM.
-                // `mrb_const_set` raises `TypeError` when `self` is not
-                // a class or module, `FrozenError` when it is frozen,
-                // and runs a `const_added` hook that may raise — all
-                // caught by `protect`.
-                unsafe { sys::mrb_const_set(mrb.as_ptr(), self.0, sym, val.0) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym, val);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` and `val` originate from the same VM.
+            // `mrb_const_set` raises `TypeError` when `self` is not
+            // a class or module, `FrozenError` when it is frozen,
+            // and runs a `const_added` hook that may raise — all
+            // caught by `protect`.
+            unsafe { sys::mrb_const_set(mrb.as_ptr(), self.0, sym, val.0) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_const_remove(mrb, self, sym)` — remove constant `sym` from
@@ -1650,24 +1249,16 @@ impl Value {
     /// not a class or module, or when it is frozen.
     #[inline]
     pub fn const_remove(self, mrb: &Mrb, sym: sys::mrb_sym) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` originates from the same VM. `mrb_const_remove`
-                // raises `TypeError` when `self` is not a class or
-                // module and `FrozenError` when it is frozen — both
-                // caught by `protect`.
-                unsafe { sys::mrb_const_remove(mrb.as_ptr(), self.0, sym) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` originates from the same VM. `mrb_const_remove`
+            // raises `TypeError` when `self` is not a class or
+            // module and `FrozenError` when it is frozen — both
+            // caught by `protect`.
+            unsafe { sys::mrb_const_remove(mrb.as_ptr(), self.0, sym) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_cv_get(mrb, self, sym)` — read class variable `sym` from
@@ -1676,24 +1267,16 @@ impl Value {
     /// `sym` resolves to no class variable.
     #[inline]
     pub fn cv_get(self, mrb: &Mrb, sym: sys::mrb_sym) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            if !self.is_class_or_module() {
-                return Err(self.not_class_or_module_error(mrb));
-            }
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` originates from the same VM. `mrb_cv_get`
-                // raises `NameError` for an undefined class variable —
-                // caught by `protect`.
-                Value(unsafe { sys::mrb_cv_get(mrb.as_ptr(), self.0, sym) })
-            })
+        if !self.is_class_or_module() {
+            return Err(self.not_class_or_module_error(mrb));
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` originates from the same VM. `mrb_cv_get`
+            // raises `NameError` for an undefined class variable —
+            // caught by `protect`.
+            Value(unsafe { sys::mrb_cv_get(mrb.as_ptr(), self.0, sym) })
+        })
     }
 
     /// `mrb_cv_set(mrb, self, sym, val)` — assign class variable `sym`
@@ -1703,26 +1286,18 @@ impl Value {
     /// raw-`RClass*` form) stays in `sys`.
     #[inline]
     pub fn cv_set(self, mrb: &Mrb, sym: sys::mrb_sym, val: Value) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            if !self.is_class_or_module() {
-                return Err(self.not_class_or_module_error(mrb));
-            }
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` and `val` originate from the same VM.
-                // `mrb_cv_set` raises `FrozenError` on a frozen
-                // receiver — caught by `protect`.
-                unsafe { sys::mrb_cv_set(mrb.as_ptr(), self.0, sym, val.0) };
-                Value::nil()
-            })
-            .map(|_| ())
+        if !self.is_class_or_module() {
+            return Err(self.not_class_or_module_error(mrb));
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym, val);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` and `val` originate from the same VM.
+            // `mrb_cv_set` raises `FrozenError` on a frozen
+            // receiver — caught by `protect`.
+            unsafe { sys::mrb_cv_set(mrb.as_ptr(), self.0, sym, val.0) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_cv_defined(mrb, self, sym)` — TRUE when class variable `sym`
@@ -1732,54 +1307,30 @@ impl Value {
     /// which stays in `sys`.
     #[inline]
     pub fn cv_defined(self, mrb: &Mrb, sym: sys::mrb_sym) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            if !self.is_class_or_module() {
-                return false;
-            }
-            // SAFETY: as `iv_set`, with the class-or-module receiver
-            // `mrb_cv_defined` dereferences unchecked established by
-            // the guard above.
-            unsafe { sys::mrb_cv_defined(mrb.as_ptr(), self.0, sym) }
+        if !self.is_class_or_module() {
+            return false;
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, sym);
-            crate::not_linked()
-        }
+        // SAFETY: as `iv_set`, with the class-or-module receiver
+        // `mrb_cv_defined` dereferences unchecked established by
+        // the guard above.
+        unsafe { sys::mrb_cv_defined(mrb.as_ptr(), self.0, sym) }
     }
 
     /// `mrb_respond_to(mrb, self, mid)` — TRUE when `self` answers to
     /// the method named by `mid`.
     #[inline]
     pub fn respond_to(self, mrb: &Mrb, mid: sys::mrb_sym) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `iv_set`.
-            unsafe { sys::mrb_respond_to(mrb.as_ptr(), self.0, mid) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, mid);
-            crate::not_linked()
-        }
+        // SAFETY: as `iv_set`.
+        unsafe { sys::mrb_respond_to(mrb.as_ptr(), self.0, mid) }
     }
 
     /// `mrb_obj_class(mrb, self)` — the class `self` belongs to, Ruby's
     /// `Object#class`. Every value has a class, so this never fails.
     #[inline]
     pub fn class(self, mrb: &Mrb) -> RClass {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive; `self` shares the VM. `mrb_obj_class`
-            // returns the receiver's class pointer, never null.
-            RClass::from_raw(unsafe { sys::mrb_obj_class(mrb.as_ptr(), self.0) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        // SAFETY: `mrb` is alive; `self` shares the VM. `mrb_obj_class`
+        // returns the receiver's class pointer, never null.
+        RClass::from_raw(unsafe { sys::mrb_obj_class(mrb.as_ptr(), self.0) })
     }
 
     /// `mrb_singleton_class(mrb, self)` — the value's own singleton class,
@@ -1796,25 +1347,17 @@ impl Value {
     /// `beni::sys`. Mirrors magnus's `Object::singleton_class`.
     #[inline]
     pub fn singleton_class(self, mrb: &Mrb) -> Result<RClass, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_singleton_class` raises
-                // `TypeError` for an immediate that has no singleton class —
-                // caught by `protect` into `Err` — and otherwise returns a
-                // class-tagged value.
-                Value::from_raw(unsafe { sys::mrb_singleton_class(mrb.as_ptr(), self.0) })
-            })
-            // SAFETY: an `Ok` result is the class-tagged value
-            // `mrb_singleton_class` returns, so the pointer recovery accepts it.
-            .map(|v| RClass::from_raw(unsafe { v.as_class_ptr() }))
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_singleton_class` raises
+            // `TypeError` for an immediate that has no singleton class —
+            // caught by `protect` into `Err` — and otherwise returns a
+            // class-tagged value.
+            Value::from_raw(unsafe { sys::mrb_singleton_class(mrb.as_ptr(), self.0) })
+        })
+        // SAFETY: an `Ok` result is the class-tagged value
+        // `mrb_singleton_class` returns, so the pointer recovery accepts it.
+        .map(|v| RClass::from_raw(unsafe { v.as_class_ptr() }))
     }
 
     /// `mrb_obj_is_kind_of(mrb, self, class)` — whether `self` is an
@@ -1822,17 +1365,9 @@ impl Value {
     /// pure ancestry walk that dispatches nothing, so it never raises.
     #[inline]
     pub fn is_kind_of(self, mrb: &Mrb, class: RClass) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive; `self` and `class` share the VM.
-            // `mrb_obj_is_kind_of` only walks the class hierarchy.
-            unsafe { sys::mrb_obj_is_kind_of(mrb.as_ptr(), self.0, class.as_raw()) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, class);
-            crate::not_linked()
-        }
+        // SAFETY: `mrb` is alive; `self` and `class` share the VM.
+        // `mrb_obj_is_kind_of` only walks the class hierarchy.
+        unsafe { sys::mrb_obj_is_kind_of(mrb.as_ptr(), self.0, class.as_raw()) }
     }
 
     /// `mrb_obj_is_instance_of(mrb, self, class)` — whether `self` is a
@@ -1840,22 +1375,10 @@ impl Value {
     /// compare that dispatches nothing, so it never raises.
     #[inline]
     pub fn is_instance_of(self, mrb: &Mrb, class: RClass) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: as `is_kind_of`; `mrb_obj_is_instance_of` only reads
-            // the receiver's class.
-            unsafe {
-                sys::mrb_obj_is_instance_of(
-                    mrb.as_ptr(),
-                    self.0,
-                    class.as_raw() as *const sys::RClass,
-                )
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, class);
-            crate::not_linked()
+        // SAFETY: as `is_kind_of`; `mrb_obj_is_instance_of` only reads
+        // the receiver's class.
+        unsafe {
+            sys::mrb_obj_is_instance_of(mrb.as_ptr(), self.0, class.as_raw() as *const sys::RClass)
         }
     }
 
@@ -1864,17 +1387,9 @@ impl Value {
     /// raises.
     #[inline]
     pub fn freeze(self, mrb: &Mrb) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive; `self` shares the VM. `mrb_obj_freeze`
-            // sets the frozen flag and returns the receiver.
-            Value::from_raw(unsafe { sys::mrb_obj_freeze(mrb.as_ptr(), self.0) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        // SAFETY: `mrb` is alive; `self` shares the VM. `mrb_obj_freeze`
+        // sets the frozen flag and returns the receiver.
+        Value::from_raw(unsafe { sys::mrb_obj_freeze(mrb.as_ptr(), self.0) })
     }
 
     /// `mrb_check_frozen_value(mrb, self)` — a precondition guard that
@@ -1887,23 +1402,15 @@ impl Value {
     /// form, not a prerequisite for them.
     #[inline]
     pub fn check_frozen(self, mrb: &Mrb) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_check_frozen_value`
-                // raises `FrozenError` on a frozen or immediate receiver —
-                // caught by `protect`.
-                unsafe { sys::mrb_check_frozen_value(mrb.as_ptr(), self.0) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_check_frozen_value`
+            // raises `FrozenError` on a frozen or immediate receiver —
+            // caught by `protect`.
+            unsafe { sys::mrb_check_frozen_value(mrb.as_ptr(), self.0) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_obj_equal(mrb, self, other)` — TRUE when `self` and `other`
@@ -1911,18 +1418,10 @@ impl Value {
     /// it dispatches nothing, so it never raises and yields a `bool`.
     #[inline]
     pub fn obj_equal(self, mrb: &Mrb, other: Value) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive; `self` and `other` share the VM by
-            // the single-VM contract. `mrb_obj_equal` only inspects the
-            // two values' identity.
-            unsafe { sys::mrb_obj_equal(mrb.as_ptr(), self.0, other.0) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        // SAFETY: `mrb` is alive; `self` and `other` share the VM by
+        // the single-VM contract. `mrb_obj_equal` only inspects the
+        // two values' identity.
+        unsafe { sys::mrb_obj_equal(mrb.as_ptr(), self.0, other.0) }
     }
 
     /// `mrb_obj_id(self)` — a unique integer identifier for `self`,
@@ -1931,14 +1430,9 @@ impl Value {
     /// raises.
     #[inline]
     pub fn object_id(self) -> sys::mrb_int {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb_obj_id` reads only `self`'s boxed word for its
-            // identity and does not touch `mrb_state`.
-            unsafe { sys::mrb_obj_id(self.0) }
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `mrb_obj_id` reads only `self`'s boxed word for its
+        // identity and does not touch `mrb_state`.
+        unsafe { sys::mrb_obj_id(self.0) }
     }
 
     /// `mrb_equal(mrb, self, other)` — Ruby `==` equality. May run a
@@ -1947,26 +1441,18 @@ impl Value {
     /// dispatched method raises.
     #[inline]
     pub fn equal(self, mrb: &Mrb, other: Value) -> Result<bool, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive; `self` and `other` share the
-                // VM. `mrb_equal` may dispatch `==` and raise, which
-                // `protect` catches into `Err`.
-                let eq = unsafe { sys::mrb_equal(mrb.as_ptr(), self.0, other.0) };
-                if eq {
-                    Value::true_()
-                } else {
-                    Value::false_()
-                }
-            })
-            .map(|v| v.to_bool())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive; `self` and `other` share the
+            // VM. `mrb_equal` may dispatch `==` and raise, which
+            // `protect` catches into `Err`.
+            let eq = unsafe { sys::mrb_equal(mrb.as_ptr(), self.0, other.0) };
+            if eq {
+                Value::true_()
+            } else {
+                Value::false_()
+            }
+        })
+        .map(|v| v.to_bool())
     }
 
     /// `mrb_eql(mrb, self, other)` — Ruby `eql?`, the stricter equality
@@ -1974,25 +1460,17 @@ impl Value {
     /// it runs under protection: `Ok(bool)` or `Err` on a raise.
     #[inline]
     pub fn eql(self, mrb: &Mrb, other: Value) -> Result<bool, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: as `equal`; `mrb_eql` may dispatch `eql?` and
-                // raise, caught by `protect`.
-                let eq = unsafe { sys::mrb_eql(mrb.as_ptr(), self.0, other.0) };
-                if eq {
-                    Value::true_()
-                } else {
-                    Value::false_()
-                }
-            })
-            .map(|v| v.to_bool())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: as `equal`; `mrb_eql` may dispatch `eql?` and
+            // raise, caught by `protect`.
+            let eq = unsafe { sys::mrb_eql(mrb.as_ptr(), self.0, other.0) };
+            if eq {
+                Value::true_()
+            } else {
+                Value::false_()
+            }
+        })
+        .map(|v| v.to_bool())
     }
 
     /// `mrb_cmp(mrb, self, other)` — Ruby's `<=>` three-way comparison.
@@ -2005,38 +1483,30 @@ impl Value {
     /// `eql`, which test sameness rather than rank.
     #[inline]
     pub fn cmp(self, mrb: &Mrb, other: Value) -> Result<Option<core::cmp::Ordering>, Error> {
-        #[cfg(mruby_linked)]
-        {
-            // `mrb_cmp` reserves -2 to flag two incomparable values.
-            const INCOMPARABLE: sys::mrb_int = -2;
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // and `other` share the VM. `mrb_cmp` may dispatch `<=>`
-                // and raise, caught by `protect`. It returns the sign of
-                // `<=>` for numeric / String receivers and passes a custom
-                // `<=>` result through unnormalized otherwise, reserving -2
-                // as the incomparable sentinel; the result re-boxes
-                // losslessly through `from_int`.
-                let n = unsafe { sys::mrb_cmp(mrb.as_ptr(), self.0, other.0) };
-                Value::from_int(mrb, n)
-            })
-            // SAFETY: the `Ok` value was boxed by `Value::from_int` just
-            // above, so it carries an Integer tag the unbox accepts.
-            .map(|v| match unsafe { v.unbox_integer() } {
-                // -2 is the dedicated incomparable sentinel; every other
-                // value ranks by its sign, since Ruby's `<=>` contract
-                // only promises negative / zero / positive.
-                INCOMPARABLE => None,
-                0 => Some(core::cmp::Ordering::Equal),
-                n if n < 0 => Some(core::cmp::Ordering::Less),
-                _ => Some(core::cmp::Ordering::Greater),
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, other);
-            crate::not_linked()
-        }
+        // `mrb_cmp` reserves -2 to flag two incomparable values.
+        const INCOMPARABLE: sys::mrb_int = -2;
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // and `other` share the VM. `mrb_cmp` may dispatch `<=>`
+            // and raise, caught by `protect`. It returns the sign of
+            // `<=>` for numeric / String receivers and passes a custom
+            // `<=>` result through unnormalized otherwise, reserving -2
+            // as the incomparable sentinel; the result re-boxes
+            // losslessly through `from_int`.
+            let n = unsafe { sys::mrb_cmp(mrb.as_ptr(), self.0, other.0) };
+            Value::from_int(mrb, n)
+        })
+        // SAFETY: the `Ok` value was boxed by `Value::from_int` just
+        // above, so it carries an Integer tag the unbox accepts.
+        .map(|v| match unsafe { v.unbox_integer() } {
+            // -2 is the dedicated incomparable sentinel; every other
+            // value ranks by its sign, since Ruby's `<=>` contract
+            // only promises negative / zero / positive.
+            INCOMPARABLE => None,
+            0 => Some(core::cmp::Ordering::Equal),
+            n if n < 0 => Some(core::cmp::Ordering::Less),
+            _ => Some(core::cmp::Ordering::Greater),
+        })
     }
 
     /// `mrb_as_int(mrb, self)` — convert `self` to a Rust integer across
@@ -2056,26 +1526,18 @@ impl Value {
     /// range.
     #[inline]
     pub fn as_int(self, mrb: &Mrb) -> Result<sys::mrb_int, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // originates from the same VM. `mrb_as_int` raises
-                // `TypeError` on a non-numeric value and `RangeError` on
-                // an infinite / NaN float — both caught by `protect`. The
-                // result re-boxes losslessly through `from_int`.
-                let n = unsafe { sys::mrb_as_int_func(mrb.as_ptr(), self.0) };
-                Value::from_int(mrb, n)
-            })
-            // SAFETY: the `Ok` value was boxed by `Value::from_int` just
-            // above, so it carries an Integer tag the unbox accepts.
-            .map(|v| unsafe { v.unbox_integer() })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // originates from the same VM. `mrb_as_int` raises
+            // `TypeError` on a non-numeric value and `RangeError` on
+            // an infinite / NaN float — both caught by `protect`. The
+            // result re-boxes losslessly through `from_int`.
+            let n = unsafe { sys::mrb_as_int_func(mrb.as_ptr(), self.0) };
+            Value::from_int(mrb, n)
+        })
+        // SAFETY: the `Ok` value was boxed by `Value::from_int` just
+        // above, so it carries an Integer tag the unbox accepts.
+        .map(|v| unsafe { v.unbox_integer() })
     }
 
     /// `mrb_as_float(mrb, self)` — convert `self` to a Rust float across
@@ -2089,24 +1551,16 @@ impl Value {
     /// `unbox_float`, lossless under beni's pinned float config.
     #[inline]
     pub fn as_float(self, mrb: &Mrb) -> Result<sys::mrb_float, Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: as `as_int`; `mrb_as_float` raises `TypeError`
-                // on a non-numeric value, caught by `protect`. The result
-                // re-boxes losslessly through `from_float`.
-                let f = unsafe { sys::mrb_as_float_func(mrb.as_ptr(), self.0) };
-                Value::from_float(mrb, f)
-            })
-            // SAFETY: the `Ok` value was boxed by `Value::from_float`
-            // just above, so it carries a Float tag the unbox accepts.
-            .map(|v| unsafe { v.unbox_float() })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: as `as_int`; `mrb_as_float` raises `TypeError`
+            // on a non-numeric value, caught by `protect`. The result
+            // re-boxes losslessly through `from_float`.
+            let f = unsafe { sys::mrb_as_float_func(mrb.as_ptr(), self.0) };
+            Value::from_float(mrb, f)
+        })
+        // SAFETY: the `Ok` value was boxed by `Value::from_float`
+        // just above, so it carries a Float tag the unbox accepts.
+        .map(|v| unsafe { v.unbox_float() })
     }
 }
 
@@ -2128,14 +1582,9 @@ impl Break {
     /// `mrb_break_value_func`.
     #[inline]
     pub fn value(&self) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self.0` is break-tagged by the `Value::as_break`
-            // gate that is this newtype's only constructor.
-            Value::from_raw(unsafe { sys::mrb_break_value_func(self.0.as_raw()) })
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `self.0` is break-tagged by the `Value::as_break`
+        // gate that is this newtype's only constructor.
+        Value::from_raw(unsafe { sys::mrb_break_value_func(self.0.as_raw()) })
     }
 }
 

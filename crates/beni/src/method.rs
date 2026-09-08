@@ -38,10 +38,8 @@
 //! because the expansion nests it inside an `extern "C" fn`.
 
 use crate::{Error, FromValue, IntoValue, Mrb, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 
-#[cfg(mruby_linked)]
 use crate::error::panic_message;
 
 /// Bridge + arity pair produced by the `method!` macro and
@@ -133,7 +131,6 @@ where
 /// Build an exception of the named core class carrying `msg`'s
 /// bytes, copied into the VM. The lookup cannot miss for core
 /// classes (`TypeError`, `RuntimeError`).
-#[cfg(mruby_linked)]
 pub(crate) fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str) -> Value {
     // SAFETY: `mrb` is alive; `class_name` is NUL-terminated and
     // names a core class present in every VM.
@@ -145,7 +142,6 @@ pub(crate) fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str)
 /// The `TypeError` a bridge raises when an argument fails its
 /// `FromValue` conversion — named after the Rust type the registered
 /// function expected.
-#[cfg(mruby_linked)]
 fn arg_type_error<T>(mrb: &Mrb) -> Error {
     let msg = format!(
         "wrong argument type (expected {})",
@@ -163,7 +159,6 @@ fn arg_type_error<T>(mrb: &Mrb) -> Error {
 ///
 /// Only callable from a bridge frame mruby may unwind out of, with
 /// no live Rust values needing `Drop` on the caller's frame.
-#[cfg(mruby_linked)]
 unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
     let exc = match err {
         Error::Exception(exc) => exc,
@@ -186,7 +181,6 @@ unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
 /// # Safety
 ///
 /// As `raise_error`: bridge frame only.
-#[cfg(mruby_linked)]
 unsafe fn handle_error<F>(mrb: &Mrb, f: F) -> Value
 where
     F: FnOnce() -> Result<Value, Error>,
@@ -221,30 +215,22 @@ macro_rules! define_method_trait {
             /// function runs.
             #[doc(hidden)]
             fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
-                #[cfg(mruby_linked)]
-                {
-                    $(let mut $arg = sys::mrb_value::zeroed();)*
-                    // SAFETY: `mrb` is alive; each out-parameter is a
-                    // valid `*mut mrb_value`; the format string holds
-                    // one `o` per out-parameter.
-                    unsafe {
-                        sys::mrb_get_args(
-                            mrb.as_ptr(),
-                            $fmt.as_ptr()
-                            $(, &mut $arg as *mut sys::mrb_value)*
-                        );
-                    }
-                    $(
-                        let $arg = $t::from_value(Value::from_raw($arg))
-                            .ok_or_else(|| arg_type_error::<$t>(mrb))?;
-                    )*
-                    (self)(mrb, self_ $(, $arg)*).into_method_return(mrb)
+                $(let mut $arg = sys::mrb_value::zeroed();)*
+                // SAFETY: `mrb` is alive; each out-parameter is a
+                // valid `*mut mrb_value`; the format string holds
+                // one `o` per out-parameter.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        $fmt.as_ptr()
+                        $(, &mut $arg as *mut sys::mrb_value)*
+                    );
                 }
-                #[cfg(not(mruby_linked))]
-                {
-                    let _ = (mrb, self_);
-                    crate::not_linked()
-                }
+                $(
+                    let $arg = $t::from_value(Value::from_raw($arg))
+                        .ok_or_else(|| arg_type_error::<$t>(mrb))?;
+                )*
+                (self)(mrb, self_ $(, $arg)*).into_method_return(mrb)
             }
 
             /// Bridge entry: `call_convert_value` inside the panic
@@ -255,16 +241,8 @@ macro_rules! define_method_trait {
             /// Bridge frame only — the raise long-jumps out.
             #[doc(hidden)]
             unsafe fn call_handle_error(self, mrb: &Mrb, self_: Value) -> Value {
-                #[cfg(mruby_linked)]
-                {
-                    // SAFETY: forwarded from the caller.
-                    unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
-                }
-                #[cfg(not(mruby_linked))]
-                {
-                    let _ = (mrb, self_);
-                    crate::not_linked()
-                }
+                // SAFETY: forwarded from the caller.
+                unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
             }
         }
 
@@ -346,46 +324,38 @@ macro_rules! define_method_req_opt_trait {
             /// returns `Err` before the wrapped function runs.
             #[doc(hidden)]
             fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
-                #[cfg(mruby_linked)]
-                {
-                    $(let mut $req = sys::mrb_value::zeroed();)*
-                    // SAFETY: pure value computation; the undef sentinel
-                    // marks an optional slot mruby leaves untouched.
-                    $(let mut $opt = unsafe { sys::mrb_undef_value_func() };)*
-                    // SAFETY: `mrb` is alive; each out-parameter is a
-                    // valid `*mut mrb_value`; the format string holds
-                    // one `o` per out-parameter, `|` before the
-                    // optional group.
-                    unsafe {
-                        sys::mrb_get_args(
-                            mrb.as_ptr(),
-                            $fmt.as_ptr()
-                            $(, &mut $req as *mut sys::mrb_value)*
-                            $(, &mut $opt as *mut sys::mrb_value)*
-                        );
-                    }
-                    $(
-                        let $req = $rt::from_value(Value::from_raw($req))
-                            .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
-                    )*
-                    $(
-                        // SAFETY: `mrb` is alive; `$opt` is a valid value.
-                        let $opt = if unsafe { sys::mrb_undef_p_func($opt) } {
-                            None
-                        } else {
-                            Some(
-                                $ot::from_value(Value::from_raw($opt))
-                                    .ok_or_else(|| arg_type_error::<$ot>(mrb))?,
-                            )
-                        };
-                    )*
-                    (self)(mrb, self_ $(, $req)* $(, $opt)*).into_method_return(mrb)
+                $(let mut $req = sys::mrb_value::zeroed();)*
+                // SAFETY: pure value computation; the undef sentinel
+                // marks an optional slot mruby leaves untouched.
+                $(let mut $opt = unsafe { sys::mrb_undef_value_func() };)*
+                // SAFETY: `mrb` is alive; each out-parameter is a
+                // valid `*mut mrb_value`; the format string holds
+                // one `o` per out-parameter, `|` before the
+                // optional group.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        $fmt.as_ptr()
+                        $(, &mut $req as *mut sys::mrb_value)*
+                        $(, &mut $opt as *mut sys::mrb_value)*
+                    );
                 }
-                #[cfg(not(mruby_linked))]
-                {
-                    let _ = (mrb, self_);
-                    crate::not_linked()
-                }
+                $(
+                    let $req = $rt::from_value(Value::from_raw($req))
+                        .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
+                )*
+                $(
+                    // SAFETY: `mrb` is alive; `$opt` is a valid value.
+                    let $opt = if unsafe { sys::mrb_undef_p_func($opt) } {
+                        None
+                    } else {
+                        Some(
+                            $ot::from_value(Value::from_raw($opt))
+                                .ok_or_else(|| arg_type_error::<$ot>(mrb))?,
+                        )
+                    };
+                )*
+                (self)(mrb, self_ $(, $req)* $(, $opt)*).into_method_return(mrb)
             }
 
             /// Bridge entry: `call_convert_value` inside the panic
@@ -396,16 +366,8 @@ macro_rules! define_method_req_opt_trait {
             /// Bridge frame only — the raise long-jumps out.
             #[doc(hidden)]
             unsafe fn call_handle_error(self, mrb: &Mrb, self_: Value) -> Value {
-                #[cfg(mruby_linked)]
-                {
-                    // SAFETY: forwarded from the caller.
-                    unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
-                }
-                #[cfg(not(mruby_linked))]
-                {
-                    let _ = (mrb, self_);
-                    crate::not_linked()
-                }
+                // SAFETY: forwarded from the caller.
+                unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
             }
         }
 
@@ -465,43 +427,35 @@ macro_rules! define_method_req_block_trait {
             /// the wrapped function runs.
             #[doc(hidden)]
             fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
-                #[cfg(mruby_linked)]
-                {
-                    $(let mut $req = sys::mrb_value::zeroed();)*
-                    let mut block = sys::mrb_value::zeroed();
-                    // SAFETY: `mrb` is alive; each out-parameter is a
-                    // valid `*mut mrb_value`; the format string holds
-                    // one `o` per required out-parameter and a trailing
-                    // `&` for the block slot.
-                    unsafe {
-                        sys::mrb_get_args(
-                            mrb.as_ptr(),
-                            $fmt.as_ptr()
-                            $(, &mut $req as *mut sys::mrb_value)*,
-                            &mut block as *mut sys::mrb_value,
-                        );
-                    }
-                    $(
-                        let $req = $rt::from_value(Value::from_raw($req))
-                            .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
-                    )*
-                    // SAFETY: `mrb` is alive; `block` is a valid value.
-                    let block = if unsafe { sys::mrb_nil_p_func(block) } {
-                        None
-                    } else {
-                        // The block slot carries a Proc whenever it is
-                        // not nil, so the unchecked downcast is sound.
-                        // SAFETY: the non-nil block slot is Proc-tagged
-                        // by mruby's call convention.
-                        Some(unsafe { crate::Proc::from_value_unchecked(Value::from_raw(block)) })
-                    };
-                    (self)(mrb, self_ $(, $req)*, block).into_method_return(mrb)
+                $(let mut $req = sys::mrb_value::zeroed();)*
+                let mut block = sys::mrb_value::zeroed();
+                // SAFETY: `mrb` is alive; each out-parameter is a
+                // valid `*mut mrb_value`; the format string holds
+                // one `o` per required out-parameter and a trailing
+                // `&` for the block slot.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        $fmt.as_ptr()
+                        $(, &mut $req as *mut sys::mrb_value)*,
+                        &mut block as *mut sys::mrb_value,
+                    );
                 }
-                #[cfg(not(mruby_linked))]
-                {
-                    let _ = (mrb, self_);
-                    crate::not_linked()
-                }
+                $(
+                    let $req = $rt::from_value(Value::from_raw($req))
+                        .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
+                )*
+                // SAFETY: `mrb` is alive; `block` is a valid value.
+                let block = if unsafe { sys::mrb_nil_p_func(block) } {
+                    None
+                } else {
+                    // The block slot carries a Proc whenever it is
+                    // not nil, so the unchecked downcast is sound.
+                    // SAFETY: the non-nil block slot is Proc-tagged
+                    // by mruby's call convention.
+                    Some(unsafe { crate::Proc::from_value_unchecked(Value::from_raw(block)) })
+                };
+                (self)(mrb, self_ $(, $req)*, block).into_method_return(mrb)
             }
 
             /// Bridge entry: `call_convert_value` inside the panic
@@ -512,16 +466,8 @@ macro_rules! define_method_req_block_trait {
             /// Bridge frame only — the raise long-jumps out.
             #[doc(hidden)]
             unsafe fn call_handle_error(self, mrb: &Mrb, self_: Value) -> Value {
-                #[cfg(mruby_linked)]
-                {
-                    // SAFETY: forwarded from the caller.
-                    unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
-                }
-                #[cfg(not(mruby_linked))]
-                {
-                    let _ = (mrb, self_);
-                    crate::not_linked()
-                }
+                // SAFETY: forwarded from the caller.
+                unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
             }
         }
 
@@ -581,16 +527,8 @@ where
     /// Bridge frame only — the raise long-jumps out.
     #[doc(hidden)]
     unsafe fn call_handle_error(self, mrb: &Mrb, self_: Value) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: forwarded from the caller.
-            unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, self_);
-            crate::not_linked()
-        }
+        // SAFETY: forwarded from the caller.
+        unsafe { handle_error(mrb, || self.call_convert_value(mrb, self_)) }
     }
 }
 

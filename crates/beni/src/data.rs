@@ -19,7 +19,6 @@
 //! pointer.
 
 use crate::{Mrb, RClass, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 use core::marker::PhantomData;
 
@@ -31,11 +30,9 @@ use core::marker::PhantomData;
 /// static REGEX_TYPE: DataType<MyRegex> = DataType::new(c"Regexp");
 /// ```
 ///
-/// In linked builds the descriptor holds mruby's `mrb_data_type` (a
-/// release hook plus a type name); in placeholder builds it holds only
-/// the `T` marker, since no mruby symbols exist to describe.
+/// The descriptor holds mruby's `mrb_data_type` — a release hook plus
+/// a type name — beside the `T` marker that types the payload.
 pub struct DataType<T> {
-    #[cfg(mruby_linked)]
     raw: sys::mrb_data_type,
     _marker: PhantomData<T>,
 }
@@ -53,22 +50,12 @@ impl<T> DataType<T> {
     /// labels the data type in mruby diagnostics; it is not the Ruby
     /// class name (the class is chosen at `RClass::data_wrap` time).
     pub const fn new(struct_name: &'static core::ffi::CStr) -> Self {
-        #[cfg(mruby_linked)]
-        {
-            Self {
-                raw: sys::mrb_data_type {
-                    struct_name: struct_name.as_ptr(),
-                    dfree: Some(Self::dfree),
-                },
-                _marker: PhantomData,
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = struct_name;
-            Self {
-                _marker: PhantomData,
-            }
+        Self {
+            raw: sys::mrb_data_type {
+                struct_name: struct_name.as_ptr(),
+                dfree: Some(Self::dfree),
+            },
+            _marker: PhantomData,
         }
     }
 
@@ -78,7 +65,6 @@ impl<T> DataType<T> {
     /// `T`'s `Drop` is caught here, since unwinding across that frame is
     /// undefined. The drop has no error channel, so the payload is
     /// discarded.
-    #[cfg(mruby_linked)]
     unsafe extern "C" fn dfree(_mrb: *mut sys::mrb_state, ptr: *mut core::ffi::c_void) {
         if !ptr.is_null() {
             // SAFETY: `ptr` was produced by `Box::into_raw::<T>` in
@@ -95,7 +81,6 @@ impl<T> DataType<T> {
     /// each carrier and compares it by identity at extraction, so it
     /// must outlive every wrapped object — which the `'static` bound on
     /// the callers (`data_wrap` / `data_get`) guarantees.
-    #[cfg(mruby_linked)]
     #[inline]
     fn as_raw(&self) -> *const sys::mrb_data_type {
         &self.raw
@@ -108,18 +93,10 @@ impl RClass {
     /// instance through `RClass::data_wrap`.
     #[inline]
     pub fn set_instance_data_tt(self, _mrb: &Mrb) {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` originates from the live VM borrowed as
-            // `_mrb`; the shim only rewrites the class's instance-tt
-            // flag bits.
-            unsafe { sys::mrb_set_instance_tt_func(self.as_raw(), sys::MRB_TT_CDATA) };
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = _mrb;
-            crate::not_linked()
-        }
+        // SAFETY: `self` originates from the live VM borrowed as
+        // `_mrb`; the shim only rewrites the class's instance-tt
+        // flag bits.
+        unsafe { sys::mrb_set_instance_tt_func(self.as_raw(), sys::MRB_TT_CDATA) };
     }
 
     /// Box `value` and wrap it as a fresh instance of this class,
@@ -160,43 +137,35 @@ impl RClass {
         value: T,
         ty: &'static DataType<T>,
     ) -> Result<Value, crate::Error> {
-        #[cfg(mruby_linked)]
-        {
-            let ptr = Box::into_raw(Box::new(value)) as *mut core::ffi::c_void;
-            // `ptr` is `Copy`, so the closure captures a copy while this
-            // frame keeps the original for the reclaim path. On success
-            // mruby's allocation owns the box; on the raise path the
-            // allocation never attached it to any object, so this frame
-            // reclaims the still-orphaned box exactly once.
-            let wrapped = mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // is from the same VM; `ptr` is a freshly leaked `Box<T>`;
-                // `ty` is `'static`, so its descriptor outlives the
-                // carrier. `mrb_data_object_alloc` allocates the carrier,
-                // which raises a `TypeError` when `self` was never marked
-                // to carry a data carrier — caught by `protect`.
-                let rdata = unsafe {
-                    sys::mrb_data_object_alloc(mrb.as_ptr(), self.as_raw(), ptr, ty.as_raw())
-                };
-                // SAFETY: `rdata` is a live object pointer just allocated
-                // against this VM; `mrb_obj_value` reifies it.
-                Value::from_raw(unsafe { sys::mrb_obj_value(rdata as *mut core::ffi::c_void) })
-            });
-            if wrapped.is_err() {
-                // SAFETY: the allocation raised before handing the box to
-                // any carrier, so no GC owner exists and `ptr` is still the
-                // sole owner of the live `Box<T>`. Reclaiming it here drops
-                // the `T` once; the success path never reaches this, so the
-                // box is freed exactly once across both paths.
-                drop(unsafe { Box::from_raw(ptr as *mut T) });
-            }
-            wrapped
+        let ptr = Box::into_raw(Box::new(value)) as *mut core::ffi::c_void;
+        // `ptr` is `Copy`, so the closure captures a copy while this
+        // frame keeps the original for the reclaim path. On success
+        // mruby's allocation owns the box; on the raise path the
+        // allocation never attached it to any object, so this frame
+        // reclaims the still-orphaned box exactly once.
+        let wrapped = mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // is from the same VM; `ptr` is a freshly leaked `Box<T>`;
+            // `ty` is `'static`, so its descriptor outlives the
+            // carrier. `mrb_data_object_alloc` allocates the carrier,
+            // which raises a `TypeError` when `self` was never marked
+            // to carry a data carrier — caught by `protect`.
+            let rdata = unsafe {
+                sys::mrb_data_object_alloc(mrb.as_ptr(), self.as_raw(), ptr, ty.as_raw())
+            };
+            // SAFETY: `rdata` is a live object pointer just allocated
+            // against this VM; `mrb_obj_value` reifies it.
+            Value::from_raw(unsafe { sys::mrb_obj_value(rdata as *mut core::ffi::c_void) })
+        });
+        if wrapped.is_err() {
+            // SAFETY: the allocation raised before handing the box to
+            // any carrier, so no GC owner exists and `ptr` is still the
+            // sole owner of the live `Box<T>`. Reclaiming it here drops
+            // the `T` once; the success path never reaches this, so the
+            // box is freed exactly once across both paths.
+            drop(unsafe { Box::from_raw(ptr as *mut T) });
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, value, ty);
-            crate::not_linked()
-        }
+        wrapped
     }
 }
 
@@ -217,27 +186,18 @@ impl Value {
     /// typed data.
     #[inline]
     pub fn data_get<'a, T>(self, mrb: &'a Mrb, ty: &'static DataType<T>) -> Option<&'a T> {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive; `self` originates from the same
-            // VM. `mrb_data_check_get_ptr` returns NULL unless `self`
-            // carries exactly `ty`'s data type.
-            let ptr =
-                unsafe { sys::mrb_data_check_get_ptr(mrb.as_ptr(), self.into_raw(), ty.as_raw()) }
-                    as *const T;
-            if ptr.is_null() {
-                None
-            } else {
-                // SAFETY: the identity check above confirms the pointer
-                // was produced by `data_wrap::<T>`, so it is a live `T`
-                // owned by the carrier; the borrow is bounded by `'a`.
-                Some(unsafe { &*ptr })
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, ty);
-            crate::not_linked()
+        // SAFETY: `mrb` is alive; `self` originates from the same
+        // VM. `mrb_data_check_get_ptr` returns NULL unless `self`
+        // carries exactly `ty`'s data type.
+        let ptr = unsafe { sys::mrb_data_check_get_ptr(mrb.as_ptr(), self.into_raw(), ty.as_raw()) }
+            as *const T;
+        if ptr.is_null() {
+            None
+        } else {
+            // SAFETY: the identity check above confirms the pointer
+            // was produced by `data_wrap::<T>`, so it is a live `T`
+            // owned by the carrier; the borrow is bounded by `'a`.
+            Some(unsafe { &*ptr })
         }
     }
 
@@ -254,25 +214,17 @@ impl Value {
     /// previous box; applied to a non-carrier value it does nothing.
     #[inline]
     pub fn data_reinit<T: Send>(self, _mrb: &Mrb, value: T, ty: &'static DataType<T>) {
-        #[cfg(mruby_linked)]
-        {
-            // `mrb_data_init` writes through the carrier's `RData`, so it is
-            // defined only on a CDATA value; `is_data` mirrors mruby's
-            // `mrb_data_p` exactly, so gating on it keeps that write sound and
-            // leaves a non-carrier value untouched.
-            if self.is_data() {
-                let ptr = Box::into_raw(Box::new(value)) as *mut core::ffi::c_void;
-                // SAFETY: `self` is a CDATA carrier from the live VM borrowed
-                // as `_mrb`; `ptr` is a freshly leaked `Box<T>` handed to
-                // mruby, which releases it via `ty`'s release hook; `ty` is
-                // `'static`, so its descriptor outlives the carrier.
-                unsafe { sys::mrb_data_init(self.into_raw(), ptr, ty.as_raw()) };
-            }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (value, ty);
-            crate::not_linked()
+        // `mrb_data_init` writes through the carrier's `RData`, so it is
+        // defined only on a CDATA value; `is_data` mirrors mruby's
+        // `mrb_data_p` exactly, so gating on it keeps that write sound and
+        // leaves a non-carrier value untouched.
+        if self.is_data() {
+            let ptr = Box::into_raw(Box::new(value)) as *mut core::ffi::c_void;
+            // SAFETY: `self` is a CDATA carrier from the live VM borrowed
+            // as `_mrb`; `ptr` is a freshly leaked `Box<T>` handed to
+            // mruby, which releases it via `ty`'s release hook; `ty` is
+            // `'static`, so its descriptor outlives the carrier.
+            unsafe { sys::mrb_data_init(self.into_raw(), ptr, ty.as_raw()) };
         }
     }
 }

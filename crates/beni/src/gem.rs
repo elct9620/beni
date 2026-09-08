@@ -27,19 +27,14 @@ impl Mrb {
     /// embedder's move), and converts a panic inside the `init` body
     /// into `Err(Error::Panic)` so it never unwinds past the wrapper.
     pub fn init_gem<G: Gem>(&self) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            // The panic boundary for `Gem::init` bodies: catching
-            // here keeps the unwind inside the wrapper. The closure
-            // only borrows `self`, so no observable broken state
-            // survives the catch (AssertUnwindSafe as in
-            // `Mrb::protect`).
-            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| G::init(self))) {
-                Ok(result) => result,
-                Err(payload) => Err(Error::Panic(crate::error::panic_message(payload))),
-            }
+        // The panic boundary for `Gem::init` bodies: catching
+        // here keeps the unwind inside the wrapper. The closure
+        // only borrows `self`, so no observable broken state
+        // survives the catch (AssertUnwindSafe as in
+        // `Mrb::protect`).
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| G::init(self))) {
+            Ok(result) => result,
+            Err(payload) => Err(Error::Panic(crate::error::panic_message(payload))),
         }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
     }
 }

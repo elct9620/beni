@@ -101,7 +101,6 @@ mod private {
 /// `block` ORs in the block-accepting flag, which composes with the
 /// positional aspec the way mruby's own `MRB_ARGS_ARG` composes its
 /// required and optional parts.
-#[cfg(mruby_linked)]
 fn method_aspec(arity: i8, opt: i8, block: bool) -> sys::mrb_aspec {
     let positional = if arity < 0 {
         sys::mrb_args_any()
@@ -121,7 +120,6 @@ fn method_aspec(arity: i8, opt: i8, block: bool) -> sys::mrb_aspec {
 /// derived from `method.arity` and the typed bridge transmuted to
 /// the raw `sys::mrb_func_t` — the single seam where that transmute
 /// happens for every `Module` / `Object` registration.
-#[cfg(mruby_linked)]
 fn protect_register<F>(mrb: &Mrb, method: MethodDef, register: F) -> Result<(), Error>
 where
     F: FnOnce(&Mrb, sys::mrb_func_t, sys::mrb_aspec),
@@ -145,7 +143,6 @@ where
 /// unboxing it on the way out — the shared plumbing behind every
 /// definition and lookup that yields a handle. An mruby raise inside
 /// `f` surfaces as `Err(Error::Exception)`.
-#[cfg(mruby_linked)]
 pub(crate) fn protect_class_ptr<F>(mrb: &Mrb, f: F) -> Result<*mut sys::RClass, Error>
 where
     F: FnOnce(&Mrb) -> *mut sys::RClass,
@@ -196,15 +193,10 @@ impl RClass {
     /// resolution.
     #[inline]
     pub fn real(self) -> RClass {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb_class_real` only walks the `super` chain past
-            // singleton / include classes; it reads no `mrb_state` and
-            // returns a real class pointer for any live class handle.
-            RClass::from_raw(unsafe { sys::mrb_class_real(self.0) })
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: `mrb_class_real` only walks the `super` chain past
+        // singleton / include classes; it reads no `mrb_state` and
+        // returns a real class pointer for any live class handle.
+        RClass::from_raw(unsafe { sys::mrb_class_real(self.0) })
     }
 
     /// Reify this class handle as an mruby `Value` via mruby's own
@@ -225,14 +217,9 @@ impl RClass {
     /// as `mrb` (and not yet freed).
     #[inline]
     pub unsafe fn to_value(self, _mrb: &Mrb) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: forwarded from caller; mrb_obj_value reads only
-            // the pointer payload and reuses mruby's own boxing logic.
-            Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        // SAFETY: forwarded from caller; mrb_obj_value reads only
+        // the pointer payload and reuses mruby's own boxing logic.
+        Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
     }
 
     /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
@@ -241,31 +228,23 @@ impl RClass {
     /// `Class::new_instance`.
     #[inline]
     pub fn obj_new(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
-        #[cfg(mruby_linked)]
-        {
-            // Value is repr(transparent) over mrb_value; the slice
-            // pointer reuses the same layout.
-            let argv = args.as_ptr() as *const sys::mrb_value;
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` and every `args` entry originate from the same
-                // VM. `mrb_obj_new` runs `initialize`, which may raise —
-                // caught by `protect`.
-                Value::from_raw(unsafe {
-                    sys::mrb_obj_new(
-                        mrb.as_ptr(),
-                        self.0,
-                        sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
-                        argv,
-                    )
-                })
+        // Value is repr(transparent) over mrb_value; the slice
+        // pointer reuses the same layout.
+        let argv = args.as_ptr() as *const sys::mrb_value;
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` and every `args` entry originate from the same
+            // VM. `mrb_obj_new` runs `initialize`, which may raise —
+            // caught by `protect`.
+            Value::from_raw(unsafe {
+                sys::mrb_obj_new(
+                    mrb.as_ptr(),
+                    self.0,
+                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
+                    argv,
+                )
             })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, args);
-            crate::not_linked()
-        }
+        })
     }
 
     /// `mrb_raise(mrb, self, msg)` — raise an exception of this class
@@ -280,18 +259,10 @@ impl RClass {
     /// the stack expects to run.
     #[inline]
     pub unsafe fn raise(self, mrb: &Mrb, msg: &core::ffi::CStr) -> ! {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: bridge frame — caller upholds the unwind contract.
-            // `mrb_raise` is declared as never returning and the binding
-            // carries that, so it satisfies the diverging signature.
-            unsafe { sys::mrb_raise(mrb.as_ptr(), self.0, msg.as_ptr()) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, msg);
-            crate::not_linked()
-        }
+        // SAFETY: bridge frame — caller upholds the unwind contract.
+        // `mrb_raise` is declared as never returning and the binding
+        // carries that, so it satisfies the diverging signature.
+        unsafe { sys::mrb_raise(mrb.as_ptr(), self.0, msg.as_ptr()) }
     }
 
     /// `mrb_exc_new(mrb, self, msg, len)` — build an exception of this
@@ -305,26 +276,18 @@ impl RClass {
     /// handler messages stay far below that.
     #[inline]
     pub fn exc_new(self, mrb: &Mrb, msg: &str) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            let len = msg.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-            // SAFETY: `mrb` is alive; `self` originates from the same
-            // VM; `msg`'s bytes are copied into the new exception
-            // object before the call returns.
-            Value::from_raw(unsafe {
-                sys::mrb_exc_new(
-                    mrb.as_ptr(),
-                    self.0,
-                    msg.as_ptr() as *const core::ffi::c_char,
-                    len,
-                )
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, msg);
-            crate::not_linked()
-        }
+        let len = msg.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        // SAFETY: `mrb` is alive; `self` originates from the same
+        // VM; `msg`'s bytes are copied into the new exception
+        // object before the call returns.
+        Value::from_raw(unsafe {
+            sys::mrb_exc_new(
+                mrb.as_ptr(),
+                self.0,
+                msg.as_ptr() as *const core::ffi::c_char,
+                len,
+            )
+        })
     }
 
     /// `mrb_exc_new_str(mrb, self, str)` — build an exception of this
@@ -338,18 +301,10 @@ impl RClass {
     /// runs no user Ruby.
     #[inline]
     pub fn exc_new_str(self, mrb: &Mrb, str: RString) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive; `self` and `str` originate from the
-            // same VM; `str` is a String-tagged value, so the call's
-            // string type guard cannot raise.
-            Value::from_raw(unsafe { sys::mrb_exc_new_str(mrb.as_ptr(), self.0, str.as_raw()) })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, str);
-            crate::not_linked()
-        }
+        // SAFETY: `mrb` is alive; `self` and `str` originate from the
+        // same VM; `str` is a String-tagged value, so the call's
+        // string type guard cannot raise.
+        Value::from_raw(unsafe { sys::mrb_exc_new_str(mrb.as_ptr(), self.0, str.as_raw()) })
     }
 }
 
@@ -386,29 +341,16 @@ pub trait Module: private::ClassLike {
         name: K,
         superclass: RClass,
     ) -> Result<RClass, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            protect_class_ptr(mrb, |mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` and `superclass` originate from the same VM;
-                // `sym` was interned against the same VM.
-                unsafe {
-                    sys::mrb_define_class_under_id(
-                        mrb.as_ptr(),
-                        self.raw(),
-                        sym,
-                        superclass.as_raw(),
-                    )
-                }
-            })
-            .map(RClass::from_raw)
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name, superclass);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        protect_class_ptr(mrb, |mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` and `superclass` originate from the same VM;
+            // `sym` was interned against the same VM.
+            unsafe {
+                sys::mrb_define_class_under_id(mrb.as_ptr(), self.raw(), sym, superclass.as_raw())
+            }
+        })
+        .map(RClass::from_raw)
     }
 
     /// `mrb_define_module_under_id(mrb, self, name)` — define (or
@@ -416,20 +358,12 @@ pub trait Module: private::ClassLike {
     /// symbol-or-name key (`IntoSym`). mruby rejects a same-named
     /// constant that is not a module.
     fn define_module<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            protect_class_ptr(mrb, |mrb| {
-                // SAFETY: as `define_class`.
-                unsafe { sys::mrb_define_module_under_id(mrb.as_ptr(), self.raw(), sym) }
-            })
-            .map(RModule::from_raw)
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        protect_class_ptr(mrb, |mrb| {
+            // SAFETY: as `define_class`.
+            unsafe { sys::mrb_define_module_under_id(mrb.as_ptr(), self.raw(), sym) }
+        })
+        .map(RModule::from_raw)
     }
 
     /// `mrb_class_get_under_id(mrb, self, name)` — fetch the nested
@@ -439,20 +373,12 @@ pub trait Module: private::ClassLike {
     /// `src/class.c` documents both), so the lookup is fallible by
     /// contract.
     fn class_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RClass, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            protect_class_ptr(mrb, |mrb| {
-                // SAFETY: as `define_class`.
-                unsafe { sys::mrb_class_get_under_id(mrb.as_ptr(), self.raw(), sym) }
-            })
-            .map(RClass::from_raw)
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        protect_class_ptr(mrb, |mrb| {
+            // SAFETY: as `define_class`.
+            unsafe { sys::mrb_class_get_under_id(mrb.as_ptr(), self.raw(), sym) }
+        })
+        .map(RClass::from_raw)
     }
 
     /// `mrb_module_get_under_id(mrb, self, name)` — fetch the nested
@@ -462,20 +388,12 @@ pub trait Module: private::ClassLike {
     /// `src/class.c` documents both), so the lookup is fallible by
     /// contract.
     fn module_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            protect_class_ptr(mrb, |mrb| {
-                // SAFETY: as `define_class`.
-                unsafe { sys::mrb_module_get_under_id(mrb.as_ptr(), self.raw(), sym) }
-            })
-            .map(RModule::from_raw)
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        protect_class_ptr(mrb, |mrb| {
+            // SAFETY: as `define_class`.
+            unsafe { sys::mrb_module_get_under_id(mrb.as_ptr(), self.raw(), sym) }
+        })
+        .map(RModule::from_raw)
     }
 
     /// `mrb_class_defined_under_id(mrb, self, name)` — TRUE when a
@@ -486,19 +404,11 @@ pub trait Module: private::ClassLike {
     /// before a namespaced fetching lookup that would raise on a
     /// missing name.
     fn class_defined<K: IntoSym>(self, mrb: &Mrb, name: K) -> bool {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            // SAFETY: `mrb` is alive; `self` originates from the same
-            // VM; `sym` was interned against it. `mrb_class_defined_under_id`
-            // is a constant-existence lookup that does not raise.
-            unsafe { sys::mrb_class_defined_under_id(mrb.as_ptr(), self.raw(), sym) }
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        // SAFETY: `mrb` is alive; `self` originates from the same
+        // VM; `sym` was interned against it. `mrb_class_defined_under_id`
+        // is a constant-existence lookup that does not raise.
+        unsafe { sys::mrb_class_defined_under_id(mrb.as_ptr(), self.raw(), sym) }
     }
 
     /// `mrb_define_method_id(mrb, self, name, func, aspec)` — register
@@ -508,28 +418,13 @@ pub trait Module: private::ClassLike {
     /// many required positionals). mruby rejects registration on a
     /// frozen receiver.
     fn define_method<K: IntoSym>(self, mrb: &Mrb, name: K, method: MethodDef) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            protect_register(mrb, method, |mrb, raw, aspec| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` was produced by the same VM; `sym` was
-                // interned against it; `raw` has the C ABI mruby expects.
-                unsafe { sys::mrb_define_method_id(mrb.as_ptr(), self.raw(), sym, raw, aspec) };
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (
-                mrb,
-                name,
-                method.func,
-                method.arity,
-                method.opt,
-                method.block,
-            );
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        protect_register(mrb, method, |mrb, raw, aspec| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` was produced by the same VM; `sym` was
+            // interned against it; `raw` has the C ABI mruby expects.
+            unsafe { sys::mrb_define_method_id(mrb.as_ptr(), self.raw(), sym, raw, aspec) };
+        })
     }
 
     /// `mrb_define_private_method_id(mrb, self, name, func, aspec)` —
@@ -543,29 +438,12 @@ pub trait Module: private::ClassLike {
         name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            protect_register(mrb, method, |mrb, raw, aspec| {
-                // SAFETY: as `define_method` — same signature, same
-                // contract.
-                unsafe {
-                    sys::mrb_define_private_method_id(mrb.as_ptr(), self.raw(), sym, raw, aspec)
-                };
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (
-                mrb,
-                name,
-                method.func,
-                method.arity,
-                method.opt,
-                method.block,
-            );
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        protect_register(mrb, method, |mrb, raw, aspec| {
+            // SAFETY: as `define_method` — same signature, same
+            // contract.
+            unsafe { sys::mrb_define_private_method_id(mrb.as_ptr(), self.raw(), sym, raw, aspec) };
+        })
     }
 
     /// `mrb_define_module_function_id(mrb, self, name, func, aspec)` —
@@ -581,29 +459,14 @@ pub trait Module: private::ClassLike {
         name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            protect_register(mrb, method, |mrb, raw, aspec| {
-                // SAFETY: as `define_method` — same signature, same
-                // contract.
-                unsafe {
-                    sys::mrb_define_module_function_id(mrb.as_ptr(), self.raw(), sym, raw, aspec)
-                };
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (
-                mrb,
-                name,
-                method.func,
-                method.arity,
-                method.opt,
-                method.block,
-            );
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        protect_register(mrb, method, |mrb, raw, aspec| {
+            // SAFETY: as `define_method` — same signature, same
+            // contract.
+            unsafe {
+                sys::mrb_define_module_function_id(mrb.as_ptr(), self.raw(), sym, raw, aspec)
+            };
+        })
     }
 
     /// `mrb_define_const_id(mrb, self, name, val)` — bind the constant
@@ -613,23 +476,15 @@ pub trait Module: private::ClassLike {
     /// rather than long-jumping — the same contract as the definition
     /// methods above.
     fn define_const<K: IntoSym>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` and `val` originate from the same VM; `sym`
-                // was interned against it.
-                unsafe { sys::mrb_define_const_id(mrb.as_ptr(), self.raw(), sym, val.as_raw()) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name, val);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` and `val` originate from the same VM; `sym`
+            // was interned against it.
+            unsafe { sys::mrb_define_const_id(mrb.as_ptr(), self.raw(), sym, val.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_define_alias_id(mrb, self, new, old)` — bind `new` as a
@@ -641,26 +496,18 @@ pub trait Module: private::ClassLike {
     /// `Err(Error::Exception)` (mruby's `NameError`) rather than
     /// long-jumping — the same contract as the definition methods above.
     fn alias_method<N: IntoSym, O: IntoSym>(self, mrb: &Mrb, new: N, old: O) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let new = new.into_sym(mrb);
-            let old = old.into_sym(mrb);
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` originates from the same VM; `new` and `old`
-                // were interned against it. The original-method lookup
-                // raises NameError when `old` is absent — caught by
-                // `protect`.
-                unsafe { sys::mrb_define_alias_id(mrb.as_ptr(), self.raw(), new, old) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, new, old);
-            crate::not_linked()
-        }
+        let new = new.into_sym(mrb);
+        let old = old.into_sym(mrb);
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` originates from the same VM; `new` and `old`
+            // were interned against it. The original-method lookup
+            // raises NameError when `old` is absent — caught by
+            // `protect`.
+            unsafe { sys::mrb_define_alias_id(mrb.as_ptr(), self.raw(), new, old) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_undef_method_id(mrb, self, name)` — undefine a method on
@@ -673,24 +520,16 @@ pub trait Module: private::ClassLike {
     /// `NameError`) rather than long-jumping — the same contract as the
     /// definition methods above.
     fn undef_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` originates from the same VM; `sym` was interned
-                // against it. `mrb_undef_method_id` raises NameError when
-                // the method is absent — caught by `protect`.
-                unsafe { sys::mrb_undef_method_id(mrb.as_ptr(), self.raw(), sym) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` originates from the same VM; `sym` was interned
+            // against it. `mrb_undef_method_id` raises NameError when
+            // the method is absent — caught by `protect`.
+            unsafe { sys::mrb_undef_method_id(mrb.as_ptr(), self.raw(), sym) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_remove_method(mrb, self, name)` — remove a method from this
@@ -703,24 +542,16 @@ pub trait Module: private::ClassLike {
     /// `Err(Error::Exception)` rather than long-jumping — the same contract
     /// as the definition methods above.
     fn remove_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` originates from the same VM; `sym` was interned
-                // against it. `mrb_remove_method` raises NameError when the
-                // method is not defined on the handle — caught by `protect`.
-                unsafe { sys::mrb_remove_method(mrb.as_ptr(), self.raw(), sym) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` originates from the same VM; `sym` was interned
+            // against it. `mrb_remove_method` raises NameError when the
+            // method is not defined on the handle — caught by `protect`.
+            unsafe { sys::mrb_remove_method(mrb.as_ptr(), self.raw(), sym) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_include_module(mrb, self, module)` — mix `module` into this
@@ -728,23 +559,15 @@ pub trait Module: private::ClassLike {
     /// `FrozenError` and a cyclic include raises `ArgumentError`; both
     /// surface as `Err` via `Mrb::protect`.
     fn include_module(self, mrb: &Mrb, module: RModule) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // and `module` originate from the same VM. `mrb_include_module`
-                // checks frozen state and rejects a cyclic include, raising
-                // FrozenError or ArgumentError — caught by `protect`.
-                unsafe { sys::mrb_include_module(mrb.as_ptr(), self.raw(), module.as_raw()) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, module);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // and `module` originate from the same VM. `mrb_include_module`
+            // checks frozen state and rejects a cyclic include, raising
+            // FrozenError or ArgumentError — caught by `protect`.
+            unsafe { sys::mrb_include_module(mrb.as_ptr(), self.raw(), module.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_prepend_module(mrb, self, module)` — mix `module` into this
@@ -753,23 +576,15 @@ pub trait Module: private::ClassLike {
     /// raises `FrozenError` and a cyclic prepend raises `ArgumentError`;
     /// both surface as `Err` via `Mrb::protect`.
     fn prepend_module(self, mrb: &Mrb, module: RModule) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; `self`
-                // and `module` originate from the same VM. `mrb_prepend_module`
-                // checks frozen state and rejects a cyclic prepend, raising
-                // FrozenError or ArgumentError — caught by `protect`.
-                unsafe { sys::mrb_prepend_module(mrb.as_ptr(), self.raw(), module.as_raw()) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, module);
-            crate::not_linked()
-        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `self`
+            // and `module` originate from the same VM. `mrb_prepend_module`
+            // checks frozen state and rejects a cyclic prepend, raising
+            // FrozenError or ArgumentError — caught by `protect`.
+            unsafe { sys::mrb_prepend_module(mrb.as_ptr(), self.raw(), module.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_class_name(mrb, self)` — the handle's full Ruby name as an
@@ -778,27 +593,19 @@ pub trait Module: private::ClassLike {
     /// name into a GC-managed temporary, so the bytes are copied out at
     /// once rather than borrowed.
     fn name(self, mrb: &Mrb) -> String {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `mrb` is alive by the borrow; `self` originates
-            // from the same VM by the single-VM contract.
-            let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.raw()) };
-            if ptr.is_null() {
-                return String::new();
-            }
-            // SAFETY: `ptr` is a valid C string for the duration of this
-            // call; copy its bytes before the temporary it points into
-            // can be collected.
-            unsafe { core::ffi::CStr::from_ptr(ptr) }
-                .to_str()
-                .unwrap_or("")
-                .to_owned()
+        // SAFETY: `mrb` is alive by the borrow; `self` originates
+        // from the same VM by the single-VM contract.
+        let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.raw()) };
+        if ptr.is_null() {
+            return String::new();
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        // SAFETY: `ptr` is a valid C string for the duration of this
+        // call; copy its bytes before the temporary it points into
+        // can be collected.
+        unsafe { core::ffi::CStr::from_ptr(ptr) }
+            .to_str()
+            .unwrap_or("")
+            .to_owned()
     }
 
     /// `mrb_class_path(mrb, self)` — the handle's fully-qualified path,
@@ -810,24 +617,16 @@ pub trait Module: private::ClassLike {
     /// answers the qualified path or nothing; both return an owned `String`
     /// copied out of mruby's freshly built string.
     fn path(self, mrb: &Mrb) -> Option<String> {
-        #[cfg(mruby_linked)]
-        {
-            use crate::FromValue;
-            // SAFETY: `mrb` is alive by the borrow; `self` originates
-            // from the same VM by the single-VM contract. `mrb_class_path`
-            // walks the namespace chain and never raises; it answers nil
-            // for an anonymous handle and a String otherwise.
-            let value = Value::from_raw(unsafe { sys::mrb_class_path(mrb.as_ptr(), self.raw()) });
-            if value.is_nil() {
-                return None;
-            }
-            String::from_value(value)
+        use crate::FromValue;
+        // SAFETY: `mrb` is alive by the borrow; `self` originates
+        // from the same VM by the single-VM contract. `mrb_class_path`
+        // walks the namespace chain and never raises; it answers nil
+        // for an anonymous handle and a String otherwise.
+        let value = Value::from_raw(unsafe { sys::mrb_class_path(mrb.as_ptr(), self.raw()) });
+        if value.is_nil() {
+            return None;
         }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = mrb;
-            crate::not_linked()
-        }
+        String::from_value(value)
     }
 }
 
@@ -851,37 +650,22 @@ pub trait Object: private::ClassLike {
         name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            protect_register(mrb, method, |mrb, raw, aspec| {
-                // SAFETY: as `Module::define_method`; the `RClass *` →
-                // `RObject *` cast mirrors mruby's own
-                // `mrb_define_class_method_id`, which casts `(struct
-                // RObject*)c` before this same call.
-                unsafe {
-                    sys::mrb_define_singleton_method_id(
-                        mrb.as_ptr(),
-                        self.raw() as *mut sys::RObject,
-                        sym,
-                        raw,
-                        aspec,
-                    )
-                };
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (
-                mrb,
-                name,
-                method.func,
-                method.arity,
-                method.opt,
-                method.block,
-            );
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        protect_register(mrb, method, |mrb, raw, aspec| {
+            // SAFETY: as `Module::define_method`; the `RClass *` →
+            // `RObject *` cast mirrors mruby's own
+            // `mrb_define_class_method_id`, which casts `(struct
+            // RObject*)c` before this same call.
+            unsafe {
+                sys::mrb_define_singleton_method_id(
+                    mrb.as_ptr(),
+                    self.raw() as *mut sys::RObject,
+                    sym,
+                    raw,
+                    aspec,
+                )
+            };
+        })
     }
 
     /// `mrb_undef_class_method_id(mrb, self, name)` — undefine a
@@ -892,25 +676,17 @@ pub trait Object: private::ClassLike {
     /// undefining a singleton name absent from the handle surfaces as
     /// `Err(Error::Exception)` (mruby's `NameError`).
     fn undef_singleton_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        #[cfg(mruby_linked)]
-        {
-            let sym = name.into_sym(mrb);
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `self` originates from the same VM; `sym` was interned
-                // against it. `mrb_undef_class_method_id` resolves the
-                // singleton class and raises NameError when the method is
-                // absent — caught by `protect`.
-                unsafe { sys::mrb_undef_class_method_id(mrb.as_ptr(), self.raw(), sym) };
-                Value::nil()
-            })
-            .map(|_| ())
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = (mrb, name);
-            crate::not_linked()
-        }
+        let sym = name.into_sym(mrb);
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` originates from the same VM; `sym` was interned
+            // against it. `mrb_undef_class_method_id` resolves the
+            // singleton class and raises NameError when the method is
+            // absent — caught by `protect`.
+            unsafe { sys::mrb_undef_class_method_id(mrb.as_ptr(), self.raw(), sym) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 }
 

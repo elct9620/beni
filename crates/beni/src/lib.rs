@@ -47,11 +47,7 @@
 // bindgen FFI surface: `Mrb` / `Ccontext` RAII, typed `Value` /
 // `RClass` / `RModule` / `Array` / `Hash` newtypes, and the `cstr!` / `cstr_ptr`
 // C-string helpers.
-//
-// Every module and re-export is unconditional: in placeholder mode
-// the full API surface still compiles (the spec's transitive-
-// dependency guarantee), with mruby-calling method bodies diverting
-// to `not_linked` — see that helper below.
+
 pub mod array;
 pub mod ccontext;
 pub mod class;
@@ -90,18 +86,6 @@ pub use string::RString;
 pub use symbol::{IntoSym, Symbol};
 pub use value::cstr_ptr;
 pub use value::{Break, Value};
-
-/// Placeholder-mode terminus for operations that need a linked
-/// mruby. Methods taking `&Mrb` can never reach it (`Mrb::open`
-/// returns `Err`, so no `Mrb` exists to borrow); pure value methods
-/// reach it only when called on a degenerate placeholder value.
-#[cfg(not(mruby_linked))]
-#[inline]
-pub(crate) fn not_linked() -> ! {
-    panic!(
-        "beni placeholder mode: mruby is not linked; this operation needs a discovered libmruby.a"
-    )
-}
 
 /// Raw FFI escape hatch. Use `beni::sys::mrb_*` when the typed API
 /// in this crate's root does not yet cover a needed symbol. Anything

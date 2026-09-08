@@ -34,8 +34,8 @@
 #     the `IntoValue` / `FromValue` trait seam, the `Format`-based
 #     `mrb_get_args` dispatch, and the typed `mrb_func_t` alias all
 #     live in the sibling `beni` crate. This crate stays a pure
-#     FFI surface (bindings + ABI constants + host placeholders);
-#     the typed wrappers consume it as a path dependency.
+#     FFI surface (bindings + ABI constants); the typed wrappers
+#     consume it as a path dependency.
 
 [package]
 name = "beni-sys"
@@ -47,9 +47,8 @@ description = "bindgen-driven mruby C API FFI bindings and layout-safe C shims; 
 readme = "README.md"
 keywords = ["mruby", "ruby", "ffi", "bindings"]
 categories = ["external-ffi-bindings"]
-# Exactly one crate links libmruby; build.rs publishes `cargo:linked=1`
-# through this key so the `beni` wrapper's build script can mirror the
-# `mruby_linked` cfg via DEP_MRUBY_LINKED.
+# Names the native library this crate links, so cargo refuses a graph
+# where two packages would link libmruby.
 links = "mruby"
 
 [lib]

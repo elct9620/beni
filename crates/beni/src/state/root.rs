@@ -16,10 +16,8 @@
 //! interpreter holds, so releasing one clears that slot and leaves every
 //! other slot — including another root over the same value — standing.
 
-#[cfg(mruby_linked)]
 use crate::{Array, FromValue as _};
 use crate::{Error, Mrb, Value};
-#[cfg(mruby_linked)]
 use beni_sys as sys;
 
 impl Mrb {
@@ -31,18 +29,10 @@ impl Mrb {
     /// Rooting an immediate value is a no-op, immediates being values
     /// the collector never reclaims.
     pub fn gc_register_forever(&self, v: Value) {
-        #[cfg(mruby_linked)]
-        {
-            // SAFETY: `self` is alive by the `&self` borrow and `v`
-            // originates from the same VM; the registry only records the
-            // value, and this shape never removes it again.
-            unsafe { sys::mrb_gc_register(self.as_ptr(), v.as_raw()) };
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = v;
-            crate::not_linked()
-        }
+        // SAFETY: `self` is alive by the `&self` borrow and `v`
+        // originates from the same VM; the registry only records the
+        // value, and this shape never removes it again.
+        unsafe { sys::mrb_gc_register(self.as_ptr(), v.as_raw()) };
     }
 
     /// Root `v` until the returned guard is dropped, so it stays
@@ -52,29 +42,20 @@ impl Mrb {
     /// value standing. Fallible because taking a root grows the record
     /// of roots — no root is taken when it fails.
     pub fn gc_root(&self, v: Value) -> Result<GcRoot<'_>, Error> {
-        #[cfg(mruby_linked)]
-        {
-            let table = self.root_table()?;
-            let slot = table.claim(self, v)?;
-            Ok(GcRoot {
-                mrb: self,
-                table,
-                slot,
-                value: v,
-            })
-        }
-        #[cfg(not(mruby_linked))]
-        {
-            let _ = v;
-            crate::not_linked()
-        }
+        let table = self.root_table()?;
+        let slot = table.claim(self, v)?;
+        Ok(GcRoot {
+            mrb: self,
+            table,
+            slot,
+            value: v,
+        })
     }
 
     /// The array holding one slot per live root, created on first use
     /// and kept reachable for the interpreter's lifetime by the global
     /// it is stored under. The name carries no `$`, so no Ruby program
     /// can reach the table by writing a global variable.
-    #[cfg(mruby_linked)]
     fn root_table(&self) -> Result<RootTable, Error> {
         let slot = self.intern_static(TABLE_GLOBAL);
         if let Some(table) = Array::from_value(self.gv_get(slot)) {
@@ -94,11 +75,9 @@ impl Mrb {
 /// holds the index of the first free slot (zero when there is none),
 /// and each free slot holds the index of the next one, so a released
 /// slot is reused without scanning.
-#[cfg(mruby_linked)]
 #[derive(Clone, Copy)]
 struct RootTable(Array);
 
-#[cfg(mruby_linked)]
 impl RootTable {
     /// Store `v` in a free slot, reusing a released one when the free
     /// list has any and growing the table when it does not.
@@ -141,7 +120,6 @@ impl RootTable {
 
 /// The global the root table is stored under. The name carries no `$`,
 /// so no Ruby program can reach the table by writing a global variable.
-#[cfg(mruby_linked)]
 const TABLE_GLOBAL: &[u8] = b"beni_gc_roots";
 
 /// One root over one value, released when dropped. Roots over the same
@@ -157,16 +135,10 @@ const TABLE_GLOBAL: &[u8] = b"beni_gc_roots";
 /// carried::<beni::GcRoot<'static>>();
 /// ```
 pub struct GcRoot<'mrb> {
-    #[cfg(mruby_linked)]
     mrb: &'mrb Mrb,
-    #[cfg(mruby_linked)]
     table: RootTable,
-    #[cfg(mruby_linked)]
     slot: usize,
-    #[cfg(mruby_linked)]
     value: Value,
-    #[cfg(not(mruby_linked))]
-    _mrb: core::marker::PhantomData<&'mrb Mrb>,
 }
 
 impl GcRoot<'_> {
@@ -174,28 +146,20 @@ impl GcRoot<'_> {
     /// is released, which consumes the guard, so this stays what was
     /// rooted for as long as the guard lives.
     pub fn value(&self) -> Value {
-        #[cfg(mruby_linked)]
-        {
-            self.value
-        }
-        #[cfg(not(mruby_linked))]
-        crate::not_linked()
+        self.value
     }
 }
 
 impl Drop for GcRoot<'_> {
     fn drop(&mut self) {
-        #[cfg(mruby_linked)]
-        {
-            // A refused release leaves the value rooted for the
-            // interpreter's remaining lifetime — over-retention, never a
-            // value collected while a holder still names it.
-            let _ = self.table.release(self.mrb, self.slot);
-        }
+        // A refused release leaves the value rooted for the
+        // interpreter's remaining lifetime — over-retention, never a
+        // value collected while a holder still names it.
+        let _ = self.table.release(self.mrb, self.slot);
     }
 }
 
-#[cfg(all(test, mruby_linked))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::{FromValue, RString};
