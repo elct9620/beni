@@ -231,7 +231,9 @@ typed:
   mrb_iv_set: Value::iv_set
   mrb_load_irep_buf: Mrb::load_irep_buf
   mrb_load_nstring: Mrb::load_string
-  mrb_load_nstring_cxt: Ccontext::load_nstring
+  mrb_parse_nstring: Ccontext::load_nstring
+  mrb_load_exec: Ccontext::load_nstring
+  mrb_parser_free: Ccontext::load_nstring
   mrb_load_string: "`Mrb::load_string` — the cstr `mrb_load_string(mrb, s)` is `mrb_load_nstring` over `strlen(s)`; a Rust `&[u8]` carries its own length, so the length-carrying call subsumes it and no separate item is needed"
   mrb_module_get: "`Mrb::module_get` with a name key — interns and routes through `mrb_module_get_id`"
   mrb_module_get_id: "`Mrb::module_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
@@ -318,6 +320,19 @@ extensions:
     `Error::argnum` builds the canonical wrong-argument-count
     `ArgumentError` (via `mrb_argnum_error`) for a handler validating its
     own arity.
+  ParseMessage: >-
+    One compiler diagnostic's line, column, and text, read through accessors.
+    mruby publishes `struct mrb_parser_message` as a parser field rather than
+    through any call, so there is no C API to bind: the typed surface copies
+    the slot out while the parser is alive and hands back an owned value that
+    outlives it. `Ccontext::load_nstring` returns the first recorded error as
+    `Error::Syntax`, and `Ccontext::warnings` answers the load's warnings.
+  Error::backtrace: >-
+    An exception's frames as rendered strings. Composes the already-graduated
+    `Value::funcall`, `Value::ensure_array`, and the String-tag read rather
+    than binding a C symbol — `mrb_exc_backtrace` is declared in
+    `include/mruby/internal.h`, outside the embedder API the measure covers.
+    Whatever holds no frames answers an empty list.
   ArenaScope: >-
     RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore`
     with a `mrb_gc_protect` keep — a safety guard with no single C API.
@@ -410,6 +425,7 @@ subsumed:
   mrb_funcall: "`Value::funcall`, `Value::funcall_argv` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"
   mrb_funcall_id: "`Value::funcall`, `Value::funcall_argv` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"
   mrb_yield: "`Proc::call` — the one-argument form of `mrb_yield_argv` (`vendor/mruby/src/vm.c:1328` passes `1, &arg` to the same `yield_with_attr`); a Rust slice of one carries it"
+  mrb_load_nstring_cxt: "`Ccontext::load_nstring` — the one-call form, whose body is `mrb_load_exec(mrb, mrb_parse_nstring(mrb, s, len, c), c)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7862-7865`); the typed load drives those two calls itself so it can read the parser's diagnostic buffer between them, which the one-call form frees before returning"
   mrb_load_string_cxt: "`Ccontext::load_nstring` — the NUL-terminated form of `mrb_load_nstring_cxt` over `strlen`; a Rust byte slice carries its own length, so the length-taking call subsumes it"
   mrb_garbage_collect: "`Mrb::full_gc` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection"
   mrb_protect: "`Mrb::protect` — the older `mrb_func_t` + `mrb_value data` form, whose body is `mrb_protect_error(mrb, protect_body, &protect_data, state)` and nothing else (`vendor/mruby/mrbgems/mruby-error/src/exception.c:34-37`); a Rust closure carries the body-and-data pair the C form spells out as two arguments"

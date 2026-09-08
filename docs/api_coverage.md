@@ -9,9 +9,9 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 321 | 320 (100%) | 217 (68%) |
+| function | 321 | 320 (100%) | 220 (69%) |
 | macro | 111 | 28 (25%) | 68 (61%) |
-| total | 432 | 348 (81%) | 285 (66%) |
+| total | 432 | 348 (81%) | 288 (67%) |
 
 ## mruby.h
 
@@ -286,17 +286,17 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_ccontext_partial_hook` | fn | ✅ | — |  |
 | `mrb_generate_code` | fn | ✅ | — |  |
 | `mrb_load_detect_file_cxt` | fn | ✅ | — |  |
-| `mrb_load_exec` | fn | ✅ | — |  |
+| `mrb_load_exec` | fn | ✅ | ✅ | `Ccontext::load_nstring` |
 | `mrb_load_file` | fn | ✅ | — |  |
 | `mrb_load_file_cxt` | fn | ✅ | — |  |
 | `mrb_load_nstring` | fn | ✅ | ✅ | `Mrb::load_string` |
-| `mrb_load_nstring_cxt` | fn | ✅ | ✅ | `Ccontext::load_nstring` |
+| `mrb_load_nstring_cxt` | fn | ✅ | ✅ | subsumed: `Ccontext::load_nstring` — the one-call form, whose body is `mrb_load_exec(mrb, mrb_parse_nstring(mrb, s, len, c), c)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7862-7865`); the typed load drives those two calls itself so it can read the parser's diagnostic buffer between them, which the one-call form frees before returning |
 | `mrb_load_string` | fn | ✅ | ✅ | `Mrb::load_string` — the cstr `mrb_load_string(mrb, s)` is `mrb_load_nstring` over `strlen(s)`; a Rust `&[u8]` carries its own length, so the length-carrying call subsumes it and no separate item is needed |
 | `mrb_load_string_cxt` | fn | ✅ | ✅ | subsumed: `Ccontext::load_nstring` — the NUL-terminated form of `mrb_load_nstring_cxt` over `strlen`; a Rust byte slice carries its own length, so the length-taking call subsumes it |
 | `mrb_parse_file` | fn | ✅ | — |  |
-| `mrb_parse_nstring` | fn | ✅ | — |  |
+| `mrb_parse_nstring` | fn | ✅ | ✅ | `Ccontext::load_nstring` |
 | `mrb_parse_string` | fn | ✅ | — |  |
-| `mrb_parser_free` | fn | ✅ | — |  |
+| `mrb_parser_free` | fn | ✅ | ✅ | `Ccontext::load_nstring` |
 | `mrb_parser_get_filename` | fn | ✅ | — |  |
 | `mrb_parser_new` | fn | ✅ | — |  |
 | `mrb_parser_parse` | fn | ✅ | — |  |
@@ -582,7 +582,9 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `Array::entries` | `ExactSizeIterator` walk of an array by C-level index: composes the already-graduated `Array::entry` (`mrb_ary_entry`) and `Array::len` (`RARRAY_LEN`) over a length snapshot taken when the walk begins, binding no new C symbol. A live view rather than a content snapshot — a re-entrant mutation is only partly visible, and a position the array no longer reaches reads `nil` — dispatching no Ruby, the idiomatic Rust surface over mruby's caller-side index loop (which the C API has no iterator primitive for). |
 | `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, adding Rust-side type safety to the data pointer. `RClass::data_wrap` returns a `Result` and runs the alloc under `protect`, reclaiming the boxed payload when the wrap raises: allocating against a class not yet marked CDATA raises, and marking is a deliberately separate class-setup step (`RClass::set_instance_data_tt`) — mruby's two-step design marks the class once at setup and wraps per instance, so `data_wrap` neither folds the mark in nor presumes it, leaving the caller to assemble both steps. The `DataType::dfree` release hook wraps the payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame of mruby's GC sweep, where unwinding is undefined. |
 | `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by `Mrb::protect` (`mrb_protect_error`). `Error::new` builds an exception error from a class and a message (via `RClass::exc_new`) for a handler to raise its own exception, and `Error::argnum` builds the canonical wrong-argument-count `ArgumentError` (via `mrb_argnum_error`) for a handler validating its own arity. |
+| `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `Value::funcall`, `Value::ensure_array`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
 | `GcRoot` | The releasable root: a guard holding one slot of a table the interpreter keeps, released when the guard drops. Binds no new C symbol — it composes the already-graduated array and global-variable primitives — because the C pair it would otherwise wrap cannot carry it: `mrb_gc_unregister` removes by value, so one holder's release would drop every other root over the same value. A slot is the per-root identity mruby's registry lacks, the same role the storage address plays for CRuby's `rb_gc_register_address`. Released slots go on an intrusive free list so a long-running consumer's table stops growing. A refused release leaves the value rooted for the interpreter's remaining lifetime — over-retention, never a value collected while a holder still names it. |
 | `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
 | `Mrb::rescue` | `begin`/`rescue` combinator: a safe composition of the already-graduated `Mrb::protect` (`mrb_protect_error`) and `Value::is_kind_of` (`mrb_obj_is_kind_of`) class-list filter, the typed-surface equivalent of mruby's `mrb_rescue` / `mrb_rescue_exceptions` with a `&[RClass]` slice replacing the raw `RClass**` array. Binds no new C symbol — keeping it a composition is the point. An empty class list intercepts nothing (no implicit `StandardError` default — a caller wanting the bare-`rescue` default names `StandardError` itself); an exception matching no listed class, and a Rust panic, are not caught and propagate unchanged. |
+| `ParseMessage` | One compiler diagnostic's line, column, and text, read through accessors. mruby publishes `struct mrb_parser_message` as a parser field rather than through any call, so there is no C API to bind: the typed surface copies the slot out while the parser is alive and hands back an owned value that outlives it. `Ccontext::load_nstring` returns the first recorded error as `Error::Syntax`, and `Ccontext::warnings` answers the load's warnings. |
 | `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` and `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as arbitrary owned bytes). |

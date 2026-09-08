@@ -8,7 +8,7 @@ mirrors magnus + rb-sys at the CRuby boundary:
 surface, this crate owns every abstraction above it.
 
 - `Mrb` / `Ccontext` — RAII owners of the interpreter state and
-  parser contexts
+  compile contexts
 - `Value` / `RClass` / `RModule` / `Array` / `Hash` — typed handles
   over `mrb_value`
 - `IntoValue` / `FromValue` — the Rust ⇄ mruby conversion seam

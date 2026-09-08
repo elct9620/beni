@@ -116,3 +116,63 @@ impl ParseMessage {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a diagnostic slot. `text` must outlive the slot's use.
+    fn slot(lineno: u16, column: i32, text: Option<&std::ffi::CStr>) -> sys::mrb_parser_message {
+        sys::mrb_parser_message {
+            lineno,
+            column,
+            message: text.map_or(core::ptr::null_mut(), |t| t.as_ptr().cast_mut()),
+        }
+    }
+
+    #[test]
+    fn first_recorded_passes_over_a_slot_the_compiler_never_wrote() {
+        // The parser counts a diagnostic before it writes one, so a
+        // failure arriving between the two leaves slot 0 empty while
+        // the diagnostic lands in slot 1.
+        let buffer = [
+            slot(0, 0, None),
+            slot(7, 3, Some(c"memory allocation error")),
+            slot(0, 0, None),
+        ];
+
+        let got = unsafe { ParseMessage::first_recorded(&buffer) };
+
+        assert_eq!(got.line(), 7);
+        assert_eq!(got.column(), 3);
+        assert_eq!(got.message(), "memory allocation error");
+    }
+
+    #[test]
+    fn first_recorded_reports_no_position_when_nothing_was_written() {
+        let buffer = [slot(9, 9, None), slot(9, 9, None)];
+
+        let got = unsafe { ParseMessage::first_recorded(&buffer) };
+
+        assert_eq!(got, ParseMessage::unrecorded());
+        assert_eq!(got.line(), 0);
+        assert_eq!(got.column(), 0);
+        assert_eq!(got.message(), "");
+    }
+
+    #[test]
+    fn recorded_collects_every_written_slot_in_order() {
+        let buffer = [
+            slot(1, 0, Some(c"first")),
+            slot(2, 4, Some(c"second")),
+            slot(0, 0, None),
+        ];
+
+        let got = unsafe { ParseMessage::recorded(&buffer) };
+
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].message(), "first");
+        assert_eq!(got[1].line(), 2);
+        assert_eq!(got[1].column(), 4);
+    }
+}
