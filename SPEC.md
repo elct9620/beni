@@ -823,6 +823,13 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   that distinguish those cases are mruby VM internals with no stable public
   accessor; the typed surface does not expose them, so a consumer that must
   classify reaches them through the `beni::sys` escape hatch.
+- A Proc answers its compiled form as a byte buffer of its own — the bytecode a
+  bytecode load reads back. A Proc backed by a C function has none, and a dump
+  mruby cannot complete produces none; both surface as a Rust `Err` carrying an
+  exception, as every other failure the typed surface reports does.
+- A dump carries the instructions alone. The line numbers a loaded program's
+  exceptions are backtraced from, and the local variable names, are each carried
+  only when the caller asks for that one.
 - `Mrb::rescue` runs a body closure under exception protection and recovers a
   caught exception with a handler closure, mirroring a Ruby `begin`/`rescue`
   over a chosen set of exception classes. It takes a class list as a slice of
@@ -941,9 +948,9 @@ The `compiler` capability feature carries everything in this section.
   admitted one at a time and never by taking its header in whole; it is admitted
   only where no published symbol delivers the capability and the graduation rule
   above can encode its invariants, so it lands on the safe typed surface rather
-  than beside it; and each admission records what settles it. Admission reaches
-  the typed surface and stops: an internal symbol is never re-exported raw, so a
-  consumer never holds a symbol mruby promises them nothing about.
+  than beside it; and each admission records what settles it. An internal symbol
+  is admitted for the typed item that carries it and never on its own, so
+  nothing enters on the chance that a consumer might one day want it.
 - `docs/api_coverage.md` measures how far the typed surface has graduated
   mruby's embedder API — the functions and macros an embedder calls across the
   public embedder headers. A capability the typed surface graduates through a
@@ -1025,6 +1032,7 @@ The `compiler` capability feature carries everything in this section.
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
 | A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
+| Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
 | A `Mrb::rescue` body raising an exception instance of a class in the list | the handler runs on a handle with no pending exception and receives the caught exception; its result is the outcome |
 | A `Mrb::rescue` body raising an exception instance of no class in the list | not rescued; surfaced as the body's Rust `Err` unchanged, never unwinds across FFI |
