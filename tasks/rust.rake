@@ -17,9 +17,7 @@
 #                              the vendored libmruby.a
 #   $ rake rust:test         — cargo test, host target, linked against
 #                              the vendored libmruby.a
-#   $ rake rust:check:wasm   — cargo check on wasm32-wasip1 (degrades to
-#                              host with a warning when the Rust target
-#                              is not provisioned)
+#   $ rake rust:check:wasm   — cargo check on wasm32-wasip1
 #   $ rake rust:link:wasm    — link wasm32-wasip1 test binaries against the
 #                              staged archive. `cargo check` never reaches
 #                              the linker, so this is what exercises the
@@ -52,18 +50,12 @@ namespace :rust do
   end
 
   namespace :check do
-    desc "cargo check the workspace on wasm32-wasip1 (host fallback when unprovisioned)"
+    desc "cargo check the workspace on wasm32-wasip1"
     task :wasm do
       abort "cargo not on PATH; install Rust toolchain to run rust:check:wasm" unless BeniRust.cargo_available?
+      abort BeniRust::MISSING_WASM_TARGET unless BeniRust.wasm_target_installed?
 
-      target = BeniRust.wasm_target_or_host
-      if target.nil?
-        warn "[rust] #{BeniRust::WASM_TARGET} not provisioned; falling back to host check"
-        Rake::Task["rust:check"].invoke
-        next
-      end
-
-      sh(BeniRust.wasm_env, "cargo", "check", "--workspace", "--target", target)
+      sh(BeniRust.wasm_env, "cargo", "check", "--workspace", "--target", BeniRust::WASM_TARGET)
     end
   end
 
@@ -75,14 +67,9 @@ namespace :rust do
     desc "link wasm32-wasip1 test binaries against the staged archive"
     task :wasm do
       abort "cargo not on PATH; install Rust toolchain to run rust:link:wasm" unless BeniRust.cargo_available?
+      abort BeniRust::MISSING_WASM_TARGET unless BeniRust.wasm_target_installed?
 
-      target = BeniRust.wasm_target_or_host
-      if target.nil?
-        warn "[rust] #{BeniRust::WASM_TARGET} not provisioned; skipping the wasm link"
-        next
-      end
-
-      sh(BeniRust.wasm_env, "cargo", "test", "--workspace", "--target", target, "--no-run")
+      sh(BeniRust.wasm_env, "cargo", "test", "--workspace", "--target", BeniRust::WASM_TARGET, "--no-run")
     end
   end
 

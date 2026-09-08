@@ -16,6 +16,8 @@ require "rbconfig"
 module BeniRust
   ROOT = File.expand_path("../..", __dir__)
   WASM_TARGET = "wasm32-wasip1"
+  MISSING_WASM_TARGET = "#{WASM_TARGET} is not installed; run `rustup target add #{WASM_TARGET}` " \
+                        "(rust-toolchain.toml declares it, so a rustup-managed toolchain has it)".freeze
 
   # Scratch build dir for the default-ABI leg. Lives under tmp/
   # (gitignored) and is incremental across runs.
@@ -70,21 +72,13 @@ module BeniRust
     system(env, *cmd, chdir: chdir, exception: true)
   end
 
-  # Returns WASM_TARGET if the toolchain has it provisioned, otherwise nil
-  # so the caller falls back to the host target. Keeps the task useful in
-  # CI lanes that haven't yet installed the cross target.
-  def self.wasm_target_or_host
-    out, status = Open3.capture2("rustc", "--print", "target-list")
-    return nil unless status.success?
-    return nil unless out.include?(WASM_TARGET)
-
-    # Probe whether the target's sysroot is actually present; if absent,
-    # cargo check would fail. Degrade gracefully to host instead.
-    _probe, probe_status = Open3.capture2(
-      "rustc", "--target", WASM_TARGET, "--print", "sysroot"
-    )
-    probe_status.success? ? WASM_TARGET : nil
+  # Whether the wasm target's standard library is installed. The sysroot
+  # prints for any triple rustc knows, installed or not, so what settles
+  # it is the target's own lib directory holding the compiled std.
+  def self.wasm_target_installed?
+    libdir, status = Open3.capture2("rustc", "--print", "target-libdir", "--target", WASM_TARGET)
+    status.success? && !Dir.glob(File.join(libdir.strip, "*.rlib")).empty?
   rescue StandardError
-    nil
+    false
   end
 end
