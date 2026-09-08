@@ -109,3 +109,46 @@ fn a_context_survives_a_parse_failure_and_keeps_loading() {
 
     assert_eq!(i32::from_value(got), Some(2));
 }
+
+#[test]
+fn warnings_carry_the_compiler_diagnostics_a_load_produced() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    // `else` on a `begin` with no `rescue` never runs; mruby warns.
+    let got = cxt
+        .load_nstring(b"begin\n  1\nelse\n  2\nend\n")
+        .expect("a warning must not change the load's outcome");
+
+    assert_eq!(i32::from_value(got), Some(2), "the useless else still runs");
+    let warnings = cxt.warnings();
+    assert_eq!(warnings.len(), 1, "got {warnings:?}");
+    assert!(
+        warnings[0].message().contains("else without rescue"),
+        "unexpected warning: {}",
+        warnings[0].message()
+    );
+    // mruby resolves the `begin` node at its `end`, so that is where it
+    // places the warning.
+    assert_eq!(warnings[0].line(), 5);
+}
+
+#[test]
+fn warnings_answer_empty_before_a_load_and_after_a_clean_one() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    assert!(cxt.warnings().is_empty(), "a context that has run no load");
+
+    cxt.load_nstring(b"begin\n  1\nelse\n  2\nend\n")
+        .expect("the warning source must still run");
+    assert_eq!(cxt.warnings().len(), 1);
+
+    cxt.load_nstring(b"1 + 1").expect("clean source must run");
+    assert!(
+        cxt.warnings().is_empty(),
+        "warnings answer the most recent load, not every load"
+    );
+}

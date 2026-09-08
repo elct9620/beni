@@ -9,10 +9,12 @@
 //!
 //! The context also captures the compiler's diagnostics instead of
 //! letting mruby print them: a load hands back the first error as a
-//! `ParseMessage`, which is the only place that location surfaces.
+//! `ParseMessage` and the context keeps that load's warnings as more
+//! of them, which is the only place either location surfaces.
 
 use crate::{Error, Mrb, ParseMessage, Value};
 use beni_sys as sys;
+use core::cell::RefCell;
 
 /// Owned mruby compile context, tied to the lifetime of an `Mrb`.
 ///
@@ -31,6 +33,11 @@ use beni_sys as sys;
 pub struct Ccontext<'mrb> {
     mrb: &'mrb Mrb,
     raw: *mut sys::mrb_ccontext,
+    /// The warnings the most recent load produced. A load takes
+    /// `&self` so the interpreter can be reached from a registered
+    /// method's frame; the cell is what lets it record on the way
+    /// through.
+    warnings: RefCell<Vec<ParseMessage>>,
 }
 
 impl<'mrb> Ccontext<'mrb> {
@@ -59,7 +66,11 @@ impl<'mrb> Ccontext<'mrb> {
         // the raw setter writes the bitfield through a pointer rather
         // than forming a `&mut` to memory mruby owns.
         unsafe { sys::mrb_ccontext::set_capture_errors_raw(raw, true) };
-        Some(Self { mrb, raw })
+        Some(Self {
+            mrb,
+            raw,
+            warnings: RefCell::new(Vec::new()),
+        })
     }
 
     /// Compile and evaluate `source` under this context, yielding the
@@ -86,8 +97,14 @@ impl<'mrb> Ccontext<'mrb> {
             )
         };
         if parser.is_null() {
+            self.warnings.replace(Vec::new());
             return Err(Error::Syntax(ParseMessage::unrecorded()));
         }
+
+        // SAFETY: `parser` is non-NULL and untouched since the parse;
+        // the buffer outlives this read either way.
+        let warnings = unsafe { ParseMessage::recorded(&(*parser).warn_buffer) };
+        self.warnings.replace(warnings);
 
         // SAFETY: `parser` is non-NULL and untouched since the parse.
         let parsed = unsafe { (*parser).nerr == 0 && !(*parser).tree.is_null() };
@@ -116,6 +133,16 @@ impl<'mrb> Ccontext<'mrb> {
             self.mrb.clear_exc();
             Err(Error::Exception(exc))
         }
+    }
+
+    /// The warnings the compiler produced for the most recent load.
+    ///
+    /// Warnings do not change a load's outcome: a load that produces
+    /// warnings and no error still yields its value. A context that
+    /// has run no load, or whose most recent load warned about
+    /// nothing, answers an empty list.
+    pub fn warnings(&self) -> Vec<ParseMessage> {
+        self.warnings.borrow().clone()
     }
 }
 

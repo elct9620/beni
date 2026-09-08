@@ -3,7 +3,8 @@
 //! mruby's parser records each diagnostic it produces — an error or a
 //! warning — as a line, a column, and message text. `ParseMessage` is
 //! the shape those cross into Rust in: `Ccontext::load_nstring`
-//! returns one as `Error::Syntax` for source that does not parse.
+//! returns one as `Error::Syntax` for source that does not parse, and
+//! `Ccontext::warnings` answers the load's warnings as more of them.
 
 use beni_sys as sys;
 
@@ -48,6 +49,21 @@ impl ParseMessage {
             column: 0,
             message: String::new(),
         }
+    }
+
+    /// Copy every diagnostic the compiler wrote into `buffer`, in the
+    /// order it wrote them.
+    ///
+    /// # Safety
+    ///
+    /// `buffer` must belong to a parser that has not been freed.
+    pub(crate) unsafe fn recorded(buffer: &[sys::mrb_parser_message]) -> Vec<Self> {
+        buffer
+            .iter()
+            .filter(|slot| !slot.message.is_null())
+            // SAFETY: the slot is live by the caller's guarantee.
+            .map(|slot| unsafe { Self::from_slot(slot) })
+            .collect()
     }
 
     /// Copy the first diagnostic the compiler wrote into `buffer`.
