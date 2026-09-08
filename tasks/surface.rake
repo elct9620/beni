@@ -9,7 +9,7 @@ namespace :api do
   desc "Verify the compile-surface test references every inherent pub fn"
   task :surface do
     report = BeniSurface.verify
-    report.missing.each { |entry| puts "[api:surface] missing reference: #{entry.ref}" }
+    report.missing.each { |entry| puts "[api:surface] missing reference: #{entry.label}" }
     report.stale.each { |ref| puts "[api:surface] stale reference: #{ref}" }
     abort "[api:surface] surface drift detected" unless report.ok?
 
