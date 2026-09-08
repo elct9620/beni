@@ -29,6 +29,9 @@ the resulting `libmruby.a`.
 - The documentation host renders the published crates without an archive,
   so the typed surface can be read before a build chain exists to try it
   against.
+- A Rust project that embeds mruby without compiling Ruby at run time drops
+  the surface that needs mruby's compiler gem by disabling default features,
+  rather than linking a compiler it never calls.
 
 ## Success criteria
 
@@ -41,6 +44,9 @@ the resulting `libmruby.a`.
 - The `beni` crate's behavior is verified from outside the crate, through its
   public paths alone, so every export those paths cross — the `sys` re-export
   among them — fails the suite the moment it stops being public.
+- The `beni` crate builds and links with its default features disabled
+  against an archive built without mruby's compiler gem, and none of the
+  compiler surface is reachable in that build.
 - Outside a documentation build, a build with no archive discovery
   variable set fails on every cargo target, naming the variables archive
   discovery consults.
@@ -217,6 +223,31 @@ Selection, checksums, and cross-compile activation:
   bindings from the discovered archive's own headers.
 
 ### beni crate — typed wrapper
+
+#### Capability features
+
+- The surface a consumer gets by default is mruby's core capability plus every
+  capability feature. A capability mruby keeps in a gem rather than its core is
+  carried by a capability feature, so a consumer who never wanted that gem can
+  drop the surface that needs it and still have a crate that builds.
+- A capability feature answers whether a consumer wants the capability, not
+  whether the archive in front of the crate carries it. The crate reads no gem
+  inventory and adapts to no archive: the consumer's declaration settles which
+  surface exists, and an archive that does not carry what the declaration names
+  is the consumer's to reconcile.
+- Enabling a capability feature only adds surface. No combination of features
+  removes or replaces an item another combination carries, and that holds inside
+  a type as well as across the crate: the error a fallible operation answers has
+  one shape in every build, so a consumer matching on it writes the same match
+  whatever they enabled. A feature carries operations, never the shapes their
+  results are reported in.
+- `compiler` is a capability feature, enabled by default, carrying what mruby's
+  compiler gem defines: the compile context and the loads that compile Ruby
+  source into the running interpreter. It carries the compiler gem's function
+  surface exactly — loading precompiled bytecode needs no compiler and stays
+  outside it — and the parse message a compile failure is reported in stays
+  outside it too, being one of those shapes. Disabling default features is how a
+  consumer that never compiles Ruby at run time says so.
 
 #### Handle, values, and conversions
 
@@ -815,6 +846,8 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   surface.
 #### Compiling and running source
 
+The `compiler` capability feature carries everything in this section.
+
 - A compile context is created against a live interpreter with a filename and
   released when it is dropped, never outliving that interpreter and staying on
   the thread that made it. The filename is stamped onto everything compiled
@@ -830,6 +863,20 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   carries a parse message, while a codegen failure or an exception raised while
   the program runs carries the exception, the pending exception cleared from
   the handle as it crosses out. Only the exception carries a backtrace.
+- Compiling a slice of Ruby source under a context without running it yields the
+  compiled program as a typed `Proc`. The two failures surface as they do for a
+  load that runs — a parse failure carrying a parse message, a codegen failure
+  carrying the exception — so the two operations differ in what they produce and
+  in nothing else, the warnings the context answers included. Whether an
+  operation stops before running is settled per operation and is never a state
+  the context keeps, so no load's meaning depends on what an earlier call left
+  behind.
+- A compiled program is invoked through `Proc::call` like any other block, and
+  invoking it runs the program at the interpreter's top level. It does not carry
+  the context's top-level local variables: those reach a program the context
+  itself runs, and a program the caller invokes starts without them. It is a
+  value like any other, so outliving the arena scope that produced it needs a
+  root.
 - A parse message carries one compiler diagnostic's line, column, and message
   text, read through accessors rather than exposed as fields. Source that does
   not parse surfaces the first diagnostic the compiler recorded; where the
@@ -887,6 +934,16 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   want of an unbuilt carrier graduates once the carrier exists, unlike one
   permanently VM-internal. Closing a consumer's `beni::sys` use to zero is
   not a goal; any unexposed C API stays reachable there.
+- mruby stages its whole include tree beside an archive, the header it marks as
+  internal to the library included, so what the crate can reach is wider than
+  what mruby publishes for an embedder. The typed surface follows what is
+  published and reaches past it only under this rule: an internal symbol is
+  admitted one at a time and never by taking its header in whole; it is admitted
+  only where no published symbol delivers the capability and the graduation rule
+  above can encode its invariants, so it lands on the safe typed surface rather
+  than beside it; and each admission records what settles it. Admission reaches
+  the typed surface and stops: an internal symbol is never re-exported raw, so a
+  consumer never holds a symbol mruby promises them nothing about.
 - `docs/api_coverage.md` measures how far the typed surface has graduated
   mruby's embedder API — the functions and macros an embedder calls across the
   public embedder headers. A capability the typed surface graduates through a
@@ -908,9 +965,15 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   graduated item covers them both, recorded with what the Rust shape carries in
   the C form's place. A symbol a graduated item cannot express is not covered
   by it, however close their purposes.
-- API an embedder cannot call never enters the measure: what the headers do not
-  publish, and compile-time, debug assertion, and internal helper macros. What
-  does enter leaves again only for a reason the measure records. Public API the
+- API an embedder cannot call never enters the measure: what the headers publish
+  for an embedder is the whole of it, so a library-internal header's
+  declarations stay out however plainly they are staged, as do compile-time,
+  debug assertion, and internal helper macros. An internal symbol the admission
+  rule above lets through is recorded apart from the ratio rather than entering
+  it: it is neither embedder API nor API still owed. A symbol a capability
+  feature carries counts as covered and the measure names the feature; turning a
+  feature off subtracts nothing from the measure. What does enter the measure
+  leaves again only for a reason the measure records. Public API the
   typed surface deliberately does not carry leaves as declined — what the
   graduation rule above leaves in `beni::sys` for want of a typed shape to add,
   named for the measure. A capability awaiting a carrier is not declined: it
@@ -974,6 +1037,8 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | Allocating the context a load borrows failing | the load surfaces as a Rust `Err` carrying a parse message with zero line, zero column, and empty text, never aborts |
 | A load under a caller's compile context producing compiler warnings | the load's outcome is unchanged; the context answers the warnings as parse messages |
 | A load under a borrowed compile context producing compiler warnings | the load's outcome is unchanged; the warnings reach no caller, and none are written to standard error |
+| Compiling source without running it, where the source does not parse or a codegen step fails | the same `Err` a load that runs surfaces, and no compiled program is produced |
+| The `compiler` feature enabled against an archive built without mruby's compiler gem | both crates build, and the consumer's own link fails on the symbols the archive does not carry |
 | mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
@@ -1009,5 +1074,8 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated on the documentation host's platform from an mruby built with the upstream default configuration, and carrying what that pairing decides — type widths, the form of `va_list`, the constants the platform's headers define. Never hand-written, and generated nowhere else, since another platform would write a different file; no other build reads them |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
+| capability feature | a cargo feature on the `beni` crate carrying a capability mruby keeps in a gem rather than its core — declared by the consumer rather than probed from the archive, enabled by default, and additive, so enabling one only adds surface |
+| library-internal header | a header mruby stages beside an archive while marking it internal to the library; its declarations are not embedder API, and the typed surface reaches them only under the admission rule |
+| admitted internal symbol | a library-internal header's symbol the typed surface carries because no published symbol delivers its capability — admitted one at a time, recorded with what settles it, and never re-exported raw |
 | declined symbol | public embedder API the typed surface deliberately does not carry, outside the coverage measure and recorded with what settles it |
 | flag-gated symbol | embedder API a build's ABI lacks because a compile-time flag gates it, outside the coverage measure and recorded with what settles it — the gating flag |
