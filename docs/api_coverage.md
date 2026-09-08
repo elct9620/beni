@@ -289,7 +289,7 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_load_exec` | fn | ✅ | ✅ | `Ccontext::load_nstring` |
 | `mrb_load_file` | fn | ✅ | — |  |
 | `mrb_load_file_cxt` | fn | ✅ | — |  |
-| `mrb_load_nstring` | fn | ✅ | ✅ | `Mrb::load_string` |
+| `mrb_load_nstring` | fn | ✅ | ✅ | subsumed: `Mrb::load_string` — the context-free form, whose body is `mrb_load_nstring_cxt(mrb, s, len, NULL)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7868-7871`); the typed load borrows an unnamed context in the NULL's place so the compiler's diagnostics are captured rather than printed, which is all a fresh context changes for one load |
 | `mrb_load_nstring_cxt` | fn | ✅ | ✅ | subsumed: `Ccontext::load_nstring` — the one-call form, whose body is `mrb_load_exec(mrb, mrb_parse_nstring(mrb, s, len, c), c)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7862-7865`); the typed load drives those two calls itself so it can read the parser's diagnostic buffer between them, which the one-call form frees before returning |
 | `mrb_load_string` | fn | ✅ | ✅ | `Mrb::load_string` — the cstr `mrb_load_string(mrb, s)` is `mrb_load_nstring` over `strlen(s)`; a Rust `&[u8]` carries its own length, so the length-carrying call subsumes it and no separate item is needed |
 | `mrb_load_string_cxt` | fn | ✅ | ✅ | subsumed: `Ccontext::load_nstring` — the NUL-terminated form of `mrb_load_nstring_cxt` over `strlen`; a Rust byte slice carries its own length, so the length-taking call subsumes it |

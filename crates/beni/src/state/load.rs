@@ -7,38 +7,33 @@ use crate::{Error, Mrb, Value};
 use beni_sys as sys;
 
 impl Mrb {
-    /// Compile and run a slice of Ruby `source` with no compile
-    /// context, yielding the program's result value. A failure on any
-    /// path — a parse error, a codegen error, or an exception raised
-    /// while the program runs — comes back `Err(Error::Exception)`
-    /// with the pending exception cleared from the handle.
+    /// Compile and run a slice of Ruby `source` without being given a
+    /// compile context, yielding the program's result value.
+    ///
+    /// A failure surfaces exactly as it does under a caller's context:
+    /// source that does not parse comes back `Err(Error::Syntax)`
+    /// carrying the compiler's diagnostic, and a codegen failure or a
+    /// raise comes back `Err(Error::Exception)` with the pending
+    /// exception cleared from the handle.
     ///
     /// The source carries its own length, so it needs no terminating
-    /// NUL and the bytes need not be valid UTF-8. The context-free
-    /// counterpart to `Ccontext::load_nstring`: it stamps no filename
-    /// (so a raised exception carries no source-line backtrace) and
-    /// surfaces a failure as an `Err` rather than leaving the pending
-    /// exception on the handle.
+    /// NUL and the bytes need not be valid UTF-8.
+    ///
+    /// The load borrows an unnamed `Ccontext` and releases it on the
+    /// way out, so it differs from one under a caller's context only
+    /// where the context is what carries the difference: no filename
+    /// is stamped, so a raised exception has no source-line backtrace,
+    /// and the warnings the load produced go with the context a caller
+    /// never holds. Reach for a `Ccontext` to keep either.
     pub fn load_string(&self, source: &[u8]) -> Result<Value, Error> {
-        // SAFETY: `self` is alive by the &self borrow; `source` is
-        // borrowed for the synchronous call and `mrb_load_nstring`
-        // retains no reference past return. The load path runs
-        // Ruby but parks any failure in `mrb->exc` rather than
-        // long-jumping, so no `protect` frame is needed.
-        let value = Value::from_raw(unsafe {
-            sys::mrb_load_nstring(
-                self.as_ptr(),
-                source.as_ptr() as *const core::ffi::c_char,
-                source.len(),
-            )
-        });
-        let exc = self.pending_exc();
-        if exc.is_nil() {
-            Ok(value)
-        } else {
-            self.clear_exc();
-            Err(Error::Exception(exc))
-        }
+        let Some(cxt) = crate::Ccontext::unnamed(self) else {
+            // The context allocator answers NULL rather than raising,
+            // and a load that never reached the compiler has the same
+            // nothing to report as one whose compiler recorded no
+            // diagnostic.
+            return Err(Error::Syntax(crate::ParseMessage::unrecorded()));
+        };
+        cxt.load_nstring(source)
     }
 
     /// `mrb_load_irep_buf(mrb, buf, size)` — load and evaluate a

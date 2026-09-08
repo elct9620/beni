@@ -36,18 +36,55 @@ fn load_string_surfaces_a_raising_script_as_err() {
 }
 
 #[test]
-fn load_string_surfaces_a_syntax_error_as_err() {
+fn load_string_surfaces_a_parse_failure_with_its_location() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
     let err = mrb
-        .load_string(b"def (")
+        .load_string(b"a = 1\nb = 2\nend\n")
         .expect_err("unparseable source must come back Err");
 
-    assert!(matches!(err, Error::Exception(_)));
+    match err {
+        Error::Syntax(parse) => {
+            assert_eq!(
+                parse.line(),
+                3,
+                "a borrowed context carries the location a caller's context does"
+            );
+            assert!(!parse.message().is_empty());
+        }
+        other => panic!("a parse failure must surface as Error::Syntax, got {other}"),
+    }
     assert!(
         mrb.pending_exc().is_nil(),
-        "the pending exception must be cleared as the Err crosses out"
+        "a program that never compiled leaves no exception on the handle"
     );
+}
+
+#[test]
+fn load_string_stamps_no_filename_so_a_raise_carries_no_backtrace() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+    let err = mrb
+        .load_string(b"def outer\n  raise 'deep'\nend\nouter\n")
+        .expect_err("a raising script must come back Err");
+
+    assert!(
+        err.backtrace(&mrb).is_empty(),
+        "the borrowed context is unnamed, so nothing packs frames"
+    );
+}
+
+#[test]
+fn load_string_still_runs_source_the_compiler_warns_about() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+    // The borrowed context captures the warning and is released with
+    // it; a caller who wants the warning holds a context of their own.
+    let got = mrb
+        .load_string(b"begin\n  1\nelse\n  2\nend\n")
+        .expect("a warning must not change the load's outcome");
+
+    assert_eq!(i32::from_value(got), Some(2));
 }
 
 /// The synthesised `RuntimeError` parked under `mrb->exc`, rendered.

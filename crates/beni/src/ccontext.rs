@@ -47,15 +47,26 @@ impl<'mrb> Ccontext<'mrb> {
     /// `mrb_ccontext_filename` interns the bytes, so the `&CStr`
     /// borrow only has to outlive this call.
     pub fn new(mrb: &'mrb Mrb, filename: &core::ffi::CStr) -> Option<Self> {
+        let cxt = Self::unnamed(mrb)?;
+        // SAFETY: `mrb` is live; `cxt.raw` came from the matching
+        // `mrb_ccontext_new`; `filename.as_ptr()` is a NUL-terminated
+        // `*const c_char` by `CStr`'s invariant.
+        unsafe { sys::mrb_ccontext_filename(mrb.as_ptr(), cxt.raw, filename.as_ptr()) };
+        Some(cxt)
+    }
+
+    /// Allocate a context with no filename — everything a context
+    /// gives a load except the stamp its backtraces are packed from.
+    ///
+    /// `Mrb::load_string` borrows one of these for a single load: a
+    /// caller who gave no context still gets the compiler's
+    /// diagnostics, which only a context can capture.
+    pub(crate) fn unnamed(mrb: &'mrb Mrb) -> Option<Self> {
         // SAFETY: `mrb` is live by the borrow.
         let raw = unsafe { sys::mrb_ccontext_new(mrb.as_ptr()) };
         if raw.is_null() {
             return None;
         }
-        // SAFETY: `mrb` is live; `raw` was just produced by the
-        // matching `mrb_ccontext_new`; `filename.as_ptr()` is a
-        // NUL-terminated `*const c_char` by `CStr`'s invariant.
-        unsafe { sys::mrb_ccontext_filename(mrb.as_ptr(), raw, filename.as_ptr()) };
         // Capture is not a choice a caller gets: `load_nstring` reads
         // the parser's diagnostic buffer to build its `ParseMessage`,
         // and an uncaptured parser writes that buffer nothing. Capture
