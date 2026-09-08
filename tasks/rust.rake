@@ -18,6 +18,11 @@
 #   $ rake rust:test         — cargo test, host target, linked against
 #                              the vendored libmruby.a
 #   $ rake rust:check:wasm   — cargo check on wasm32-wasip1
+#   $ rake rust:check:docs   — what a documentation host builds: no
+#                              archive, the checked-in documentation
+#                              bindings standing in for one. Runs
+#                              anywhere, since it reads the committed
+#                              file rather than writing it.
 #   $ rake rust:link:wasm    — link wasm32-wasip1 test binaries against the
 #                              staged archive. `cargo check` never reaches
 #                              the linker, so this is what exercises the
@@ -57,6 +62,17 @@ namespace :rust do
 
       sh(BeniRust.wasm_env, "cargo", "check", "--workspace", "--target", BeniRust::WASM_TARGET)
     end
+
+    # The documentation bindings can only be written on the platform the
+    # documentation host builds on, but whether they still describe a
+    # surface the crate compiles against is the same question
+    # everywhere — so this leg runs on every host and needs no archive.
+    desc "cargo doc as a documentation host: no archive, checked-in bindings"
+    task :docs do
+      abort "cargo not on PATH; install Rust toolchain to run rust:check:docs" unless BeniRust.cargo_available?
+
+      BeniRust.documentation_build_doc
+    end
   end
 
   namespace :link do
@@ -84,7 +100,7 @@ namespace :rust do
     end
   end
 
-  desc "Full local compile verification: beni:build + host check/test + wasm32 check/link + default-ABI test"
+  desc "Full local compile verification: build + host, wasm32, documentation and default-ABI legs"
   task verify: ["beni:build", "rust:check", "rust:test", "rust:check:wasm", "rust:link:wasm",
-                "rust:test:default"]
+                "rust:check:docs", "rust:test:default"]
 end

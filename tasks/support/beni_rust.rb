@@ -65,6 +65,18 @@ module BeniRust
          chdir: ROOT)
   end
 
+  # Render the docs the way a documentation host does: DOCS_RS set, no
+  # archive discovery variable, so beni-sys stages the checked-in
+  # documentation bindings. Its own target dir, since flipping DOCS_RS
+  # would otherwise invalidate the main verification cache.
+  def self.documentation_build_doc
+    env = { "DOCS_RS" => "1", "RUSTDOCFLAGS" => "-D warnings",
+            "BENI_VENDOR_DIR" => nil, "MRUBY_LIB_DIR" => nil }
+    run!(env, "cargo", "doc", "-p", "beni-sys", "-p", "beni", "--no-deps",
+         "--target-dir", File.join(ROOT, "target", "docs-rs"),
+         chdir: ROOT)
+  end
+
   # Echo-then-run with the env overlay, raising on failure — the same
   # subprocess shape `rake sh` provides, available outside the DSL.
   def self.run!(env, *cmd, chdir:)
