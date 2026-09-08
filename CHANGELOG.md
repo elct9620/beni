@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.13.0](https://github.com/elct9620/beni/compare/v0.12.0...v0.13.0) (2026-09-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** `Ccontext` and `Mrb::load_string` now require the `compiler` feature. A consumer on default features is unaffected; one already passing `default-features = false` loses them.
+* **beni:** give a context-free load the same compile-error contract
+* **beni:** hand a parse failure back with the location it happened at
+* **beni-sys:** a host build with no archive discovery variable set now fails instead of compiling a placeholder surface, and dependents no longer receive DEP_MRUBY_LINKED.
+
+### Features
+
+* **beni:** answer a Proc's compiled form as bytecode ([2e48579](https://github.com/elct9620/beni/commit/2e485795166bf41882611cb09ba07c5755ef4ba6))
+* **beni:** give a context-free load the same compile-error contract ([e047c27](https://github.com/elct9620/beni/commit/e047c275c0a91d21b4baef8d713bc08265628e85))
+* **beni:** hand a parse failure back with the location it happened at ([6738fda](https://github.com/elct9620/beni/commit/6738fda7035fabe06136036676bb7e0abe240fc0))
+* **beni:** keep the warnings a load produced on its context ([c5bee4b](https://github.com/elct9620/beni/commit/c5bee4b061a7051828461722df1e70cf4a06cabf))
+* **beni:** let a caller stop between the compile and the run ([247616d](https://github.com/elct9620/beni/commit/247616d99df5c57ec8e491bb2dc97b2c0055fcd4))
+* **beni:** let a consumer decline the compiler ([bf1ae17](https://github.com/elct9620/beni/commit/bf1ae17ef79dc95c429650544b0631dfaad331fe))
+* **beni:** read an error's backtrace frames in one call ([27d1d47](https://github.com/elct9620/beni/commit/27d1d473a4ed33da9624f269c75b1d3b52036ccd))
+* **docs:** generate the bindings a documentation build reads ([63c5a27](https://github.com/elct9620/beni/commit/63c5a27a75bc805c92cd3c92364468931c4be6b4))
+* **surface:** make a capability feature an axis of the drift net ([ff7026f](https://github.com/elct9620/beni/commit/ff7026fbc356b74c923ff706457c6b0158ac2134))
+
+
+### Bug Fixes
+
+* **docs:** carry the documentation host's own bindings ([5e0b3c5](https://github.com/elct9620/beni/commit/5e0b3c52e33b0a98575e55c996b11255bd0284d0))
+* **docs:** generate the bindings where the documentation host builds ([f04a57b](https://github.com/elct9620/beni/commit/f04a57b6fb5940271cd570cbef2079ec50f96ee0))
+* **docs:** generate the documentation bindings instead of pinning them ([dd07492](https://github.com/elct9620/beni/commit/dd07492bae642aa18089922517c0556289914154))
+* **hooks:** fail the lint gate when the archive is missing ([2c036c9](https://github.com/elct9620/beni/commit/2c036c9167bd8bf066d5be991ad33153dd0791b4))
+* **rust:** compile the documentation build before rendering it ([3b957df](https://github.com/elct9620/beni/commit/3b957df2f959f7f976622d812f2ead88d0aa1eaa))
+* **tasks:** fail the wasm legs when the target is not installed ([a8826bd](https://github.com/elct9620/beni/commit/a8826bdcdec5d1ef10b419c8252bde68883e9de3))
+
+
+### Code Refactoring
+
+* **beni-sys:** build against an archive or not at all ([c7de9f6](https://github.com/elct9620/beni/commit/c7de9f685093d0e3b97a3b4094cad83666610fcf))
+
 ## [0.12.0](https://github.com/elct9620/beni/compare/v0.11.0...v0.12.0) (2026-09-07)
 
 
