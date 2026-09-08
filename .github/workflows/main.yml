@@ -80,8 +80,10 @@ jobs:
   # WASI_SDK_PLATFORM detection branch. rust:verify drives a real
   # vendor download (mruby + wasi-sdk), the custom-config host + wasi
   # cross build, cargo test against the native archive, a wasm32
-  # check, and the default-ABI leg. Vendor tarballs are deliberately
-  # not cached — the download path is part of what's under test.
+  # check, and the default-ABI leg. Vendor tarballs are not cached
+  # here: one real download per build platform is what exercises every
+  # WASI_SDK_PLATFORM detection branch, and this lane is the one job
+  # per platform.
   verify:
     runs-on: ${{ matrix.os }}
     name: Verify (${{ matrix.os }})
@@ -209,6 +211,17 @@ jobs:
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ steps.rust.outputs.channel }}
+      # The verify lane already downloads once per build platform, which
+      # is what proves the platform detection; a scenario repeating it
+      # proves nothing further and costs 174MB for wasi-sdk. The key
+      # carries the pinned versions, so a bump misses cleanly and the
+      # download runs for real — and a hit still recomputes every
+      # checksum, since only the fetch is skipped.
+      - name: Cache the scenario's toolchain tarballs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: test/scenarios/${{ matrix.scenario }}/vendor/.cache
+          key: toolchains-${{ matrix.scenario }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lib/beni/vendor.rb') }}
       - name: Build through the gem's task interface
         run: rake scenario:setup beni:build scenario:verify
         working-directory: test/scenarios/${{ matrix.scenario }}
