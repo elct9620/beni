@@ -51,8 +51,8 @@ the resulting `libmruby.a`.
   variable set fails on every cargo target, naming the variables archive
   discovery consults.
 - A documentation build renders the typed surface with no archive present,
-  and the documentation bindings it reads match what regenerating them on
-  the documentation host's platform produces.
+  reading documentation bindings the published package carries and the
+  repository does not.
 - A `wasm32-wasip1` cross-build succeeds when a target declaration
   references `wasi-sdk`, the build config defines a target cross-compiled
   for wasm32, `MRUBY_LIB_DIR` names that target's staged path, and
@@ -1079,7 +1079,7 @@ The `compiler` capability feature carries everything in this section.
 | supported mruby floor | mruby 4.0 — the oldest release the crates build against; an archive states its own version in the header tree staged beside it |
 | documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable and builds on one platform, `x86_64-unknown-linux-gnu` |
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
-| documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated on the documentation host's platform from an mruby built with the upstream default configuration, and carrying what that pairing decides — type widths, the form of `va_list`, the constants the platform's headers define. Never hand-written, and generated nowhere else, since another platform would write a different file; no other build reads them |
+| documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated from an mruby built with the upstream default configuration, and carrying what the generating host decides alongside it — type widths, the form of `va_list`, the constants its headers define. Never hand-written and never tracked by the repository: the published package carries the copy a release generated, and every other copy is generated where it is read |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
 | capability feature | a cargo feature on the `beni` crate carrying a capability mruby keeps in a gem rather than its core — declared by the consumer rather than probed from the archive, enabled by default, and additive, so enabling one only adds surface |
