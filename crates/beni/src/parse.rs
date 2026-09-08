@@ -6,6 +6,7 @@
 //! returns one as `Error::Syntax` for source that does not parse, and
 //! `Ccontext::warnings` answers the load's warnings as more of them.
 
+#[cfg(feature = "compiler")]
 use beni_sys as sys;
 
 /// One compiler diagnostic's position and text.
@@ -40,7 +41,14 @@ impl ParseMessage {
     pub fn message(&self) -> &str {
         &self.message
     }
+}
 
+/// Reading a parser's diagnostic buffer, which only a compile produces.
+/// The type itself is one shape in every build — it is what an error
+/// carries — so a build without the compiler keeps the accessors above
+/// and none of this.
+#[cfg(feature = "compiler")]
+impl ParseMessage {
     /// The message for a failure the compiler recorded no diagnostic
     /// for: zero position, empty text.
     pub(crate) fn unrecorded() -> Self {
@@ -117,7 +125,7 @@ impl ParseMessage {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "compiler"))]
 mod tests {
     use super::*;
 

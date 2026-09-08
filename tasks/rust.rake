@@ -17,6 +17,11 @@
 #                              the vendored libmruby.a
 #   $ rake rust:test         — cargo test, host target, linked against
 #                              the vendored libmruby.a
+#   $ rake rust:check:nodefault
+#                            — cargo check the beni crate alone with
+#                              every capability feature off, which is
+#                              the shape a consumer embedding mruby
+#                              without a compiler gets.
 #   $ rake rust:check:wasm   — cargo check on wasm32-wasip1
 #   $ rake rust:check:docs   — what a documentation host builds: no
 #                              archive, the checked-in documentation
@@ -33,7 +38,7 @@
 #                              mrb_int on 64-bit hosts). Catches
 #                              width-coincidence bugs that the repo's
 #                              MRB_INT32 validation config masks.
-#   $ rake rust:verify       — beni:build + the four tasks above; the
+#   $ rake rust:verify       — beni:build + the tasks above; the
 #                              single local entry point for "does the
 #                              Rust side compile and pass everywhere".
 
@@ -61,6 +66,18 @@ namespace :rust do
       abort BeniRust::MISSING_WASM_TARGET unless BeniRust.wasm_target_installed?
 
       sh(BeniRust.wasm_env, "cargo", "check", "--workspace", "--target", BeniRust::WASM_TARGET)
+    end
+
+    # Cargo unifies features across the members it builds together, so
+    # a workspace-wide --no-default-features still hands `beni` the
+    # defaults a sibling asked for. Naming the one package is what makes
+    # the shape a consumer gets with default features off the shape this
+    # leg actually compiles.
+    desc "cargo check the beni crate with every capability feature off"
+    task :nodefault do
+      abort "cargo not on PATH; install Rust toolchain to run rust:check:nodefault" unless BeniRust.cargo_available?
+
+      sh(BeniRust.host_env, "cargo", "check", "-p", "beni", "--no-default-features")
     end
 
     # The documentation bindings can only be written on the platform the
@@ -100,7 +117,7 @@ namespace :rust do
     end
   end
 
-  desc "Full local compile verification: build + host, wasm32, documentation and default-ABI legs"
-  task verify: ["beni:build", "rust:check", "rust:test", "rust:check:wasm", "rust:link:wasm",
-                "rust:check:docs", "rust:test:default"]
+  desc "Full local compile verification: build + host, feature-off, wasm32, documentation and default-ABI legs"
+  task verify: ["beni:build", "rust:check", "rust:test", "rust:check:nodefault", "rust:check:wasm",
+                "rust:link:wasm", "rust:check:docs", "rust:test:default"]
 end

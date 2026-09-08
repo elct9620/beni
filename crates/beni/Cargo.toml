@@ -34,6 +34,18 @@ targets = []
 # dependency; their own artefact carries the final symbol surface.
 crate-type = ["rlib"]
 
+# Capability features carry what mruby keeps in a gem rather than its
+# core. They are declared, never probed: the crate reads no gem
+# inventory, so what a consumer enables is what exists. Each only adds
+# surface, and every one is on by default.
+[features]
+default = ["compiler"]
+# `compiler` — mruby's compiler gem: the compile context and the loads
+# that compile Ruby source into the running interpreter. A consumer that
+# never compiles Ruby at run time turns default features off; loading
+# precompiled bytecode needs no compiler and stays outside it.
+compiler = []
+
 [dependencies]
 # `beni-sys` — sibling crate carrying the bindgen-generated FFI
 # surface plus the layout-safe C shims. Re-exported through `sys` for

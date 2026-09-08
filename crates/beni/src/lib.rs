@@ -30,6 +30,13 @@
 //! L0  raw FFI          beni-sys::*  (bindgen output + ABI constants)
 //! ```
 //!
+//! ## Capability features
+//!
+//! `compiler`, on by default, carries what mruby keeps in its compiler
+//! gem: the `Ccontext` compile context and `Mrb::load_string`. Turn
+//! default features off to embed mruby without compiling Ruby at run
+//! time — loading precompiled bytecode needs no compiler and stays.
+//!
 //! ## Raw-FFI escape hatch
 //!
 //! `beni::sys` re-exports the entire `beni-sys` crate so call
@@ -49,6 +56,7 @@
 // C-string helpers.
 
 pub mod array;
+#[cfg(feature = "compiler")]
 pub mod ccontext;
 pub mod class;
 pub mod convert;
@@ -71,6 +79,7 @@ pub use state::{Mrb, MrbOpenError};
 
 pub use state::args::{format, Format};
 
+#[cfg(feature = "compiler")]
 pub use ccontext::Ccontext;
 
 pub use array::Array;

@@ -25,6 +25,16 @@ surface, this crate owns every abstraction above it.
 beni = "0.1"
 ```
 
+The `compiler` feature is on by default and carries what mruby keeps in
+its compiler gem — `Ccontext` and `Mrb::load_string`. Turn default
+features off to embed mruby without compiling Ruby at run time; loading
+precompiled bytecode needs no compiler and stays.
+
+```toml
+[dependencies]
+beni = { version = "0.1", default-features = false }
+```
+
 ```rust
 use beni::{Module, Mrb, Value};
 

@@ -1,9 +1,11 @@
 //! Source and RITE bytecode loaders on `Mrb`.
 //!
 //! Inherent methods that compile Ruby source — or drop a compiled
-//! blob — into the live mruby VM and run its top-level Proc.
+//! blob — into the live mruby VM and run its top-level Proc. The
+//! `compiler` feature carries the source loader; the bytecode loaders
+//! need no compiler and stay outside it.
 
-use crate::{Error, Mrb, Value};
+use crate::{Mrb, Value};
 use beni_sys as sys;
 
 impl Mrb {
@@ -25,13 +27,14 @@ impl Mrb {
     /// is stamped, so a raised exception has no source-line backtrace,
     /// and the warnings the load produced go with the context a caller
     /// never holds. Reach for a `Ccontext` to keep either.
-    pub fn load_string(&self, source: &[u8]) -> Result<Value, Error> {
+    #[cfg(feature = "compiler")]
+    pub fn load_string(&self, source: &[u8]) -> Result<Value, crate::Error> {
         let Some(cxt) = crate::Ccontext::unnamed(self) else {
             // The context allocator answers NULL rather than raising,
             // and a load that never reached the compiler has the same
             // nothing to report as one whose compiler recorded no
             // diagnostic.
-            return Err(Error::Syntax(crate::ParseMessage::unrecorded()));
+            return Err(crate::Error::Syntax(crate::ParseMessage::unrecorded()));
         };
         cxt.load_nstring(source)
     }

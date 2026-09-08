@@ -109,9 +109,9 @@ typed:
   mrb_string_p: "`Value::is_string`, via the value tag"
   mrb_symbol_p: "`Value::is_symbol`, via the value tag"
   mrb_break_value_get: Break::value
-  mrb_ccontext_filename: Ccontext::new
-  mrb_ccontext_free: Ccontext::drop
-  mrb_ccontext_new: Ccontext::new
+  mrb_ccontext_filename: "`Ccontext::new` — carried by the `compiler` capability feature"
+  mrb_ccontext_free: "`Ccontext::drop` — carried by the `compiler` capability feature"
+  mrb_ccontext_new: "`Ccontext::new` — carried by the `compiler` capability feature"
   mrb_check_error: Mrb::clear_exc
   mrb_check_frozen_value: "`Value::check_frozen` — the frozen-state precondition guard, the `mrb_value` form a typed caller can reach"
   mrb_class_defined: "`Mrb::class_defined` with a name key — interns and routes through `mrb_class_defined_id`"
@@ -230,10 +230,10 @@ typed:
   mrb_iv_remove: "`Value::iv_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None`"
   mrb_iv_set: Value::iv_set
   mrb_load_irep_buf: Mrb::load_irep_buf
-  mrb_parse_nstring: Ccontext::load_nstring
-  mrb_load_exec: Ccontext::load_nstring
-  mrb_parser_free: Ccontext::load_nstring
-  mrb_load_string: "`Mrb::load_string` — the cstr `mrb_load_string(mrb, s)` is `mrb_load_nstring` over `strlen(s)`; a Rust `&[u8]` carries its own length, so the length-carrying call subsumes it and no separate item is needed"
+  mrb_parse_nstring: "`Ccontext::load_nstring` — carried by the `compiler` capability feature"
+  mrb_load_exec: "`Ccontext::load_nstring` — carried by the `compiler` capability feature"
+  mrb_parser_free: "`Ccontext::load_nstring` — carried by the `compiler` capability feature"
+  mrb_load_string: "`Mrb::load_string` — the cstr `mrb_load_string(mrb, s)` is `mrb_load_nstring` over `strlen(s)`; a Rust `&[u8]` carries its own length, so the length-carrying call subsumes it and no separate item is needed; carried by the `compiler` capability feature"
   mrb_module_get: "`Mrb::module_get` with a name key — interns and routes through `mrb_module_get_id`"
   mrb_module_get_id: "`Mrb::module_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
   mrb_module_get_under: "`Module::module_get` with a name key — interns and routes through `mrb_module_get_under_id`"
@@ -424,9 +424,9 @@ subsumed:
   mrb_funcall: "`Value::funcall`, `Value::funcall_argv` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"
   mrb_funcall_id: "`Value::funcall`, `Value::funcall_argv` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"
   mrb_yield: "`Proc::call` — the one-argument form of `mrb_yield_argv` (`vendor/mruby/src/vm.c:1328` passes `1, &arg` to the same `yield_with_attr`); a Rust slice of one carries it"
-  mrb_load_nstring: "`Mrb::load_string` — the context-free form, whose body is `mrb_load_nstring_cxt(mrb, s, len, NULL)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7868-7871`); the typed load borrows an unnamed context in the NULL's place so the compiler's diagnostics are captured rather than printed, which is all a fresh context changes for one load"
-  mrb_load_nstring_cxt: "`Ccontext::load_nstring` — the one-call form, whose body is `mrb_load_exec(mrb, mrb_parse_nstring(mrb, s, len, c), c)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7862-7865`); the typed load drives those two calls itself so it can read the parser's diagnostic buffer between them, which the one-call form frees before returning"
-  mrb_load_string_cxt: "`Ccontext::load_nstring` — the NUL-terminated form of `mrb_load_nstring_cxt` over `strlen`; a Rust byte slice carries its own length, so the length-taking call subsumes it"
+  mrb_load_nstring: "`Mrb::load_string` — the context-free form, whose body is `mrb_load_nstring_cxt(mrb, s, len, NULL)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7868-7871`); the typed load borrows an unnamed context in the NULL's place so the compiler's diagnostics are captured rather than printed, which is all a fresh context changes for one load; carried by the `compiler` capability feature"
+  mrb_load_nstring_cxt: "`Ccontext::load_nstring` — the one-call form, whose body is `mrb_load_exec(mrb, mrb_parse_nstring(mrb, s, len, c), c)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7862-7865`); the typed load drives those two calls itself so it can read the parser's diagnostic buffer between them, which the one-call form frees before returning; carried by the `compiler` capability feature"
+  mrb_load_string_cxt: "`Ccontext::load_nstring` — the NUL-terminated form of `mrb_load_nstring_cxt` over `strlen`; a Rust byte slice carries its own length, so the length-taking call subsumes it; carried by the `compiler` capability feature"
   mrb_garbage_collect: "`Mrb::full_gc` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection"
   mrb_protect: "`Mrb::protect` — the older `mrb_func_t` + `mrb_value data` form, whose body is `mrb_protect_error(mrb, protect_body, &protect_data, state)` and nothing else (`vendor/mruby/mrbgems/mruby-error/src/exception.c:34-37`); a Rust closure carries the body-and-data pair the C form spells out as two arguments"
   mrb_rescue_exceptions: "`Mrb::rescue` — `mrb_protect_error` followed by an `mrb_obj_is_kind_of` walk of the class array (`vendor/mruby/mrbgems/mruby-error/src/exception.c:109-133`), which is the composition `rescue` is; the `&[RClass]` slice carries the `len` the C form spells out beside `classes`, and the closures carry the two `mrb_func_t` + `mrb_value` data pairs. The arena restore and exception clear that bracket the C form are `mrb_protect_error`'s own (`vendor/mruby/src/vm.c:548,566-567`), so each `protect` call already performs them"

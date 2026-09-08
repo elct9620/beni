@@ -177,9 +177,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Symbol::name;
     let _ = <&core::ffi::CStr as IntoSym>::into_sym;
     let _ = <Symbol as IntoSym>::into_sym;
-    let _ = Ccontext::new;
-    let _ = Ccontext::load_nstring;
-    let _ = Ccontext::warnings;
     let _ = ParseMessage::line;
     let _ = ParseMessage::column;
     let _ = ParseMessage::message;
@@ -241,7 +238,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::intern;
     let _ = Mrb::intern_check;
     let _ = Mrb::intern_static;
-    let _ = Mrb::load_string;
     let _ = Mrb::module_new;
     let _ = Mrb::rescue::<fn(&Mrb) -> Value, fn(&Mrb, Value) -> Value>;
     let _ = Mrb::str_new_static;
@@ -324,4 +320,17 @@ fn typed_mrb_func_t_coerces_from_value_bridge() {
         Value::zeroed()
     }
     let _f: beni::mrb_func_t = _stub;
+}
+
+/// The drift net for the `compiler` capability feature. An item the
+/// feature carries is named here rather than above, so the ungated net
+/// stays whole for a consumer who never enables it and `rake
+/// api:surface` can tell the two apart.
+#[cfg(feature = "compiler")]
+#[test]
+fn compiler_surface_is_reachable_from_outside() {
+    let _ = Ccontext::new;
+    let _ = Ccontext::load_nstring;
+    let _ = Ccontext::warnings;
+    let _ = Mrb::load_string;
 }
