@@ -8,6 +8,7 @@ require_relative "beni_coverage/aliases"
 require_relative "beni_coverage/coverage"
 require_relative "beni_coverage/frequency"
 require_relative "beni_coverage/ranking"
+require_relative "beni_coverage/appendix"
 require_relative "beni_coverage/report"
 
 # mruby C API coverage support module
@@ -40,7 +41,9 @@ require_relative "beni_coverage/report"
 # The manifest also records why a symbol leaves the measure entirely —
 # declined for want of a typed shape, or gated behind a build flag this
 # ABI lacks — so what remains unrecorded is API still owed and nothing
-# else.
+# else. Beside all of that it records the symbols admitted from a
+# library-internal header: never embedder API, so never in the ratio,
+# and each named with the typed item it was admitted for.
 #
 # The +priority+ query is a separate concern from the report: it orders
 # the not-yet-typed surface by what downstream calls (+Frequency+,

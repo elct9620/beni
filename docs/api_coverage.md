@@ -572,6 +572,15 @@ covered (✅); the Via column names the surface that covers each one.
 | `:` | ✅ | format::Kw / NRestKwBlock — the keyword bucket |
 | `!` | ✅ | nilable read as Option<T> in the conversion layer |
 | `+` | ✅ | read + Value::check_frozen |
+## Admitted internal symbols
+
+Declared in a header mruby marks internal to the library, so outside the
+embedder API the ratio measures. Each names the typed item it was
+admitted for, which is the only thing that admits one.
+
+| Symbol | Admitted for |
+|--------|--------------|
+| `mrb_dump_irep` | `Proc::dump` — the only call that renders an IREP as the bytecode `mrb_read_irep_buf` reads back; `mrb_dump_irep_binary` is the published counterpart but writes to a `FILE*` and is compiled only outside `MRB_NO_STDIO`, so it delivers neither the buffer nor the availability. Declared at `vendor/mruby/include/mruby/internal.h:41`, reached through the single declaration `crates/beni-sys/src/wrapper.h` copies rather than by including that header |
 ## Rust extensions
 
 Rust-native surface with no 1:1 mruby C API — not part of the ratio.

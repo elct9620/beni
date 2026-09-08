@@ -87,3 +87,81 @@ impl Proc {
         })
     }
 }
+
+/// What a dump carries beside the compiled instructions.
+///
+/// The default carries neither — the smallest bytecode that still
+/// loads. Ask for `debug_info` where the loaded program's exceptions
+/// should answer a source backtrace.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DumpOptions {
+    /// Carry the line numbers a loaded program's exceptions are
+    /// backtraced from.
+    pub debug_info: bool,
+    /// Carry the local variable names.
+    pub locals: bool,
+}
+
+impl DumpOptions {
+    /// The flag word mruby's dumper reads. It spells the local variable
+    /// names as an opt-out, so leaving them behind is what sets a bit.
+    fn flags(self) -> u8 {
+        let mut flags = if self.locals {
+            0
+        } else {
+            sys::MRB_DUMP_NO_LVAR
+        };
+        if self.debug_info {
+            flags |= sys::MRB_DUMP_DEBUG_INFO;
+        }
+        flags as u8
+    }
+}
+
+impl Proc {
+    /// The compiled form of this Proc as bytecode, which
+    /// `Mrb::load_bytecode` reads back.
+    ///
+    /// A Proc backed by a C function has no compiled form and comes
+    /// back `Err`, as does a dump mruby could not complete.
+    pub fn dump(self, mrb: &Mrb, options: DumpOptions) -> Result<Vec<u8>, Error> {
+        // SAFETY: `self` is Proc-tagged by the type's invariant, and
+        // the shim resolves the flags bitfield and the body union in
+        // the C compiler.
+        let irep = unsafe { sys::mrb_proc_irep_func(self.as_raw()) };
+        if irep.is_null() {
+            return Err(Self::undumpable(
+                mrb,
+                "a Proc backed by a C function carries no bytecode",
+            ));
+        }
+
+        let mut bin: *mut u8 = core::ptr::null_mut();
+        let mut size: usize = 0;
+        // SAFETY: `mrb` is live; `irep` belongs to this Proc; mruby
+        // writes the buffer it allocated and its length through the two
+        // out-parameters.
+        let code =
+            unsafe { sys::mrb_dump_irep(mrb.as_ptr(), irep, options.flags(), &mut bin, &mut size) };
+        if code != sys::MRB_DUMP_OK as core::ffi::c_int || bin.is_null() {
+            return Err(Self::undumpable(mrb, "mruby could not dump the Proc"));
+        }
+
+        // SAFETY: mruby wrote `size` bytes at `bin`, and the copy is
+        // finished before the buffer is released.
+        let bytes = unsafe { core::slice::from_raw_parts(bin, size) }.to_vec();
+        // SAFETY: the buffer is mruby's allocation and this is its only
+        // release; nothing reads it after the copy above.
+        unsafe { sys::mrb_free(mrb.as_ptr(), bin.cast()) };
+        Ok(bytes)
+    }
+
+    /// A dump that produced nothing, reported as the `Err` carrying an
+    /// exception that every other failure is reported in.
+    fn undumpable(mrb: &Mrb, message: &str) -> Error {
+        match mrb.class_get(c"RuntimeError") {
+            Ok(class) => Error::new(mrb, class, message),
+            Err(err) => err,
+        }
+    }
+}

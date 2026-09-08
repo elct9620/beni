@@ -2,12 +2,13 @@
 
 module BeniCoverage
   # Renders the scanned inventory and coverage tiers into the
-  # +docs/api_coverage.md+ markdown: a per-category summary, one section
-  # per header, a Rust-extensions section, and a trailing list of
-  # manifest entries that no longer match a scanned symbol. +coverage+
-  # answers how the measure sees each symbol; +manifest+ supplies only
-  # what is not keyed by C symbol.
+  # +docs/api_coverage.md+ markdown: a per-category summary and one
+  # section per header, followed by the +Appendix+ sections that sit
+  # beside the ratio. +coverage+ answers how the measure sees each
+  # symbol; +manifest+ supplies only what is not keyed by C symbol.
   class Report
+    include Appendix
+
     # What the measure knows, so the coverage gate can reject a manifest
     # the render itself has no opinion about.
     attr_reader :coverage
@@ -15,6 +16,7 @@ module BeniCoverage
     def initialize(surface:, manifest:, coverage:, version:, linked:)
       @surface = surface
       @coverage = coverage
+      @admitted = manifest["admitted"] || {}
       @extensions = manifest["extensions"] || {}
       @formats = manifest["get_args_formats"] || {}
       @version = version
@@ -23,7 +25,8 @@ module BeniCoverage
 
     def to_md
       sections = @surface.group_by(&:header).map { |header, entries| header_section(header, entries) }
-      "#{[head_block, *sections, formats_block, extensions_block, unknown_block].compact.join("\n")}\n"
+      blocks = [head_block, *sections, formats_block, admitted_block, extensions_block, unknown_block]
+      "#{blocks.compact.join("\n")}\n"
     end
 
     private
@@ -92,58 +95,6 @@ module BeniCoverage
       typed = @coverage.exclusion(entry.name) ? "⊘" : mark(@coverage.typed?(entry.name))
       "| `#{entry.name}` | #{kind} | #{mark(@coverage.in_sys?(entry.name))} | " \
         "#{typed} | #{@coverage.note(entry.name)} |"
-    end
-
-    def formats_block
-      return nil if @formats.empty?
-
-      rows = @formats.map { |spec, entry| formats_row(spec, entry) }
-      <<~MD.chomp
-        ## get_args format specifiers
-
-        `mrb_get_args`' format string is a specifier vocabulary — one symbol,
-        many capabilities — measured as its own lens. Every specifier is
-        covered (✅); the Via column names the surface that covers each one.
-
-        | Specifier | Covered | Via |
-        |-----------|:-------:|-----|
-        #{rows.join("\n")}
-      MD
-    end
-
-    # A literal `|` specifier is escaped so it does not close the table cell.
-    def formats_row(spec, entry)
-      cell = spec == "|" ? "\\|" : spec
-      "| `#{cell}` | ✅ | #{entry["via"]} |"
-    end
-
-    def extensions_block
-      return nil if @extensions.empty?
-
-      rows = @extensions.sort.map { |item, desc| "| `#{item}` | #{desc.to_s.strip} |" }
-      <<~MD.chomp
-        ## Rust extensions
-
-        Rust-native surface with no 1:1 mruby C API — not part of the ratio.
-
-        | Item | Description |
-        |------|-------------|
-        #{rows.join("\n")}
-      MD
-    end
-
-    def unknown_block
-      return nil if @coverage.unknown.empty?
-
-      rows = @coverage.unknown.sort.map { |name| "- `#{name}`" }
-      <<~MD.chomp
-        ## Unknown manifest entries
-
-        Listed in `.api_coverage.yml` but absent from the scanned headers
-        (renamed/removed upstream, or a typo):
-
-        #{rows.join("\n")}
-      MD
     end
 
     def mark(covered)

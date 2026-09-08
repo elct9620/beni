@@ -309,6 +309,14 @@ typed:
   mrb_undef_method_id: "`Module::undef_method` — Ruby's `Module#undef_method`; both the symbol-or-name key route through the raising `_id` form, so the `mrb_undef_method` string variant (which does not raise) stays in `sys`"
   mrb_yield_argv: Proc::call
 
+# Symbols admitted from a header mruby marks internal to the library.
+# They are not embedder API, so they enter neither side of the ratio;
+# each is recorded here with the typed item it was admitted for, which
+# is the only thing that admits one — nothing enters on the chance a
+# consumer might want it.
+admitted:
+  mrb_dump_irep: "`Proc::dump` — the only call that renders an IREP as the bytecode `mrb_read_irep_buf` reads back; `mrb_dump_irep_binary` is the published counterpart but writes to a `FILE*` and is compiled only outside `MRB_NO_STDIO`, so it delivers neither the buffer nor the availability. Declared at `vendor/mruby/include/mruby/internal.h:41`, reached through the single declaration `crates/beni-sys/src/wrapper.h` copies rather than by including that header"
+
 extensions:
   Error: >-
     Result-based error model: a handler's `Err(Error)` is raised into the

@@ -91,7 +91,7 @@ pub use gem::Gem;
 pub use hash::{ForEach, Hash};
 pub use method::{MethodDef, MethodReturn};
 pub use parse::ParseMessage;
-pub use proc::Proc;
+pub use proc::{DumpOptions, Proc};
 pub use range::{Range, RangeBegLen};
 pub use string::RString;
 pub use symbol::{IntoSym, Symbol};

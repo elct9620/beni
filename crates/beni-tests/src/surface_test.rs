@@ -155,6 +155,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Proc::as_value;
     let _ = Proc::as_raw;
     let _ = Proc::call;
+    let _ = Proc::dump;
     let _ = Hash::from_value_unchecked;
     let _ = Hash::as_value;
     let _ = Hash::as_raw;

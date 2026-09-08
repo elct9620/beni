@@ -143,6 +143,27 @@ mrb_proc_new_func(mrb_state *mrb, const mrb_irep *irep)
   return mrb_proc_new(mrb, irep);
 }
 
+/* The IREP a Proc carries, or NULL when a C function backs it and
+ * there is none. `MRB_PROC_CFUNC_P` reads the flags bitfield and
+ * `body` is a union, so both must resolve in the C compiler against
+ * the layout libmruby.a was built with. Folding the guard into the
+ * NULL answer is what lets the caller ask once. */
+static inline const mrb_irep *
+mrb_proc_irep_func(mrb_value proc)
+{
+  struct RProc *p = (struct RProc *)mrb_obj_ptr(proc);
+  if (MRB_PROC_CFUNC_P(p)) return NULL;
+  return p->body.irep;
+}
+
+/* `mrb_dump_irep` is declared in <mruby/internal.h>, a header mruby
+ * marks internal to the library and this wrapper does not include:
+ * taking that header in whole would admit every declaration in it.
+ * Declaring this one function is what admits it alone, for the
+ * `Proc::dump` the beni crate builds on it. Signature copied from
+ * `vendor/mruby/include/mruby/internal.h:41`. */
+int mrb_dump_irep(mrb_state *mrb, const mrb_irep *irep, uint8_t flags, uint8_t **bin, size_t *bin_size);
+
 /* `mrb_nil_p(v)` expands differently across boxing configs
  * (word-box / NaN-box / no-box); reaching it from Rust must go
  * through the C compiler so we always read the layout libmruby.a
