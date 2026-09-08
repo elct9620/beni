@@ -62,3 +62,57 @@ fn argnum_renders_the_range_form_for_distinct_bounds() {
         "unexpected message: {message}"
     );
 }
+
+#[test]
+fn backtrace_reads_the_frames_a_raise_under_a_context_carries() {
+    use beni::Ccontext;
+
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"backtrace_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    let err = cxt
+        .load_nstring(b"def outer\n  inner\nend\ndef inner\n  raise 'deep'\nend\nouter\n")
+        .expect_err("the raise must surface as Err");
+
+    let frames = err.backtrace(&mrb);
+    assert!(!frames.is_empty(), "a stamped filename packs a backtrace");
+    assert!(
+        frames.iter().any(|f| f.contains("backtrace_test.rb")),
+        "the frames name the stamped filename: {frames:?}"
+    );
+    assert!(
+        frames.iter().any(|f| f.contains("inner")),
+        "the frames name the raising method: {frames:?}"
+    );
+}
+
+#[test]
+fn backtrace_answers_empty_for_an_error_carrying_no_exception() {
+    use beni::Ccontext;
+
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"backtrace_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    let syntax = cxt
+        .load_nstring(b"end")
+        .expect_err("source that does not parse must surface as Err");
+    assert!(
+        syntax.backtrace(&mrb).is_empty(),
+        "a program that never compiled never ran"
+    );
+
+    assert!(Error::Panic("boom".to_owned()).backtrace(&mrb).is_empty());
+}
+
+#[test]
+fn backtrace_answers_empty_for_an_exception_holding_none() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+
+    // Built in Rust rather than raised, so nothing ever packed frames
+    // onto it.
+    let err = Error::new(&mrb, mrb.class_get(c"RuntimeError").unwrap(), "unraised");
+
+    assert!(err.backtrace(&mrb).is_empty());
+}

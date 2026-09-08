@@ -74,6 +74,34 @@ impl Error {
         }
     }
 
+    /// The frames the carried exception's `backtrace` answers, each
+    /// rendered as mruby writes it (`file:line:in method`).
+    ///
+    /// A `Syntax` or `Panic` error answers an empty list, and so does
+    /// an exception holding no backtrace — one raised under no compile
+    /// context never got the `debug_info` a backtrace is packed from.
+    /// Reading the backtrace runs Ruby, so an exception whose
+    /// `backtrace` is overridden and raises answers an empty list too,
+    /// the way `Value::to_string` renders a raising `to_s`.
+    pub fn backtrace(&self, mrb: &Mrb) -> Vec<String> {
+        let Error::Exception(exc) = self else {
+            return Vec::new();
+        };
+        // `ensure_array` rejects the `nil` an exception with no
+        // backtrace answers, so the absent case needs no test of its
+        // own.
+        let Ok(frames) = exc
+            .funcall(mrb, c"backtrace", &[])
+            .and_then(|frames| frames.ensure_array(mrb))
+        else {
+            return Vec::new();
+        };
+        frames
+            .entries()
+            .map(|frame| frame.string_lossy(mrb))
+            .collect()
+    }
+
     /// The error's message. An exception renders through the live VM
     /// (the carried `Value` cannot render itself without one),
     /// falling back to an empty string when the exception's `to_s`

@@ -115,6 +115,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <RClass as Object>::define_singleton_method::<&core::ffi::CStr>;
     let _ = <RModule as Object>::define_singleton_method::<&core::ffi::CStr>;
     let _ = Error::message;
+    let _ = Error::backtrace;
     let _ = Error::argnum;
     let _ = MethodDef::new;
     struct _SurfaceGem;

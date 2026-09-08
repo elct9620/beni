@@ -633,12 +633,13 @@ impl Value {
 
     /// Read a String-tagged value into an owned UTF-8 `String`,
     /// collapsing a non-String tag or non-UTF-8 bytes to an empty
-    /// string — the shared render tail of `to_string` and `inspect`.
+    /// string — the shared render tail of `to_string`, `inspect`, and
+    /// `Error::backtrace`.
     /// The String tag, not the classname, decides: a String subclass
     /// instance reads its bytes the same way a plain String does, the
     /// rule the `FromValue` downcasts follow.
     #[inline]
-    fn string_lossy(self, mrb: &Mrb) -> String {
+    pub(crate) fn string_lossy(self, mrb: &Mrb) -> String {
         let Some(s) = RString::from_value(self) else {
             return String::new();
         };
