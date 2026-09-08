@@ -12,12 +12,17 @@ set -eu
 root="${CLAUDE_PROJECT_DIR:?}"
 degraded=""
 
+# beni-tests only compiles against a real archive, so it joins the lint
+# when one is staged and drops to the default members when none is.
 if [ -f "$root/vendor/mruby/build/host/lib/libmruby.a" ]; then
   export BENI_VENDOR_DIR="$root/vendor"
+  host_scope="--workspace"
 else
   degraded="host archive not staged (placeholder lint only)"
+  host_scope=""
 fi
-cargo clippy --manifest-path "$root/Cargo.toml" --workspace --all-targets -q -- -D warnings >&2
+# shellcheck disable=SC2086 # host_scope is a single flag or empty
+cargo clippy --manifest-path "$root/Cargo.toml" $host_scope --all-targets -q -- -D warnings >&2
 
 if rustc --target wasm32-wasip1 --print sysroot >/dev/null 2>&1; then
   if [ -f "$root/vendor/mruby/build/wasi/lib/libmruby.a" ] \
