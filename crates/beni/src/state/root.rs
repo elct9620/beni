@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn a_released_slot_is_reused_by_the_next_root() {
-        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let mrb = Mrb::open().expect("Mrb::open needs a staged mruby archive");
         let first = mrb.str_new(b"first").as_value();
         let second = mrb.str_new(b"second").as_value();
 
