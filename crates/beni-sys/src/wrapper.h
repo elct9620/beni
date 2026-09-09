@@ -13,11 +13,15 @@
  * function reached through the include tree, including wasi-libc
  * helpers like `FD_ISSET`; the generated trampoline file `#include`s
  * only this wrapper, so `bool` and `fd_set` must resolve here even
- * though the safe layer never calls those helpers.
+ * though the safe layer never calls those helpers. `<sys/select.h>`
+ * is POSIX and has no Windows counterpart, and nothing on that
+ * platform reaches a helper needing it.
  */
 
 #include <stdbool.h>
+#if !defined(_WIN32)
 #include <sys/select.h>
+#endif
 
 #include <mruby.h>
 #include <mruby/array.h>
