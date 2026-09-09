@@ -169,7 +169,10 @@ jobs:
   # that leaves mruby's compiler gem out and a crate with beni's default
   # features off to match. What it pins — that the pair links and that
   # the compile surface is absent — is platform-independent, so one OS
-  # suffices.
+  # suffices. macos_universal is the macOS shipping posture: one mruby
+  # target per architecture and one cargo build per architecture, merged
+  # with lipo. It is the only lane exercising a cross target outside
+  # wasm32, and the pair it crosses between exists on macOS alone.
   scenario:
     runs-on: ${{ matrix.os }}
     name: Scenario ${{ matrix.scenario }} (${{ matrix.os }})
@@ -191,6 +194,12 @@ jobs:
           - os: ubuntu-latest
             scenario: embedded_no_compiler
             rust: true
+          - os: macos-latest
+            scenario: macos_universal
+            rust: true
+            # The host's own target is already installed; the scenario
+            # names both so either macOS runner architecture serves.
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -212,6 +221,7 @@ jobs:
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ steps.rust.outputs.channel }}
+          targets: ${{ matrix.rust_targets }}
       # The verify lane already downloads once per build platform, which
       # is what proves the platform detection; a scenario repeating it
       # proves nothing further and costs 174MB for wasi-sdk. The key
