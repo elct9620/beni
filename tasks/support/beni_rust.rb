@@ -18,8 +18,6 @@ require "beni/builder"
 module BeniRust
   ROOT = File.expand_path("../..", __dir__)
   WASM_TARGET = "wasm32-wasip1"
-  MISSING_WASM_TARGET = "#{WASM_TARGET} is not installed; run `rustup target add #{WASM_TARGET}` " \
-                        "(rust-toolchain.toml declares it, so a rustup-managed toolchain has it)".freeze
 
   # Scratch build dir for the default-ABI leg. Lives under tmp/
   # (gitignored) and is incremental across runs.
@@ -29,6 +27,22 @@ module BeniRust
   # tool, which +which+ is on POSIX hosts and is not on Windows.
   def self.cargo_available?
     !system("cargo", "--version", %i[out err] => File::NULL).nil?
+  end
+
+  # Stop +task+ before it spawns a cargo that is not there, naming the
+  # task the caller asked for.
+  def self.require_cargo!(task)
+    return if cargo_available?
+
+    abort "cargo not on PATH; install Rust toolchain to run #{task}"
+  end
+
+  # Stop a wasm leg whose target standard library is not installed.
+  def self.require_wasm_target!
+    return if wasm_target_installed?
+
+    abort "#{WASM_TARGET} is not installed; run `rustup target add #{WASM_TARGET}` " \
+          "(rust-toolchain.toml declares it, so a rustup-managed toolchain has it)"
   end
 
   # Archive discovery env for host-target cargo runs: the vendor tree
