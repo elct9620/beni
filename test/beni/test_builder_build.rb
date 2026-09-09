@@ -112,8 +112,8 @@ module Beni
         capture_io { builder.build }
       end
 
-      assert_includes error.message, builder.libmruby_path("host")
-      assert_includes error.message, builder.libmruby_path("wasi")
+      assert_includes error.message, builder.flags_mak_path("host")
+      assert_includes error.message, builder.flags_mak_path("wasi")
     end
 
     private
@@ -135,13 +135,14 @@ module Beni
       path
     end
 
-    # Fakes a fully built target: the archive plus the flags.mak
-    # sidecar the build always requests alongside it.
+    # Fakes a fully built target: the sidecar naming the archive, and
+    # the archive itself beside it.
     def touch_libmruby(builder, target)
-      path = builder.libmruby_path(target)
-      FileUtils.mkdir_p(File.dirname(path))
-      FileUtils.touch(path)
-      FileUtils.touch(File.join(File.dirname(path), "libmruby.flags.mak"))
+      dir = builder.staged_path(target)
+      FileUtils.mkdir_p(dir)
+      File.write(File.join(dir, Builder::FLAGS_MAK),
+                 "#{Builder::ARCHIVE_PATH_KEY}$(MRUBY_PACKAGE_DIR)/lib/libmruby.a\n")
+      FileUtils.touch(File.join(dir, "libmruby.a"))
     end
   end
 end

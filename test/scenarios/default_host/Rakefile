@@ -19,6 +19,19 @@ require "beni/tasks"
 
 Beni::Tasks.new
 
+# The archive's file name follows the toolchain that built it, so the
+# sidecar beside it is what names the file to look for.
+def staged_artifacts(dir)
+  sidecar = File.join(dir, "libmruby.flags.mak")
+  return [sidecar] unless File.exist?(sidecar)
+
+  named = File.foreach(sidecar).find { |line| line.start_with?("MRUBY_LIBMRUBY_PATH = ") }
+  abort "[scenario] #{sidecar} names no archive" unless named
+
+  archive = File.basename(named.delete_prefix("MRUBY_LIBMRUBY_PATH = ").strip.tr("\\", "/"))
+  [sidecar, File.join(dir, archive)]
+end
+
 namespace :scenario do
   # Part of the harness contract every scenario implements
   # (setup → beni:build → verify); the zero-configuration path has
@@ -28,10 +41,7 @@ namespace :scenario do
 
   desc "Assert the artifacts beni:build must leave behind"
   task :verify do
-    artifacts = %w[
-      vendor/mruby/build/host/lib/libmruby.a
-      vendor/mruby/build/host/lib/libmruby.flags.mak
-    ].map { |rel| File.expand_path(rel, __dir__) }
+    artifacts = staged_artifacts(File.expand_path("vendor/mruby/build/host/lib", __dir__))
 
     missing = artifacts.reject { |path| File.exist?(path) }
     abort "[scenario] missing artifacts:\n  #{missing.join("\n  ")}" unless missing.empty?

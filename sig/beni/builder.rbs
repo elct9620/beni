@@ -1,6 +1,8 @@
 module Beni
   class Builder
     DEFAULT_TARGETS: Array[String]
+    ARCHIVE_PATH_KEY: String
+    FLAGS_MAK: String
 
     attr_reader vendor_dir: String
     attr_reader build_config: String?
@@ -10,9 +12,13 @@ module Beni
 
     def mruby_dir: () -> String
 
-    def libmruby_path: (String target) -> String
+    def staged_path: (String target) -> String
 
-    def libmruby_paths: () -> Array[String]
+    def staged_paths: () -> Array[String]
+
+    def flags_mak_path: (String target) -> String
+
+    def archive_path: (String target) -> String?
 
     def built?: () -> bool
 
@@ -24,7 +30,9 @@ module Beni
 
     private
 
-    def artifact_paths: () -> Array[String]
+    def archive_file_name: (String sidecar) -> String
+
+    def exist?: (String? path) -> bool
 
     def run_mruby_rake: (Hash[String, String] env, Array[String] cmd) -> void
 

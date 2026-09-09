@@ -126,7 +126,7 @@ module Beni
 
     def define_build_task
       desc "Build vendored mruby for #{configuration.targets.join(" + ")} " \
-           "(produces #{builder.libmruby_paths.join(", ")})"
+           "(stages the archive and its compile-flags sidecar in #{builder.staged_paths.join(", ")})"
       task build: "vendor:setup" do
         builder.ensure_built
       end

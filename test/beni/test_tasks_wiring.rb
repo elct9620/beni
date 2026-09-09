@@ -20,7 +20,7 @@ module Beni
         @ensure_built_calls = 0
       end
 
-      def libmruby_paths
+      def staged_paths
         []
       end
 
