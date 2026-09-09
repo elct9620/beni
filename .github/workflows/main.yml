@@ -156,7 +156,8 @@ jobs:
   # scenario:verify), plain rake without Bundler. default_host is the
   # zero-configuration path: mruby alone, upstream default config,
   # host target — platform-sensitive (mruby's native toolchain
-  # detection), so it runs on every OS. generated_config drives the
+  # detection), so it runs on every OS this lane covers; the Windows
+  # lane runs it against MSVC. generated_config drives the
   # rake beni:config → cross-build chain; the mechanism is
   # platform-independent and the resulting config already builds on
   # all three OS in the verify lane, so one OS suffices. rust_consumer
@@ -225,3 +226,58 @@ jobs:
       - name: Build through the gem's task interface
         run: rake scenario:setup beni:build scenario:verify
         working-directory: test/scenarios/${{ matrix.scenario }}
+
+  # Windows lane: the MSVC chain, which is the toolchain a downstream
+  # Rust extension for Windows is built with. mruby's visualcpp
+  # toolchain names the archive and every compile flag differently from
+  # the GNU-style toolchains every other lane exercises, and the
+  # compile-flags sidecar is where the gem and the crates read that
+  # from — so this is the lane that proves the read against a real one.
+  # Only host-target scenarios run: wasi-sdk vendors no tarball for a
+  # Windows build platform, so a scenario declaring a wasi target is
+  # refused here by design.
+  windows:
+    runs-on: windows-latest
+    name: Windows ${{ matrix.scenario }} (MSVC)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scenario: default_host
+          - scenario: rust_consumer
+            rust: true
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        with:
+          ruby-version: '3.4'
+      - name: Read Rust channel from rust-toolchain.toml
+        if: matrix.rust
+        id: rust
+        shell: bash
+        run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+      - name: Set up Rust toolchain
+        if: matrix.rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ steps.rust.outputs.channel }}
+      - name: Cache the scenario's toolchain tarballs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: test/scenarios/${{ matrix.scenario }}/vendor/.cache
+          key: toolchains-${{ matrix.scenario }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lib/beni/vendor.rb') }}
+      # mruby selects its visualcpp toolchain off the environment vcvars
+      # sets, and the trampoline compile and binding generation read the
+      # same environment for cl.exe and the MSVC headers — so the build
+      # runs inside it rather than beside it. vswhere ships at a fixed
+      # path, which is why no edition or version is spelled out here.
+      - name: Build through the gem's task interface
+        shell: cmd
+        working-directory: test/scenarios/${{ matrix.scenario }}
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do call "%%i\VC\Auxiliary\Build\vcvars64.bat"
+          rake scenario:setup beni:build scenario:verify
