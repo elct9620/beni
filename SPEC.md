@@ -57,6 +57,9 @@ the archive it builds.
   references `wasi-sdk`, the build config defines a target cross-compiled
   for wasm32, `MRUBY_LIB_DIR` names that target's staged path, and
   `WASI_SDK_PATH` names the unpacked wasi-sdk root.
+- A cross-build for the other macOS architecture succeeds when the build
+  config defines a target cross-compiled for it and `MRUBY_LIB_DIR` names
+  that target's staged path.
 
 ## Non-goals
 
@@ -208,9 +211,15 @@ Selection, checksums, and cross-compile activation:
 
   A documentation build runs no archive discovery, so an archive
   discovery variable set in one changes nothing.
-- wasm32 is the one supported cross target; a build for any other
-  cross-compiled cargo target fails and names the unsupported target.
-  wasm32 requires the wasi-sdk toolchain: `WASI_SDK_PATH` names its
+- The supported cross targets are wasm32 and the other macOS
+  architecture — `x86_64-apple-darwin` from an `aarch64-apple-darwin`
+  host and the reverse; a build for any other cross-compiled cargo target
+  fails and names the unsupported target.
+- The macOS one selects no toolchain: the host compiler builds for either
+  macOS architecture. The sidecar does not record which architecture an
+  archive was built for, so `MRUBY_LIB_DIR` naming the other
+  architecture's archive resolves and fails at link.
+- wasm32 requires the wasi-sdk toolchain: `WASI_SDK_PATH` names its
   unpacked root, defaulting to `/opt/wasi-sdk` when the variable is
   unset. The sidecar records the toolchain root the archive was built
   against, and the root in effect is that one: a build finding a
@@ -1040,8 +1049,9 @@ The `compiler` capability feature carries everything in this section.
 | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive its sidecar names is absent | `beni-sys` build fails and names the expected path |
 | Discovered archive below the supported mruby floor | `beni-sys` build fails and names the archive's version |
 | Discovered archive whose headers state no mruby version | `beni-sys` build fails and names the headers it read |
-| Cross-compiled build for a cargo target other than wasm32 | `beni-sys` build fails and names the unsupported target |
+| Cross-compiled build for a cargo target that is neither wasm32 nor the other macOS architecture | `beni-sys` build fails and names the unsupported target |
 | Cross-compiled build without `MRUBY_LIB_DIR` | `beni-sys` build fails |
+| A cross-build whose `MRUBY_LIB_DIR` names an archive built for the other macOS architecture | discovery resolves, the link fails; the crate reads the archive's sidecar, never its architecture |
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails |
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root |
 | The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has |
