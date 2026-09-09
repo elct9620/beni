@@ -16,7 +16,7 @@ fn sidecar_line(lib_dir: &std::path::Path, key: &str) -> String {
     let flags_mak = lib_dir.join("libmruby.flags.mak");
     let content = std::fs::read_to_string(&flags_mak).unwrap_or_else(|_| {
         panic!(
-            "beni-sys: {} is missing. The discovered libmruby.a's compile flags are \
+            "beni-sys: {} is missing. The discovered archive's compile flags are \
              unknown, so bindgen cannot be aligned with the archive. Re-run \
              `bundle exec rake beni:build` (which requests the sidecar), or for \
              an externally built archive invoke mruby's rake with the sidecar's \
@@ -60,7 +60,7 @@ fn sidecar_line(lib_dir: &std::path::Path, key: &str) -> String {
 fn parse_compile_flags(lib_dir: &std::path::Path) -> Vec<String> {
     let flags: Vec<String> = sidecar_line(lib_dir, "MRUBY_CFLAGS")
         .split_whitespace()
-        .filter(|token| !token.starts_with("-I"))
+        .filter(|token| !names_header_tree(token))
         .map(str::to_owned)
         .collect();
     if let Some(quoted) = flags
@@ -76,17 +76,44 @@ fn parse_compile_flags(lib_dir: &std::path::Path) -> Vec<String> {
     flags
 }
 
+/// Whether a token names the header tree. `build.rs` substitutes the
+/// tree staged beside the archive, so the flag is dropped in either
+/// toolchain's spelling of it.
+fn names_header_tree(token: &str) -> bool {
+    token.starts_with("-I") || token.starts_with("/I")
+}
+
+/// The MSVC spelling of each flag deciding what the headers declare,
+/// paired with the spelling libclang reads it under.
+const DECLARATION_FLAG_SPELLINGS: [(&str, &str); 3] =
+    [("/D", "-D"), ("/U", "-U"), ("/std:", "-std=")];
+
+/// One compile flag as binding generation reads it, or `None` when the
+/// flag decides how code is generated rather than what the headers
+/// declare.
+fn declaration_flag(token: &str) -> Option<String> {
+    for (msvc, clang) in DECLARATION_FLAG_SPELLINGS {
+        if let Some(value) = token.strip_prefix(msvc) {
+            return Some(format!("{clang}{value}"));
+        }
+    }
+    (token.starts_with("-D") || token.starts_with("-U") || token.starts_with("-std="))
+        .then(|| token.to_owned())
+}
+
 /// The flags deciding what the archive's headers declare — macro
-/// definitions and removals, and the language standard. Binding
-/// generation parses with a toolchain that is never the one the sidecar
-/// names, so it is held to these alone.
+/// definitions and removals, and the language standard — in the
+/// spelling libclang reads. Binding generation parses with a toolchain
+/// that is never the one the sidecar names, so it is held to these
+/// alone, and the archive's toolchain spelling of each is handed over
+/// as clang's.
 ///
-/// A `-D` or `-U` carrying its value in the next token would reach the
-/// parse without it, so it stops the read instead.
+/// A definition or removal carrying its value in the next token would
+/// reach the parse without it, so it stops the read instead.
 fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec<String> {
     if let Some(bare) = compile_flags
         .iter()
-        .find(|token| token.as_str() == "-D" || token.as_str() == "-U")
+        .find(|token| matches!(token.as_str(), "-D" | "-U" | "/D" | "/U"))
     {
         panic!(
             "beni-sys: {} names a bare `{bare}` in `MRUBY_CFLAGS`, whose value is a \
@@ -96,10 +123,7 @@ fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec
     }
     compile_flags
         .iter()
-        .filter(|token| {
-            token.starts_with("-D") || token.starts_with("-U") || token.starts_with("-std=")
-        })
-        .cloned()
+        .filter_map(|token| declaration_flag(token))
         .collect()
 }
 
@@ -178,6 +202,16 @@ mod tests {
         dir
     }
 
+    /// What mruby's visualcpp toolchain writes: the archive named as a
+    /// file, and every flag in MSVC's spelling.
+    const MSVC_SIDECAR: &str = concat!(
+        "# GNU make is required to use this file.\n",
+        "MRUBY_CC = cl.exe\n",
+        "MRUBY_CFLAGS = /nologo /W3 /MD /O2 /D_CRT_SECURE_NO_WARNINGS /we4013",
+        " /DMRB_STACK_EXTEND_DOUBLING /DMRB_INT32 /I\"$(MRUBY_PACKAGE_DIR)/include\"\n",
+        "MRUBY_LIBS = libmruby.lib\n",
+    );
+
     const HOST_SIDECAR: &str = concat!(
         "# GNU make is required to use this file.\n",
         "MRUBY_CC = gcc\n",
@@ -225,6 +259,52 @@ mod tests {
             ],
             "a flag and the value it governs stay together and in order"
         );
+    }
+
+    #[test]
+    fn an_msvc_archives_compile_flags_are_read_from_its_cflags() {
+        let dir = sidecar_dir("msvc", MSVC_SIDECAR);
+        assert_eq!(
+            parse_compile_flags(&dir),
+            vec![
+                "/nologo".to_owned(),
+                "/W3".to_owned(),
+                "/MD".to_owned(),
+                "/O2".to_owned(),
+                "/D_CRT_SECURE_NO_WARNINGS".to_owned(),
+                "/we4013".to_owned(),
+                "/DMRB_STACK_EXTEND_DOUBLING".to_owned(),
+                "/DMRB_INT32".to_owned(),
+            ],
+            "MSVC names the header tree with /I, and that one flag is the only one dropped"
+        );
+    }
+
+    #[test]
+    fn an_msvc_archives_declaration_flags_reach_binding_generation_as_clangs() {
+        // libclang never reads MSVC's spelling, so each flag deciding
+        // what the headers declare crosses in the spelling it does read.
+        let dir = sidecar_dir(
+            "msvc-declares",
+            "MRUBY_CFLAGS = /nologo /std:c11 /O2 /DMRB_INT32 /UMRB_USE_FLOAT32\n",
+        );
+        let flags = parse_compile_flags(&dir);
+        assert_eq!(
+            declaration_flags(&dir, &flags),
+            vec![
+                "-std=c11".to_owned(),
+                "-DMRB_INT32".to_owned(),
+                "-UMRB_USE_FLOAT32".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "names a bare `/D` in `MRUBY_CFLAGS`")]
+    fn a_bare_msvc_define_fails_rather_than_reaching_the_parse_without_its_value() {
+        let dir = sidecar_dir("msvc-bare-define", "MRUBY_CFLAGS = /D MRB_INT32\n");
+        let flags = parse_compile_flags(&dir);
+        declaration_flags(&dir, &flags);
     }
 
     #[test]
