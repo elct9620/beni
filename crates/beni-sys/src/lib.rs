@@ -44,14 +44,14 @@
 //!
 //! ## ABI / opaque types
 //!
-//! `mrb_value` layout depends on mruby compile-time configuration.
-//! For wasm32 with `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`
-//! the value is a 32-bit word-box (`struct { uintptr_t w }` where
-//! `uintptr_t` is 4 bytes). The `build.rs` clang invocation mirrors
-//! those defines so bindgen sees the same layout the archive was
-//! built with. The const assertions below pin the size / align at
-//! compile time — any future vendor bump that drifts the layout
-//! fails to compile rather than silently breaking the ABI.
+//! `mrb_value` layout depends on mruby compile-time configuration,
+//! which is the archive's to decide and not this crate's: `build.rs`
+//! reads the defines the archive was built with from its compile-flags
+//! sidecar and hands them to bindgen, so the generated layout is the
+//! linked one whatever a consumer configured. The const assertions
+//! below hold `mrb_value` to a single machine word, so an archive
+//! whose boxing makes it wider fails to compile here rather than
+//! silently breaking the ABI.
 
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
@@ -88,10 +88,10 @@ mod bindings {
 pub use bindings::*;
 
 impl mrb_value {
-    /// All-zero `mrb_value`. Under beni's pinned word-boxing mruby
-    /// configuration this matches `mrb_nil_value()` (MRB_Qnil = 0).
-    /// Out-parameter initialisers (`mrb_get_args` writes to it) use
-    /// this; callers that need a guaranteed nil should prefer the
+    /// All-zero `mrb_value`. Under word boxing this matches
+    /// `mrb_nil_value()` (MRB_Qnil = 0). Out-parameter initialisers
+    /// (`mrb_get_args` writes to it) use this; callers that need a
+    /// guaranteed nil should prefer the
     /// `Value::nil` accessor in the `beni` wrapper which reads
     /// through mruby's helper.
     pub const fn zeroed() -> Self {
@@ -99,27 +99,29 @@ impl mrb_value {
     }
 }
 
-// Compile-time pin on the mrb_value layout. Under word boxing the
-// value is a single machine word on every target (4 bytes on wasm32,
-// 8 on 64-bit hosts). Catches a future bindgen / build_config drift
-// before it silently breaks ABI.
+// Compile-time pin on the mrb_value layout. mruby falls back to word
+// boxing when a config names no boxing mode
+// (`vendor/mruby/include/mrbconf.h:62-64`), and under it the value is
+// a single machine word on every target (4 bytes on wasm32, 8 on
+// 64-bit hosts). Catches a bindgen or archive drift before it
+// silently breaks ABI.
 const _: () = assert!(
     core::mem::size_of::<mrb_value>() == core::mem::size_of::<usize>(),
-    "mrb_value size diverged from the MRB_WORDBOX_NO_INLINE_FLOAT word-boxing layout"
+    "mrb_value size diverged from the word-boxing layout"
 );
 const _: () = assert!(
     core::mem::align_of::<mrb_value>() == core::mem::align_of::<usize>(),
-    "mrb_value alignment diverged from the MRB_WORDBOX_NO_INLINE_FLOAT word-boxing layout"
+    "mrb_value alignment diverged from the word-boxing layout"
 );
 
 // `Mrb::pending_exc` and `Mrb::set_pending_exc` (in the `beni`
 // wrapper crate) read / write `mrb_state.exc` through bindgen's
 // struct accessor. Pin the field's offset so a future bindgen run or
 // mruby vendor bump that shifts it fails at compile time rather than
-// silently reading the wrong slot. The field sits after `jmp` / `c` / `root_c` /
-// `globals` (four pointer-sized fields); `mrb_gc` (which carries
-// the bitfield workaround) lives further down the struct, so the
-// bitfield mis-pack does not affect this offset.
+// silently reading the wrong slot. The field sits after `jmp` / `c` /
+// `root_c` / `globals` (four pointer-sized fields); `mrb_gc` (which
+// carries the bitfield workaround) lives further down the struct, so
+// the bitfield mis-pack does not affect this offset.
 const _: () = assert!(
     core::mem::offset_of!(mrb_state, exc) == 4 * core::mem::size_of::<*const core::ffi::c_void>(),
     "mrb_state.exc offset diverged from the vendored mruby layout — \

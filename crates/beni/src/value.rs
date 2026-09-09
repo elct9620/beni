@@ -20,10 +20,11 @@
 //!
 //! ## ABI guarantee
 //!
-//! `Value` is `#[repr(transparent)]` over `mrb_value`. Under beni's
-//! pinned word-boxing config `mrb_value` is a single machine word
-//! (4 bytes on wasm32, 8 on 64-bit hosts); `Value` shares that
-//! layout and the C ABI. This matters at the `mrb_func_t` boundary:
+//! `Value` is `#[repr(transparent)]` over `mrb_value`. Under word
+//! boxing — mruby's fallback when a config names no boxing mode
+//! (`vendor/mruby/include/mrbconf.h:62-64`) — `mrb_value` is a single
+//! machine word (4 bytes on wasm32, 8 on 64-bit hosts); `Value` shares
+//! that layout and the C ABI. This matters at the `mrb_func_t` boundary:
 //! a bridge declared with `Value` parameters and return type
 //! produces the same function signature as one declared with
 //! `mrb_value`. Round-tripping through `Value::from_raw` /
@@ -190,9 +191,9 @@ impl Value {
         self.0
     }
 
-    /// All-zero `Value`. Under beni's pinned word-boxing
-    /// configuration this matches `mrb_nil_value()` (MRB_Qnil = 0),
-    /// but callers that need a guaranteed nil should prefer
+    /// All-zero `Value`. Under word boxing this matches
+    /// `mrb_nil_value()` (MRB_Qnil = 0), but callers that need a
+    /// guaranteed nil should prefer
     /// `Value::nil` which reads through the mruby shim. The
     /// zeroed form exists for out-parameter initialization
     /// (`mrb_get_args` writes to it).
@@ -1549,7 +1550,8 @@ impl Value {
     /// converts across types and rejects an Integer outright.
     ///
     /// The converted number round-trips through `Value::from_float` and
-    /// `unbox_float`, lossless under beni's pinned float config.
+    /// `unbox_float` at the archive's own float width, so nothing is
+    /// lost between them.
     #[inline]
     pub fn as_float(self, mrb: &Mrb) -> Result<sys::mrb_float, Error> {
         mrb.protect(|mrb| {

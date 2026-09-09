@@ -228,9 +228,9 @@ mrb_break_p_func(mrb_value v)
 /* Read the `val` field of an RBreak-tagged `mrb_value`.
  *
  * Counterpart to the `mrb_break_value_get(brk)` macro in
- * <mruby/error.h> under beni's pinned word-boxing configuration
- * (which leaves `MRB_USE_RBREAK_VALUE_UNION` undefined, so the
- * macro resolves to a simple `brk->val` read).
+ * <mruby/error.h>, whose expansion depends on whether the build
+ * carries `MRB_USE_RBREAK_VALUE_UNION`; routing through the C
+ * compiler picks the one the archive was built with.
  *
  * Caller must ensure `v` is RBreak-tagged via `mrb_break_p_func`;
  * behaviour is undefined otherwise. */
