@@ -1,7 +1,7 @@
 //! beni-sys — bindgen-driven mruby C API FFI surface.
 //!
 //! This crate is the boundary between the typed `beni` wrapper and
-//! `libmruby.a`. The entire FFI surface comes from `bindgen` at
+//! the mruby archive. The entire FFI surface comes from `bindgen` at
 //! build time:
 //!
 //!   * `src/wrapper.h` is the bindgen entry header. It includes the
@@ -48,7 +48,7 @@
 //! For wasm32 with `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`
 //! the value is a 32-bit word-box (`struct { uintptr_t w }` where
 //! `uintptr_t` is 4 bytes). The `build.rs` clang invocation mirrors
-//! those defines so bindgen sees the same layout libmruby.a was
+//! those defines so bindgen sees the same layout the archive was
 //! built with. The const assertions below pin the size / align at
 //! compile time — any future vendor bump that drifts the layout
 //! fails to compile rather than silently breaking the ABI.

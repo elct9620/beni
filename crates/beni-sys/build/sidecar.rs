@@ -127,6 +127,31 @@ fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec
         .collect()
 }
 
+/// The file name the archive's sidecar gives it. mruby writes the path
+/// through a make variable no reader outside make can expand, so the
+/// name is what is taken from it — the archive itself sits in the
+/// directory discovery resolved.
+fn parse_archive_file_name(lib_dir: &std::path::Path) -> String {
+    let path = sidecar_line(lib_dir, "MRUBY_LIBMRUBY_PATH");
+    let name = path.trim().rsplit(['/', '\\']).next().unwrap_or_default();
+    if name.is_empty() || name.contains('$') {
+        panic!(
+            "beni-sys: {} names `{path}` in `MRUBY_LIBMRUBY_PATH`, which carries no \
+             file name the archive can be looked for under — unrecognized flags.mak \
+             layout",
+            lib_dir.join("libmruby.flags.mak").display()
+        );
+    }
+    name.to_owned()
+}
+
+/// Whether `name` is the library the archive's own file answers to,
+/// under either convention a static library is named by: a GNU-style
+/// `lib<name>.a`, or MSVC's `<name>.lib`.
+fn names_the_archive(name: &str, archive_file_name: &str) -> bool {
+    archive_file_name == format!("lib{name}.a") || archive_file_name == format!("{name}.lib")
+}
+
 /// The library name one `MRUBY_LIBS` token carries, in either form
 /// mruby's toolchains name a library by: a GNU-style `-l<name>` option,
 /// or MSVC's `<name>.lib` file. `None` for a token in neither form.
@@ -187,8 +212,8 @@ fn parse_toolchain_root(lib_dir: &std::path::Path) -> Option<std::path::PathBuf>
 #[cfg(test)]
 mod tests {
     use super::{
-        declaration_flags, parse_compile_flags, parse_compiler, parse_link_libs,
-        parse_toolchain_root,
+        declaration_flags, names_the_archive, parse_archive_file_name, parse_compile_flags,
+        parse_compiler, parse_link_libs, parse_toolchain_root,
     };
 
     /// A directory holding one sidecar with the given `MRUBY_CFLAGS`
@@ -218,6 +243,7 @@ mod tests {
         "MRUBY_CFLAGS = /nologo /W3 /MD /O2 /D_CRT_SECURE_NO_WARNINGS /we4013",
         " /DMRB_STACK_EXTEND_DOUBLING /DMRB_INT32 /I\"$(MRUBY_PACKAGE_DIR)/include\"\n",
         "MRUBY_LIBS = libmruby.lib\n",
+        "MRUBY_LIBMRUBY_PATH = $(MRUBY_PACKAGE_DIR)\\lib\\libmruby.lib\n",
     );
 
     const HOST_SIDECAR: &str = concat!(
@@ -226,6 +252,7 @@ mod tests {
         "MRUBY_CFLAGS = -std=gnu99 -g -O3 -Wall -DMRB_INT32",
         " -DMRB_WORDBOX_NO_INLINE_FLOAT -I\"$(MRUBY_PACKAGE_DIR)/include\"\n",
         "MRUBY_LIBS = -lmruby -lm\n",
+        "MRUBY_LIBMRUBY_PATH = $(MRUBY_PACKAGE_DIR)/lib/libmruby.a\n",
     );
 
     #[test]
@@ -313,6 +340,37 @@ mod tests {
         let dir = sidecar_dir("msvc-bare-define", "MRUBY_CFLAGS = /D MRB_INT32\n");
         let flags = parse_compile_flags(&dir);
         declaration_flags(&dir, &flags);
+    }
+
+    #[test]
+    fn the_archives_file_name_is_read_from_the_path_its_sidecar_names_it_by() {
+        assert_eq!(
+            parse_archive_file_name(&sidecar_dir("archive-gnu", HOST_SIDECAR)),
+            "libmruby.a"
+        );
+        assert_eq!(
+            parse_archive_file_name(&sidecar_dir("archive-msvc", MSVC_SIDECAR)),
+            "libmruby.lib",
+            "MSVC separates the path with backslashes and names the file .lib"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "carries no file name")]
+    fn a_path_whose_file_name_is_a_make_variable_fails_rather_than_looking_for_it() {
+        let dir = sidecar_dir("archive-variable", "MRUBY_LIBMRUBY_PATH = $(MRUBY_LIB)\n");
+        parse_archive_file_name(&dir);
+    }
+
+    #[test]
+    fn the_archive_answers_to_the_name_its_own_file_is_built_from() {
+        assert!(names_the_archive("mruby", "libmruby.a"));
+        assert!(names_the_archive("libmruby", "libmruby.lib"));
+        // Everything else the link set names is a library beside it.
+        assert!(!names_the_archive("m", "libmruby.a"));
+        assert!(!names_the_archive("kernel32", "libmruby.lib"));
+        // One toolchain's naming never answers for the other's file.
+        assert!(!names_the_archive("mruby", "libmruby.lib"));
     }
 
     #[test]

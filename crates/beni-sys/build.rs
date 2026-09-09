@@ -3,7 +3,7 @@
 //
 // Purpose
 // -------
-// When archive discovery locates a `libmruby.a` for the active cargo
+// When archive discovery locates an archive for the active cargo
 // target, this build script does four things:
 //
 //   1. Runs bindgen against `src/wrapper.h` to emit the mruby C API
@@ -32,7 +32,7 @@
 // back to a lower one:
 //
 //   1. `MRUBY_LIB_DIR` — names the directory containing the active
-//      target's `libmruby.a` and `libmruby.flags.mak`.
+//      target's archive and `libmruby.flags.mak`.
 //   2. `BENI_VENDOR_DIR` — names the vendor tree `rake beni:build`
 //      populated; the crate reads the `host` build's staged path
 //      (`mruby/build/host/lib/`) and serves host cargo targets only.
@@ -58,7 +58,7 @@
 // The discovered lib dir is self-contained: mruby's build copies the
 // complete public header tree (source headers, generated headers,
 // gem exports) into the sibling `include/` whenever it archives
-// `libmruby.a`, so `<lib dir>/../include` is the single include root
+// the archive, so `<lib dir>/../include` is the single include root
 // — the same directory the sidecar's own `-I$(MRUBY_PACKAGE_DIR)/
 // include` names. Neither the compile flags nor the link set are
 // hard-coded: both are parsed from the `libmruby.flags.mak` sidecar
@@ -92,9 +92,6 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// The archive discovery looks for, named as the linker names it.
-const ARCHIVE_LIB: &str = "mruby";
-
 include!("build/sidecar.rs");
 include!("build/version.rs");
 
@@ -104,8 +101,8 @@ fn env_path(key: &str) -> Option<String> {
     env::var(key).ok().filter(|s| !s.is_empty())
 }
 
-/// Locate the directory holding the active target's `libmruby.a` and
-/// its compile-flags sidecar. Every outcome either resolves or panics
+/// Locate the directory holding the active target's archive and its
+/// compile-flags sidecar. Every outcome either resolves or panics
 /// naming what is missing.
 fn discover_lib_dir(is_wasm: bool) -> PathBuf {
     if let Some(dir) = env_path("MRUBY_LIB_DIR") {
@@ -116,7 +113,7 @@ fn discover_lib_dir(is_wasm: bool) -> PathBuf {
     if is_wasm {
         panic!(
             "beni-sys: cross-compiled builds require MRUBY_LIB_DIR to name the \
-             directory containing the target's libmruby.a (the vendor tree is \
+             directory containing the target's archive (the vendor tree is \
              never read for cross targets). Build the archive with \
              `bundle exec rake beni:build`, then set MRUBY_LIB_DIR."
         );
@@ -132,15 +129,16 @@ fn discover_lib_dir(is_wasm: bool) -> PathBuf {
     }
     panic!(
         "beni-sys: no archive discovery variable set. Set MRUBY_LIB_DIR to the \
-         directory containing this target's libmruby.a, or BENI_VENDOR_DIR to \
+         directory containing this target's archive, or BENI_VENDOR_DIR to \
          the vendor tree `bundle exec rake beni:build` populates."
     );
 }
 
 /// Fail loudly when the discovery variable points at a directory with
-/// no archive — a set variable is a claim that the archive exists.
+/// no archive — a set variable is a claim that the archive exists. The
+/// name to look for is the archive's own, which its sidecar states.
 fn require_archive(lib_dir: &Path, var: &str) {
-    let archive = lib_dir.join(format!("lib{ARCHIVE_LIB}.a"));
+    let archive = lib_dir.join(parse_archive_file_name(lib_dir));
     if !archive.exists() {
         panic!(
             "beni-sys: {var} is set but {} does not exist. Run \
@@ -284,10 +282,11 @@ fn main() {
             wasi_sdk
         );
     }
+    let archive_file_name = parse_archive_file_name(&lib_dir);
     for lib in parse_link_libs(&lib_dir) {
         // The archive is static by definition; on wasm32 nothing links
         // dynamically, so every library there is static too.
-        let kind = if lib == ARCHIVE_LIB || is_wasm {
+        let kind = if names_the_archive(&lib, &archive_file_name) || is_wasm {
             "static="
         } else {
             ""

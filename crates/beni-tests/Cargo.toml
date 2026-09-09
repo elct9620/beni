@@ -7,7 +7,7 @@
 # the raw-FFI escape hatch, among them — can stop being public with
 # every in-crate gate still green, and only this suite objects.
 #
-# The suite always runs against a real `libmruby.a` — there is one way
+# The suite always runs against a real archive — there is one way
 # to consume a static archive, so nothing here is gated on whether one
 # is linked. Archive discovery comes from the environment the gem's
 # build chain populates (`rake rust:test`); without it the tests fail
