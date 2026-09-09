@@ -89,10 +89,9 @@ impl Range {
     }
 
     /// `mrb_range_end(mrb, self)` — the end value, Ruby's `Range#end`,
-    /// the mirror of `begin`. Named `end_` because `end` is a Rust
-    /// keyword; a pure field read that never raises.
+    /// the mirror of `begin`. A pure field read that never raises.
     #[inline]
-    pub fn end_(self, mrb: &Mrb) -> Value {
+    pub fn end(self, mrb: &Mrb) -> Value {
         // SAFETY: as `begin`; `mrb_range_end_func` reads only the
         // `RRange` end field.
         Value::from_raw(unsafe { sys::mrb_range_end_func(mrb.as_ptr(), self.0.as_raw()) })

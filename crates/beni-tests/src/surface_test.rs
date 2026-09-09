@@ -165,7 +165,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Range::as_value;
     let _ = Range::as_raw;
     let _ = Range::begin;
-    let _ = Range::end_;
+    let _ = Range::end;
     let _ = Range::is_exclusive;
     let _ = Range::beg_len;
     let _ = Symbol::from_value_unchecked;

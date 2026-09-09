@@ -10,7 +10,7 @@ fn range_new_constructs_and_reads_back_its_bounds() {
         .range_new(0.into_value(&mrb), 10.into_value(&mrb), false)
         .expect("a comparable integer range constructs");
     assert_eq!(i32::from_value(r.begin(&mrb)), Some(0));
-    assert_eq!(i32::from_value(r.end_(&mrb)), Some(10));
+    assert_eq!(i32::from_value(r.end(&mrb)), Some(10));
     assert!(!r.is_exclusive(&mrb));
 }
 
@@ -66,7 +66,7 @@ fn reads_track_an_exclusive_literal() {
     )
     .expect("a Range literal is Range-tagged");
     assert_eq!(i32::from_value(r.begin(&mrb)), Some(1));
-    assert_eq!(i32::from_value(r.end_(&mrb)), Some(5));
+    assert_eq!(i32::from_value(r.end(&mrb)), Some(5));
     assert!(r.is_exclusive(&mrb));
 }
 

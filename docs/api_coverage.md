@@ -414,7 +414,7 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_gc_free_range` | macro | — | ⊘ | conditional: `MRB_RANGE_EMBED` — beni's ABI names no boxing mode, and mruby then defaults to `MRB_WORD_BOXING` (`vendor/mruby/include/mrbconf.h:63-65`), which embeds a Range's bounds and expands the macro to `((void)0)` (`vendor/mruby/include/mruby/range.h:28`) |
 | `mrb_range_beg` | macro | ✅ | ✅ | `Range::begin` |
 | `mrb_range_beg_len` | fn | ✅ | ✅ | `Range::beg_len` — the normalized slice a Range covers of a collection of a given length (Ruby's `Array#[range]` / `String#[range]`); returns the three-way `RangeBegLen` outcome (in-range, out-of-range, non-Range mismatch), raising TypeError on a non-integer bound, caught by `Mrb::protect` into `Err` |
-| `mrb_range_end` | macro | ✅ | ✅ | `Range::end_` |
+| `mrb_range_end` | macro | ✅ | ✅ | `Range::end` |
 | `mrb_range_excl_p` | macro | ✅ | ✅ | `Range::is_exclusive` |
 | `mrb_range_new` | fn | ✅ | ✅ | `Mrb::range_new` |
 | `mrb_range_ptr` | fn | ✅ | ⊘ | declined: unchecked cast to `struct RRange*` — see `mrb_str_ptr` |
