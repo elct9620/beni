@@ -17,19 +17,18 @@ $LOAD_PATH.unshift File.expand_path("../../../lib", __dir__)
 
 require "beni/tasks"
 
-Beni::Tasks.new
+TASKS = Beni::Tasks.new
 
-# The archive's file name follows the toolchain that built it, so the
-# sidecar beside it is what names the file to look for.
-def staged_artifacts(dir)
-  sidecar = File.join(dir, "libmruby.flags.mak")
-  return [sidecar] unless File.exist?(sidecar)
+# Wired from the same resolved declarations the task surface was,
+# so the check cannot drift from what `beni:build` actually stages.
+BUILDER = Beni::Builder.new(vendor_dir: TASKS.configuration.vendor_dir,
+                            targets: TASKS.configuration.targets)
 
-  named = File.foreach(sidecar).find { |line| line.start_with?("MRUBY_LIBMRUBY_PATH = ") }
-  abort "[scenario] #{sidecar} names no archive" unless named
-
-  archive = File.basename(named.delete_prefix("MRUBY_LIBMRUBY_PATH = ").strip.tr("\\", "/"))
-  [sidecar, File.join(dir, archive)]
+# What `beni:build` must leave behind for one target. The gem's own
+# builder answers it: the archive's file name follows the toolchain
+# that built it, and the sidecar beside it is what names that file.
+def staged_artifacts(target)
+  [BUILDER.flags_mak_path(target), BUILDER.archive_path(target)].compact
 end
 
 namespace :scenario do
@@ -41,7 +40,7 @@ namespace :scenario do
 
   desc "Assert the artifacts beni:build must leave behind"
   task :verify do
-    artifacts = staged_artifacts(File.expand_path("vendor/mruby/build/host/lib", __dir__))
+    artifacts = staged_artifacts("host")
 
     missing = artifacts.reject { |path| File.exist?(path) }
     abort "[scenario] missing artifacts:\n  #{missing.join("\n  ")}" unless missing.empty?
