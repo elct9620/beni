@@ -6,6 +6,10 @@
 // Names are written in full because the two including scopes import
 // different ones.
 
+/// The file name mruby gives the sidecar it writes beside every
+/// archive. SPEC's Terminology defines it; this is the read end.
+const FLAGS_MAK: &str = "libmruby.flags.mak";
+
 /// The value of one `NAME = ...` line in the `libmruby.flags.mak`
 /// sidecar in `lib_dir`. The sidecar is the sole channel through which
 /// an archive states how it was built, so a sidecar that is absent, is
@@ -13,7 +17,7 @@
 /// split would mis-read fails loudly rather than yielding a partial
 /// set.
 fn sidecar_line(lib_dir: &std::path::Path, key: &str) -> String {
-    let flags_mak = lib_dir.join("libmruby.flags.mak");
+    let flags_mak = lib_dir.join(FLAGS_MAK);
     let content = std::fs::read_to_string(&flags_mak).unwrap_or_else(|_| {
         panic!(
             "beni-sys: {} is missing. The discovered archive's compile flags are \
@@ -70,7 +74,7 @@ fn parse_compile_flags(lib_dir: &std::path::Path) -> Vec<String> {
         panic!(
             "beni-sys: {} carries a quoted value in `MRUBY_CFLAGS` ({quoted}) — \
              unrecognized flags.mak layout",
-            lib_dir.join("libmruby.flags.mak").display()
+            lib_dir.join(FLAGS_MAK).display()
         );
     }
     flags
@@ -126,7 +130,7 @@ fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec
         panic!(
             "beni-sys: {} names a bare `{bare}` in `MRUBY_CFLAGS`, whose value is a \
              separate token — unrecognized flags.mak layout",
-            lib_dir.join("libmruby.flags.mak").display()
+            lib_dir.join(FLAGS_MAK).display()
         );
     }
     let mut flags: Vec<String> = compile_flags
@@ -151,7 +155,7 @@ fn parse_archive_file_name(lib_dir: &std::path::Path) -> String {
             "beni-sys: {} names `{path}` in `MRUBY_LIBMRUBY_PATH`, which carries no \
              file name the archive can be looked for under — unrecognized flags.mak \
              layout",
-            lib_dir.join("libmruby.flags.mak").display()
+            lib_dir.join(FLAGS_MAK).display()
         );
     }
     name.to_owned()
@@ -192,7 +196,7 @@ fn parse_link_libs(lib_dir: &std::path::Path) -> Vec<String> {
                         "beni-sys: {} names `{token}` in `MRUBY_LIBS`, which is neither a \
                          `-l<name>` option nor a `<name>.lib` file — unrecognized \
                          flags.mak layout",
-                        lib_dir.join("libmruby.flags.mak").display()
+                        lib_dir.join(FLAGS_MAK).display()
                     )
                 })
                 .to_owned()

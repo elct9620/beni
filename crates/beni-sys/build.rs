@@ -252,7 +252,7 @@ fn main() {
     // with different defines must re-bindgen.
     println!(
         "cargo:rerun-if-changed={}",
-        lib_dir.join("libmruby.flags.mak").display()
+        lib_dir.join(FLAGS_MAK).display()
     );
     let compiler = parse_compiler(&lib_dir);
     let compile_flags = parse_compile_flags(&lib_dir);

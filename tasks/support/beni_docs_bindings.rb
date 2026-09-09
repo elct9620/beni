@@ -24,6 +24,8 @@ require "json"
 require "open3"
 require "rbconfig"
 
+require "beni/builder"
+
 require_relative "beni_rust"
 
 # Regeneration of the documentation bindings. See sibling
@@ -80,7 +82,7 @@ module BeniDocsBindings
     lib_dir = File.join(BeniRust::DEFAULT_ABI_BUILD_DIR, "host", "lib")
     BeniRust.run!({ "MRUBY_BUILD_DIR" => BeniRust::DEFAULT_ABI_BUILD_DIR },
                   RbConfig.ruby, "-S", "rake", "default",
-                  File.join(lib_dir, "libmruby.flags.mak"),
+                  File.join(lib_dir, Beni::Builder::FLAGS_MAK),
                   chdir: File.join(ROOT, "vendor", "mruby"))
     lib_dir
   end

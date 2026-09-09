@@ -11,6 +11,8 @@
 require "open3"
 require "rbconfig"
 
+require "beni/builder"
+
 # Helpers for the Cargo workspace at the repo root. See sibling
 # +tasks/rust.rake+ for the rake DSL.
 module BeniRust
@@ -56,7 +58,7 @@ module BeniRust
   # invalidate the main verification cache.
   def self.default_abi_test
     lib_dir = File.join(DEFAULT_ABI_BUILD_DIR, "host", "lib")
-    flags_mak = File.join(lib_dir, "libmruby.flags.mak")
+    flags_mak = File.join(lib_dir, Beni::Builder::FLAGS_MAK)
 
     run!({ "MRUBY_BUILD_DIR" => DEFAULT_ABI_BUILD_DIR },
          RbConfig.ruby, "-S", "rake", "default", flags_mak,
