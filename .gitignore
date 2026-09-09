@@ -6,9 +6,10 @@
 # config a harness writes in scenario:setup is regenerated every run.
 /test/scenarios/*/vendor/
 /test/scenarios/*/build_config/
-# macos_universal's is committed instead: the config is what that
-# scenario teaches, so it is kept the way a consumer's own is.
+# Where the config is what the scenario teaches, it is committed
+# instead and kept the way a consumer's own is.
 !/test/scenarios/macos_universal/build_config/
+!/test/scenarios/embedded_no_compiler/build_config/
 # The consumer crate resolves against the working tree through a path
 # dependency, so its lock file records nothing the repo's own does not.
 /test/scenarios/*/Cargo.lock
