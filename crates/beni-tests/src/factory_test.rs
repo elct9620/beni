@@ -1,8 +1,8 @@
-use beni::Mrb;
+use crate::support::open_mrb;
 
 #[test]
 fn str_factories_roundtrip_their_bytes() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     assert_eq!(
         mrb.str_new(b"from bytes").as_value().to_string(&mrb),
@@ -16,7 +16,7 @@ fn str_factories_roundtrip_their_bytes() {
 
 #[test]
 fn str_new_capa_preallocates_an_empty_string() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Capacity is a hint, not content — the string starts empty and
     // fills as usual through cat.
@@ -29,7 +29,7 @@ fn str_new_capa_preallocates_an_empty_string() {
 
 #[test]
 fn str_new_static_aliases_a_static_buffer_without_copying() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A byte-string literal is a `&'static [u8]`, the same path mruby's
     // `mrb_str_new_lit` macro takes.
@@ -40,7 +40,7 @@ fn str_new_static_aliases_a_static_buffer_without_copying() {
 
 #[test]
 fn str_new_static_copies_on_in_place_write() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Appending reallocates the copy-on-write string before mutating,
     // so the in-place op yields the grown result without touching the
@@ -59,7 +59,7 @@ fn str_new_static_copies_on_in_place_write() {
 
 #[test]
 fn ary_new_capa_preallocates_an_empty_array() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Capacity is a hint, not content — the array starts empty and
     // fills as usual.
@@ -72,7 +72,7 @@ fn ary_new_capa_preallocates_an_empty_array() {
 
 #[test]
 fn hash_new_capa_preallocates_an_empty_hash() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Capacity is a hint, not content — the hash starts empty and
     // fills as usual.
@@ -89,7 +89,7 @@ fn hash_new_capa_preallocates_an_empty_hash() {
 
 #[test]
 fn ary_new_from_values_copies_the_slice_in_order() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let values = [
         mrb.str_new(b"a").as_value(),
@@ -105,7 +105,7 @@ fn ary_new_from_values_copies_the_slice_in_order() {
 
 #[test]
 fn assoc_new_pairs_the_two_values_in_order() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let pair = mrb.assoc_new(
         mrb.str_new(b"car").as_value(),

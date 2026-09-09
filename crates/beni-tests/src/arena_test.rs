@@ -1,3 +1,4 @@
+use crate::support::open_mrb;
 use beni::{FromValue, Mrb, RString};
 
 /// Current arena index — mruby's save helper only reads it.
@@ -8,7 +9,7 @@ fn arena_index(mrb: &Mrb) -> core::ffi::c_int {
 
 #[test]
 fn scope_drop_restores_the_arena_index() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let before = arena_index(&mrb);
 
     {
@@ -31,7 +32,7 @@ fn scope_drop_restores_the_arena_index() {
 
 #[test]
 fn keep_restores_the_arena_and_protects_the_survivor() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let before = arena_index(&mrb);
 
     let scope = mrb.arena_scope();
@@ -55,7 +56,7 @@ fn keep_restores_the_arena_and_protects_the_survivor() {
 
 #[test]
 fn keep_survivor_counts_as_created_in_the_opening_context() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let before = arena_index(&mrb);
 
     // The inner survivor lands in the outer scope's region, so

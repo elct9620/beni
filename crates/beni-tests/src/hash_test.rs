@@ -1,8 +1,8 @@
-use beni::Mrb;
+use crate::support::open_mrb;
 
 #[test]
 fn set_and_get_roundtrip_with_nil_for_an_absent_key() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
 
     hash.set(
@@ -26,7 +26,7 @@ fn set_and_get_roundtrip_with_nil_for_an_absent_key() {
 
 #[test]
 fn keys_returns_the_typed_key_array() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
 
     hash.set(
@@ -45,7 +45,7 @@ fn keys_returns_the_typed_key_array() {
 fn set_surfaces_frozen_receiver_as_err() {
     use beni::{Ccontext, Error, FromValue, Hash};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_hash.rb").expect("allocating the context must succeed");
 
     // A frozen Hash still carries the Hash tag, so the downcast holds,
@@ -70,7 +70,7 @@ fn set_surfaces_frozen_receiver_as_err() {
 fn keyed_operations_surface_a_raising_key_as_err() {
     use beni::{Ccontext, Error, Value};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"raising_key.rb").expect("allocating the context must succeed");
 
     // mruby locates a key by dispatching its `hash` and `eql?`; a key
@@ -107,7 +107,7 @@ fn keyed_operations_surface_a_raising_key_as_err() {
 fn read_surfaces_a_raising_default_as_err() {
     use beni::{Ccontext, Error, FromValue, Hash};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"raising_default.rb").expect("allocating the context must succeed");
 
@@ -132,7 +132,7 @@ fn read_surfaces_a_raising_default_as_err() {
 
 #[test]
 fn values_size_and_emptiness_read_the_structure() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
     assert!(hash.is_empty(&mrb));
     assert_eq!(hash.len(&mrb), 0);
@@ -151,7 +151,7 @@ fn values_size_and_emptiness_read_the_structure() {
 
 #[test]
 fn contains_key_and_fetch_read_by_key() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
     let k = mrb.str_new(b"k").as_value();
     hash.set(&mrb, k, mrb.str_new(b"v").as_value())
@@ -183,7 +183,7 @@ fn contains_key_and_fetch_read_by_key() {
 
 #[test]
 fn delete_removes_and_update_merges() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
     let k = mrb.str_new(b"k").as_value();
     hash.set(&mrb, k, mrb.str_new(b"v").as_value())
@@ -216,7 +216,7 @@ fn delete_removes_and_update_merges() {
 
 #[test]
 fn clear_empties_the_hash() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
     hash.set(
         &mrb,
@@ -234,7 +234,7 @@ fn clear_empties_the_hash() {
 fn clear_surfaces_frozen_receiver_as_err() {
     use beni::{Ccontext, Error, FromValue, Hash};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_clear.rb").expect("allocating the context must succeed");
 
     // clear checks frozen state before touching entries, so even a
@@ -249,7 +249,7 @@ fn clear_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn dup_copies_independently() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
     hash.set(
         &mrb,
@@ -276,7 +276,7 @@ fn dup_copies_independently() {
 fn delete_surfaces_frozen_receiver_as_err() {
     use beni::{Ccontext, Error, FromValue, Hash};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_del.rb").expect("allocating the context must succeed");
 
     // delete checks frozen state before touching entries, so even a
@@ -296,7 +296,7 @@ fn delete_surfaces_frozen_receiver_as_err() {
 fn update_surfaces_frozen_receiver_as_err() {
     use beni::{Ccontext, Error, FromValue, Hash};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"frozen_update.rb").expect("allocating the context must succeed");
 
@@ -325,7 +325,7 @@ fn update_surfaces_frozen_receiver_as_err() {
 fn each_visits_every_pair_in_insertion_order() {
     use beni::{ForEach, Value};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
     hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
         .expect("set succeeds");
@@ -355,7 +355,7 @@ fn each_visits_every_pair_in_insertion_order() {
 fn each_stops_early_on_stop() {
     use beni::{ForEach, Value};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
     hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
         .expect("set succeeds");
@@ -379,7 +379,7 @@ fn each_stops_early_on_stop() {
 fn each_surfaces_an_in_walk_modification_as_err() {
     use beni::{Error, ForEach, Value};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
     hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
         .expect("set succeeds");
@@ -411,7 +411,7 @@ fn each_surfaces_an_in_walk_modification_as_err() {
 fn each_resurfaces_a_closure_panic_on_the_rust_side() {
     use beni::Value;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let hash = mrb.hash_new();
     hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
         .expect("set succeeds");

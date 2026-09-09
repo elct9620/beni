@@ -1,3 +1,4 @@
+use crate::support::open_mrb;
 use beni::{Error, FromValue, Gem, Module, Mrb, Value};
 
 fn answer(_mrb: &Mrb, _self: Value) -> i32 {
@@ -42,7 +43,7 @@ impl Gem for PanickingGem {
 
 #[test]
 fn init_gem_installs_the_gem_surface() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     mrb.init_gem::<WidgetGem>()
         .expect("installing the gem must succeed");
@@ -64,7 +65,7 @@ fn init_gem_installs_the_gem_surface() {
 
 #[test]
 fn init_gem_surfaces_init_err_to_the_embedder() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let err = mrb
         .init_gem::<RefusingGem>()
@@ -78,7 +79,7 @@ fn init_gem_surfaces_init_err_to_the_embedder() {
 
 #[test]
 fn init_gem_catches_init_panic() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let err = mrb
         .init_gem::<PanickingGem>()

@@ -1,10 +1,11 @@
+use crate::support::open_mrb;
 use beni::{Ccontext, DumpOptions, Error, FromValue, Mrb};
 
 const HEADER_LEN: usize = core::mem::size_of::<beni::sys::rite_binary_header>();
 
 #[test]
 fn load_string_evaluates_a_valid_expression_to_its_value() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let got = mrb
         .load_string(b"1 + 2")
@@ -19,7 +20,7 @@ fn load_string_evaluates_a_valid_expression_to_its_value() {
 
 #[test]
 fn load_string_surfaces_a_raising_script_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let err = mrb
         .load_string(b"raise 'kaboom'")
@@ -37,7 +38,7 @@ fn load_string_surfaces_a_raising_script_as_err() {
 
 #[test]
 fn load_string_surfaces_a_parse_failure_with_its_location() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let err = mrb
         .load_string(b"a = 1\nb = 2\nend\n")
@@ -62,7 +63,7 @@ fn load_string_surfaces_a_parse_failure_with_its_location() {
 
 #[test]
 fn load_string_stamps_no_filename_so_a_raise_carries_no_backtrace() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let err = mrb
         .load_string(b"def outer\n  raise 'deep'\nend\nouter\n")
@@ -76,7 +77,7 @@ fn load_string_stamps_no_filename_so_a_raise_carries_no_backtrace() {
 
 #[test]
 fn load_string_still_runs_source_the_compiler_warns_about() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // The borrowed context captures the warning and is released with
     // it; a caller who wants the warning holds a context of their own.
@@ -112,21 +113,21 @@ fn structural_failure(mrb: &Mrb, blob: &[u8]) -> String {
 
 #[test]
 fn load_bytecode_classifies_a_blob_shorter_than_the_header() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     assert!(structural_failure(&mrb, b"RITE").contains("shorter than RITE binary header"));
 }
 
 #[test]
 fn load_bytecode_classifies_a_non_rite_ident() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     assert!(structural_failure(&mrb, &[b'X'; HEADER_LEN]).contains("not RITE format"));
 }
 
 #[test]
 fn load_bytecode_classifies_a_rite_version_mismatch() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let mut blob = [0u8; HEADER_LEN];
     blob[..4].copy_from_slice(&beni::sys::RITE_BINARY_IDENT[..4]);
     blob[4..8].copy_from_slice(b"0000");
@@ -136,7 +137,7 @@ fn load_bytecode_classifies_a_rite_version_mismatch() {
 
 #[test]
 fn load_bytecode_classifies_a_corrupt_body() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let mut blob = [0u8; HEADER_LEN + 8];
     blob[..4].copy_from_slice(&beni::sys::RITE_BINARY_IDENT[..4]);
     blob[4..8].copy_from_slice(&beni::sys::RITE_BINARY_FORMAT_VER[..4]);
@@ -146,7 +147,7 @@ fn load_bytecode_classifies_a_corrupt_body() {
 
 #[test]
 fn load_bytecode_leaves_the_vm_usable_after_a_structural_failure() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let _ = structural_failure(&mrb, b"not RITE bytecode");
 
@@ -158,7 +159,7 @@ fn load_bytecode_leaves_the_vm_usable_after_a_structural_failure() {
 
 #[test]
 fn load_bytecode_hands_back_an_exception_the_program_raised() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"raiser.rb").expect("allocating the context must succeed");
     let bytes = cxt
         .compile(b"raise ArgumentError, 'from the loaded program'")

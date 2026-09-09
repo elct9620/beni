@@ -1,12 +1,12 @@
-use beni::Mrb;
+use crate::support::open_mrb;
 
 #[test]
 fn open_boots_and_closes_a_live_interpreter() {
-    // With a vendored libmruby.a linked, `open` boots a real
+    // With the vendored archive linked, `open` boots a real
     // interpreter through `mrb_open`; the drop runs `mrb_close`.
     // This is the host-native smoke test of the whole link graph
-    // (bindings + trampolines + libmruby.a).
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    // (bindings + trampolines + the archive).
+    let mrb = open_mrb();
     drop(mrb);
 }
 
@@ -17,7 +17,7 @@ fn an_interpreter_is_carried_between_threads() {
     // One interpreter, reached from two threads in turn: it opens
     // here, evaluates on the thread it is handed to, comes back,
     // and the state the far thread wrote is what this one reads.
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let here = mrb.load_string(b"1 + 2").expect("evaluates on this thread");
     assert_eq!(i32::from_value(here), Some(3));
 
@@ -43,7 +43,7 @@ fn an_interpreter_is_carried_between_threads() {
 fn gc_triggers_keep_a_reachable_value_valid() {
     use beni::{FromValue, RString};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Anchor one survivor through a global so it stays reachable
     // across collection; pile up unreachable garbage around it.
@@ -72,7 +72,7 @@ const REGION_BYTES: usize = 512 * 1024;
 
 #[test]
 fn a_generous_region_yields_pages_the_vm_then_allocates_into() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let buf = Box::leak(vec![0u8; REGION_BYTES].into_boxed_slice());
 
     let pages = mrb.gc_add_region(buf);
@@ -89,7 +89,7 @@ fn a_generous_region_yields_pages_the_vm_then_allocates_into() {
 
 #[test]
 fn a_region_too_small_for_one_page_yields_none() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let buf = Box::leak(vec![0u8; 16].into_boxed_slice());
 
     assert_eq!(
@@ -105,7 +105,7 @@ fn a_region_too_small_for_one_page_yields_none() {
 
 #[test]
 fn pending_exc_reads_the_slot_and_clear_exc_empties_it() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A fresh VM has no pending exception.
     assert!(mrb.pending_exc().is_nil());

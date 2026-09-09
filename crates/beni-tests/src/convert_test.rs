@@ -1,3 +1,4 @@
+use crate::support::open_mrb;
 use beni::{Array, FromValue, Hash, IntoValue, RClass, RString, Value};
 
 // Boxes through mruby's generic `mrb_int_value` / `mrb_float_value`
@@ -7,7 +8,7 @@ use beni::{Array, FromValue, Hash, IntoValue, RClass, RString, Value};
 // roundtrips before anything else.
 #[test]
 fn scalars_roundtrip_through_a_live_vm() {
-    let mrb = beni::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let int_val = 42i32.into_value(&mrb);
     assert_eq!(i32::from_value(int_val), Some(42));
@@ -23,7 +24,7 @@ fn scalars_roundtrip_through_a_live_vm() {
 
 #[test]
 fn bool_round_trips_and_converts_totally() {
-    let mrb = beni::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // The two canonical booleans round-trip through IntoValue.
     assert_eq!(bool::from_value(true.into_value(&mrb)), Some(true));
@@ -36,7 +37,7 @@ fn bool_round_trips_and_converts_totally() {
 
 #[test]
 fn string_converts_utf8_and_rejects_otherwise() {
-    let mrb = beni::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A UTF-8 string value converts to an owned Rust String,
     // multi-byte characters included.
@@ -54,7 +55,7 @@ fn string_converts_utf8_and_rejects_otherwise() {
 
 #[test]
 fn rstring_downcasts_by_tag() {
-    let mrb = beni::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A String-tagged value downcasts to the typed handle; a
     // non-string tag rejects instead of wrapping a value the
@@ -69,7 +70,7 @@ fn rstring_downcasts_by_tag() {
 
 #[test]
 fn vec_u8_converts_arbitrary_bytes_and_rejects_non_string() {
-    let mrb = beni::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A String-tagged value yields its bytes verbatim — non-UTF-8
     // bytes that the owned `String` conversion rejects survive here.
@@ -81,7 +82,7 @@ fn vec_u8_converts_arbitrary_bytes_and_rejects_non_string() {
 
 #[test]
 fn container_downcasts_discriminate_by_tag() {
-    let mrb = beni::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let ary = mrb.ary_new().as_value();
     let hash = mrb.hash_new().as_value();
@@ -100,7 +101,7 @@ fn container_downcasts_discriminate_by_tag() {
 
 #[test]
 fn container_downcast_includes_subclass_instances() {
-    let mrb = beni::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = beni::Ccontext::new(&mrb, c"convert_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -126,7 +127,7 @@ fn container_downcast_includes_subclass_instances() {
 fn class_downcast_admits_only_the_class_tag() {
     use beni::Module;
 
-    let mrb = beni::Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = beni::Ccontext::new(&mrb, c"convert_test.rb")
         .expect("allocating the compile context must succeed");
 

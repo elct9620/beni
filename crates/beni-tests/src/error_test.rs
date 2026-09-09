@@ -1,8 +1,9 @@
-use beni::{Error, Mrb};
+use crate::support::open_mrb;
+use beni::Error;
 
 #[test]
 fn new_builds_an_exception_error_carrying_the_message() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let runtime_error = mrb
         .class_get(c"RuntimeError")
         .expect("RuntimeError is a core class");
@@ -17,7 +18,7 @@ fn new_builds_an_exception_error_carrying_the_message() {
 
 #[test]
 fn argnum_renders_the_fixed_count_form() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // min == max: "wrong number of arguments (given 3, expected 2)".
     let err = Error::argnum(&mrb, 3, 2, 2);
@@ -37,7 +38,7 @@ fn argnum_renders_the_fixed_count_form() {
 
 #[test]
 fn argnum_renders_the_open_ended_form_for_a_negative_max() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // max < 0: "expected 2+" — at least `min`, no upper bound.
     let err = Error::argnum(&mrb, 1, 2, -1);
@@ -51,7 +52,7 @@ fn argnum_renders_the_open_ended_form_for_a_negative_max() {
 
 #[test]
 fn argnum_renders_the_range_form_for_distinct_bounds() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // min < max: "expected 2..4" — an inclusive range.
     let err = Error::argnum(&mrb, 5, 2, 4);
@@ -67,7 +68,7 @@ fn argnum_renders_the_range_form_for_distinct_bounds() {
 fn backtrace_reads_the_frames_a_raise_under_a_context_carries() {
     use beni::Ccontext;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"backtrace_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -91,7 +92,7 @@ fn backtrace_reads_the_frames_a_raise_under_a_context_carries() {
 fn backtrace_answers_empty_for_an_error_carrying_no_exception() {
     use beni::Ccontext;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"backtrace_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -108,7 +109,7 @@ fn backtrace_answers_empty_for_an_error_carrying_no_exception() {
 
 #[test]
 fn backtrace_answers_empty_for_an_exception_holding_none() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Built in Rust rather than raised, so nothing ever packed frames
     // onto it.

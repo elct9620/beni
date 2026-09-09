@@ -1,3 +1,4 @@
+use crate::support::open_mrb;
 use beni::{Ccontext, DumpOptions, Error, FromValue, IntoValue, Mrb, Proc, Value};
 
 fn proc_from(mrb: &Mrb, src: &[u8]) -> Proc {
@@ -16,7 +17,7 @@ fn proc_from(mrb: &Mrb, src: &[u8]) -> Proc {
 
 #[test]
 fn call_yields_to_the_block_and_returns_its_value() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let block = proc_from(&mrb, b"proc { |x| x + 1 }");
 
     let got = block
@@ -28,7 +29,7 @@ fn call_yields_to_the_block_and_returns_its_value() {
 
 #[test]
 fn call_surfaces_a_raised_exception_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let block = proc_from(&mrb, b"proc { raise 'boom from block' }");
 
     let err = block
@@ -49,7 +50,7 @@ fn call_surfaces_a_raised_exception_as_err() {
 
 #[test]
 fn from_value_rejects_a_non_proc_value() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A scalar carries no MRB_TT_PROC tag — the downcast rejects
     // instead of wrapping a value `mrb_yield_argv` would misread.
@@ -58,7 +59,7 @@ fn from_value_rejects_a_non_proc_value() {
 
 #[test]
 fn as_value_round_trips_through_the_newtype() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let block = proc_from(&mrb, b"proc { 0 }");
 
     // The reified value is still Proc-tagged and downcasts back.
@@ -68,7 +69,7 @@ fn as_value_round_trips_through_the_newtype() {
 
 #[test]
 fn a_dumped_program_loads_back_as_bytecode() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"proc_test.rb").expect("allocating the compile context must succeed");
     // The program answers a heap object, not an immediate: an
@@ -102,7 +103,7 @@ fn a_dumped_program_loads_back_as_bytecode() {
 
 #[test]
 fn asking_for_debug_info_carries_more_than_the_instructions() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"proc_test.rb").expect("allocating the compile context must succeed");
     let program = cxt
@@ -137,7 +138,7 @@ fn a_proc_backed_by_a_c_function_has_no_bytecode() {
         self_
     }
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     // SAFETY: `stub` has the `mrb_func_t` ABI and is never called here;
     // `mrb_obj_value` boxes the RProc the constructor just returned.
     let value = unsafe {

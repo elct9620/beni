@@ -1,8 +1,9 @@
-use beni::{FromValue, IntoValue, Mrb, Symbol};
+use crate::support::open_mrb;
+use beni::{FromValue, IntoValue, Symbol};
 
 #[test]
 fn name_sym_and_rebuild_roundtrip() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let sym = Symbol::new(&mrb, c"flags");
 
     assert_eq!(sym.name(&mrb).as_deref(), Some("flags"));
@@ -18,7 +19,7 @@ fn name_sym_and_rebuild_roundtrip() {
 
 #[test]
 fn name_bytes_and_dump_read_the_symbol_name() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A plain identifier: bytes equal the name, dump is bare.
     let plain = Symbol::new(&mrb, c"fred");
@@ -38,7 +39,7 @@ fn name_bytes_and_dump_read_the_symbol_name() {
 
 #[test]
 fn name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Two short names pack inline (<=4 packable chars), so mruby unpacks
     // each into one shared per-VM scratch buffer that the next name read
@@ -54,7 +55,7 @@ fn name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
 
 #[test]
 fn to_str_reifies_the_name_as_a_mutable_string() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let sym = Symbol::new(&mrb, c"flags");
 
     // The reified String carries the symbol's name bytes verbatim.
@@ -72,7 +73,7 @@ fn to_str_reifies_the_name_as_a_mutable_string() {
 
 #[test]
 fn to_sym_coerces_symbol_string_and_rejects_others() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A symbol value coerces to the same symbol.
     let sym = Symbol::new(&mrb, c"key");
@@ -94,7 +95,7 @@ fn to_sym_coerces_symbol_string_and_rejects_others() {
 
 #[test]
 fn from_value_discriminates_the_symbol_tag() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let sym_val = Symbol::new(&mrb, c"k").into_value(&mrb);
 
     assert!(Symbol::from_value(sym_val).is_some());

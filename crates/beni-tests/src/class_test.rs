@@ -1,3 +1,4 @@
+use crate::support::open_mrb;
 use beni::{Error, IntoSym, Module, Mrb, Object, RClass, Value};
 
 /// Registration target answering a fixed Integer for the trait
@@ -12,7 +13,7 @@ fn answer_nine(_mrb: &Mrb, _self: Value) -> i32 {
 
 #[test]
 fn symbol_key_reaches_the_same_definition_as_the_name() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     // Defining with an already-interned Symbol must reach the same
@@ -63,7 +64,7 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
 
 #[test]
 fn symbol_key_and_name_key_are_interchangeable_for_lookup() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     // A class defined by name is fetchable by Symbol, and one defined
@@ -79,7 +80,7 @@ fn symbol_key_and_name_key_are_interchangeable_for_lookup() {
 
 #[test]
 fn symbol_key_registers_private_singleton_and_module_function() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     // Each registration variant routes its Symbol key through the
@@ -146,7 +147,7 @@ fn symbol_key_registers_private_singleton_and_module_function() {
 
 #[test]
 fn nested_definition_accepts_a_symbol_key() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     // The namespaced Module-trait define/get also accept a Symbol key.
@@ -166,7 +167,7 @@ fn nested_definition_accepts_a_symbol_key() {
 
 #[test]
 fn define_class_surfaces_mruby_rejection_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let base = mrb
@@ -191,7 +192,7 @@ fn define_class_surfaces_mruby_rejection_as_err() {
 
 #[test]
 fn class_get_surfaces_name_error_for_missing_class() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // mruby raises NameError for a missing constant (vendored
     // src/class.c documents the lookup contract) — the typed
@@ -208,7 +209,7 @@ fn class_get_surfaces_name_error_for_missing_class() {
 
 #[test]
 fn module_get_fetches_a_nested_module_by_either_key() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // The namespaced module lookup mirrors the nested class_get:
     // a name key and a Symbol key both route through
@@ -233,7 +234,7 @@ fn module_get_fetches_a_nested_module_by_either_key() {
 
 #[test]
 fn module_get_surfaces_err_for_missing_and_non_module() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let outer = mrb
@@ -260,7 +261,7 @@ fn module_get_surfaces_err_for_missing_and_non_module() {
 
 #[test]
 fn class_defined_answers_a_total_bool_within_a_namespace() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let outer = mrb
@@ -283,7 +284,7 @@ fn class_defined_answers_a_total_bool_within_a_namespace() {
 
 #[test]
 fn obj_new_surfaces_a_raising_initialize_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         beni::Ccontext::new(&mrb, c"obj_new_test.rb").expect("allocating the context must succeed");
 
@@ -304,7 +305,7 @@ fn obj_new_surfaces_a_raising_initialize_as_err() {
 
 #[test]
 fn registering_onto_a_frozen_class_surfaces_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         beni::Ccontext::new(&mrb, c"frozen_reg.rb").expect("allocating the context must succeed");
 
@@ -329,7 +330,7 @@ fn registering_onto_a_frozen_class_surfaces_as_err() {
 
 #[test]
 fn private_method_rejects_public_dispatch_but_is_attached() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let class = mrb
@@ -370,7 +371,7 @@ fn private_method_rejects_public_dispatch_but_is_attached() {
 
 #[test]
 fn alias_method_keys_both_names_as_symbol_or_name() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let class = mrb
@@ -409,7 +410,7 @@ fn alias_method_keys_both_names_as_symbol_or_name() {
 
 #[test]
 fn module_and_object_traits_register_methods() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     // Module trait: nested definition + instance-method
@@ -454,7 +455,7 @@ fn module_and_object_traits_register_methods() {
 
 #[test]
 fn define_module_function_attaches_to_module_and_includers() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let module = mrb
         .define_module(c"BeniModFn")
@@ -494,7 +495,7 @@ fn define_module_function_attaches_to_module_and_includers() {
 
 #[test]
 fn module_function_instance_form_is_private() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let module = mrb
         .define_module(c"BeniModFnPriv")
@@ -529,7 +530,7 @@ fn module_function_instance_form_is_private() {
 
 #[test]
 fn define_const_binds_a_constant_readable_from_ruby() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let module = mrb
         .define_module(c"BeniConstHost")
         .expect("defining the host module must succeed");
@@ -556,7 +557,7 @@ fn define_const_binds_a_constant_readable_from_ruby() {
 
 #[test]
 fn alias_method_binds_a_second_name_for_an_existing_method() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let class = mrb
@@ -583,7 +584,7 @@ fn alias_method_binds_a_second_name_for_an_existing_method() {
 
 #[test]
 fn include_module_mixes_in_and_rejects_a_cyclic_include() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let helper = mrb
@@ -615,7 +616,7 @@ fn include_module_mixes_in_and_rejects_a_cyclic_include() {
 
 #[test]
 fn prepend_module_overrides_the_receiver_and_rejects_a_cyclic_prepend() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let helper = mrb
@@ -662,7 +663,7 @@ fn prepend_module_overrides_the_receiver_and_rejects_a_cyclic_prepend() {
 
 #[test]
 fn alias_method_surfaces_name_error_for_missing_original() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let class = mrb
@@ -685,7 +686,7 @@ fn alias_method_surfaces_name_error_for_missing_original() {
 
 #[test]
 fn undef_method_marks_a_method_undefined_on_the_handle() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let class = mrb
@@ -725,7 +726,7 @@ fn undef_method_marks_a_method_undefined_on_the_handle() {
 
 #[test]
 fn undef_method_surfaces_name_error_for_absent_method() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let class = mrb
@@ -748,7 +749,7 @@ fn undef_method_surfaces_name_error_for_absent_method() {
 
 #[test]
 fn remove_method_strips_a_method_defined_on_the_handle() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let class = mrb
@@ -782,7 +783,7 @@ fn remove_method_strips_a_method_defined_on_the_handle() {
 
 #[test]
 fn remove_method_surfaces_name_error_for_absent_method() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let class = mrb
@@ -804,7 +805,7 @@ fn remove_method_surfaces_name_error_for_absent_method() {
 
 #[test]
 fn undef_singleton_method_marks_a_class_method_undefined() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     let class = mrb
@@ -842,7 +843,7 @@ fn undef_singleton_method_marks_a_class_method_undefined() {
 
 #[test]
 fn real_returns_a_real_class_handle_unchanged() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A real class resolves to itself: the handle a safe lookup
     // hands back is already past any singleton / include link, so
@@ -861,7 +862,7 @@ fn real_returns_a_real_class_handle_unchanged() {
 
 #[test]
 fn name_survives_a_gc_cycle() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // `name` owns its bytes: mruby builds the name into a GC-managed
     // temporary, so a handle held across a collection — the anonymous
@@ -886,7 +887,7 @@ fn name_survives_a_gc_cycle() {
 
 #[test]
 fn real_resolves_a_singleton_class_to_its_attached_object_class() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     // A class's singleton class is an SCLASS whose real class is the
@@ -934,7 +935,7 @@ fn real_resolves_a_singleton_class_to_its_attached_object_class() {
 
 #[test]
 fn exc_new_builds_an_exception_of_the_class_without_raising() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let runtime_error = mrb
         .class_get(c"RuntimeError")
         .expect("RuntimeError is present in every VM");
@@ -950,7 +951,7 @@ fn exc_new_builds_an_exception_of_the_class_without_raising() {
 
 #[test]
 fn exc_new_str_carries_an_existing_string_value_without_raising() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let runtime_error = mrb
         .class_get(c"RuntimeError")
         .expect("RuntimeError is present in every VM");
@@ -967,7 +968,7 @@ fn exc_new_str_carries_an_existing_string_value_without_raising() {
 
 #[test]
 fn path_reads_the_qualified_namespace_chain() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     // A nested class reads its full namespace path, not just its leaf
@@ -992,7 +993,7 @@ fn path_reads_the_qualified_namespace_chain() {
 
 #[test]
 fn path_yields_none_for_an_anonymous_class() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let object = mrb.object_class();
 
     // An anonymous class has no place in any namespace, so its path is

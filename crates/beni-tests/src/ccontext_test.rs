@@ -1,8 +1,9 @@
-use beni::{Ccontext, Error, FromValue, Mrb};
+use crate::support::open_mrb;
+use beni::{Ccontext, Error, FromValue};
 
 #[test]
 fn load_nstring_evaluates_source_under_the_stamped_filename() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -15,7 +16,7 @@ fn load_nstring_evaluates_source_under_the_stamped_filename() {
 
 #[test]
 fn load_nstring_surfaces_a_raise_as_an_exception_error() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -38,7 +39,7 @@ fn load_nstring_surfaces_a_raise_as_an_exception_error() {
 
 #[test]
 fn load_nstring_surfaces_a_parse_failure_with_its_location() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -65,7 +66,7 @@ fn load_nstring_surfaces_a_parse_failure_with_its_location() {
 
 #[test]
 fn a_parse_failure_and_a_raise_are_distinguishable_without_reading_a_message() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -82,7 +83,7 @@ fn a_parse_failure_and_a_raise_are_distinguishable_without_reading_a_message() {
 
 #[test]
 fn one_context_carries_top_level_locals_across_loads() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -97,7 +98,7 @@ fn one_context_carries_top_level_locals_across_loads() {
 
 #[test]
 fn a_context_survives_a_parse_failure_and_keeps_loading() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -112,7 +113,7 @@ fn a_context_survives_a_parse_failure_and_keeps_loading() {
 
 #[test]
 fn warnings_carry_the_compiler_diagnostics_a_load_produced() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -136,7 +137,7 @@ fn warnings_carry_the_compiler_diagnostics_a_load_produced() {
 
 #[test]
 fn warnings_answer_empty_before_a_load_and_after_a_clean_one() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -155,7 +156,7 @@ fn warnings_answer_empty_before_a_load_and_after_a_clean_one() {
 
 #[test]
 fn compile_yields_a_program_that_has_not_run_yet() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -177,7 +178,7 @@ fn compile_yields_a_program_that_has_not_run_yet() {
 
 #[test]
 fn compile_surfaces_a_parse_failure_the_way_a_load_does() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -196,7 +197,7 @@ fn compile_surfaces_a_parse_failure_the_way_a_load_does() {
 
 #[test]
 fn compile_leaves_the_context_running_its_next_load() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -215,7 +216,7 @@ fn compile_leaves_the_context_running_its_next_load() {
 
 #[test]
 fn compile_records_the_warnings_it_produced() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -229,7 +230,7 @@ fn compile_records_the_warnings_it_produced() {
 
 #[test]
 fn a_compiled_program_starts_without_the_contexts_top_level_locals() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"ccontext_test.rb")
         .expect("allocating the compile context must succeed");
 

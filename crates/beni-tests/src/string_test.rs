@@ -1,8 +1,9 @@
-use beni::{Ccontext, Error, FromValue, Mrb, RString};
+use crate::support::open_mrb;
+use beni::{Ccontext, Error, FromValue, RString};
 
 #[test]
 fn cat_appends_bytes_in_place() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let s = mrb.str_new(b"foo");
     s.cat(&mrb, b"bar")
@@ -18,7 +19,7 @@ fn cat_appends_bytes_in_place() {
 
 #[test]
 fn cat_appends_a_static_literal_in_place() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A `b"..."` literal is a `&'static [u8]`, so `cat` reaches what
     // C's `mrb_str_cat_lit(mrb, str, lit)` does — the literal-append path.
@@ -29,7 +30,7 @@ fn cat_appends_a_static_literal_in_place() {
 
 #[test]
 fn cat_str_appends_another_string_in_place() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let s = mrb.str_new(b"foo");
     let tail = mrb.str_new(b"bar");
@@ -47,7 +48,7 @@ fn cat_str_appends_another_string_in_place() {
 
 #[test]
 fn cat_str_surfaces_frozen_receiver_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
     let frozen = RString::from_value(
@@ -67,7 +68,7 @@ fn cat_str_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn cat_cstr_appends_a_c_string_in_place() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let s = mrb.str_new(b"foo");
     s.cat_cstr(&mrb, c"bar")
@@ -83,7 +84,7 @@ fn cat_cstr_appends_a_c_string_in_place() {
 
 #[test]
 fn cat_cstr_surfaces_frozen_receiver_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
     let frozen = RString::from_value(
@@ -97,7 +98,7 @@ fn cat_cstr_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn cat_surfaces_frozen_receiver_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
     // A frozen String still carries the String tag, so the downcast
@@ -120,7 +121,7 @@ fn cat_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn len_and_is_empty_track_the_byte_count() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let empty = mrb.str_new(b"");
     assert_eq!(empty.len(), 0);
@@ -135,7 +136,7 @@ fn len_and_is_empty_track_the_byte_count() {
 
 #[test]
 fn dup_copies_into_an_independent_string() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let s = mrb.str_new(b"orig");
     let copy = s.dup(&mrb);
@@ -149,7 +150,7 @@ fn dup_copies_into_an_independent_string() {
 
 #[test]
 fn plus_concatenates_into_a_new_string_leaving_operands_unchanged() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let a = mrb.str_new(b"foo");
     let b = mrb.str_new(b"bar");
@@ -181,7 +182,7 @@ fn plus_concatenates_into_a_new_string_leaving_operands_unchanged() {
 fn cmp_orders_by_byte_content() {
     use core::cmp::Ordering;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let abc = mrb.str_new(b"abc");
     let abd = mrb.str_new(b"abd");
@@ -198,7 +199,7 @@ fn cmp_orders_by_byte_content() {
 
 #[test]
 fn eq_tests_byte_equality() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let abc = mrb.str_new(b"abc");
     let abc2 = mrb.str_new(b"abc");
@@ -218,7 +219,7 @@ fn eq_tests_byte_equality() {
 
 #[test]
 fn intern_names_the_symbol_for_the_receiver_bytes() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // The interned symbol names the string's own bytes.
     let sym = mrb.str_new(b"flags").intern(&mrb);
@@ -231,7 +232,7 @@ fn intern_names_the_symbol_for_the_receiver_bytes() {
 
 #[test]
 fn to_bytes_copies_arbitrary_bytes() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Binary bytes survive the owned copy — `to_bytes` does not
     // require valid UTF-8.
@@ -241,7 +242,7 @@ fn to_bytes_copies_arbitrary_bytes() {
 
 #[test]
 fn concat_coerces_a_non_string_argument_in_place() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A plain String argument appends like cat_str.
     let s = mrb.str_new(b"foo");
@@ -258,7 +259,7 @@ fn concat_coerces_a_non_string_argument_in_place() {
 
 #[test]
 fn concat_surfaces_frozen_receiver_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
     let frozen = RString::from_value(
@@ -272,7 +273,7 @@ fn concat_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn resize_truncates_and_extends_in_place() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Shrinking drops the tail; the same handle names the result.
     let s = mrb.str_new(b"Hello, world!");
@@ -289,7 +290,7 @@ fn resize_truncates_and_extends_in_place() {
 
 #[test]
 fn resize_surfaces_frozen_receiver_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
     let frozen = RString::from_value(
@@ -302,7 +303,7 @@ fn resize_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn to_cstr_yields_a_nul_terminated_view() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let s = mrb.str_new(b"hello");
     let cstr = s.to_cstr(&mrb).expect("a NUL-free string yields a CString");
@@ -313,7 +314,7 @@ fn to_cstr_yields_a_nul_terminated_view() {
 
 #[test]
 fn to_cstr_surfaces_an_embedded_nul_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A C string cannot carry an embedded NUL, so the read raises
     // ArgumentError, which protect catches into Err.
@@ -323,7 +324,7 @@ fn to_cstr_surfaces_an_embedded_nul_as_err() {
 
 #[test]
 fn substr_reads_a_range_and_clamps_out_of_range() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let s = mrb.str_new(b"Hello, world!");
 
@@ -353,7 +354,7 @@ fn substr_saturates_an_out_of_width_beg_rather_than_wrapping() {
         return;
     }
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let s = mrb.str_new(b"Hello");
 
@@ -372,7 +373,7 @@ fn substr_saturates_an_out_of_width_beg_rather_than_wrapping() {
 
 #[test]
 fn index_finds_the_first_match_at_or_after_the_offset() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let s = mrb.str_new(b"hello, hello");
 
@@ -406,7 +407,7 @@ fn index_saturates_an_out_of_width_offset_rather_than_wrapping() {
         return;
     }
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let s = mrb.str_new(b"hello, hello");
 
@@ -426,7 +427,7 @@ fn index_saturates_an_out_of_width_offset_rather_than_wrapping() {
 
 #[test]
 fn to_i_parses_in_the_requested_base() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A clean decimal string parses to its value.
     assert_eq!(
@@ -455,7 +456,7 @@ fn to_i_parses_in_the_requested_base() {
 
 #[test]
 fn to_i_surfaces_invalid_input_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Trailing junk is rejected by the strict parse — unlike Ruby's
     // lenient String#to_i, which would stop at the first bad character.
@@ -473,7 +474,7 @@ fn to_i_surfaces_invalid_input_as_err() {
 
 #[test]
 fn to_i_aliases_a_negative_base_to_its_radix_without_raising() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A negative base is not an illegal radix: -16 aliases radix 16 with
     // prefix detection disabled, so the bytes parse in base 16 instead of
@@ -488,7 +489,7 @@ fn to_i_aliases_a_negative_base_to_its_radix_without_raising() {
 
 #[test]
 fn to_inum_parses_leniently_without_raising_on_malformed_content() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A clean decimal string parses to its value.
     assert_eq!(
@@ -527,7 +528,7 @@ fn to_inum_parses_leniently_without_raising_on_malformed_content() {
 
 #[test]
 fn to_inum_surfaces_an_illegal_radix_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A radix outside the 2-through-36 / 0-prefix domain is the one input
     // the lenient parse cannot interpret, so it raises ArgumentError even
@@ -540,7 +541,7 @@ fn to_inum_surfaces_an_illegal_radix_as_err() {
 
 #[test]
 fn to_f_parses_a_float_string() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A clean float string parses to its value.
     assert_eq!(
@@ -561,7 +562,7 @@ fn to_f_parses_a_float_string() {
 
 #[test]
 fn to_f_surfaces_invalid_input_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Trailing junk is rejected by the strict parse — unlike Ruby's
     // lenient String#to_f, which would ignore the trailing characters.

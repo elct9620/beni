@@ -1,3 +1,4 @@
+use crate::support::open_mrb;
 use beni::format::{Io, Kw, NRest, NRestKwBlock, Rest, RestBlock, Str, S};
 use beni::{Mrb, Value};
 
@@ -50,7 +51,7 @@ fn nrest_after_sym(mrb: &Mrb, _self: Value) -> Value {
 fn rest_format_reads_the_argc_mruby_writes() {
     use beni::Module;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"rest_count", beni::method!(rest_count, -1))
@@ -83,7 +84,7 @@ fn rest_format_reads_the_argc_mruby_writes() {
 fn io_format_reads_the_int_mruby_writes() {
     use beni::Module;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"io_first", beni::method!(io_first, -1))
@@ -113,7 +114,7 @@ fn io_format_reads_the_int_mruby_writes() {
 fn nrest_format_splits_the_leading_symbol() {
     use beni::{Ccontext, FromValue, Module};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"nrest_after_sym", beni::method!(nrest_after_sym, -1))
@@ -170,7 +171,7 @@ fn rest_block_report(mrb: &Mrb, _self: Value) -> Value {
 fn s_format_reads_a_string_argument() {
     use beni::Module;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"s_echo", beni::method!(s_echo, -1))
@@ -191,7 +192,7 @@ fn s_format_reads_a_string_argument() {
 fn str_format_reads_a_string_as_bytes() {
     use beni::Module;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"str_echo", beni::method!(str_echo, -1))
@@ -213,7 +214,7 @@ fn str_format_reads_a_string_as_bytes() {
 fn rest_block_format_splits_rest_from_block() {
     use beni::{Ccontext, FromValue, Module};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(
@@ -291,7 +292,7 @@ fn argv_sum(mrb: &Mrb, _self: Value) -> Value {
 fn arg1_reads_the_single_argument() {
     use beni::{FromValue, Module};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"arg1_echo", beni::method!(arg1_echo, -1))
@@ -310,7 +311,7 @@ fn arg1_reads_the_single_argument() {
 fn arg1_raises_argument_error_on_wrong_count() {
     use beni::{Error, Module};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"arg1_echo", beni::method!(arg1_echo, -1))
@@ -335,7 +336,7 @@ fn arg1_raises_argument_error_on_wrong_count() {
 fn argc_reads_the_argument_count() {
     use beni::{FromValue, Module};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"argc_report", beni::method!(argc_report, -1))
@@ -359,7 +360,7 @@ fn argc_reads_the_argument_count() {
 fn argv_reads_the_whole_argument_array() {
     use beni::{FromValue, Module};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"argv_sum", beni::method!(argv_sum, -1))
@@ -394,7 +395,7 @@ fn argv_reads_the_whole_argument_array() {
 fn block_given_reports_whether_a_block_was_passed() {
     use beni::{Ccontext, FromValue, Module};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"block_report", beni::method!(block_report, -1))
@@ -467,7 +468,7 @@ fn rest_borrowed_survives_reentry(mrb: &Mrb, _self: Value) -> Value {
 fn rest_borrowed_slice_survives_vm_reentry() {
     use beni::Module;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(
@@ -520,7 +521,7 @@ fn nrest_kwblock_encode(mrb: &Mrb, _self: Value) -> Value {
 fn kw_format_captures_keywords_and_empty_is_a_hash() {
     use beni::{Ccontext, FromValue, Module};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(&mrb, c"kw_size", beni::method!(kw_size, -1))
@@ -558,7 +559,7 @@ fn kw_format_captures_keywords_and_empty_is_a_hash() {
 fn nrest_kwblock_separates_positionals_keywords_and_block() {
     use beni::{Ccontext, FromValue, Module};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb.object_class();
     class
         .define_method(

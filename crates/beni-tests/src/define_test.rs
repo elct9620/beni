@@ -1,3 +1,4 @@
+use crate::support::open_mrb;
 use beni::{FromValue, Module, Mrb, Value};
 
 fn answer_seven(_mrb: &Mrb, _self: Value) -> i32 {
@@ -6,7 +7,7 @@ fn answer_seven(_mrb: &Mrb, _self: Value) -> i32 {
 
 #[test]
 fn class_new_creates_an_unnamed_usable_class() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An anonymous class inherits from the given superclass, carries
     // no name until bound to a constant, yet is fully usable through
@@ -36,7 +37,7 @@ fn class_new_creates_an_unnamed_usable_class() {
 
 #[test]
 fn class_new_surfaces_err_for_a_rejected_superclass() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // mruby rejects `Class` itself as a superclass; the typed form
     // catches the raise instead of long-jumping across FFI.
@@ -51,7 +52,7 @@ fn class_new_surfaces_err_for_a_rejected_superclass() {
 
 #[test]
 fn module_new_creates_an_unnamed_mixable_module() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An anonymous module carries no name, yet mixing it into a class
     // makes its method reachable on that class's instances.
@@ -83,7 +84,7 @@ fn module_new_creates_an_unnamed_mixable_module() {
 
 #[test]
 fn module_get_fetches_a_defined_module() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A top-level module is fetchable by name and by Symbol key —
     // both forms route through `mrb_module_get_id`.
@@ -101,7 +102,7 @@ fn module_get_fetches_a_defined_module() {
 
 #[test]
 fn module_get_surfaces_name_error_for_missing_module() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // mruby raises NameError for a missing constant (vendored
     // src/class.c documents the lookup contract) — the typed
@@ -118,7 +119,7 @@ fn module_get_surfaces_name_error_for_missing_module() {
 
 #[test]
 fn class_defined_answers_a_total_bool_for_top_level_names() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A defined top-level class reads `true` by name and by Symbol
     // key — both route through `mrb_class_defined_id`.
@@ -135,7 +136,7 @@ fn class_defined_answers_a_total_bool_for_top_level_names() {
 
 #[test]
 fn exc_get_fetches_a_builtin_exception_class() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A built-in exception class is reachable by name and by Symbol
     // key — both forms route through `mrb_exc_get_id`.
@@ -151,7 +152,7 @@ fn exc_get_fetches_a_builtin_exception_class() {
 
 #[test]
 fn exc_get_surfaces_err_for_a_non_exception_class() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // `Object` is a class but not an Exception subclass; the
     // Exception-subclass guarantee turns this into an Err instead of
@@ -164,7 +165,7 @@ fn exc_get_surfaces_err_for_a_non_exception_class() {
 
 #[test]
 fn exc_get_surfaces_err_for_missing_constant() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // mruby raises NameError for a missing constant — the typed
     // lookup must catch it instead of long-jumping.
@@ -176,7 +177,7 @@ fn exc_get_surfaces_err_for_missing_constant() {
 
 #[test]
 fn gv_get_reads_nil_for_unset_global() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let sym = mrb.intern_cstr(c"$beni_gv_unset");
 
@@ -185,7 +186,7 @@ fn gv_get_reads_nil_for_unset_global() {
 
 #[test]
 fn gv_get_observes_reassignment() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let sym = mrb.intern_cstr(c"$beni_gv");
 
     // Globals are read at call time: each assignment must be
@@ -200,7 +201,7 @@ fn gv_get_observes_reassignment() {
 
 #[test]
 fn gv_remove_clears_a_global_back_to_nil() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let sym = mrb.intern_cstr(c"$beni_gv_removed");
 
     // A set global reads its value, then removing it reads nil —

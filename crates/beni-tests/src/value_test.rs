@@ -1,3 +1,4 @@
+use crate::support::open_mrb;
 use beni::state::args::format;
 use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, Symbol, Value};
 
@@ -19,7 +20,7 @@ fn report_break(mrb: &Mrb, _self: Value) -> Value {
 
 #[test]
 fn as_break_rejects_non_break_values() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // No ordinary value carries the break tag — including a real
     // exception object (a raise is not a break).
@@ -30,7 +31,7 @@ fn as_break_rejects_non_break_values() {
 
 #[test]
 fn funcall_dispatches_a_method_and_returns_its_value() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // `42.to_s` dispatches `Integer#to_s` and hands back its String.
     let got = 42i32
@@ -42,7 +43,7 @@ fn funcall_dispatches_a_method_and_returns_its_value() {
 
 #[test]
 fn funcall_passes_the_argument_slice_to_the_method() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // `40 + 2` proves the arg slice reaches the dispatched method.
     let got = 40i32
@@ -54,7 +55,7 @@ fn funcall_passes_the_argument_slice_to_the_method() {
 
 #[test]
 fn funcall_surfaces_a_raised_exception_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Dispatching an undefined method raises `NoMethodError`, which the
     // protect frame catches into `Err` rather than long-jumping.
@@ -76,7 +77,7 @@ fn funcall_surfaces_a_raised_exception_as_err() {
 
 #[test]
 fn funcall_accepts_a_symbol_key_identical_to_the_name() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An interned `Symbol` key reaches the same dispatch as the
     // equivalent name, proving the `IntoSym` generalization routes
@@ -94,7 +95,7 @@ fn funcall_accepts_a_symbol_key_identical_to_the_name() {
 
 #[test]
 fn funcall_with_block_yields_to_the_passed_block() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A block that records each doubled element into a global array.
     // `Array#each` yields every element to it; reading `$seen` back
@@ -126,7 +127,7 @@ fn funcall_with_block_yields_to_the_passed_block() {
 
 #[test]
 fn funcall_with_block_surfaces_a_raised_exception_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let cxt = Ccontext::new(&mrb, c"funcall_block_raise.rb")
         .expect("allocating the compile context must succeed");
@@ -159,7 +160,7 @@ fn funcall_with_block_surfaces_a_raised_exception_as_err() {
 
 #[test]
 fn is_string_discriminates_the_string_tag() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     assert!(mrb.str_new(b"x").as_value().is_string());
     // A non-String tag — and an immediate — both reject.
@@ -169,7 +170,7 @@ fn is_string_discriminates_the_string_tag() {
 
 #[test]
 fn tag_predicates_discriminate_module_range_and_exception() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"tag_pred_test.rb").expect("allocating the context must succeed");
 
@@ -211,7 +212,7 @@ fn tag_predicates_discriminate_module_range_and_exception() {
 
 #[test]
 fn to_string_reads_a_string_subclass_result() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"to_s_test.rb").expect("allocating the context must succeed");
 
     // `to_s` returns a String *subclass* instance: String-tagged, so it
@@ -232,7 +233,7 @@ fn to_string_reads_a_string_subclass_result() {
 
 #[test]
 fn inspect_renders_the_ruby_debug_string() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A String inspects quoted, an Integer and nil render canonically —
     // the debug forms, not the to_s forms.
@@ -243,7 +244,7 @@ fn inspect_renders_the_ruby_debug_string() {
 
 #[test]
 fn inspect_swallows_a_raising_inspect_as_empty() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"inspect_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -267,7 +268,7 @@ fn inspect_swallows_a_raising_inspect_as_empty() {
 
 #[test]
 fn any_to_s_renders_the_default_object_form() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"any_to_s_test.rb")
         .expect("allocating the compile context must succeed");
 
@@ -288,7 +289,7 @@ fn any_to_s_renders_the_default_object_form() {
 
 #[test]
 fn equality_separates_value_eql_and_identity() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let a = mrb.str_new(b"hello").as_value();
     let b = mrb.str_new(b"hello").as_value();
@@ -308,7 +309,7 @@ fn equality_separates_value_eql_and_identity() {
 
 #[test]
 fn object_id_is_stable_per_value_and_distinct_across_identity() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let a = mrb.str_new(b"hello").as_value();
     let b = mrb.str_new(b"hello").as_value();
@@ -325,7 +326,7 @@ fn object_id_is_stable_per_value_and_distinct_across_identity() {
 
 #[test]
 fn equal_surfaces_a_raising_user_method_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"eq_test.rb").expect("allocating the context must succeed");
 
     let obj = cxt
@@ -345,7 +346,7 @@ fn equal_surfaces_a_raising_user_method_as_err() {
 
 #[test]
 fn eql_surfaces_a_raising_user_method_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"eql_test.rb").expect("allocating the context must succeed");
 
     let obj = cxt
@@ -372,7 +373,7 @@ fn eql_surfaces_a_raising_user_method_as_err() {
 fn cmp_ranks_comparable_values_and_yields_none_for_incomparable() {
     use core::cmp::Ordering;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let one = 1i32.into_value(&mrb);
     let two = 2i32.into_value(&mrb);
@@ -392,7 +393,7 @@ fn cmp_ranks_comparable_values_and_yields_none_for_incomparable() {
 fn cmp_ranks_a_custom_spaceship_by_sign_not_magnitude() {
     use core::cmp::Ordering;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"cmp_test.rb").expect("allocating the context must succeed");
 
     // A `<=>` is only obliged to return negative / zero / positive, so
@@ -420,7 +421,7 @@ fn cmp_ranks_a_custom_spaceship_by_sign_not_magnitude() {
 
 #[test]
 fn cmp_surfaces_a_raising_user_method_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"cmp_test.rb").expect("allocating the context must succeed");
 
     let obj = cxt
@@ -440,7 +441,7 @@ fn cmp_surfaces_a_raising_user_method_as_err() {
 
 #[test]
 fn dup_and_clone_surface_a_raising_initialize_copy_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"copy_test.rb").expect("allocating the context must succeed");
 
     let obj = cxt
@@ -460,7 +461,7 @@ fn dup_and_clone_surface_a_raising_initialize_copy_as_err() {
 
 #[test]
 fn check_frozen_guards_frozen_and_immediate_receivers() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A mutable heap object passes the guard.
     let mutable = mrb.str_new(b"open").as_value();
@@ -493,7 +494,7 @@ fn check_frozen_guards_frozen_and_immediate_receivers() {
 
 #[test]
 fn obj_as_string_coerces_through_to_s() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Already a string: coercion returns that same string, not a copy.
     let already = mrb.str_new(b"hi").as_value();
@@ -513,7 +514,7 @@ fn obj_as_string_coerces_through_to_s() {
 
 #[test]
 fn ensure_string_returns_the_handle_or_raises_by_tag() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A String tag yields the same string as a typed handle — no
     // copy, no dispatch.
@@ -538,7 +539,7 @@ fn ensure_string_returns_the_handle_or_raises_by_tag() {
 
 #[test]
 fn ensure_array_returns_the_handle_or_raises_by_tag() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An Array tag yields the same array as a typed handle — no
     // copy, no dispatch.
@@ -573,7 +574,7 @@ fn to_a_returns_nil(_mrb: &Mrb, _self: Value) -> Value {
 
 #[test]
 fn to_ary_spreads_or_wraps_each_value_kind() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An array spreads to a copy: same elements, distinct object.
     let src = mrb.ary_new_from_values(&[1i32.into_value(&mrb), 2i32.into_value(&mrb)]);
@@ -649,7 +650,7 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
 
 #[test]
 fn ensure_hash_returns_the_handle_or_raises_by_tag() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A Hash tag yields the same hash as a typed handle — no copy,
     // no dispatch.
@@ -674,7 +675,7 @@ fn ensure_hash_returns_the_handle_or_raises_by_tag() {
 fn bool_predicates_separate_true_false_and_nil() {
     // The immediate singletons need a live VM to have been captured,
     // even though the predicates themselves take no `Mrb`.
-    let _mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let _mrb = open_mrb();
 
     // `is_true` / `is_false` are exact: each admits only its own
     // singleton. The load-bearing case is that `nil` — which shares
@@ -689,7 +690,7 @@ fn bool_predicates_separate_true_false_and_nil() {
 
 #[test]
 fn to_bool_follows_ruby_truthiness() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Only `nil` and `false` are falsy; every other value — zero
     // and the empty string included — is truthy.
@@ -702,7 +703,7 @@ fn to_bool_follows_ruby_truthiness() {
 
 #[test]
 fn obj_dup_copies_state_into_an_independent_object() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"dup_test.rb").expect("allocating the compile context must succeed");
 
@@ -724,7 +725,7 @@ fn obj_dup_copies_state_into_an_independent_object() {
 
 #[test]
 fn iv_set_surfaces_frozen_and_non_object_receivers_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"iv_set_test.rb").expect("allocating the context must succeed");
     let x = mrb.intern_cstr(c"@x");
     let one = 1i32.into_value(&mrb);
@@ -749,7 +750,7 @@ fn iv_set_surfaces_frozen_and_non_object_receivers_as_err() {
 
 #[test]
 fn const_get_reads_a_constant_and_surfaces_an_absent_one_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"const_get_test.rb").expect("allocating the context must succeed");
 
@@ -776,7 +777,7 @@ fn const_get_reads_a_constant_and_surfaces_an_absent_one_as_err() {
 
 #[test]
 fn cv_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"cv_get_test.rb").expect("allocating the context must succeed");
 
     let class = cxt
@@ -802,7 +803,7 @@ fn cv_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
 
 #[test]
 fn const_set_assigns_a_constant_and_surfaces_a_non_module_receiver_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"const_set_test.rb").expect("allocating the context must succeed");
 
@@ -831,7 +832,7 @@ fn const_set_assigns_a_constant_and_surfaces_a_non_module_receiver_as_err() {
 
 #[test]
 fn const_remove_removes_a_constant_and_surfaces_a_non_module_receiver_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"const_remove_test.rb").expect("allocating the context must succeed");
 
@@ -866,7 +867,7 @@ fn const_remove_removes_a_constant_and_surfaces_a_non_module_receiver_as_err() {
 
 #[test]
 fn const_defined_at_answers_only_for_the_receivers_own_constant() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"const_defined_at_test.rb")
         .expect("allocating the context must succeed");
 
@@ -907,7 +908,7 @@ fn const_defined_at_answers_only_for_the_receivers_own_constant() {
 
 #[test]
 fn cv_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"cv_set_test.rb").expect("allocating the context must succeed");
 
     let class = cxt
@@ -939,7 +940,7 @@ fn cv_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
 
 #[test]
 fn cv_defined_tests_class_variable_presence_walking_the_ancestry() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"cv_defined_test.rb").expect("allocating the context must succeed");
 
@@ -971,7 +972,7 @@ fn assert_type_error(mrb: &Mrb, err: Error) {
 
 #[test]
 fn cv_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let sym = mrb.intern_cstr(c"@@x");
 
     // nil, an immediate, and a plain object all sit outside the
@@ -1002,7 +1003,7 @@ fn cv_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
 
 #[test]
 fn const_presence_answers_false_for_a_receiver_that_is_not_a_class_or_module() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let sym = mrb.intern_cstr(c"X");
 
     // Both presence tests are total predicates: a receiver outside
@@ -1021,7 +1022,7 @@ fn const_presence_answers_false_for_a_receiver_that_is_not_a_class_or_module() {
 
 #[test]
 fn cv_accessors_accept_a_singleton_class_receiver() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"cv_sclass_test.rb").expect("allocating the context must succeed");
 
@@ -1044,7 +1045,7 @@ fn cv_accessors_accept_a_singleton_class_receiver() {
 
 #[test]
 fn iv_defined_tests_instance_variable_presence() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"iv_defined_test.rb").expect("allocating the context must succeed");
 
@@ -1063,7 +1064,7 @@ fn iv_defined_tests_instance_variable_presence() {
 
 #[test]
 fn iv_remove_yields_the_former_value_and_clears_presence() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"iv_remove_test.rb").expect("allocating the context must succeed");
 
@@ -1082,7 +1083,7 @@ fn iv_remove_yields_the_former_value_and_clears_presence() {
 
 #[test]
 fn iv_remove_distinguishes_absent_from_a_removed_nil() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"iv_remove_absent_test.rb")
         .expect("allocating the context must succeed");
 
@@ -1113,7 +1114,7 @@ fn iv_remove_distinguishes_absent_from_a_removed_nil() {
 
 #[test]
 fn iv_remove_surfaces_a_frozen_holder_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"iv_remove_frozen_test.rb")
         .expect("allocating the context must succeed");
 
@@ -1132,7 +1133,7 @@ fn iv_remove_surfaces_a_frozen_holder_as_err() {
 
 #[test]
 fn obj_clone_carries_frozen_state_where_dup_drops_it() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"clone_test.rb").expect("allocating the compile context must succeed");
 
@@ -1159,7 +1160,7 @@ fn obj_clone_carries_frozen_state_where_dup_drops_it() {
 
 #[test]
 fn as_break_views_a_real_escaping_break() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let class = mrb
         .define_class(c"BeniBreakYielder", mrb.object_class())
@@ -1193,7 +1194,7 @@ fn as_break_views_a_real_escaping_break() {
 
 #[test]
 fn class_and_kind_predicates_read_the_hierarchy() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let s = mrb.str_new(b"hi").as_value();
     let string_class = mrb.class_get(c"String").expect("String is defined");
     let object_class = mrb.class_get(c"Object").expect("Object is defined");
@@ -1211,7 +1212,7 @@ fn class_and_kind_predicates_read_the_hierarchy() {
 
 #[test]
 fn singleton_class_reads_a_stable_eigenclass_and_rejects_immediates() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let s = mrb.str_new(b"hi").as_value();
 
     // An ordinary object's singleton class is its own per-instance
@@ -1249,7 +1250,7 @@ fn singleton_class_reads_a_stable_eigenclass_and_rejects_immediates() {
 
 #[test]
 fn freeze_marks_the_value_frozen() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let s = mrb.str_new(b"x").as_value();
     assert!(!s
         .funcall(&mrb, c"frozen?", &[])
@@ -1265,7 +1266,7 @@ fn freeze_marks_the_value_frozen() {
 
 #[test]
 fn as_int_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An Integer reads directly.
     assert_eq!(
@@ -1292,7 +1293,7 @@ fn as_int_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
 
 #[test]
 fn as_float_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A Float reads directly.
     assert_eq!(
@@ -1318,7 +1319,7 @@ fn as_float_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
 
 #[test]
 fn int_to_str_renders_in_base_ten_and_other_radixes() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let n = Value::from_int(&mrb, 12345);
     // Base 10 is the plain decimal rendering.
@@ -1336,7 +1337,7 @@ fn int_to_str_renders_in_base_ten_and_other_radixes() {
 
 #[test]
 fn int_to_str_surfaces_an_invalid_radix_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A radix outside 2 through 36 raises ArgumentError, caught into
     // Err rather than long-jumping; the VM stays usable afterward.
@@ -1355,7 +1356,7 @@ fn int_to_str_surfaces_an_invalid_radix_as_err() {
 
 #[test]
 fn int_to_str_rejects_a_non_integer_receiver() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // The guard is strict on the Integer tag: a Float is rejected with
     // TypeError, not coerced, because mrb_integer_to_str unboxes its
@@ -1368,7 +1369,7 @@ fn int_to_str_rejects_a_non_integer_receiver() {
 
 #[test]
 fn float_to_int_truncates_toward_zero() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A positive float truncates down, like Ruby's 3.9.to_i == 3.
     let three = Value::from_float(&mrb, 3.9)
@@ -1384,7 +1385,7 @@ fn float_to_int_truncates_toward_zero() {
 
 #[test]
 fn float_to_int_surfaces_infinity_and_nan_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Infinity and NaN have no integer; mruby raises RangeError, caught
     // into Err rather than long-jumping, and the VM stays usable after.
@@ -1408,7 +1409,7 @@ fn float_to_int_surfaces_infinity_and_nan_as_err() {
 
 #[test]
 fn float_to_int_rejects_a_non_float_receiver() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // mrb_float_to_integer guards its receiver on the Float tag: an
     // Integer is rejected with TypeError, not passed through.
@@ -1420,7 +1421,7 @@ fn float_to_int_rejects_a_non_float_receiver() {
 
 #[test]
 fn ensure_int_coerces_by_numeric_type_or_raises() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An Integer coerces unchanged, staying an Integer value.
     let same = Value::from_int(&mrb, 5)
@@ -1456,7 +1457,7 @@ fn ensure_int_coerces_by_numeric_type_or_raises() {
 
 #[test]
 fn ensure_float_coerces_by_numeric_type_or_raises() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A Float coerces unchanged, staying a Float value.
     let same = Value::from_float(&mrb, 2.5)
@@ -1484,7 +1485,7 @@ fn ensure_float_coerces_by_numeric_type_or_raises() {
 
 #[test]
 fn arithmetic_computes_on_integers_and_floats() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // Integer operands yield an Integer result, like Ruby's 2 + 3 == 5.
     let sum = Value::from_int(&mrb, 2)
@@ -1504,7 +1505,7 @@ fn arithmetic_computes_on_integers_and_floats() {
 
 #[test]
 fn arithmetic_widens_a_mixed_operand_to_float() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A float operand widens the result to a Float, like Ruby's
     // 2 + 3.5 == 5.5; f64::from_value reads only the Float tag, so a Some
@@ -1522,7 +1523,7 @@ fn arithmetic_widens_a_mixed_operand_to_float() {
 
 #[test]
 fn arithmetic_rejects_a_non_numeric_operand() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // mrb_num_add dispatches on the numeric tag: a non-numeric right
     // operand raises TypeError, caught into Err rather than long-jumping.
@@ -1548,7 +1549,7 @@ fn arithmetic_rejects_a_non_numeric_operand() {
 
 #[test]
 fn arithmetic_surfaces_integer_overflow_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An integer result past the configured width has two lawful
     // outcomes, branched on the build's integer model rather than a
@@ -1578,7 +1579,7 @@ fn arithmetic_surfaces_integer_overflow_as_err() {
 fn each_iv_visits_every_set_instance_variable() {
     use beni::{ForEach, Symbol};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"each_iv.rb").expect("allocating the context must succeed");
     let obj = cxt
         .load_nstring(b"Object.new")
@@ -1614,7 +1615,7 @@ fn each_iv_visits_every_set_instance_variable() {
 fn each_iv_visits_nothing_for_a_receiver_without_instance_variables() {
     use beni::ForEach;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An immediate cannot hold instance variables, so the guarded
     // foreach returns without ever calling back.
@@ -1630,7 +1631,7 @@ fn each_iv_visits_nothing_for_a_receiver_without_instance_variables() {
 fn each_iv_stops_early_on_stop() {
     use beni::ForEach;
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"each_iv_stop.rb").expect("allocating the context must succeed");
     let obj = cxt
         .load_nstring(b"Object.new")
@@ -1656,7 +1657,7 @@ fn each_iv_stops_early_on_stop() {
 fn each_iv_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
     use beni::{ForEach, Symbol};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"each_iv_mutate.rb").expect("allocating the context must succeed");
     let obj = cxt
@@ -1697,7 +1698,7 @@ fn each_iv_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
 fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
     use beni::{ForEach, RString};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"each_iv_gc.rb").expect("allocating the context must succeed");
     let obj = cxt
         .load_nstring(b"Object.new")
@@ -1740,7 +1741,7 @@ fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
 
 #[test]
 fn each_iv_resurfaces_a_closure_panic_on_the_rust_side() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"each_iv_panic.rb").expect("allocating the context must succeed");
     let obj = cxt
@@ -1781,7 +1782,7 @@ fn each_iv_resurfaces_a_closure_panic_on_the_rust_side() {
 
 #[test]
 fn classname_survives_a_gc_cycle() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // `classname` owns its bytes: mruby builds the name into a
     // GC-managed temporary, so a name held across a collection must

@@ -6,7 +6,7 @@ use beni::{FromValue, Mrb};
 
 #[test]
 fn an_interpreter_boots_and_evaluates_ruby() {
-    let mrb = Mrb::open().expect("Mrb::open needs a staged libmruby.a");
+    let mrb = Mrb::open().expect("Mrb::open needs a staged mruby archive");
 
     let value = mrb.load_string(b"1 + 2").expect("evaluating must succeed");
 

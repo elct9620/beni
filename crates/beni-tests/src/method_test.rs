@@ -1,6 +1,7 @@
 use beni::{Error, FromValue, IntoValue, Mrb, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::support::open_mrb;
 use beni::Module;
 
 static TYPE_ERROR_BODY_RAN: AtomicBool = AtomicBool::new(false);
@@ -56,7 +57,7 @@ fn fresh_class(mrb: &Mrb, name: &core::ffi::CStr) -> beni::RClass {
 
 #[test]
 fn typed_method_roundtrips_scalars() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniAdder");
     class
         .define_method(&mrb, c"add", beni::method!(add, 2))
@@ -74,7 +75,7 @@ fn typed_method_roundtrips_scalars() {
 
 #[test]
 fn fixed_arity_raises_argument_error_on_wrong_count() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniArityAdder");
     class
         .define_method(&mrb, c"add", beni::method!(add, 2))
@@ -119,7 +120,7 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
 
 #[test]
 fn from_value_failure_raises_before_body_runs() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniStrictAdder");
     class
         .define_method(&mrb, c"add", beni::method!(observed_add, 2))
@@ -148,7 +149,7 @@ fn from_value_failure_raises_before_body_runs() {
 
 #[test]
 fn optional_argument_defaults_to_none_when_omitted() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniOptAdder");
     class
         .define_method(&mrb, c"add", beni::method!(opt_add, 1, 1))
@@ -178,7 +179,7 @@ fn optional_argument_defaults_to_none_when_omitted() {
 
 #[test]
 fn all_optional_method_reads_its_lone_slot() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniOptOnly");
     class
         .define_method(&mrb, c"v", beni::method!(opt_only, 0, 1))
@@ -201,7 +202,7 @@ fn all_optional_method_reads_its_lone_slot() {
 
 #[test]
 fn supplied_optional_failing_from_value_raises() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniOptStrict");
     class
         .define_method(&mrb, c"add", beni::method!(opt_add, 1, 1))
@@ -229,7 +230,7 @@ fn supplied_optional_failing_from_value_raises() {
 
 #[test]
 fn block_accepting_method_yields_to_a_passed_block() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniBlockApply");
     class
         .define_method(&mrb, c"apply", beni::method!(apply_block, 1, &))
@@ -252,7 +253,7 @@ fn block_accepting_method_yields_to_a_passed_block() {
 
 #[test]
 fn block_accepting_method_binds_none_without_a_block() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniBlockOptional");
     class
         .define_method(&mrb, c"apply", beni::method!(apply_block, 1, &))
@@ -271,7 +272,7 @@ fn block_accepting_method_binds_none_without_a_block() {
 
 #[test]
 fn panicking_method_surfaces_as_ruby_exception() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniPanicker");
     class
         .define_method(&mrb, c"detonate", beni::method!(boom, 0))
@@ -296,7 +297,7 @@ fn panicking_method_surfaces_as_ruby_exception() {
 
 #[test]
 fn protect_surfaces_closure_panic_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let err = mrb
         .protect(|_| panic!("pop goes the closure"))
@@ -309,7 +310,7 @@ fn protect_surfaces_closure_panic_as_err() {
 
 #[test]
 fn result_returning_method_raises_its_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniFallible");
     class
         .define_method(&mrb, c"try", beni::method!(fallible, 0))

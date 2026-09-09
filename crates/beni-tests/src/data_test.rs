@@ -1,5 +1,5 @@
+use crate::support::open_mrb;
 use beni::DataType;
-use beni::Mrb;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload with no observable drop — exercises wrap / get / type
@@ -13,7 +13,7 @@ static OTHER_TYPE: DataType<Holder> = DataType::new(c"BeniOtherHolder");
 
 #[test]
 fn data_wrap_roundtrips_and_get_is_type_checked() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb
         .define_class(c"BeniDataHolder", mrb.object_class())
         .expect("defining the carrier class must succeed");
@@ -61,7 +61,7 @@ static UNMARKED_TYPE: DataType<UnmarkedProbe> = DataType::new(c"BeniUnmarkedProb
 #[test]
 fn data_wrap_into_an_unmarked_class_errs_and_reclaims_the_box() {
     UNMARKED_DROPS.store(0, Ordering::SeqCst);
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     // A class that was never marked through set_instance_data_tt: its
     // instances do not allocate as data carriers, so the allocation
     // raises a TypeError instead of producing a carrier.
@@ -98,7 +98,7 @@ fn data_wrap_into_an_unmarked_class_errs_and_reclaims_the_box() {
 
 #[test]
 fn data_reinit_installs_into_a_bare_carrier() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb
         .define_class(c"BeniReinitHolder", mrb.object_class())
         .expect("defining the carrier class must succeed");
@@ -124,7 +124,7 @@ fn data_reinit_installs_into_a_bare_carrier() {
 
 #[test]
 fn data_reinit_on_a_non_carrier_is_a_safe_noop() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A non-CDATA value: the install must do nothing rather than
     // reinterpret the value's bytes as a data carrier.
@@ -166,7 +166,7 @@ static PROBE_TYPE: DataType<DropProbe> = DataType::new(c"BeniDropProbe");
 fn release_hook_drops_the_boxed_value_on_close() {
     PROBE_DROPS.store(0, Ordering::SeqCst);
     {
-        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let mrb = open_mrb();
         let class = mrb
             .define_class(c"BeniDropHolder", mrb.object_class())
             .expect("defining the carrier class must succeed");
@@ -204,7 +204,7 @@ static THREAD_PROBE_TYPE: DataType<ThreadProbe> = DataType::new(c"BeniThreadProb
 
 #[test]
 fn release_hook_runs_on_the_thread_the_interpreter_was_carried_to() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = mrb
         .define_class(c"BeniThreadHolder", mrb.object_class())
         .expect("defining the carrier class must succeed");
@@ -258,7 +258,7 @@ static PANIC_TYPE: DataType<PanicOnDrop> = DataType::new(c"BeniPanicOnDrop");
 fn release_hook_contains_a_panicking_drop_on_close() {
     PANIC_DROPS.store(0, Ordering::SeqCst);
     {
-        let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+        let mrb = open_mrb();
         let class = mrb
             .define_class(c"BeniPanicHolder", mrb.object_class())
             .expect("defining the carrier class must succeed");

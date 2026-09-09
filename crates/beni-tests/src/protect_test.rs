@@ -1,8 +1,9 @@
+use crate::support::open_mrb;
 use beni::{Error, Mrb, Value};
 
 #[test]
 fn protect_returns_the_body_value_on_success() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let got = mrb
         .protect(|m| m.str_new(b"ok").as_value())
@@ -13,7 +14,7 @@ fn protect_returns_the_body_value_on_success() {
 
 #[test]
 fn protect_surfaces_a_raised_ruby_exception_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let err = mrb
         .protect(|m| {
@@ -41,7 +42,7 @@ fn protect_surfaces_a_raised_ruby_exception_as_err() {
 
 #[test]
 fn protect_surfaces_a_panicking_body_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let err = mrb
         .protect(|_| panic!("boom from rust"))
@@ -72,7 +73,7 @@ fn raise_named(m: &Mrb, class: &core::ffi::CStr, message: &core::ffi::CStr) -> V
 
 #[test]
 fn rescue_returns_the_body_value_when_it_does_not_raise() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let standard_error = mrb
         .class_get(c"StandardError")
         .expect("StandardError is a core class");
@@ -90,7 +91,7 @@ fn rescue_returns_the_body_value_when_it_does_not_raise() {
 
 #[test]
 fn rescue_runs_the_handler_on_a_clean_vm_for_a_matching_exception() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let runtime_error = mrb
         .class_get(c"RuntimeError")
         .expect("RuntimeError is a core class");
@@ -126,7 +127,7 @@ fn rescue_runs_the_handler_on_a_clean_vm_for_a_matching_exception() {
 
 #[test]
 fn rescue_propagates_an_exception_outside_the_class_list() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     // TypeError is not a kind of ArgumentError, so the filter misses.
     let argument_error = mrb
         .class_get(c"ArgumentError")
@@ -148,7 +149,7 @@ fn rescue_propagates_an_exception_outside_the_class_list() {
 
 #[test]
 fn rescue_surfaces_a_handler_raise_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let standard_error = mrb
         .class_get(c"StandardError")
         .expect("StandardError is a core class");
@@ -169,7 +170,7 @@ fn rescue_surfaces_a_handler_raise_as_err() {
 
 #[test]
 fn rescue_surfaces_a_handler_panic_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let standard_error = mrb
         .class_get(c"StandardError")
         .expect("StandardError is a core class");
@@ -198,7 +199,7 @@ fn rescue_surfaces_a_handler_panic_as_err() {
 
 #[test]
 fn rescue_with_an_empty_class_list_rescues_nothing() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let err = mrb
         .rescue(
@@ -216,7 +217,7 @@ fn rescue_with_an_empty_class_list_rescues_nothing() {
 
 #[test]
 fn rescue_does_not_catch_a_body_panic() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let standard_error = mrb
         .class_get(c"StandardError")
         .expect("StandardError is a core class");

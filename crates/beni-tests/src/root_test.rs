@@ -1,3 +1,4 @@
+use crate::support::open_mrb;
 use beni::{DataType, Mrb, RClass};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -62,7 +63,7 @@ fn carrier(mrb: &Mrb, name: &'static core::ffi::CStr) -> RClass {
 #[test]
 fn a_registered_value_survives_collection() {
     ROOTED_DROPS.store(0, Ordering::SeqCst);
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = carrier(&mrb, c"BeniRootedHolder");
 
     {
@@ -94,7 +95,7 @@ fn a_registered_value_survives_collection() {
 #[test]
 fn an_unregistered_value_is_reclaimed_by_the_same_collection() {
     LOOSE_DROPS.store(0, Ordering::SeqCst);
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = carrier(&mrb, c"BeniLooseHolder");
 
     {
@@ -117,7 +118,7 @@ fn an_unregistered_value_is_reclaimed_by_the_same_collection() {
 #[test]
 fn a_guard_holds_its_value_until_it_is_dropped() {
     GUARDED_DROPS.store(0, Ordering::SeqCst);
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = carrier(&mrb, c"BeniGuardedHolder");
 
     let root = {
@@ -153,7 +154,7 @@ fn a_guard_holds_its_value_until_it_is_dropped() {
 #[test]
 fn roots_over_one_value_release_independently() {
     SHARED_DROPS.store(0, Ordering::SeqCst);
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let class = carrier(&mrb, c"BeniSharedHolder");
 
     let survivor = {

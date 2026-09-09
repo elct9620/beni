@@ -1,8 +1,9 @@
-use beni::{Error, Mrb};
+use crate::support::open_mrb;
+use beni::Error;
 
 #[test]
 fn push_and_entry_roundtrip_through_a_live_array() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
 
     ary.push(&mrb, mrb.str_new(b"first").as_value())
@@ -16,7 +17,7 @@ fn push_and_entry_roundtrip_through_a_live_array() {
 
 #[test]
 fn entry_is_nil_out_of_range_in_both_directions() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
 
     ary.push(&mrb, mrb.str_new(b"only").as_value())
@@ -32,7 +33,7 @@ fn entry_is_nil_out_of_range_in_both_directions() {
 
 #[test]
 fn store_writes_grows_and_counts_from_the_tail() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
 
     // Writing past the end grows the array, filling the gap with nil.
@@ -51,7 +52,7 @@ fn store_writes_grows_and_counts_from_the_tail() {
 
 #[test]
 fn store_out_of_range_index_surfaces_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, mrb.str_new(b"only").as_value())
         .expect("push to a fresh array succeeds");
@@ -72,7 +73,7 @@ fn store_out_of_range_index_surfaces_err() {
 
 #[test]
 fn len_and_is_empty_track_the_element_count() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
 
     assert_eq!(ary.len(), 0);
@@ -91,7 +92,7 @@ fn len_and_is_empty_track_the_element_count() {
 fn push_surfaces_frozen_receiver_as_err() {
     use beni::{Array, Ccontext, FromValue};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_ary.rb").expect("allocating the context must succeed");
 
     // A frozen Array still carries the Array tag, so the downcast
@@ -110,7 +111,7 @@ fn push_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn pop_and_shift_remove_from_each_end() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, mrb.str_new(b"a").as_value())
         .expect("push succeeds");
@@ -129,7 +130,7 @@ fn pop_and_shift_remove_from_each_end() {
 
 #[test]
 fn unshift_prepends_and_concat_extends() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, mrb.str_new(b"mid").as_value())
         .expect("push succeeds");
@@ -148,7 +149,7 @@ fn unshift_prepends_and_concat_extends() {
 
 #[test]
 fn clear_empties_and_dup_copies_independently() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, mrb.str_new(b"x").as_value())
         .expect("push succeeds");
@@ -164,7 +165,7 @@ fn clear_empties_and_dup_copies_independently() {
 
 #[test]
 fn replace_swaps_the_whole_contents_in_place() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, beni::Value::from_int(&mrb, 1))
         .expect("push succeeds");
@@ -189,7 +190,7 @@ fn replace_swaps_the_whole_contents_in_place() {
 
 #[test]
 fn resize_grows_with_nil_and_truncates() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, mrb.str_new(b"a").as_value())
         .expect("push succeeds");
@@ -209,7 +210,7 @@ fn resize_grows_with_nil_and_truncates() {
 
 #[test]
 fn splice_inserts_replaces_and_deletes_in_place() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     for n in [1, 2, 3] {
         ary.push(&mrb, beni::Value::from_int(&mrb, n))
@@ -257,7 +258,7 @@ fn splice_inserts_replaces_and_deletes_in_place() {
 fn splice_surfaces_raising_edges_as_err() {
     use beni::{Array, Ccontext, FromValue};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, beni::Value::from_int(&mrb, 1))
         .expect("push succeeds");
@@ -297,7 +298,7 @@ fn splice_surfaces_raising_edges_as_err() {
 
 #[test]
 fn join_renders_elements_with_a_separator() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, beni::Value::from_int(&mrb, 1))
         .expect("push succeeds");
@@ -324,7 +325,7 @@ fn join_renders_elements_with_a_separator() {
 fn join_surfaces_a_raising_element_to_s_as_err() {
     use beni::{Array, Ccontext, FromValue};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"join_raise.rb").expect("allocating the context must succeed");
 
     // An element whose to_s raises long-jumps out of mrb_ary_join;
@@ -341,7 +342,7 @@ fn join_surfaces_a_raising_element_to_s_as_err() {
 fn pop_surfaces_frozen_receiver_as_err() {
     use beni::{Array, Ccontext, FromValue};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_pop.rb").expect("allocating the context must succeed");
 
     // pop checks frozen state before touching the elements, so even a
@@ -358,7 +359,7 @@ fn pop_surfaces_frozen_receiver_as_err() {
 fn remaining_mutators_surface_frozen_receiver_as_err() {
     use beni::{Array, Ccontext, FromValue};
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"frozen_ary_mut.rb").expect("allocating the context must succeed");
 
@@ -397,7 +398,7 @@ fn remaining_mutators_surface_frozen_receiver_as_err() {
 
 #[test]
 fn entries_visits_nothing_for_an_empty_array() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
 
     // A length-0 walk yields no elements at all.
@@ -406,7 +407,7 @@ fn entries_visits_nothing_for_an_empty_array() {
 
 #[test]
 fn entries_walks_elements_first_to_last() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     for n in [1, 2, 3] {
         ary.push(&mrb, beni::Value::from_int(&mrb, n))
@@ -422,7 +423,7 @@ fn entries_walks_elements_first_to_last() {
 
 #[test]
 fn entries_snapshots_the_length_so_a_shrink_reads_nil_past_the_new_end() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     for n in [1, 2, 3] {
         ary.push(&mrb, beni::Value::from_int(&mrb, n))
@@ -459,7 +460,7 @@ fn entries_snapshots_the_length_so_a_shrink_reads_nil_past_the_new_end() {
 
 #[test]
 fn entries_does_not_visit_elements_appended_after_the_walk_begins() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, beni::Value::from_int(&mrb, 1))
         .expect("push succeeds");
@@ -486,7 +487,7 @@ fn entries_does_not_visit_elements_appended_after_the_walk_begins() {
 
 #[test]
 fn entries_reads_a_slot_changed_mid_walk_as_its_current_value() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let ary = mrb.ary_new();
     for n in [1, 2, 3] {
         ary.push(&mrb, beni::Value::from_int(&mrb, n))

@@ -1,8 +1,9 @@
-use beni::{Ccontext, Error, FromValue, IntoValue, Mrb, Range, RangeBegLen};
+use crate::support::open_mrb;
+use beni::{Ccontext, Error, FromValue, IntoValue, Range, RangeBegLen};
 
 #[test]
 fn range_new_constructs_and_reads_back_its_bounds() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // An inclusive integer range round-trips its begin, end, and
     // exclude-end flag.
@@ -16,7 +17,7 @@ fn range_new_constructs_and_reads_back_its_bounds() {
 
 #[test]
 fn range_new_carries_the_exclusive_flag() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     let r = mrb
         .range_new(1.into_value(&mrb), 5.into_value(&mrb), true)
@@ -26,7 +27,7 @@ fn range_new_carries_the_exclusive_flag() {
 
 #[test]
 fn range_new_surfaces_incomparable_bounds_as_err() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A String and an Integer share no ordering, so mruby raises
     // ArgumentError ("bad value for range") — protect catches it into
@@ -37,7 +38,7 @@ fn range_new_surfaces_incomparable_bounds_as_err() {
 
 #[test]
 fn from_value_downcasts_by_the_range_tag() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context must succeed");
 
     // A Range-tagged value downcasts to the typed handle; a non-range
@@ -56,7 +57,7 @@ fn from_value_downcasts_by_the_range_tag() {
 
 #[test]
 fn reads_track_an_exclusive_literal() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context must succeed");
 
     // A `(1...5)` literal is exclusive; its bounds read back unchanged.
@@ -72,7 +73,7 @@ fn reads_track_an_exclusive_literal() {
 
 #[test]
 fn beg_len_maps_an_in_range_slice() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
 
     // `2..7` against a length-10 collection selects 6 elements from
@@ -103,7 +104,7 @@ fn beg_len_maps_an_in_range_slice() {
 
 #[test]
 fn beg_len_reports_a_begin_before_the_start_as_out() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
 
     // `-20` counts back past the start of a length-10 collection, so
@@ -122,7 +123,7 @@ fn beg_len_reports_a_begin_before_the_start_as_out() {
 
 #[test]
 fn beg_len_truncates_an_over_long_end() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
 
     // `2..100` overruns a length-10 collection. With truncation the end
@@ -156,7 +157,7 @@ fn beg_len_saturates_a_length_past_the_mrb_int_width() {
         return;
     }
 
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
 
     // A length wider than `mrb_int` saturates up to the widest
@@ -178,7 +179,7 @@ fn beg_len_saturates_a_length_past_the_mrb_int_width() {
 
 #[test]
 fn beg_len_rejects_a_non_range_as_mismatch() {
-    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let mrb = open_mrb();
 
     // A non-Range receiver wrapped through the unchecked cast reports a
     // type mismatch rather than reading a malformed field.
