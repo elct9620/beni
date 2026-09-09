@@ -57,16 +57,6 @@ impl Mrb {
     where
         F: FnOnce(&Mrb) -> Value,
     {
-        self.protect_linked(body)
-    }
-
-    /// Linked-mode body of `Mrb::protect`, split out because the
-    /// trampoline + closure-slot dance reads better without an extra
-    /// cfg indentation level.
-    fn protect_linked<F>(&self, body: F) -> Result<Value, Error>
-    where
-        F: FnOnce(&Mrb) -> Value,
-    {
         // Hold the closure in a stack-local slot so the trampoline
         // can take it without owning a heap allocation. The slot's
         // storage outlives the FFI call by virtue of being a local;

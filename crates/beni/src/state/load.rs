@@ -72,13 +72,6 @@ impl Mrb {
     /// header" / "wrong ident" / "version mismatch" / "corrupt
     /// body".
     pub fn load_bytecode(&self, bytes: &[u8]) -> core::ffi::c_int {
-        self.load_bytecode_linked(bytes)
-    }
-
-    /// Linked-mode body of `Mrb::load_bytecode`, split out because the
-    /// multi-step arena/IREP dance reads better without an extra cfg
-    /// indentation level.
-    fn load_bytecode_linked(&self, bytes: &[u8]) -> core::ffi::c_int {
         // mruby/irep.h documents that `mrb_load_irep*` calls retain
         // one RProc per invocation in the arena; bracketing with
         // save/restore keeps multi-snippet preload cost bounded.
