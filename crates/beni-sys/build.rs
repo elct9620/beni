@@ -47,7 +47,10 @@
 // crate compiles against declarations alone.
 //
 // A set variable whose archive is absent fails the build naming the
-// expected path. wasm32 is the one supported cross target; any other
+// expected path. The supported cross targets are wasm32 and the other
+// macOS architecture — the host compiler builds for either macOS
+// architecture, so that one needs no toolchain of its own and reaches
+// its archive through `MRUBY_LIB_DIR` like every cross target; any other
 // cross-compiled cargo target fails naming the target. wasm32 builds
 // resolve the wasi-sdk root from `WASI_SDK_PATH`, defaulting to
 // `/opt/wasi-sdk` when unset, and fail naming the root in effect when
@@ -93,6 +96,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 include!("build/sidecar.rs");
+include!("build/target.rs");
 include!("build/version.rs");
 
 /// Non-empty value of the env var named `key`, treating unset and
@@ -104,13 +108,13 @@ fn env_path(key: &str) -> Option<String> {
 /// Locate the directory holding the active target's archive and its
 /// compile-flags sidecar. Every outcome either resolves or panics
 /// naming what is missing.
-fn discover_lib_dir(is_wasm: bool) -> PathBuf {
+fn discover_lib_dir(is_cross: bool) -> PathBuf {
     if let Some(dir) = env_path("MRUBY_LIB_DIR") {
         let lib_dir = PathBuf::from(dir);
         require_archive(&lib_dir, "MRUBY_LIB_DIR");
         return lib_dir;
     }
-    if is_wasm {
+    if is_cross {
         panic!(
             "beni-sys: cross-compiled builds require MRUBY_LIB_DIR to name the \
              directory containing the target's archive (the vendor tree is \
@@ -201,6 +205,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=WASI_SDK_PATH");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build/sidecar.rs");
+    println!("cargo:rerun-if-changed=build/target.rs");
     println!("cargo:rerun-if-changed=build/version.rs");
     println!("cargo:rerun-if-changed=src/wrapper.h");
     println!("cargo:rerun-if-env-changed=DOCS_RS");
@@ -209,12 +214,7 @@ fn main() {
     let target = env::var("TARGET").unwrap_or_default();
     let host = env::var("HOST").unwrap_or_default();
     let is_wasm = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default() == "wasm32";
-    if target != host && !is_wasm {
-        panic!(
-            "beni-sys: unsupported cross-compilation target {target}. \
-             wasm32 is the one supported cross target."
-        );
-    }
+    require_supported_target(&target, &host, is_wasm);
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -223,7 +223,7 @@ fn main() {
         return;
     }
 
-    let lib_dir = discover_lib_dir(is_wasm);
+    let lib_dir = discover_lib_dir(target != host);
 
     // The complete header tree mruby copies next to the archive on
     // every build — the single include root for bindgen and the

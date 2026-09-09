@@ -219,6 +219,13 @@ mod sidecar {
     include!("../build/sidecar.rs");
 }
 
+/// The build script's cargo-target admission, reachable here for the
+/// same reason as the sidecar parse above.
+#[cfg(test)]
+mod target {
+    include!("../build/target.rs");
+}
+
 /// The build script's mruby version read, reachable here for the same
 /// reason as the sidecar parse above.
 #[cfg(test)]
