@@ -24,7 +24,9 @@ namespace :scenario do
 
   desc "Build and run the consumer crate against the staged archive"
   task :verify do
-    abort "[scenario] cargo not on PATH" unless system("which cargo > /dev/null 2>&1")
+    # Asking cargo itself needs no lookup tool, which +which+ is on POSIX
+    # hosts and is not on Windows.
+    abort "[scenario] cargo not on PATH" if system("cargo", "--version", %i[out err] => File::NULL).nil?
 
     sh({ "BENI_VENDOR_DIR" => File.expand_path("vendor", __dir__) },
        "cargo", "test", "--manifest-path", File.expand_path("Cargo.toml", __dir__))

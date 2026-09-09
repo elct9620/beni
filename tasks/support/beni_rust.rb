@@ -23,8 +23,10 @@ module BeniRust
   # (gitignored) and is incremental across runs.
   DEFAULT_ABI_BUILD_DIR = File.join(ROOT, "tmp", "mruby-default-build")
 
+  # Whether cargo can be spawned. Asking cargo itself needs no lookup
+  # tool, which +which+ is on POSIX hosts and is not on Windows.
   def self.cargo_available?
-    system("which cargo > /dev/null 2>&1")
+    !system("cargo", "--version", %i[out err] => File::NULL).nil?
   end
 
   # Archive discovery env for host-target cargo runs: the vendor tree
