@@ -22,9 +22,6 @@
 
 require "json"
 require "open3"
-require "rbconfig"
-
-require "beni/builder"
 
 require_relative "beni_rust"
 
@@ -50,7 +47,7 @@ module BeniDocsBindings
   # Write the bindings a documentation build reads and return the path.
   # Generated where it is read, so any host may write its own.
   def generate
-    out_dir = build_out_dir(upstream_default_lib_dir)
+    out_dir = build_out_dir(BeniRust.upstream_default_lib_dir)
     File.write(TARGET, HEADER + File.read(File.join(out_dir, "bindings.rs")))
     TARGET
   end
@@ -73,18 +70,6 @@ module BeniDocsBindings
     raise "rustc -vV failed" unless status.success?
 
     out[/^host: (.+)$/, 1]
-  end
-
-  # The mruby built with no MRUBY_CONFIG, so mruby's own
-  # build_config/default.rb decides the ABI. Shares the build tree the
-  # default-ABI test leg uses.
-  def upstream_default_lib_dir
-    lib_dir = File.join(BeniRust::DEFAULT_ABI_BUILD_DIR, "host", "lib")
-    BeniRust.run!({ "MRUBY_BUILD_DIR" => BeniRust::DEFAULT_ABI_BUILD_DIR },
-                  RbConfig.ruby, "-S", "rake", "default",
-                  File.join(lib_dir, Beni::Builder::FLAGS_MAK),
-                  chdir: File.join(ROOT, "vendor", "mruby"))
-    lib_dir
   end
 
   # Build the crate against +lib_dir+ and return the OUT_DIR cargo

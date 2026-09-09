@@ -57,16 +57,23 @@ module BeniRust
   # target dir is split off so the MRUBY_LIB_DIR switch does not
   # invalidate the main verification cache.
   def self.default_abi_test
-    lib_dir = File.join(DEFAULT_ABI_BUILD_DIR, "host", "lib")
-    flags_mak = File.join(lib_dir, Beni::Builder::FLAGS_MAK)
-
-    run!({ "MRUBY_BUILD_DIR" => DEFAULT_ABI_BUILD_DIR },
-         RbConfig.ruby, "-S", "rake", "default", flags_mak,
-         chdir: File.join(ROOT, "vendor", "mruby"))
-    run!({ "MRUBY_LIB_DIR" => lib_dir },
+    run!({ "MRUBY_LIB_DIR" => upstream_default_lib_dir },
          "cargo", "test", "-p", "beni", "-p", "beni-tests",
          "--target-dir", File.join(ROOT, "target", "default-abi"),
          chdir: ROOT)
+  end
+
+  # Build the vendored mruby with no MRUBY_CONFIG, so mruby's own
+  # build_config/default.rb decides the ABI, and answer the staged path.
+  # The documentation bindings are generated from the same build: both
+  # want the surface a consumer gets before editing anything.
+  def self.upstream_default_lib_dir
+    lib_dir = File.join(DEFAULT_ABI_BUILD_DIR, "host", "lib")
+    run!({ "MRUBY_BUILD_DIR" => DEFAULT_ABI_BUILD_DIR },
+         RbConfig.ruby, "-S", "rake", "default",
+         File.join(lib_dir, Beni::Builder::FLAGS_MAK),
+         chdir: File.join(ROOT, "vendor", "mruby"))
+    lib_dir
   end
 
   # What a documentation host sets: DOCS_RS on and no archive discovery
