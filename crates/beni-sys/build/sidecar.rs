@@ -127,26 +127,34 @@ fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec
         .collect()
 }
 
-/// The libraries the archive needs linked, named by the sidecar as
-/// `-l` tokens and yielded without the prefix. The archive states its
-/// own link set, so a configuration that pulls in a further library is
-/// served without the crate being taught about it.
+/// The library name one `MRUBY_LIBS` token carries, in either form
+/// mruby's toolchains name a library by: a GNU-style `-l<name>` option,
+/// or MSVC's `<name>.lib` file. `None` for a token in neither form.
+fn link_lib_name(token: &str) -> Option<&str> {
+    let name = token
+        .strip_prefix("-l")
+        .or_else(|| token.strip_suffix(".lib"))?;
+    (!name.is_empty() && !name.contains(['"', '\''])).then_some(name)
+}
+
+/// The libraries the archive needs linked, yielded as bare names. The
+/// archive states its own link set, so a configuration that pulls in a
+/// further library is served without the crate being taught about it.
 ///
 /// mruby writes every token on the line through the linker option its
-/// toolchain defines, so a token in any other shape names a link set
-/// this read would carry only in part; it stops rather than linking
+/// toolchain defines, so a token in neither of those forms names a link
+/// set this read would carry only in part; it stops rather than linking
 /// against less than the archive names.
 fn parse_link_libs(lib_dir: &std::path::Path) -> Vec<String> {
     sidecar_line(lib_dir, "MRUBY_LIBS")
         .split_whitespace()
         .map(|token| {
-            token
-                .strip_prefix("-l")
-                .filter(|name| !name.is_empty() && !name.contains(['"', '\'']))
+            link_lib_name(token)
                 .unwrap_or_else(|| {
                     panic!(
-                        "beni-sys: {} names `{token}` in `MRUBY_LIBS`, which is not a \
-                         `-l<name>` library — unrecognized flags.mak layout",
+                        "beni-sys: {} names `{token}` in `MRUBY_LIBS`, which is neither a \
+                         `-l<name>` option nor a `<name>.lib` file — unrecognized \
+                         flags.mak layout",
                         lib_dir.join("libmruby.flags.mak").display()
                     )
                 })
@@ -378,16 +386,26 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "is not a `-l<name>` library")]
+    #[should_panic(expected = "neither a `-l<name>` option nor a `<name>.lib` file")]
     fn a_quoted_library_fails_rather_than_naming_one_with_its_quotes() {
         let dir = sidecar_dir("libs-quoted", "MRUBY_LIBS = -l\"mruby\" -l\"m\"\n");
         parse_link_libs(&dir);
     }
 
     #[test]
-    #[should_panic(expected = "is not a `-l<name>` library")]
-    fn a_library_named_without_the_l_option_fails_rather_than_linking_none() {
-        let dir = sidecar_dir("libs-msvc", "MRUBY_LIBS = libmruby.lib\n");
+    fn an_msvc_link_set_names_each_library_by_its_file() {
+        let dir = sidecar_dir("libs-msvc", "MRUBY_LIBS = libmruby.lib kernel32.lib\n");
+        assert_eq!(
+            parse_link_libs(&dir),
+            vec!["libmruby".to_owned(), "kernel32".to_owned()],
+            "MSVC names a library by its file, and the name is what is carried out"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "neither a `-l<name>` option nor a `<name>.lib` file")]
+    fn a_library_named_in_neither_form_fails_rather_than_linking_none() {
+        let dir = sidecar_dir("libs-bare", "MRUBY_LIBS = mruby\n");
         parse_link_libs(&dir);
     }
 
