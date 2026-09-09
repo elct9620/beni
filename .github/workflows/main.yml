@@ -50,18 +50,11 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
-      # dtolnay/rust-toolchain does not read rust-toolchain.toml, so source
-      # the channel from it here to keep a single version of truth.
-      - name: Read Rust channel from rust-toolchain.toml
-        id: rust
-        run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+      - name: Set up Rust
+        uses: ./.github/actions/rust
         with:
-          toolchain: ${{ steps.rust.outputs.channel }}
           components: rustfmt
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+          cache: "true"
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
       # Without DOCS_RS there is no second shape to fall back to, so the
@@ -104,17 +97,12 @@ jobs:
         with:
           ruby-version: '3.4'
           bundler-cache: true
-      - name: Read Rust channel from rust-toolchain.toml
-        id: rust
-        run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+      - name: Set up Rust
+        uses: ./.github/actions/rust
         with:
-          toolchain: ${{ steps.rust.outputs.channel }}
           components: clippy
           targets: wasm32-wasip1
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+          cache: "true"
       - name: Full compile verification
         run: bundle exec rake rust:verify
       # clippy over the whole surface, possible only here, where
@@ -210,17 +198,11 @@ jobs:
         with:
           ruby-version: '3.4'
       # Only the scenarios that carry on into a cargo project reach for
-      # cargo; the channel comes from rust-toolchain.toml the same way
-      # every other lane sources it.
-      - name: Read Rust channel from rust-toolchain.toml
+      # cargo.
+      - name: Set up Rust
         if: matrix.rust
-        id: rust
-        run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
-      - name: Set up Rust toolchain
-        if: matrix.rust
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        uses: ./.github/actions/rust
         with:
-          toolchain: ${{ steps.rust.outputs.channel }}
           targets: ${{ matrix.rust_targets }}
       # The verify lane already downloads once per build platform, which
       # is what proves the platform detection; a scenario repeating it
@@ -265,16 +247,9 @@ jobs:
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           ruby-version: '3.4'
-      - name: Read Rust channel from rust-toolchain.toml
+      - name: Set up Rust
         if: matrix.rust
-        id: rust
-        shell: bash
-        run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
-      - name: Set up Rust toolchain
-        if: matrix.rust
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: ${{ steps.rust.outputs.channel }}
+        uses: ./.github/actions/rust
       - name: Cache the scenario's toolchain tarballs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

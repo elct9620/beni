@@ -66,14 +66,8 @@ jobs:
         with:
           ruby-version: '3.4'
           bundler-cache: false
-      # dtolnay/rust-toolchain does not read rust-toolchain.toml, so source
-      # the channel from it here to keep a single version of truth.
-      - name: Read Rust channel from rust-toolchain.toml
-        id: rust
-        run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
-      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: ${{ steps.rust.outputs.channel }}
+      - name: Set up Rust
+        uses: ./.github/actions/rust
       - name: Regenerate Gemfile.lock
         run: bundle install
       - name: Regenerate the workspace entries in Cargo.lock
