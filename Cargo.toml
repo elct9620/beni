@@ -11,7 +11,11 @@ default-members = ["crates/beni-sys", "crates/beni"]
 # shape a consumer's actually is — which for embedded_no_compiler
 # includes turning beni's default features off, a choice workspace
 # feature unification would otherwise take back.
-exclude = ["test/scenarios/rust_consumer", "test/scenarios/embedded_no_compiler"]
+exclude = [
+  "test/scenarios/rust_consumer",
+  "test/scenarios/embedded_no_compiler",
+  "test/scenarios/macos_universal",
+]
 resolver = "2"
 
 [workspace.package]

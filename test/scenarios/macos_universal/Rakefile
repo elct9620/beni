@@ -1,0 +1,95 @@
+# frozen_string_literal: true
+
+# Consumer scenario: a universal macOS binary from two archives.
+#
+# A macOS consumer ships one binary carrying both architectures, and
+# godot-rust reaches that by building the crate once per architecture
+# and merging the two with lipo. Only one of those builds is ever the
+# host's, so this harness pins the pair: a build config defining a
+# target per architecture, and two cargo builds each naming its own
+# target's staged path through MRUBY_LIB_DIR — the way every beni cross
+# target reaches its archive. Run from this directory, on macOS, with
+# both Rust targets installed (`rustup target add x86_64-apple-darwin
+# aarch64-apple-darwin`):
+#
+#   $ cd test/scenarios/macos_universal && rake scenario:setup beni:build scenario:verify
+$LOAD_PATH.unshift File.expand_path("../../../lib", __dir__)
+
+require "rbconfig"
+require "beni/tasks"
+
+CONFIG = File.expand_path("build_config/mruby.rb", __dir__)
+MANIFEST = File.expand_path("Cargo.toml", __dir__)
+VENDOR = File.expand_path("vendor", __dir__)
+UNIVERSAL_DYLIB = File.expand_path("target/libmacos_universal.dylib", __dir__)
+
+# The Mach-O architecture each Rust triple is built for.
+ARCHES = { "aarch64-apple-darwin" => "arm64", "x86_64-apple-darwin" => "x86_64" }.freeze
+
+# The triple this machine runs. The build config's `host` target serves
+# it; its `cross` target serves the other.
+NATIVE_TRIPLE = RbConfig::CONFIG["host_cpu"] == "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin"
+
+Beni::Tasks.new do
+  build_config CONFIG
+
+  target :host
+  target :cross
+end
+
+def mruby_target(triple)
+  triple == NATIVE_TRIPLE ? "host" : "cross"
+end
+
+def lib_dir(target)
+  File.join(VENDOR, "mruby", "build", target, "lib")
+end
+
+def slice_dylib(triple)
+  File.expand_path("target/#{triple}/debug/libmacos_universal.dylib", __dir__)
+end
+
+def cargo(*, triple:)
+  sh({ "MRUBY_LIB_DIR" => lib_dir(mruby_target(triple)) },
+     "cargo", *, "--target", triple, "--manifest-path", MANIFEST)
+end
+
+# One cargo build per architecture against that architecture's archive,
+# then lipo — the flow godot-rust documents for a macOS extension.
+def link_universal_dylib
+  ARCHES.each_key { |triple| cargo("build", triple: triple) }
+  sh("lipo", "-create", "-output", UNIVERSAL_DYLIB, *ARCHES.keys.map { |triple| slice_dylib(triple) })
+end
+
+def assert_architectures(path, arches, what)
+  info = `lipo -info #{path}`
+  missing = arches.reject { |arch| info.include?(arch) }
+  abort "[scenario] #{what} is missing #{missing.join(", ")}: #{info.strip}" unless missing.empty?
+
+  puts "[scenario] #{what} carries #{arches.join(" + ")}"
+end
+
+def assert_each_archive
+  ARCHES.each do |triple, arch|
+    target = mruby_target(triple)
+    assert_architectures(File.join(lib_dir(target), "libmruby.a"), [arch], "the #{target} archive")
+  end
+end
+
+namespace :scenario do
+  # Part of the harness contract every scenario implements
+  # (setup → beni:build → verify); the build config is the lesson here,
+  # so it is committed rather than generated.
+  desc "No-op: the build config this scenario builds from is committed"
+  task :setup
+
+  desc "Link each architecture against its own archive, then merge the two"
+  task :verify do
+    abort "[scenario] cargo not on PATH" if system("cargo", "--version", %i[out err] => File::NULL).nil?
+
+    assert_each_archive
+    link_universal_dylib
+    assert_architectures(UNIVERSAL_DYLIB, ARCHES.values, "the consumer's extension")
+    cargo("test", triple: NATIVE_TRIPLE)
+  end
+end

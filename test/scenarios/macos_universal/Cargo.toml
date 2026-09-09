@@ -1,0 +1,21 @@
+# The Rust half of the macos_universal scenario: a project outside this
+# repo's workspace, built once per macOS architecture against the one
+# universal archive the gem's task surface staged in this directory.
+#
+# The dependency is a path rather than a version so the scenario
+# exercises the working tree; a registry dependency would only ever
+# verify the last release.
+
+[package]
+name = "macos_universal"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+# cdylib is what an extension host loads and what lipo merges; rlib is
+# what lets the same crate carry its tests.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+beni = { path = "../../../crates/beni" }
