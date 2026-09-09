@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "syntax"
+require_relative "gate"
 
 module BeniSurface
   # One inherent public method path, e.g. +Value::cv_get+, together
@@ -15,23 +15,6 @@ module BeniSurface
     # feature it sits behind when one does.
     def label
       feature ? "#{ref} (feature #{feature})" : ref
-    end
-  end
-
-  # The attribute state pending for the next item: the capability
-  # feature gating it, and whether some other +#[cfg]+ makes it
-  # build-specific and so no part of the expectation.
-  Gate = Data.define(:feature, :excluded) do
-    def self.at(feature)
-      new(feature: feature, excluded: false)
-    end
-
-    def read(line)
-      name = line[Syntax::CFG_FEATURE, :feature]
-      return with(feature: name) if name
-      return with(excluded: true) if Syntax::CFG_ATTRIBUTE.match?(line)
-
-      self
     end
   end
 
@@ -63,7 +46,6 @@ module BeniSurface
     private
 
     def read_line(line)
-      return @gate = @gate.read(line) if Syntax::ATTRIBUTE.match?(line)
       return read_outside_impl(line) if @type.nil?
 
       read_inside_impl(line)
@@ -73,7 +55,7 @@ module BeniSurface
       type = Syntax.impl_type(line)
       return open_impl(type) if type
 
-      @gate = Gate.at(@feature) unless Syntax.pending_attributes?(line)
+      @gate = @gate.after(line, Gate.at(@feature))
     end
 
     def open_impl(type)
@@ -84,8 +66,8 @@ module BeniSurface
     def read_inside_impl(line)
       return close_impl if line == "}"
 
-      collect(line[Syntax::PUB_FN, :name])
-      @gate = @block unless Syntax.pending_attributes?(line)
+      collect(line[Syntax::PUB_FN, :name]) unless Syntax::ATTRIBUTE.match?(line)
+      @gate = @gate.after(line, @block)
     end
 
     def collect(name)

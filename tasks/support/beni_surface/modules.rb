@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "syntax"
+require_relative "gate"
 
 module BeniSurface
   # Maps each crate source to the capability feature its whole module
@@ -21,14 +21,14 @@ module BeniSurface
     # The gated module declarations one source makes, as name and
     # feature pairs.
     def gated(source)
-      feature = nil
+      gate = Gate.at(nil)
       source.each_line(chomp: true).with_object([]) do |line, pairs|
-        next feature = line[Syntax::CFG_FEATURE, :feature] || feature if Syntax::ATTRIBUTE.match?(line)
-
-        refuse_inline(line, feature)
-        name = line[Syntax::MOD_DECL, :name]
-        pairs << [name, feature] if name && feature
-        feature = nil unless Syntax.pending_attributes?(line)
+        unless Syntax::ATTRIBUTE.match?(line)
+          refuse_inline(line, gate.feature)
+          name = line[Syntax::MOD_DECL, :name]
+          pairs << [name, gate.feature] if name && gate.feature
+        end
+        gate = gate.after(line, Gate.at(nil))
       end
     end
 

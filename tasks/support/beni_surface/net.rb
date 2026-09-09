@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "syntax"
+require_relative "gate"
 
 module BeniSurface
   # Reads the drift net in +beni-tests+ into one reference body per
@@ -18,7 +18,7 @@ module BeniSurface
     def initialize(lines)
       @lines = lines
       @bodies = {}
-      @feature = nil
+      @gate = Gate.at(nil)
       @consumed = -1
     end
 
@@ -33,18 +33,17 @@ module BeniSurface
       return if index <= @consumed
 
       line = @lines[index]
-      return @feature = line[Syntax::CFG_FEATURE, :feature] || @feature if Syntax::ATTRIBUTE.match?(line)
-      return collect(index) if line[Syntax::FN, :name]
+      return collect(index) if !Syntax::ATTRIBUTE.match?(line) && line[Syntax::FN, :name]
 
-      @feature = nil unless Syntax.pending_attributes?(line)
+      @gate = @gate.after(line, Gate.at(nil))
     end
 
     # A feature's body is every reference body gated on it, so a net
     # split across several fns is read whole rather than by its last.
     def collect(index)
       stop = closing_brace(index)
-      (@bodies[@feature] ||= +"") << @lines[index..stop].join
-      @feature = nil
+      (@bodies[@gate.feature] ||= +"") << @lines[index..stop].join
+      @gate = Gate.at(nil)
       @consumed = stop
     end
 
