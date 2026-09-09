@@ -94,15 +94,27 @@ const DECLARATION_FLAG_SPELLINGS: [(&str, &str); 3] =
 
 /// One compile flag as binding generation reads it, or `None` when the
 /// flag decides how code is generated rather than what the headers
-/// declare.
+/// declare. A flag already in clang's spelling passes through; the
+/// archive's toolchain spelling of the same flag crosses as clang's.
 fn declaration_flag(token: &str) -> Option<String> {
     for (msvc, clang) in DECLARATION_FLAG_SPELLINGS {
         if let Some(value) = token.strip_prefix(msvc) {
             return Some(format!("{clang}{value}"));
         }
+        if token.starts_with(clang) {
+            return Some(token.to_owned());
+        }
     }
-    (token.starts_with("-D") || token.starts_with("-U") || token.starts_with("-std="))
-        .then(|| token.to_owned())
+    None
+}
+
+/// Whether a token is a flag spelling with nothing attached, in either
+/// toolchain's form — a flag whose value is the next token, which the
+/// whitespace split has already severed from it.
+fn is_bare_spelling(token: &str) -> bool {
+    DECLARATION_FLAG_SPELLINGS
+        .iter()
+        .any(|(msvc, clang)| token == *msvc || token == *clang)
 }
 
 /// The language standard binding generation parses under when the
@@ -125,7 +137,7 @@ const UNNAMED_STANDARD: &str = "-std=gnu99";
 fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec<String> {
     if let Some(bare) = compile_flags
         .iter()
-        .find(|token| matches!(token.as_str(), "-D" | "-U" | "/D" | "/U"))
+        .find(|token| is_bare_spelling(token))
     {
         panic!(
             "beni-sys: {} names a bare `{bare}` in `MRUBY_CFLAGS`, whose value is a \
