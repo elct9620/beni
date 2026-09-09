@@ -101,6 +101,14 @@ fn declaration_flag(token: &str) -> Option<String> {
         .then(|| token.to_owned())
 }
 
+/// The language standard binding generation parses under when the
+/// sidecar names none. An archive whose compiler was given no standard
+/// was built under that compiler's default, and libclang's own default
+/// is not it: below C11 mruby declares its never-returning functions
+/// through a compiler attribute, which is the form the archive carries
+/// and the one bindgen reads as a diverging function.
+const UNNAMED_STANDARD: &str = "-std=gnu99";
+
 /// The flags deciding what the archive's headers declare — macro
 /// definitions and removals, and the language standard — in the
 /// spelling libclang reads. Binding generation parses with a toolchain
@@ -121,10 +129,14 @@ fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec
             lib_dir.join("libmruby.flags.mak").display()
         );
     }
-    compile_flags
+    let mut flags: Vec<String> = compile_flags
         .iter()
         .filter_map(|token| declaration_flag(token))
-        .collect()
+        .collect();
+    if !flags.iter().any(|flag| flag.starts_with("-std=")) {
+        flags.push(UNNAMED_STANDARD.to_owned());
+    }
+    flags
 }
 
 /// The file name the archive's sidecar gives it. mruby writes the path
@@ -331,6 +343,40 @@ mod tests {
                 "-DMRB_INT32".to_owned(),
                 "-UMRB_USE_FLOAT32".to_owned(),
             ]
+        );
+    }
+
+    #[test]
+    fn a_sidecar_naming_no_standard_is_parsed_under_one_that_keeps_the_archives_form() {
+        // mruby's MSVC toolchain gives its compiler no standard, so the
+        // archive is built under that compiler's default. libclang's own
+        // default is a newer one, under which mruby declares its
+        // never-returning functions in a form the bindings do not carry.
+        let dir = sidecar_dir("msvc-no-standard", MSVC_SIDECAR);
+        let flags = parse_compile_flags(&dir);
+        assert_eq!(
+            declaration_flags(&dir, &flags),
+            vec![
+                "-D_CRT_SECURE_NO_WARNINGS".to_owned(),
+                "-DMRB_STACK_EXTEND_DOUBLING".to_owned(),
+                "-DMRB_INT32".to_owned(),
+                "-std=gnu99".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_sidecar_naming_a_standard_is_parsed_under_that_one_alone() {
+        let dir = sidecar_dir("named-standard", HOST_SIDECAR);
+        let flags = parse_compile_flags(&dir);
+        let standards: Vec<String> = declaration_flags(&dir, &flags)
+            .into_iter()
+            .filter(|flag| flag.starts_with("-std="))
+            .collect();
+        assert_eq!(
+            standards,
+            vec!["-std=gnu99".to_owned()],
+            "the archive's own, and no second one"
         );
     }
 
