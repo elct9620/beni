@@ -230,7 +230,11 @@ Selection, checksums, and cross-compile activation:
   mruby's own toolchains, whether that toolchain sets one or takes its
   compiler's default. A standard that loses that form leaves those
   declarations in a shape the bindings do not carry, and the typed
-  wrapper's diverging raise does not compile.
+  wrapper's diverging raise does not compile. Binding generation parses
+  under the standard the sidecar names; where it names none, the archive
+  was built under its compiler's default, which binding generation's own
+  toolchain need not share, so it parses under a standard that keeps the
+  form rather than under that toolchain's default.
 - A documentation build reads the documentation bindings and links
   nothing, so the whole typed surface renders where no archive can be
   staged. It serves host cargo targets only, and it is the one build
