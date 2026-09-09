@@ -50,7 +50,7 @@ namespace :scenario do
 
   desc "Build and run the consumer crate against the compiler-less archive"
   task :verify do
-    abort "[scenario] cargo not on PATH" unless system("which cargo > /dev/null 2>&1")
+    abort "[scenario] cargo not on PATH" if system("cargo", "--version", %i[out err] => File::NULL).nil?
 
     sh({ "BENI_VENDOR_DIR" => File.expand_path("vendor", __dir__) },
        "cargo", "test", "--manifest-path", File.expand_path("Cargo.toml", __dir__))
