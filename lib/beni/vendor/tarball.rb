@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "pathname"
 
 module Beni
   module Vendor
@@ -53,7 +54,19 @@ module Beni
       def extract_to_staging(staging)
         FileUtils.rm_rf(staging)
         FileUtils.mkdir_p(staging)
-        system("tar", "-xzf", @tarball, "-C", staging, exception: true)
+        # An absolute Windows path opens with a drive letter, which GNU
+        # tar reads as the host half of a +host:path+ remote spec and
+        # tries to connect to. Naming the tarball from the directory it
+        # unpacks into leaves no colon for any tar to find.
+        from_staging = Pathname.new(@tarball).relative_path_from(Pathname.new(staging))
+        run_tar(from_staging.to_s, staging)
+      end
+
+      # Spawn tar with the staging directory as its working directory.
+      # Extracted as a seam so tests can observe the argument shape
+      # without unpacking anything.
+      def run_tar(tarball, staging)
+        system("tar", "-xzf", tarball, chdir: staging, exception: true)
       end
 
       # Move the expected +top_level_dir+ subtree out of +staging+ into

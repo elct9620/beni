@@ -6,6 +6,7 @@ target :lib do
   check "lib"
 
   library "digest"
+  library "pathname"
   library "open-uri"
   library "net-http"
   library "uri"

@@ -18,6 +18,8 @@ module Beni
 
       def extract_to_staging: (String staging) -> void
 
+      def run_tar: (String tarball, String staging) -> void
+
       def promote: (String staging) -> void
     end
   end
