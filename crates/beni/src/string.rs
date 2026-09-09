@@ -281,7 +281,7 @@ impl RString {
     }
 
     /// Borrow the raw bytes of this string. Routes through the
-    /// `mrb_rstring_ptr` / `mrb_rstring_len` static-inline wrappers in
+    /// `mrb_rstring_ptr_func` / `mrb_rstring_len_func` static-inline wrappers in
     /// `wrapper.h`, which expand the `RSTRING_PTR(s)` / `RSTRING_LEN(s)`
     /// macros inside the C compiler so the embed-vs-heap branch comes
     /// from mruby's own header rather than a Rust-side mirror.
@@ -300,8 +300,8 @@ impl RString {
         // SAFETY: `self` is String-tagged by the newtype contract;
         // the wrapper-h inline helpers expand the RSTRING_PTR /
         // RSTRING_LEN macros against mruby's own headers.
-        let ptr = unsafe { sys::mrb_rstring_ptr(self.0.as_raw()) } as *const u8;
-        let len = unsafe { sys::mrb_rstring_len(self.0.as_raw()) } as usize;
+        let ptr = unsafe { sys::mrb_rstring_ptr_func(self.0.as_raw()) } as *const u8;
+        let len = unsafe { sys::mrb_rstring_len_func(self.0.as_raw()) } as usize;
         // SAFETY: ptr / len pair describes a buffer owned by mruby
         // and alive while the borrowed `&Mrb` outlives this slice.
         unsafe { core::slice::from_raw_parts(ptr, len) }
@@ -314,20 +314,20 @@ impl RString {
     #[inline]
     pub fn to_bytes(self) -> Vec<u8> {
         // SAFETY: `self` is String-tagged by the newtype contract;
-        // `mrb_rstring_ptr` / `mrb_rstring_len` read the RString
+        // `mrb_rstring_ptr_func` / `mrb_rstring_len_func` read the RString
         // header without touching `mrb_state`, and the slice is
         // copied immediately, so no borrow escapes the VM-alive
         // window every `Value` already assumes.
         let bytes = unsafe {
-            let ptr = sys::mrb_rstring_ptr(self.0.as_raw()) as *const u8;
-            let len = sys::mrb_rstring_len(self.0.as_raw()) as usize;
+            let ptr = sys::mrb_rstring_ptr_func(self.0.as_raw()) as *const u8;
+            let len = sys::mrb_rstring_len_func(self.0.as_raw()) as usize;
             core::slice::from_raw_parts(ptr, len)
         };
         bytes.to_vec()
     }
 
     /// `RSTRING_LEN(self)` — the number of bytes in this string, via the
-    /// `mrb_rstring_len` shim (the macro expanded in the C compiler so
+    /// `mrb_rstring_len_func` shim (the macro expanded in the C compiler so
     /// the embed-vs-heap length read matches the linked archive's
     /// layout). It is a byte count, not a character count, and is never
     /// negative, so the result is returned as `usize`. Mirrors
@@ -337,7 +337,7 @@ impl RString {
     pub fn len(self) -> usize {
         // SAFETY: `self` is String-tagged by the newtype contract;
         // `RSTRING_LEN` reads only the string header.
-        (unsafe { sys::mrb_rstring_len(self.0.as_raw()) }) as usize
+        (unsafe { sys::mrb_rstring_len_func(self.0.as_raw()) }) as usize
     }
 
     /// TRUE when the string holds no bytes.

@@ -52,15 +52,15 @@
  * branches between the embed buffer and the heap pointer based on
  * the RString header flags, which bindgen cannot read directly. */
 static inline const char *
-mrb_rstring_ptr(mrb_value s)
+mrb_rstring_ptr_func(mrb_value s)
 {
   return (const char *)RSTRING_PTR(s);
 }
 
 /* Byte length of a String-tagged mrb_value. Counterpart to
- * `RSTRING_LEN(s)`; same embed-vs-heap branch as `mrb_rstring_ptr`. */
+ * `RSTRING_LEN(s)`; same embed-vs-heap branch as `mrb_rstring_ptr_func`. */
 static inline mrb_int
-mrb_rstring_len(mrb_value s)
+mrb_rstring_len_func(mrb_value s)
 {
   return RSTRING_LEN(s);
 }
@@ -68,7 +68,7 @@ mrb_rstring_len(mrb_value s)
 /* Element count of an Array-tagged mrb_value. Counterpart to the
  * `RARRAY_LEN(a)` macro from <mruby/array.h>, which branches between
  * the embedded-buffer length and the heap length on the RArray header
- * flags — the same embed-vs-heap branch as `mrb_rstring_len`, which
+ * flags — the same embed-vs-heap branch as `mrb_rstring_len_func`, which
  * bindgen cannot read directly. */
 static inline mrb_int
 mrb_rarray_len_func(mrb_value a)

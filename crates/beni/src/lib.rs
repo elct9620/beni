@@ -12,20 +12,23 @@
 //! ## Layering
 //!
 //! ```text
-//! L2  trait seams      value::convert (IntoValue / FromValue)
+//! L2  trait seams      convert        (IntoValue / FromValue)
 //!                      state::args    (Format trait + ZST + GAT dispatch)
 //!                      state::protect (closure-based mrb_protect_error)
 //!                      method         (method! bridges + MethodN crossing)
 //!                      gem            (Gem trait + Mrb::init_gem)
 //!
-//! L1  RAII / newtypes  state         (Mrb owning *mut mrb_state,
-//!                                     ArenaScope arena bracketing)
-//!                      value         (Value newtype + cstr! / cstr_ptr)
-//!                      class         (RClass / RModule handles + traits)
-//!                      array / hash  (typed factories on top of Value)
-//!                      symbol        (Symbol newtype + intern / name)
-//!                      data          (DataType<T> + CDATA wrap / get)
-//!                      ccontext      (Ccontext RAII)
+//! L1  RAII / newtypes  state          (Mrb owning *mut mrb_state,
+//!                                      ArenaScope arena bracketing)
+//!                      value          (Value newtype + cstr! / cstr_ptr)
+//!                      class          (RClass / RModule handles + traits)
+//!                      array / hash   (typed factories on top of Value)
+//!                      string / range (RString / Range newtypes)
+//!                      symbol / proc  (Symbol / Proc newtypes)
+//!                      data           (DataType<T> + CDATA wrap / get)
+//!                      ccontext       (Ccontext RAII)
+//!                      error / parse  (Error + ParseMessage — the shapes
+//!                                      a failure is reported in)
 //!
 //! L0  raw FFI          beni-sys::*  (bindgen output + ABI constants)
 //! ```

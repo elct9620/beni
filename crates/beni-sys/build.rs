@@ -13,7 +13,7 @@
 //      `$OUT_DIR/mruby_static_wrappers.c`.
 //   2. Compiles the bindgen-emitted trampoline file against mruby's
 //      headers so the trampoline symbols (`mrb_obj_value__extern`,
-//      `mrb_rstring_ptr__extern`, etc.) resolve into the rlib's
+//      `mrb_rstring_ptr_func__extern`, etc.) resolve into the rlib's
 //      object set. No hand-written C shims remain — the
 //      single-translation-unit file produced by bindgen is the
 //      entire C surface.
@@ -361,7 +361,7 @@ fn run_bindgen(
         // Generate trampolines for `static inline` helpers reached
         // through `wrapper.h` — both mruby's own (`mrb_integer_func`,
         // `mrb_obj_value`, `mrb_type`, …) and the macro wrappers
-        // declared in `wrapper.h` (`mrb_rstring_ptr`, `mrb_obj_ptr_func`,
+        // declared in `wrapper.h` (`mrb_rstring_ptr_func`, `mrb_obj_ptr_func`,
         // `mrb_gc_arena_save_func`, `mrb_proc_new_func`, …).
         .wrap_static_fns(true)
         .wrap_static_fns_path(static_wrappers_c.with_extension(""))
