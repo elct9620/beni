@@ -879,6 +879,25 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   not a new bound C symbol; the safe `RClass` slice replaces mruby's raw class
   array, so the capability needs no VM-internal reasoning and lives on the typed
   surface.
+
+#### Loading precompiled bytecode
+
+No part of this section is carried by the `compiler` capability feature.
+
+- Loading a precompiled bytecode blob runs the program at the interpreter's top
+  level and yields its result value as a Rust `Ok`. The blob is a byte slice
+  carrying its own length, and it is the form a Proc's dump answers.
+- A blob the interpreter cannot read as a program surfaces as a Rust `Err`
+  carrying a `ScriptError`, and nothing runs. The exception's message
+  distinguishes four conditions: a blob shorter than the format's header, a
+  header whose ident is not the format's, a format version the interpreter does
+  not read, and a body that fails validation.
+- An exception the loaded program raises while it runs surfaces as a Rust `Err`
+  carrying that exception, the pending exception cleared from the handle as it
+  crosses out — the contract a load under a compile context answers. Neither
+  failure carries an outcome of its own: both are the `Err` every fallible
+  operation on this surface answers with.
+
 #### Compiling and running source
 
 The `compiler` capability feature carries everything in this section.
@@ -1063,6 +1082,8 @@ The `compiler` capability feature carries everything in this section.
 | A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
+| A precompiled bytecode blob the interpreter cannot read as a program | surfaced as a Rust `Err` carrying a `ScriptError` whose message names which structural check failed; nothing runs |
+| A precompiled bytecode program raising while it runs | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
 | A `Mrb::rescue` body raising an exception instance of a class in the list | the handler runs on a handle with no pending exception and receives the caught exception; its result is the outcome |
 | A `Mrb::rescue` body raising an exception instance of no class in the list | not rescued; surfaced as the body's Rust `Err` unchanged, never unwinds across FFI |
