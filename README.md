@@ -2,7 +2,7 @@
 
 beni gives Rust developers a magnus-like experience for mruby: a Ruby gem
 manages the mruby build chain, and Rust crates expose a safe, typed API over
-the resulting `libmruby.a`. Extracted from the
+the archive it builds. Extracted from the
 [kobako](https://github.com/elct9620/kobako) project; APIs follow 0.x semver
 semantics and may still evolve between minor versions.
 
@@ -17,13 +17,13 @@ All three packages release in lockstep under a single version.
 
 | Package | Registry | Role |
 |---|---|---|
-| `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build `libmruby.a` |
+| `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build the archive |
 | `beni-sys` crate | crates.io | bindgen FFI surface over the mruby C API |
 | `beni` crate | crates.io | safe typed wrapper over `beni-sys`, aligned with magnus idioms |
 
 ## Getting started
 
-### Build `libmruby.a` with the gem
+### Build the mruby archive with the gem
 
 Add `beni` to your Gemfile and install the task library in your Rakefile:
 
@@ -38,9 +38,10 @@ rake beni:build
 ```
 
 This downloads the pinned mruby release, builds it with mruby's untouched
-upstream default config, and stages `vendor/mruby/build/host/lib/` with
-`libmruby.a` and its `libmruby.flags.mak` compile-flags sidecar — everything
-the crates need.
+upstream default config, and stages `vendor/mruby/build/host/lib/` with the
+archive and its `libmruby.flags.mak` compile-flags sidecar — everything the
+crates need. The archive's own file name follows the toolchain that built it
+(`libmruby.a`, `libmruby.lib` under MSVC), and the sidecar names it.
 
 To tune the build, declare a config path and generate the seed:
 
@@ -151,8 +152,8 @@ After checking out the repo, run `bin/setup` to install dependencies, then
 `bundle exec rake` for the default gate (tests + RuboCop + Steep). The repo
 dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validation
 config `build_config/mruby.rb` (host + wasi targets), and a repo-local rake
-chain verifies the crates compile against a real `libmruby.a` on both the
-host target and wasm32-wasip1:
+chain verifies the crates compile against a real archive on both the host
+target and wasm32-wasip1:
 
 ```bash
 bundle exec rake rust:verify   # beni:build + check/test (host) + check (wasm32)

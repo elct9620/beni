@@ -2,7 +2,7 @@
 
 Typed Rust wrapper over the mruby C API — the Rust half of
 [beni](https://github.com/elct9620/beni), an mruby toolchain whose
-Ruby gem builds `libmruby.a` and whose crates bind it. The split
+Ruby gem builds the mruby archive and whose crates bind it. The split
 mirrors magnus + rb-sys at the CRuby boundary:
 [beni-sys](https://crates.io/crates/beni-sys) carries the bindgen FFI
 surface, this crate owns every abstraction above it.

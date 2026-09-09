@@ -31,7 +31,7 @@ module Beni
   #
   # Defined tasks:
   #
-  #   rake beni:build           — fetch toolchains + build libmruby.a per target
+  #   rake beni:build           — fetch toolchains + build the archive per target
   #   rake beni:clean           — remove mruby build trees (keeps source)
   #   rake beni:config          — generate the upstream default build config
   #   rake beni:vendor:setup    — download & unpack the selected toolchains

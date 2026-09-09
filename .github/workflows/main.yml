@@ -37,7 +37,7 @@ jobs:
         run: bundle exec rake
 
   # Archive-free lane: everything that can be judged without a staged
-  # libmruby.a. That is formatting, the documentation build a
+  # archive. That is formatting, the documentation build a
   # documentation host runs, and the contract that every other build
   # without an archive fails. Anything needing the real FFI surface —
   # clippy, tests, the private-item doc gate — waits for the verify

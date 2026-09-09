@@ -809,7 +809,7 @@ impl Value {
     /// TRUE when `self` is `nil`. Pure tag predicate via mruby's
     /// `mrb_nil_p(v)`, reached through bindgen's static-fn trampoline
     /// — the `wrapper.h` shim wraps the macro so the C compiler reads
-    /// the boxing-config layout libmruby.a was built with.
+    /// the boxing-config layout the archive was built with.
     #[inline]
     pub fn is_nil(self) -> bool {
         // SAFETY: mrb_nil_p is a pure predicate over the value tag and

@@ -62,7 +62,7 @@ unless defined?(BeniBuildConfig)
   end
 end
 
-# Native host build — full libmruby.a plus the host mrbc the cross build
+# Native host build — the full archive plus the host mrbc the cross build
 # borrows. +:gcc+ forces a bare +gcc+ so +Toolchain.guess+ cannot pick
 # +:clang+ on macOS and resolve through PATH into wasi-sdk's clang
 # (on macOS `gcc` is Apple clang anyway).

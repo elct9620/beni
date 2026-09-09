@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sdk and builds `libmruby.a` through Rake, and two Rust crates (`beni-sys` bindgen FFI, `beni` typed wrapper) bind the resulting archive — the magnus / rb-sys split applied at the mruby boundary. The unpublished `beni-tests` crate holds the typed suite in consumer position. wasm32-wasip1 is a downstream verification target only (for kobako), not a product target. All three published packages release in lockstep under one version.
+beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sdk and builds the mruby archive through Rake, and two Rust crates (`beni-sys` bindgen FFI, `beni` typed wrapper) bind the resulting archive — the magnus / rb-sys split applied at the mruby boundary. The unpublished `beni-tests` crate holds the typed suite in consumer position. wasm32-wasip1 is a downstream verification target only (for kobako), not a product target. All three published packages release in lockstep under one version.
 
 ## Principles
 
@@ -84,8 +84,8 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
                                             archive (outside default-members)
         │                                          ▲
         └── stages vendor/mruby/build/<name>/lib/ ─┘
-            libmruby.a + libmruby.flags.mak (the staged path;
-            the sidecar is the sole ABI alignment channel)
+            libmruby.flags.mak + the archive it names (the staged
+            path; the sidecar is the sole ABI alignment channel)
 ```
 
 - **† carried by a capability feature.** A capability mruby keeps in a gem rather than its core sits behind a cargo feature on the `beni` crate — `compiler` (`Ccontext` and `Mrb::load_string`) is the first, on by default. Declared, never probed: the crate reads no gem inventory, so an item is gated by what a consumer asked for and not by what the archive happens to carry. A feature carries operations and never the shapes their results are reported in, which is why `ParseMessage` and `Error::Syntax` stay ungated — `Error` has one shape in every build. The drift gate reads the same axis: `api:surface` expects a gated item in the net body gated on its feature.

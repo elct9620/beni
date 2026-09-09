@@ -14,9 +14,9 @@
 # without them fails naming the missing archive.
 #
 #   $ rake rust:check        — cargo check, host target, linked against
-#                              the vendored libmruby.a
+#                              the vendored archive
 #   $ rake rust:test         — cargo test, host target, linked against
-#                              the vendored libmruby.a
+#                              the vendored archive
 #   $ rake rust:check:nodefault
 #                            — cargo check the beni crate alone with
 #                              every capability feature off, which is
