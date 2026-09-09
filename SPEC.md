@@ -4,20 +4,20 @@
 
 Beni gives Rust developers a magnus-like experience for mruby: a Ruby gem
 manages the mruby build chain, and Rust crates expose a safe, typed API over
-the resulting `libmruby.a`.
+the archive it builds.
 
 ## Users
 
 - Rust developers who embed mruby and want typed, memory-safe APIs instead of
   raw FFI.
-- Rakefile-based projects that need a reproducible `libmruby.a` build wired
+- Rakefile-based projects that need a reproducible mruby archive build wired
   into their own build pipeline.
 
 ## Impacts
 
 - A Rust project can depend on the `beni` crate and call mruby without
   writing or maintaining FFI declarations by hand.
-- A Rust project can produce `libmruby.a` via `rake beni:build` without
+- A Rust project can produce the archive via `rake beni:build` without
   vendoring mruby source or scripting tarball downloads.
 - Once a target declaration references `wasi-sdk`, a build config
   cross-compiles for wasm32-wasip1 with `conf.toolchain :wasi` — the
@@ -35,7 +35,7 @@ the resulting `libmruby.a`.
 
 ## Success criteria
 
-- A fresh checkout running `rake beni:build` produces `libmruby.a` and its
+- A fresh checkout running `rake beni:build` produces the archive and its
   compile-flags sidecar at the staged path for every target the build
   config defines.
 - A consumer's own cargo project, depending on the `beni` crate with
@@ -73,7 +73,7 @@ a single version number.
 
 | Package | Registry | Responsibility |
 |---|---|---|
-| `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build `libmruby.a` for the crates to consume |
+| `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build the archive for the crates to consume |
 | `beni-sys` crate | crates.io | `-sys` style FFI surface over the mruby C API, generated against the discovered archive per supported mruby version |
 | `beni` crate | crates.io | safe typed wrapper over `beni-sys`, aligned with magnus idioms |
 | `beni-tests` crate | not published | the `beni` crate's behavior suite, held outside the crate so each test reaches it through public paths alone |
@@ -119,7 +119,7 @@ end
 
 | Task | Outcome |
 |---|---|
-| `beni:build` | toolchains staged, `libmruby.a` built per target |
+| `beni:build` | toolchains staged, the archive built per target |
 | `beni:clean` | mruby build trees removed, vendored source kept |
 | `beni:config` | self-contained, editable build config generated at the `build_config` path |
 | `beni:vendor:setup` | selected toolchains downloaded and unpacked; the wasi toolchain file staged when `wasi-sdk` is selected |
@@ -133,7 +133,7 @@ Behaviors:
 | Version convergence | The vendor tree converges on each toolchain's selected version: a staged toolchain at any other version is replaced by `beni:vendor:setup`, and `beni:build` rebuilds the archives — a stale toolchain never survives a version change. |
 | Toolchain unpack | `beni:vendor:setup` unpacks toolchains from the tarball cache and downloads only the selected versions' tarballs the cache lacks; every tarball it unpacks — cached or freshly downloaded — must match its toolchain's selected checksum. |
 | Toolchain selection | Reference-driven: the selected set is every target declaration's toolchain references plus the transitive dependencies beni resolves automatically (referencing `wasi-sdk` implies `mruby`); `mruby` is always selected. A toolchain definition selects nothing by itself — a definition for a toolchain nothing references is inert. |
-| Build & verify | `beni:build` builds every target the build config defines, then verifies that each declared target produced an archive and its compile-flags sidecar; a target no `target` declaration names is not verified. The config owns the target definitions, and beni never reads it. |
+| Build & verify | `beni:build` builds every target the build config defines, then verifies that each declared target produced its compile-flags sidecar and the archive that sidecar names; a target no `target` declaration names is not verified. The config owns the target definitions, and beni never reads it. |
 | Staged path | Toolchains unpack at their own names under the vendor tree (the mruby source at `mruby/`); each target's archive and its compile-flags sidecar stage at `mruby/build/<name>/lib/` — the staged path. |
 | Archive auto-discovery | The crates auto-discover one archive: the `host` build's, serving host cargo targets. An archive beyond `host` is never auto-discovered and is reachable only via `MRUBY_LIB_DIR`. |
 | Compile-flags sidecar | Every build writes each archive's sidecar; it is the single ABI-alignment channel to the crates. |
@@ -147,7 +147,10 @@ Selection, checksums, and cross-compile activation:
   platform's tarball: its built-in pair vendors one checksum per
   tarball and the selected checksum is the downloaded tarball's; a
   toolchain definition's single `sha256` becomes the selected checksum
-  on every build platform — it verifies only the tarball it names.
+  on every build platform — it verifies only the tarball it names. A
+  built-in pair carrying no checksum for the build platform names the
+  toolchain and the platform and downloads nothing; no other
+  platform's checksum or tarball stands in for the missing one.
   mruby's selected checksum is the one the installed release vendors
   for the default `version`; for any other `version` it is the pin
   that `version`'s first download establishes. The pin persists
@@ -171,15 +174,25 @@ Selection, checksums, and cross-compile activation:
 
 ### beni-sys crate — FFI surface
 
-- The compile-flags sidecar names the compiler that built the archive and
-  the flags it was given; a flag holds only for that compiler. The C shims
-  compiled beside the bindings use that compiler with those flags unchanged.
-  Binding generation parses the headers with its own toolchain, never that
-  compiler, so it takes only the flags deciding what the headers declare —
-  macro definitions and removals, and the language standard; the target, the
-  sysroot, and the header tree are the crate's own. The sidecar also names
-  the libraries the archive needs linked, and those are the ones linked. The
-  crate follows the `-sys` crate convention.
+- The compile-flags sidecar names the archive by its file name, the compiler that
+  built the archive, and the flags it was given; a flag holds only for that
+  compiler. The C shims compiled beside the bindings use that compiler with
+  those flags unchanged. Binding generation parses the headers with its own
+  toolchain, never that compiler, so it takes only the flags deciding what
+  the headers declare — macro definitions and removals, and the language
+  standard; the target, the sysroot, and the header tree are the crate's own.
+  The sidecar also names the libraries the archive needs linked, and those
+  are the ones linked. The crate follows the `-sys` crate convention.
+- mruby writes the sidecar in the form of the toolchain that built the
+  archive: the archive's file name, each library's name, and each compile
+  flag take that toolchain's form, and a GNU-style toolchain and MSVC differ
+  in all three. Each token is read for what it is rather than for one
+  toolchain's form of it — the archive is looked for in the directory
+  discovery resolved, under the file name the sidecar names it by; a library
+  is linked under the name its own token carries; and binding generation
+  receives the declaration flags in the form its own toolchain reads. A host
+  cargo target is served by an archive from any of mruby's host toolchains;
+  which one built it is the archive's to state.
 - One archive serves one cargo build target. Archive discovery is
   environment-driven, highest precedence first; the highest-precedence
   variable set is the sole source, never falling back to a lower one:
@@ -212,9 +225,11 @@ Selection, checksums, and cross-compile activation:
   what it changed surfaces as a compile failure, a symbol the wrapper
   calls that the archive does not declare or a layout the crates pin.
   Supported boxing configurations: word boxing. Supported language
-  standard: the GNU dialect below C11 mruby's toolchains set
-  unconditionally; overriding it leaves mruby's never-returning
-  declarations in a form the bindings do not carry, and the typed
+  standard: any under which mruby declares its never-returning
+  functions as never-returning — the standard in effect under each of
+  mruby's own toolchains, whether that toolchain sets one or takes its
+  compiler's default. A standard that loses that form leaves those
+  declarations in a shape the bindings do not carry, and the typed
   wrapper's diverging raise does not compile.
 - A documentation build reads the documentation bindings and links
   nothing, so the whole typed surface renders where no archive can be
@@ -1007,17 +1022,18 @@ The `compiler` capability feature carries everything in this section.
 | More than one declaration of the same setting (`version`, `build_config`, or `vendor_dir`) | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | Toolchain download fails (network failure, HTTP 4xx/5xx, disk write error) | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
 | A downloaded or cached tarball fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
+| A selected toolchain whose built-in pair carries no checksum for the build platform | `beni:vendor:setup` aborts and names the toolchain and the build platform, nothing downloaded |
 | `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
 | `beni:build` with a `target` declaration naming a target the build config does not define | verification fails, each missing archive reported |
 | A build config selecting the `wasi` toolchain with no wasi toolchain file staged | `beni:build` aborts, mruby naming the unknown toolchain |
 | `beni:config` with no `build_config` declaration | task fails, nothing generated |
 | `beni:config` with the configured `version`'s mruby source not staged | task fails and names the missing source, nothing generated |
 | `beni:config` targeting an existing file | generation refuses, existing config untouched |
-| Discovered archive missing its compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar |
-| A compile-flags sidecar the crate cannot read — no line naming the compiler, the flags, or the libraries, or a layout whose tokens it would mis-read | `beni-sys` build fails and names the sidecar, never reading a partial set from it |
+| A staged path with no compile-flags sidecar | `beni-sys` build fails and names the compile-flags sidecar |
+| A compile-flags sidecar the crate cannot read — no line naming the archive, the compiler, the flags, or the libraries, or a token in a form it cannot attribute to a toolchain | `beni-sys` build fails and names the sidecar, never reading a partial set from it |
 | No archive discovery variable set, outside a documentation build | `beni-sys` build fails and names the variables it consults |
 | A documentation build whose documentation bindings are absent | `beni-sys` build fails and names the bindings it expected |
-| `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive is absent | `beni-sys` build fails and names the expected path |
+| `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR` set but the archive its sidecar names is absent | `beni-sys` build fails and names the expected path |
 | Discovered archive below the supported mruby floor | `beni-sys` build fails and names the archive's version |
 | Discovered archive whose headers state no mruby version | `beni-sys` build fails and names the headers it read |
 | Cross-compiled build for a cargo target other than wasm32 | `beni-sys` build fails and names the unsupported target |
@@ -1066,16 +1082,16 @@ The `compiler` capability feature carries everything in this section.
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
 | toolchain definition | a top-level `toolchain <name>` block carrying `version` and `sha256` — replaces the named toolchain's built-in pair |
 | built-in pair | the version and checksum pair the installed beni release vendors for a toolchain; a toolchain released as one tarball per build platform vendors one checksum per tarball, the pair carrying the build platform's |
-| build platform | the platform the Rake tasks run on; it selects which of a toolchain's per-platform tarballs is downloaded |
+| build platform | the CPU architecture and operating system the Rake tasks run on; it selects which of a toolchain's per-platform tarballs is downloaded |
 | vendor tree | the directory tree the `vendor_dir` setting names |
 | tarball cache | downloaded toolchain tarballs, kept inside the vendor tree |
-| archive | the built `libmruby.a` for one target |
+| archive | the built mruby static library for one target; its file name is the one the toolchain that built it gives, and its compile-flags sidecar names it by that name |
 | discovered archive | the archive located by archive discovery for the active cargo target |
 | archive discovery variable | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR`, the environment variables archive discovery consults |
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | staged path | `mruby/build/<name>/lib/` under the vendor tree, holding one target's archive and compile-flags sidecar |
 | wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — beni's wasm32-wasip1 cross-compile settings, staged whenever `wasi-sdk` is selected and activated by a build config via `conf.toolchain :wasi` |
-| compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of the compiler that built it, the flags that compiler was given, and the libraries it needs linked |
+| compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of the archive's file name, the compiler that built it, the flags that compiler was given, and the libraries it needs linked |
 | supported mruby floor | mruby 4.0 — the oldest release the crates build against; an archive states its own version in the header tree staged beside it |
 | documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable and builds on one platform, `x86_64-unknown-linux-gnu` |
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
