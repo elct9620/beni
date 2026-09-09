@@ -17,23 +17,39 @@ module Beni
       assert_equal Vendor::TOOLCHAIN_FACTORIES.keys.sort, Vendor::BUILT_IN_PAIRS.keys.sort
     end
 
-    def test_wasi_sdk_built_in_checksums_cover_every_build_platform
+    def test_wasi_sdk_vendors_a_checksum_per_tarball_it_pins
       checksums = Vendor::BUILT_IN_PAIRS.fetch("wasi-sdk").fetch(:sha256)
 
       assert_equal %w[arm64-linux arm64-macos x86_64-linux x86_64-macos], checksums.keys.sort
-      assert_includes checksums.keys, Vendor::WASI_SDK_PLATFORM
     end
 
-    def test_wasi_sdk_platform_maps_each_host_triple_to_its_token
+    def test_build_platform_derives_one_spelling_per_architecture_and_os
       # Both arm64 and aarch64 spellings resolve on each OS.
-      assert_equal "arm64-macos", Vendor.wasi_sdk_platform("arm64-darwin23")
-      assert_equal "arm64-macos", Vendor.wasi_sdk_platform("aarch64-darwin23")
-      assert_equal "x86_64-macos", Vendor.wasi_sdk_platform("x86_64-darwin22")
-      assert_equal "arm64-linux", Vendor.wasi_sdk_platform("aarch64-linux-gnu")
-      assert_equal "arm64-linux", Vendor.wasi_sdk_platform("arm64-linux")
-      assert_equal "x86_64-linux", Vendor.wasi_sdk_platform("x86_64-linux-gnu")
-      # Unrecognised triples fall back to the most common host.
-      assert_equal "x86_64-linux", Vendor.wasi_sdk_platform("riscv64-linux")
+      assert_equal "arm64-macos", Vendor.build_platform("arm64-darwin23")
+      assert_equal "arm64-macos", Vendor.build_platform("aarch64-darwin23")
+      assert_equal "x86_64-macos", Vendor.build_platform("x86_64-darwin22")
+      assert_equal "arm64-linux", Vendor.build_platform("aarch64-linux-gnu")
+      assert_equal "arm64-linux", Vendor.build_platform("arm64-linux")
+      assert_equal "x86_64-linux", Vendor.build_platform("x86_64-linux-gnu")
+      # RubyInstaller spells x86_64 as x64 and names the runtime, not the OS.
+      assert_equal "x86_64-windows", Vendor.build_platform("x64-mingw-ucrt")
+      assert_equal "arm64-windows", Vendor.build_platform("aarch64-mingw-ucrt")
+    end
+
+    def test_build_platform_names_a_host_no_toolchain_is_pinned_for
+      assert_equal "riscv64-linux", Vendor.build_platform("riscv64-linux")
+      assert_equal "x86_64-freebsd14", Vendor.build_platform("x86_64-freebsd14")
+    end
+
+    def test_a_platform_keyed_pair_without_this_platform_names_it_rather_than_substituting
+      version = Vendor::BUILT_IN_PAIRS.fetch("wasi-sdk").fetch(:version)
+
+      error = assert_raises(Error) do
+        Vendor.built_in_sha256("wasi-sdk", version, "x86_64-windows")
+      end
+
+      assert_includes error.message, "wasi-sdk"
+      assert_includes error.message, "x86_64-windows"
     end
 
     def test_dependencies_registry_implies_mruby_for_wasi_sdk
@@ -62,14 +78,14 @@ module Beni
       pair = Vendor::BUILT_IN_PAIRS.fetch("wasi-sdk")
 
       assert_includes toolchain.tarball_name, pair.fetch(:version)
-      assert_includes toolchain.tarball_name, Vendor::WASI_SDK_PLATFORM
-      assert_equal pair.fetch(:sha256).fetch(Vendor::WASI_SDK_PLATFORM), toolchain.expected_sha256
+      assert_includes toolchain.tarball_name, Vendor::BUILD_PLATFORM
+      assert_equal pair.fetch(:sha256).fetch(Vendor::BUILD_PLATFORM), toolchain.expected_sha256
     end
 
     def test_wasi_sdk_override_replaces_version_and_checksum_together
       toolchain = Vendor.wasi_sdk(vendor_dir: VENDOR_DIR, version: "30.0", sha256: "cafe")
 
-      assert_equal "wasi-sdk-30.0-#{Vendor::WASI_SDK_PLATFORM}.tar.gz", toolchain.tarball_name
+      assert_equal "wasi-sdk-30.0-#{Vendor::BUILD_PLATFORM}.tar.gz", toolchain.tarball_name
       assert_includes toolchain.url, "/wasi-sdk-30/"
       assert_equal "cafe", toolchain.expected_sha256
     end

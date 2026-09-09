@@ -69,7 +69,7 @@ module Beni
 
       wasi = tasks.vendor_toolchains.find { |toolchain| toolchain.name == "wasi-sdk" }
 
-      assert_equal "wasi-sdk-34.0-#{Vendor::WASI_SDK_PLATFORM}.tar.gz", wasi.tarball_name
+      assert_equal "wasi-sdk-34.0-#{Vendor::BUILD_PLATFORM}.tar.gz", wasi.tarball_name
       assert_equal "ab" * 32, wasi.expected_sha256
     end
 

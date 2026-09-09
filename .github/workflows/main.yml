@@ -77,12 +77,12 @@ jobs:
           fi
 
   # Integration lane: the repo's full dogfooding chain on every
-  # WASI_SDK_PLATFORM detection branch. rust:verify drives a real
+  # BUILD_PLATFORM detection branch. rust:verify drives a real
   # vendor download (mruby + wasi-sdk), the custom-config host + wasi
   # cross build, cargo test against the native archive, a wasm32
   # check, and the default-ABI leg. Vendor tarballs are not cached
   # here: one real download per build platform is what exercises every
-  # WASI_SDK_PLATFORM detection branch, and this lane is the one job
+  # BUILD_PLATFORM detection branch, and this lane is the one job
   # per platform.
   verify:
     runs-on: ${{ matrix.os }}

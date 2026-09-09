@@ -35,7 +35,7 @@ module Beni
         selected = configuration.toolchains.find { |toolchain| toolchain.name == "wasi-sdk" }
 
         assert_equal pair.fetch(:version), selected.version
-        assert_equal pair.fetch(:sha256).fetch(Vendor::WASI_SDK_PLATFORM), selected.sha256
+        assert_equal pair.fetch(:sha256).fetch(Vendor::BUILD_PLATFORM), selected.sha256
       end
 
       def test_a_definition_replaces_the_built_in_pair_for_a_referenced_toolchain

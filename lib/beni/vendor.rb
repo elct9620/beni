@@ -21,7 +21,7 @@ module Beni
     # ---- Built-in pairs ----------------------------------------------------
     # The version and checksum pair this release vendors per toolchain.
     # wasi-sdk ships one tarball per build platform, so its checksum is
-    # keyed by +WASI_SDK_PLATFORM+ (values from the GitHub release asset
+    # keyed by +BUILD_PLATFORM+ (values from the GitHub release asset
     # digests); mruby's source archive is host-agnostic with a single
     # checksum.
     #
@@ -50,21 +50,34 @@ module Beni
     # task-definition time: referencing wasi-sdk implies mruby.
     DEPENDENCIES = { "wasi-sdk" => %w[mruby] }.freeze
 
-    # Map a host triple to the platform token wasi-sdk keys its per-platform
-    # tarballs by (wasi-sdk only; mruby's tarball is host-agnostic).
-    # +x86_64-linux+ is both the most common host and the safest fallback
-    # for unrecognised triples, so it is the +else+ branch.
-    def self.wasi_sdk_platform(platform = RUBY_PLATFORM)
-      case platform
-      when /arm64-darwin|aarch64-darwin/ then "arm64-macos"
-      when /x86_64-darwin/               then "x86_64-macos"
-      when /aarch64-linux|arm64-linux/   then "arm64-linux"
-      else "x86_64-linux"
-      end
+    # +RUBY_PLATFORM+ spells the same architecture and operating system
+    # differently across hosts; toolchains key their per-platform tarballs
+    # by one spelling each.
+    ARCH_ALIASES = { "x64" => "x86_64", "amd64" => "x86_64", "aarch64" => "arm64" }.freeze
+    OS_ALIASES = { /darwin/ => "macos", /linux/ => "linux", /mingw|mswin/ => "windows" }.freeze
+
+    # The build platform: the architecture and operating system the Rake
+    # tasks run on, spelled the way toolchains key their tarballs. Derived
+    # from the host rather than matched against a covered set, so a host no
+    # toolchain vendors a tarball for still has a name to be named in.
+    def self.build_platform(platform = RUBY_PLATFORM)
+      "#{platform_arch(platform)}-#{platform_os(platform)}"
     end
 
-    # The build platform's wasi-sdk token, resolved once at load.
-    WASI_SDK_PLATFORM = wasi_sdk_platform
+    def self.platform_arch(platform)
+      arch = platform.split("-").first.to_s
+      ARCH_ALIASES.fetch(arch, arch)
+    end
+
+    def self.platform_os(platform)
+      OS_ALIASES.find { |pattern, _| pattern.match?(platform) }&.last ||
+        platform.split("-")[1].to_s
+    end
+
+    private_class_method :platform_arch, :platform_os
+
+    # The build platform, resolved once at load.
+    BUILD_PLATFORM = build_platform
 
     # Known toolchain names mapped to their factory methods — the name
     # domain the DSL validates against and +Beni::Tasks+ dispatches on.
@@ -81,10 +94,10 @@ module Beni
       # full version plus the platform.
       Toolchain.new(
         name: "wasi-sdk",
-        version_label: "#{version} (#{WASI_SDK_PLATFORM})",
+        version_label: "#{version} (#{BUILD_PLATFORM})",
         base_url: "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-#{version.split(".").first}",
-        tarball_name: "wasi-sdk-#{version}-#{WASI_SDK_PLATFORM}.tar.gz",
-        top_level_dir: "wasi-sdk-#{version}-#{WASI_SDK_PLATFORM}",
+        tarball_name: "wasi-sdk-#{version}-#{BUILD_PLATFORM}.tar.gz",
+        top_level_dir: "wasi-sdk-#{version}-#{BUILD_PLATFORM}",
         vendor_dir: vendor_dir,
         expected_sha256: sha256 || built_in_sha256("wasi-sdk", version)
       )
@@ -116,12 +129,21 @@ module Beni
     # The built-in checksum for +name+ at +version+: the build platform's
     # entry when the toolchain's checksums are platform-keyed, +nil+ for
     # any version other than the vendored one — mruby's TOFU pinning path.
-    def built_in_sha256(name, version)
+    # A platform-keyed pair carrying no entry for +platform+ vendors no
+    # tarball there, and says so rather than letting another platform's
+    # checksum stand in.
+    def built_in_sha256(name, version, platform = BUILD_PLATFORM)
       pair = BUILT_IN_PAIRS.fetch(name)
       return nil unless version == pair.fetch(:version)
 
       checksum = pair.fetch(:sha256)
-      checksum.is_a?(Hash) ? checksum.fetch(WASI_SDK_PLATFORM) : checksum
+      return checksum unless checksum.is_a?(Hash)
+
+      checksum.fetch(platform) do
+        raise Error, "[beni] #{name} #{version} vendors no tarball for build platform " \
+                     "#{platform}; declare the toolchain with its own version and sha256 " \
+                     "to name one beni does not pin here"
+      end
     end
 
     # Write the gem-shipped wasi toolchain file into the staged mruby
