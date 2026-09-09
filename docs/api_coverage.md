@@ -379,7 +379,7 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_irep_catch_handler_pack` | macro | — | — |  |
 | `mrb_irep_catch_handler_unpack` | macro | — | — |  |
 | `mrb_load_irep` | fn | ✅ | — |  |
-| `mrb_load_irep_buf` | fn | ✅ | ✅ | `Mrb::load_irep_buf` |
+| `mrb_load_irep_buf` | fn | ✅ | ✅ | subsumed: `Mrb::load_bytecode` — the read-and-run form, whose body is `load_irep(mrb, mrb_proc_read_irep_buf(mrb, buf, bufsize), NULL)` and nothing else (`vendor/mruby/src/load.c:783-798`); the typed load drives the read and the run itself so it can name which structural check a blob failed, where the one-call form reports every one of them as `irep load error`, and it answers the same `ScriptError` for the same condition |
 | `mrb_load_irep_buf_cxt` | fn | ✅ | — |  |
 | `mrb_load_irep_cxt` | fn | ✅ | — |  |
 ## mruby/numeric.h

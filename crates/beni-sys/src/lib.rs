@@ -112,12 +112,11 @@ const _: () = assert!(
     "mrb_value alignment diverged from the MRB_WORDBOX_NO_INLINE_FLOAT word-boxing layout"
 );
 
-// `Mrb::pending_exc` and `Mrb::load_bytecode`'s exception
-// synthesiser (in the `beni` wrapper crate) read / write
-// `mrb_state.exc` through bindgen's struct accessor. Pin the
-// field's offset so a future bindgen run or mruby vendor bump that
-// shifts it fails at compile time rather than silently reading the
-// wrong slot. The field sits after `jmp` / `c` / `root_c` /
+// `Mrb::pending_exc` and `Mrb::set_pending_exc` (in the `beni`
+// wrapper crate) read / write `mrb_state.exc` through bindgen's
+// struct accessor. Pin the field's offset so a future bindgen run or
+// mruby vendor bump that shifts it fails at compile time rather than
+// silently reading the wrong slot. The field sits after `jmp` / `c` / `root_c` /
 // `globals` (four pointer-sized fields); `mrb_gc` (which carries
 // the bitfield workaround) lives further down the struct, so the
 // bitfield mis-pack does not affect this offset.

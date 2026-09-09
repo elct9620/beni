@@ -105,7 +105,7 @@ impl<'mrb> Ccontext<'mrb> {
         // ownership of it, frees it, and runs the generated Proc.
         let value =
             Value::from_raw(unsafe { sys::mrb_load_exec(self.mrb.as_ptr(), parser, self.raw) });
-        self.outcome(value)
+        self.mrb.outcome(value)
     }
 
     /// Compile `source` under this context without running it, yielding
@@ -124,7 +124,7 @@ impl<'mrb> Ccontext<'mrb> {
     /// produced it needs a `GcRoot`.
     pub fn compile(&self, source: &[u8]) -> Result<Proc, Error> {
         let parser = self.parse(source)?;
-        let value = self.outcome(self.generate(parser))?;
+        let value = self.mrb.outcome(self.generate(parser))?;
         // SAFETY: under `no_exec` a successful `mrb_load_exec` answers
         // `mrb_obj_value(proc)` for the Proc it generated
         // (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7782`), and
@@ -149,18 +149,6 @@ impl<'mrb> Ccontext<'mrb> {
         // SAFETY: as above.
         unsafe { sys::mrb_ccontext::set_no_exec_raw(self.raw, false) };
         value
-    }
-
-    /// What an operation that reached mruby answers: its value, or the
-    /// exception it raised, cleared from the handle as it crosses out.
-    fn outcome(&self, value: Value) -> Result<Value, Error> {
-        let exc = self.mrb.pending_exc();
-        if exc.is_nil() {
-            Ok(value)
-        } else {
-            self.mrb.clear_exc();
-            Err(Error::Exception(exc))
-        }
     }
 
     /// Parse `source` under this context, recording the warnings it

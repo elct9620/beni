@@ -71,15 +71,28 @@ fn a_dumped_program_loads_back_as_bytecode() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
     let cxt =
         Ccontext::new(&mrb, c"proc_test.rb").expect("allocating the compile context must succeed");
+    // The program answers a heap object, not an immediate: an
+    // immediate result would read back the same whether or not the
+    // load left its value arena-protected.
     let program = cxt
-        .compile(b"$dumped = 41 + 1")
+        .compile(b"$dumped = 41 + 1; 'answer'.dup")
         .expect("plain source must compile");
 
     let bytes = program
         .dump(&mrb, DumpOptions::default())
         .expect("a Proc compiled from source must dump");
 
-    assert_eq!(mrb.load_bytecode(&bytes), 0, "the dump must load back");
+    let got = mrb.load_bytecode(&bytes).expect("the dump must load back");
+
+    // The result is the program's own value, and it is the caller's to
+    // scope: a collection with the load's frame still live must not
+    // reclaim it.
+    mrb.full_gc();
+    assert_eq!(
+        String::from_value(got).as_deref(),
+        Some("answer"),
+        "the load yields the program's result, live after a collection"
+    );
     assert_eq!(
         i32::from_value(mrb.gv_get(mrb.intern_cstr(c"$dumped"))),
         Some(42),

@@ -56,7 +56,7 @@ pub mod protect;
 pub mod root;
 pub mod symbol;
 
-use crate::{RClass, Value};
+use crate::{Error, RClass, Value};
 use beni_sys as sys;
 use core::ptr::NonNull;
 
@@ -202,13 +202,26 @@ impl Mrb {
         }
     }
 
-    /// Set `mrb->exc` to `exc`, replacing whatever was there. Used by
-    /// synthesis paths where an FFI call signals failure by returning
-    /// NULL without raising — see `Mrb::load_bytecode`'s
-    /// `mrb_read_irep_buf` recovery. Most code paths should let mruby
-    /// raise via `mrb_raise` from inside a C bridge instead; that path
-    /// triggers the normal exception flow without needing a manual
-    /// slot write.
+    /// What an operation that reached mruby answers: its value, or the
+    /// exception it raised, cleared from the handle as it crosses out.
+    /// Every load answers through here, so a raise reaches a Rust
+    /// caller in one shape whatever compiled the program.
+    pub(crate) fn outcome(&self, value: Value) -> Result<Value, Error> {
+        let exc = self.pending_exc();
+        if exc.is_nil() {
+            Ok(value)
+        } else {
+            self.clear_exc();
+            Err(Error::Exception(exc))
+        }
+    }
+
+    /// Set `mrb->exc` to `exc`, replacing whatever was there. The slot
+    /// a raise from inside a C bridge writes for itself, offered for a
+    /// caller that has to stage an exception the VM did not raise.
+    /// Most code paths should let mruby raise via `mrb_raise` instead;
+    /// that path triggers the normal exception flow without needing a
+    /// manual slot write.
     ///
     /// # Safety
     ///

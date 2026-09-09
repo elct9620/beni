@@ -2,10 +2,10 @@
 //!
 //! Inherent methods that compile Ruby source — or drop a compiled
 //! blob — into the live mruby VM and run its top-level Proc. The
-//! `compiler` feature carries the source loader; the bytecode loaders
-//! need no compiler and stay outside it.
+//! `compiler` feature carries the source loader; the bytecode loader
+//! needs no compiler and stays outside it.
 
-use crate::{Mrb, Value};
+use crate::{Error, Mrb, Value};
 use beni_sys as sys;
 
 impl Mrb {
@@ -39,47 +39,19 @@ impl Mrb {
         cxt.load_nstring(source)
     }
 
-    /// `mrb_load_irep_buf(mrb, buf, size)` — load and evaluate a
-    /// precompiled RITE bytecode blob. On a malformed blob mruby
-    /// sets `mrb->exc`; callers should inspect via
-    /// `Mrb::pending_exc` before continuing.
-    #[inline]
-    pub fn load_irep_buf(&self, bytes: &[u8]) -> Value {
-        // SAFETY: `self` is alive; `bytes` is borrowed for the
-        // synchronous call.
-        Value::from_raw(unsafe {
-            sys::mrb_load_irep_buf(
-                self.as_ptr(),
-                bytes.as_ptr() as *const core::ffi::c_void,
-                bytes.len(),
-            )
-        })
-    }
-
-    /// Load + validate + execute a precompiled bytecode blob.
-    /// Returns 0 on success and 1 on structural failure (RITE
-    /// version drift, corrupt or non-RITE body). Top-level
-    /// exceptions from a successful load are left in `mrb->exc` for
-    /// downstream extraction.
+    /// Load and run a precompiled bytecode blob at the interpreter's
+    /// top level, yielding the program's result value.
     ///
-    /// Wraps the RITE parse step (which mruby keeps separate from
-    /// execution via `mrb_read_irep_buf`) with arena bracketing and
-    /// a structural-failure classifier; on parse failure a
-    /// `RuntimeError` is synthesised under `mrb->exc` so the
-    /// caller's pending-exception flow sees a normal exception. The
-    /// classifier reads the RITE binary header directly from
-    /// `bytes` so the diagnostic distinguishes "shorter than
-    /// header" / "wrong ident" / "version mismatch" / "corrupt
-    /// body".
-    pub fn load_bytecode(&self, bytes: &[u8]) -> core::ffi::c_int {
-        // mruby/irep.h documents that `mrb_load_irep*` calls retain
-        // one RProc per invocation in the arena; bracketing with
-        // save/restore keeps multi-snippet preload cost bounded.
-        // mrb->exc is itself a GC root, so any synthesised exception
-        // below survives the restore.
-        // SAFETY: `self` is alive by the &self borrow.
-        let ai = unsafe { sys::mrb_gc_arena_save_func(self.as_ptr()) };
-
+    /// The blob is the form `Proc::dump` answers. A blob mruby cannot
+    /// read as a program comes back `Err(Error::Exception)` carrying a
+    /// `ScriptError` whose message names which structural check failed,
+    /// and nothing runs; an exception the program raises while it runs
+    /// comes back the same way, carrying that exception with the
+    /// pending exception cleared from the handle.
+    ///
+    /// The result is a value like any other, so carrying it past the
+    /// arena scope that produced it needs a `GcRoot`.
+    pub fn load_bytecode(&self, bytes: &[u8]) -> Result<Value, Error> {
         // SAFETY: bytes pointer is valid for the synchronous call.
         let irep = unsafe {
             sys::mrb_read_irep_buf(
@@ -90,19 +62,18 @@ impl Mrb {
         };
 
         if irep.is_null() {
-            // Version drift, corrupt body, or non-RITE input. The
-            // synthesised exception surfaces through `mrb->exc`
-            // exactly like a native raise.
-            self.set_bytecode_exc(classify_structural_failure(bytes));
-            // SAFETY: arena index from the matching save above.
-            unsafe { sys::mrb_gc_arena_restore_func(self.as_ptr(), ai) };
-            return 1;
+            // `mrb_read_irep_buf` answers NULL under exactly the
+            // condition mruby's own loader reports as a `ScriptError`
+            // (`vendor/mruby/src/load.c:756,764`), so the error carries
+            // that class — with the structural check named, which
+            // mruby's one flat message does not distinguish.
+            let script_error = self.class_get(c"ScriptError")?;
+            return Err(Error::new(self, script_error, structural_failure(bytes)));
         }
 
         // Mirror mruby's static `load_irep` body: wrap the IREP in
         // a top-level Proc, hand IREP ownership to the Proc via
-        // decref, then run. Any top-level raise sets mrb->exc and
-        // the caller's existing path picks it up.
+        // decref, then run.
         // SAFETY: `irep` was just returned non-null by
         // mrb_read_irep_buf; `mrb` is alive.
         let proc_ = unsafe { sys::mrb_proc_new_func(self.as_ptr(), irep) };
@@ -113,49 +84,20 @@ impl Mrb {
         unsafe { sys::mrb_irep_decref(self.as_ptr(), irep) };
         // SAFETY: `mrb` is alive.
         let top_self = unsafe { sys::mrb_top_self(self.as_ptr()) };
-        // SAFETY: top-level Proc execution; any raise sets mrb->exc.
-        unsafe { sys::mrb_top_run(self.as_ptr(), proc_, top_self, 0) };
-        // SAFETY: arena index from the matching save above.
-        unsafe { sys::mrb_gc_arena_restore_func(self.as_ptr(), ai) };
-        0
-    }
-
-    /// Set `mrb->exc` to a freshly synthesised `RuntimeError` carrying
-    /// `msg`. Used by `Mrb::load_bytecode` to surface structural
-    /// failures from `mrb_read_irep_buf` (which signals failure by
-    /// returning NULL without setting `mrb->exc`). The caller's
-    /// existing pending-exception extraction picks the synthesised
-    /// exception up uniformly with mruby-native raises.
-    fn set_bytecode_exc(&self, msg: &str) {
-        // SAFETY: `self` is alive; `c"RuntimeError"` is a static
-        // NUL-terminated literal.
-        let runtime_error = unsafe { sys::mrb_class_get(self.as_ptr(), c"RuntimeError".as_ptr()) };
-        // SAFETY: `msg` is a Rust string slice borrowed for the
-        // synchronous call; mruby copies the bytes into a new
-        // exception object.
-        let err = Value::from_raw(unsafe {
-            sys::mrb_exc_new(
-                self.as_ptr(),
-                runtime_error,
-                msg.as_ptr() as *const core::ffi::c_char,
-                msg.len() as sys::mrb_int,
-            )
-        });
-        // SAFETY: `err` is the exception object `mrb_exc_new` just
-        // built on this VM.
-        unsafe { self.set_pending_exc(err) };
+        // SAFETY: top-level Proc execution; any raise sets mrb->exc,
+        // which `outcome` reads back.
+        let value = Value::from_raw(unsafe { sys::mrb_top_run(self.as_ptr(), proc_, top_self, 0) });
+        self.outcome(value)
     }
 }
 
-/// Classify a structural `mrb_read_irep_buf` failure by inspecting
-/// the RITE binary header (`mruby/dump.h`: ident in bytes 0–3,
-/// format version in bytes 4–7). Returns a stable diagnostic the
-/// caller wraps in a `RuntimeError`. The constants come from
+/// Which structural check a blob mruby could not read as a program
+/// failed, read from the RITE binary header (`mruby/dump.h`: ident in
+/// bytes 0-3, format version in bytes 4-7). The constants come from
 /// bindgen-emitted `RITE_BINARY_IDENT` / `RITE_BINARY_FORMAT_VER`
-/// (each is a 5-byte slice with a trailing NUL — compare the first
-/// 4 bytes against the magic / version bytes the header actually
-/// carries).
-fn classify_structural_failure(bytes: &[u8]) -> &'static str {
+/// (each a 5-byte slice with a trailing NUL, so the first 4 bytes are
+/// what the header carries).
+fn structural_failure(bytes: &[u8]) -> &'static str {
     if bytes.len() < core::mem::size_of::<sys::rite_binary_header>() {
         return "bytecode shorter than RITE binary header";
     }

@@ -36,7 +36,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::intern_cstr;
     let _ = Mrb::intern_str;
     let _ = Mrb::sym_name;
-    let _ = Mrb::load_irep_buf;
     let _ = Mrb::load_bytecode;
     let _ = Mrb::protect::<fn(&Mrb) -> Value>;
     let _ = Mrb::get_args::<format::O>;

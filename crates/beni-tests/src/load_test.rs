@@ -1,4 +1,4 @@
-use beni::{Error, FromValue, Mrb};
+use beni::{Ccontext, DumpOptions, Error, FromValue, Mrb};
 
 const HEADER_LEN: usize = core::mem::size_of::<beni::sys::rite_binary_header>();
 
@@ -87,30 +87,41 @@ fn load_string_still_runs_source_the_compiler_warns_about() {
     assert_eq!(i32::from_value(got), Some(2));
 }
 
-/// The synthesised `RuntimeError` parked under `mrb->exc`, rendered.
-fn exc_message(mrb: &Mrb) -> String {
-    let exc = mrb.pending_exc();
-    assert!(
-        !exc.is_nil(),
-        "a structural failure must synthesise mrb->exc"
+/// The `ScriptError` a blob mruby cannot read as a program comes back
+/// as, rendered. Asserts the class as well as the failure, so a load
+/// that reported the right words under the wrong class still fails
+/// here — the class is what a Ruby-side bare `rescue` reads.
+fn structural_failure(mrb: &Mrb, blob: &[u8]) -> String {
+    let err = mrb
+        .load_bytecode(blob)
+        .expect_err("a blob that is not a program must not load");
+    let Error::Exception(exc) = &err else {
+        panic!("a structural failure carries an exception, got {err:?}");
+    };
+    assert_eq!(
+        exc.classname(mrb),
+        "ScriptError",
+        "the class mruby's own irep loader reports the same condition under"
     );
-    exc.to_string(mrb)
+    assert!(
+        mrb.pending_exc().is_nil(),
+        "the error carries the exception, so nothing stays pending"
+    );
+    err.message(mrb)
 }
 
 #[test]
 fn load_bytecode_classifies_a_blob_shorter_than_the_header() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-    assert_eq!(mrb.load_bytecode(b"RITE"), 1);
-    assert!(exc_message(&mrb).contains("shorter than RITE binary header"));
+    assert!(structural_failure(&mrb, b"RITE").contains("shorter than RITE binary header"));
 }
 
 #[test]
 fn load_bytecode_classifies_a_non_rite_ident() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-    assert_eq!(mrb.load_bytecode(&[b'X'; HEADER_LEN]), 1);
-    assert!(exc_message(&mrb).contains("not RITE format"));
+    assert!(structural_failure(&mrb, &[b'X'; HEADER_LEN]).contains("not RITE format"));
 }
 
 #[test]
@@ -120,8 +131,7 @@ fn load_bytecode_classifies_a_rite_version_mismatch() {
     blob[..4].copy_from_slice(&beni::sys::RITE_BINARY_IDENT[..4]);
     blob[4..8].copy_from_slice(b"0000");
 
-    assert_eq!(mrb.load_bytecode(&blob), 1);
-    assert!(exc_message(&mrb).contains("RITE version mismatch"));
+    assert!(structural_failure(&mrb, &blob).contains("RITE version mismatch"));
 }
 
 #[test]
@@ -131,27 +141,46 @@ fn load_bytecode_classifies_a_corrupt_body() {
     blob[..4].copy_from_slice(&beni::sys::RITE_BINARY_IDENT[..4]);
     blob[4..8].copy_from_slice(&beni::sys::RITE_BINARY_FORMAT_VER[..4]);
 
-    assert_eq!(mrb.load_bytecode(&blob), 1);
-    assert!(exc_message(&mrb).contains("failed structural validation"));
+    assert!(structural_failure(&mrb, &blob).contains("failed structural validation"));
 }
 
 #[test]
-fn load_irep_buf_leaves_the_pending_exception_for_a_malformed_blob() {
+fn load_bytecode_leaves_the_vm_usable_after_a_structural_failure() {
     let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
 
-    // The documented contract: a malformed blob sets `mrb->exc`
-    // for the caller to inspect through `pending_exc`, and the
-    // VM stays usable once the caller clears it.
-    let _ = mrb.load_irep_buf(b"not RITE bytecode");
-    assert!(
-        !mrb.pending_exc().is_nil(),
-        "a malformed blob must leave a pending exception"
-    );
-    mrb.clear_exc();
-    assert!(mrb.pending_exc().is_nil());
+    let _ = structural_failure(&mrb, b"not RITE bytecode");
 
     let alive = mrb
         .load_string(b"1 + 1")
-        .expect("the VM survives the cleared load failure");
+        .expect("the VM survives a load that never became a program");
     assert_eq!(i32::from_value(alive), Some(2));
+}
+
+#[test]
+fn load_bytecode_hands_back_an_exception_the_program_raised() {
+    let mrb = Mrb::open().expect("Mrb::open failed with libmruby.a linked");
+    let cxt = Ccontext::new(&mrb, c"raiser.rb").expect("allocating the context must succeed");
+    let bytes = cxt
+        .compile(b"raise ArgumentError, 'from the loaded program'")
+        .expect("the source must compile")
+        .dump(&mrb, DumpOptions::default())
+        .expect("a Proc compiled from source must dump");
+
+    let err = mrb
+        .load_bytecode(&bytes)
+        .expect_err("a program that raises must not come back Ok");
+
+    let Error::Exception(exc) = &err else {
+        panic!("a raise carries an exception, got {err:?}");
+    };
+    assert_eq!(
+        exc.classname(&mrb),
+        "ArgumentError",
+        "the program's own exception, not the loader's ScriptError"
+    );
+    assert!(
+        mrb.pending_exc().is_nil(),
+        "the error carries the exception, so nothing stays pending"
+    );
+    assert!(err.message(&mrb).contains("from the loaded program"));
 }
