@@ -797,6 +797,10 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
     an unrooted value: where mruby refuses the release the value stays rooted
     for the interpreter's remaining lifetime, so the failure a consumer can
     meet is over-retention, never a value collected while still held.
+- Every exception the typed surface hands to a Rust caller holds arena protection
+  as it crosses out, however that exception was produced, so a caller renders its
+  message and backtrace without rooting it first. Like any other value, one held
+  past the arena scope that was open when it crossed out needs a root.
 - A consumer reaching mruby's own root registry through `beni::sys` owns an
   invariant the typed shapes encode: that registry is keyed by value rather
   than by registration, so removing a value removes every root over it and a
