@@ -172,7 +172,7 @@ typed:
   mrb_eql: Value::eql
   mrb_equal: Value::equal
   mrb_obj_equal: Value::obj_equal
-  mrb_exc_get_id: "`Mrb::exc_get` (the symbol-or-name key) — fetch a built-in exception class, guaranteed an `Exception` subclass; `mrb_exc_get` is a macro alias that interns the name and is reached by passing a name key"
+  mrb_exc_get_id: "`Mrb::exc_get` (the symbol-or-name key) — fetch a built-in exception class, guaranteed an `Exception` subclass"
   mrb_exc_new: "`RClass::exc_new`, also via `Error::new` (see Error extension)"
   mrb_exc_new_str: "`RClass::exc_new_str` — build an exception carrying an existing mruby `RString` as-is; the static String tag means the underlying type guard never fires"
   mrb_exc_raise: raised from `Err` by the dispatch bridge (see Error extension)
@@ -440,12 +440,19 @@ subsumed:
   mrb_protect: "`Mrb::protect` — the older `mrb_func_t` + `mrb_value data` form, whose body is `mrb_protect_error(mrb, protect_body, &protect_data, state)` and nothing else (`vendor/mruby/mrbgems/mruby-error/src/exception.c:34-37`); a Rust closure carries the body-and-data pair the C form spells out as two arguments"
   mrb_rescue_exceptions: "`Mrb::rescue` — `mrb_protect_error` followed by an `mrb_obj_is_kind_of` walk of the class array (`vendor/mruby/mrbgems/mruby-error/src/exception.c:109-133`), which is the composition `rescue` is; the `&[RClass]` slice carries the `len` the C form spells out beside `classes`, and the closures carry the two `mrb_func_t` + `mrb_value` data pairs. The arena restore and exception clear that bracket the C form are `mrb_protect_error`'s own (`vendor/mruby/src/vm.c:548,566-567`), so each `protect` call already performs them"
   mrb_rescue: "`Mrb::rescue` — the StandardError form of `mrb_rescue_exceptions`, whose body passes `1, &mrb->eStandardError_class` (`vendor/mruby/mrbgems/mruby-error/src/exception.c:86-89`); a caller naming `StandardError` in the class slice reaches it — the bare-`rescue` default SPEC names"
+  mrb_raisef: "`RClass::raise`, `Error::new` — the formatting variant of `mrb_raise`, whose body builds the message through mruby's own format engine and ends in the same `mrb_exc_raise` (`vendor/mruby/src/error.c:456-468`); a Rust caller formats the message in Rust before handing it over, the magnus-aligned shape SPEC's error contract names, so the engine is a means the Rust shape already carries rather than a capability of its own"
+  mrb_name_error: "`RClass::obj_new` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef`"
+  mrb_no_method_error: "`RClass::obj_new` — `NoMethodError#initialize(message, name, args)` sets the same `@name` and `@args` the C form writes directly (`vendor/mruby/src/error.c:634-635`, `vendor/mruby/mrblib/10error.rb:11-19`); see `mrb_name_error`"
+  mrb_exc_new_lit: "`RClass::exc_new_str` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it"
+  mrb_exc_get: "`Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it"
+  mrb_clear_error: "`Mrb::clear_exc` — the inner call of `mrb_check_error`, whose body is `if (mrb->exc) { mrb_clear_error(mrb); return TRUE; }` (`vendor/mruby/src/error.c:876-891`); the bool the C form returns is what the Rust shape drops, and clearing the pending exception is the whole of what remains"
   mrb_check_array_type: "`FromValue` -> `Array` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it"
   mrb_check_hash_type: "`FromValue` -> `Hash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type`"
   mrb_check_string_type: "`FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type`"
   mrb_check_type: "the `FromValue` downcasts and the `Value::is_*` tag predicates — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot"
 declined:
   mrb_sys_fail: "declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from a class and a message, which `RClass::raise` already reaches from a Rust `std::io::Error`"
+  mrb_print_error: "writes the pending exception and its backtrace to the process's standard error (`vendor/mruby/src/error.c:843-866`) — no typed shape carries a write to the host's stderr, and SPEC holds the same line for the compiler's diagnostics: where a diagnostic is written is the host's choice, not beni's. `Error::message` and `Error::backtrace` hand a Rust caller the same text to write where it chooses"
   mrb_malloc: "VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `RClass::data_wrap` is the graduated seam between the two"
   mrb_malloc_simple: "VM allocator, the non-raising variant — see `mrb_malloc`"
   mrb_calloc: "VM allocator — see `mrb_malloc`"
@@ -461,6 +468,7 @@ declined:
   mrb_hash_ptr: "unchecked cast to `struct RHash*` — see `mrb_str_ptr`"
   mrb_range_ptr: "unchecked cast to `struct RRange*` — see `mrb_str_ptr`"
   mrb_check_frozen: "takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `Value::check_frozen`"
+  mrb_frozen_error: "raises what `mrb_check_frozen` checks for, taking the object as `void*` the same way (`vendor/mruby/include/mruby.h:1446`) — see `mrb_check_frozen`; the pointer form cannot express the immediate mruby raises the same `FrozenError` for, which the `mrb_value` form tests before raising (`vendor/mruby/src/error.c:693-699`)"
   DATA_PTR: "reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `Value::data_get`, which returns `None` where this returns a wrong-typed pointer"
   DATA_TYPE: "reads `RDATA(d)->type` with no type check — see `DATA_PTR`"
   mrb_gc_unregister: "removes a root by value, so it drops every registration of that value at once (`vendor/mruby/src/gc.c:537-553`) — no typed shape can release one holder's root without releasing another's. The releasable root is the GcRoot extension, whose slot supplies the identity this call lacks; the never-released half is `Mrb::gc_register_forever`"
