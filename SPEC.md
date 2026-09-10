@@ -879,6 +879,20 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   not a new bound C symbol; the safe `RClass` slice replaces mruby's raw class
   array, so the capability needs no VM-internal reasoning and lives on the typed
   surface.
+- `Mrb::ensure` runs a body closure under exception protection and runs an
+  ensure closure afterwards, mirroring a Ruby `begin`/`ensure`. It takes a body
+  and an ensure closure, and answers the body's outcome unless the ensure
+  closure replaces it. The ensure closure runs on every exit the body can take —
+  normal completion, a raised exception, and a Rust panic — and its own return
+  value is discarded: only its effects reach the caller. An ensure closure that
+  completes leaves the body's outcome, `Ok` or `Err`, unchanged; one that raises
+  replaces that outcome with its own `Err`. A Rust panic is not an exception: a
+  panic in the body runs the ensure closure and then surfaces as the panic
+  `Err`, and a panic in the ensure closure replaces the body's outcome the way a
+  raise there does. `ensure` is a Rust-native composition of the
+  already-graduated `Mrb::protect`, not a new bound C symbol; both closures run
+  under exception protection, so neither a body raise nor an ensure raise
+  long-jumps past the caller.
 
 #### Loading precompiled bytecode
 
@@ -1089,6 +1103,10 @@ The `compiler` capability feature carries everything in this section.
 | A `Mrb::rescue` body raising an exception instance of no class in the list | not rescued; surfaced as the body's Rust `Err` unchanged, never unwinds across FFI |
 | A `Mrb::rescue` handler itself raising | surfaced as the handler's Rust `Err`, never unwinds across FFI |
 | A `Mrb::rescue` handler itself panicking — the handler runs under exception protection | caught at the FFI boundary and surfaced as a Rust `Err` (`Error::Panic`), never rescued and never unwinds across FFI |
+| A `Mrb::ensure` body raising an exception, with an ensure closure that completes | the ensure closure runs; surfaced as the body's Rust `Err` unchanged, never unwinds across FFI |
+| A `Mrb::ensure` ensure closure itself raising | surfaced as the ensure closure's Rust `Err`, replacing the body's outcome, never unwinds across FFI |
+| A `Mrb::ensure` body panicking | the ensure closure runs; caught at the FFI boundary and surfaced as a Rust `Err` (`Error::Panic`), never unwinds across FFI |
+| A `Mrb::ensure` ensure closure itself panicking — the closure runs under exception protection | caught at the FFI boundary and surfaced as a Rust `Err` (`Error::Panic`), replacing the body's outcome, never unwinds across FFI |
 | Creating a compile context against a live interpreter failing | returns no context, never aborts |
 | A codegen step failing, or the program raising while it runs, under a compile context | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle, never unwinds across FFI |
 | Source that does not parse | surfaced as a Rust `Err` carrying a parse message with the first recorded diagnostic's line, column, and text; nothing written to standard error |
