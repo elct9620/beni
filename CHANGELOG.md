@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/elct9620/beni/compare/v0.14.0...v0.14.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **beni:** keep the exception a load hands back reachable ([b2af967](https://github.com/elct9620/beni/commit/b2af96781bbd07ddada3767d9ab64c47c530a799))
+
 ## [0.14.0](https://github.com/elct9620/beni/compare/v0.13.0...v0.14.0) (2026-09-10)
 
 
