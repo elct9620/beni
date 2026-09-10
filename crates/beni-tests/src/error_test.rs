@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::Error;
+use beni::{Error, Mrb};
 
 #[test]
 fn new_builds_an_exception_error_carrying_the_message() {
@@ -116,4 +116,90 @@ fn backtrace_answers_empty_for_an_exception_holding_none() {
     let err = Error::new(&mrb, mrb.class_get(c"RuntimeError").unwrap(), "unraised");
 
     assert!(err.backtrace(&mrb).is_empty());
+}
+
+/// Collect with nothing but `err` holding its exception, and require
+/// that exception to still be one. A reclaimed object reads back as no
+/// longer an exception, so this observes survival without dereferencing
+/// what the collector may have freed.
+fn assert_exception_survives_a_collection(mrb: &Mrb, err: &Error) {
+    let Error::Exception(exc) = err else {
+        panic!("the error must carry an exception, got {err:?}")
+    };
+    mrb.full_gc();
+    assert!(exc.is_exception(), "the collection reclaimed the exception");
+}
+
+#[test]
+fn a_load_error_keeps_its_exception_through_a_collection() {
+    let mrb = open_mrb();
+
+    let err = mrb
+        .load_string(b"raise 'boom'")
+        .expect_err("a raising script must come back Err");
+
+    assert_exception_survives_a_collection(&mrb, &err);
+    assert!(err.message(&mrb).contains("boom"));
+}
+
+#[test]
+fn a_context_load_error_keeps_its_frames_through_a_collection() {
+    use beni::Ccontext;
+
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"collected.rb").expect("allocating the context must succeed");
+
+    let err = cxt
+        .load_nstring(b"raise 'boom'")
+        .expect_err("a raising script must come back Err");
+
+    assert_exception_survives_a_collection(&mrb, &err);
+    // The frames are packed onto the exception and unpacked on demand,
+    // so they are only readable while the exception itself is.
+    assert!(
+        err.backtrace(&mrb)
+            .iter()
+            .any(|frame| frame.contains("collected.rb")),
+        "the stamped frames outlive the collection too"
+    );
+}
+
+#[test]
+fn a_bytecode_load_error_keeps_its_exception_through_a_collection() {
+    use beni::{Ccontext, DumpOptions};
+
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"collected.rb").expect("allocating the context must succeed");
+    let bytes = cxt
+        .compile(b"raise 'boom'")
+        .expect("the source must compile")
+        .dump(&mrb, DumpOptions::default())
+        .expect("a Proc compiled from source must dump");
+
+    let err = mrb
+        .load_bytecode(&bytes)
+        .expect_err("a program that raises must not come back Ok");
+
+    assert_exception_survives_a_collection(&mrb, &err);
+    assert!(err.message(&mrb).contains("boom"));
+}
+
+#[test]
+fn a_protected_raise_keeps_its_exception_through_a_collection() {
+    let mrb = open_mrb();
+
+    let err = mrb
+        .protect(|m| {
+            // SAFETY: `m` is the live VM inside the protected frame;
+            // `RuntimeError` is a core class so the lookup cannot fail;
+            // `mrb_raise` long-jumps to the protect frame.
+            unsafe {
+                let runtime_error = beni::sys::mrb_class_get(m.as_ptr(), c"RuntimeError".as_ptr());
+                beni::sys::mrb_raise(m.as_ptr(), runtime_error, c"boom".as_ptr());
+            }
+        })
+        .expect_err("a raise inside the body must surface as Err");
+
+    assert_exception_survives_a_collection(&mrb, &err);
+    assert!(err.message(&mrb).contains("boom"));
 }
