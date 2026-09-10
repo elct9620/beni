@@ -384,6 +384,16 @@ extensions:
     implicit `StandardError` default — a caller wanting the bare-`rescue`
     default names `StandardError` itself); an exception matching no listed
     class, and a Rust panic, are not caught and propagate unchanged.
+  Mrb::ensure: >-
+    `begin`/`ensure` combinator: a safe composition of the already-graduated
+    `Mrb::protect`, the typed-surface equivalent of mruby's `mrb_ensure` with
+    two Rust closures replacing its two `mrb_func_t` + `mrb_value` data pairs.
+    Binds no new C symbol — keeping it a composition is what lets an archive
+    built without the `mruby-error` gem carry it. The ensure closure runs on
+    every exit the body takes and its own value is discarded; one that raises
+    or panics replaces the body's outcome, and it runs under exception
+    protection of its own so that raise surfaces as an `Err` rather than
+    long-jumping past the caller.
   Array::entries: >-
     `ExactSizeIterator` walk of an array by C-level index: composes the
     already-graduated `Array::entry` (`mrb_ary_entry`) and `Array::len`
@@ -446,6 +456,7 @@ subsumed:
   mrb_exc_new_lit: "`RClass::exc_new_str` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it"
   mrb_exc_get: "`Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it"
   mrb_clear_error: "`Mrb::clear_exc` — the inner call of `mrb_check_error`, whose body is `if (mrb->exc) { mrb_clear_error(mrb); return TRUE; }` (`vendor/mruby/src/error.c:876-891`); the bool the C form returns is what the Rust shape drops, and clearing the pending exception is the whole of what remains"
+  mrb_ensure: "`Mrb::ensure` — `mrb_protect_error`, then the cleanup call, then a rethrow of the caught exception (`vendor/mruby/mrbgems/mruby-error/src/exception.c:56-68`), which is the composition `ensure` is; the two closures carry the `mrb_func_t` + `mrb_value` data pairs, and the rethrow the C form ends in is the `Err` the typed surface returns in its place. The C form brackets both calls in one arena save to keep the body's result alive across the cleanup; each `mrb_protect_error` re-protects the value it surfaces before returning (`vendor/mruby/src/vm.c:566-567`), so the body's result outlives the second `protect`'s own restore"
   mrb_check_array_type: "`FromValue` -> `Array` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it"
   mrb_check_hash_type: "`FromValue` -> `Hash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type`"
   mrb_check_string_type: "`FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type`"

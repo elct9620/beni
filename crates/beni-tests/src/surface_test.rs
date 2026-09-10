@@ -240,6 +240,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::intern_static;
     let _ = Mrb::module_new;
     let _ = Mrb::rescue::<fn(&Mrb) -> Value, fn(&Mrb, Value) -> Value>;
+    let _ = Mrb::ensure::<fn(&Mrb) -> Value, fn(&Mrb) -> Value>;
     let _ = Mrb::str_new_static;
     let _ = Mrb::sym_dump;
     let _ = Mrb::sym_name_len;

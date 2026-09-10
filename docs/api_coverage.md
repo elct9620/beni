@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 319 | 318 (100%) | 225 (71%) |
+| function | 319 | 318 (100%) | 226 (71%) |
 | macro | 111 | 28 (25%) | 70 (63%) |
-| total | 430 | 346 (80%) | 295 (69%) |
+| total | 430 | 346 (80%) | 296 (69%) |
 
 ## mruby.h
 
@@ -333,7 +333,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_break_value_set` | macro | ❌ | ❌ |  |
 | `mrb_check_error` | fn | ✅ | ✅ | `Mrb::clear_exc` |
 | `mrb_clear_error` | fn | ✅ | ✅ | subsumed: `Mrb::clear_exc` — the inner call of `mrb_check_error`, whose body is `if (mrb->exc) { mrb_clear_error(mrb); return TRUE; }` (`vendor/mruby/src/error.c:876-891`); the bool the C form returns is what the Rust shape drops, and clearing the pending exception is the whole of what remains |
-| `mrb_ensure` | fn | ✅ | ❌ |  |
+| `mrb_ensure` | fn | ✅ | ✅ | subsumed: `Mrb::ensure` — `mrb_protect_error`, then the cleanup call, then a rethrow of the caught exception (`vendor/mruby/mrbgems/mruby-error/src/exception.c:56-68`), which is the composition `ensure` is; the two closures carry the `mrb_func_t` + `mrb_value` data pairs, and the rethrow the C form ends in is the `Err` the typed surface returns in its place. The C form brackets both calls in one arena save to keep the body's result alive across the cleanup; each `mrb_protect_error` re-protects the value it surfaces before returning (`vendor/mruby/src/vm.c:566-567`), so the body's result outlives the second `protect`'s own restore |
 | `mrb_exc_new_lit` | macro | ❌ | ✅ | subsumed: `RClass::exc_new_str` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it |
 | `mrb_exc_new_str` | fn | ✅ | ✅ | `RClass::exc_new_str` — build an exception carrying an existing mruby `RString` as-is; the static String tag means the underlying type guard never fires |
 | `mrb_exc_ptr` | macro | ❌ | ❌ |  |
@@ -594,6 +594,7 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `Value::funcall`, `Value::ensure_array`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
 | `GcRoot` | The releasable root: a guard holding one slot of a table the interpreter keeps, released when the guard drops. Binds no new C symbol — it composes the already-graduated array and global-variable primitives — because the C pair it would otherwise wrap cannot carry it: `mrb_gc_unregister` removes by value, so one holder's release would drop every other root over the same value. A slot is the per-root identity mruby's registry lacks, the same role the storage address plays for CRuby's `rb_gc_register_address`. Released slots go on an intrusive free list so a long-running consumer's table stops growing. A refused release leaves the value rooted for the interpreter's remaining lifetime — over-retention, never a value collected while a holder still names it. |
 | `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
+| `Mrb::ensure` | `begin`/`ensure` combinator: a safe composition of the already-graduated `Mrb::protect`, the typed-surface equivalent of mruby's `mrb_ensure` with two Rust closures replacing its two `mrb_func_t` + `mrb_value` data pairs. Binds no new C symbol — keeping it a composition is what lets an archive built without the `mruby-error` gem carry it. The ensure closure runs on every exit the body takes and its own value is discarded; one that raises or panics replaces the body's outcome, and it runs under exception protection of its own so that raise surfaces as an `Err` rather than long-jumping past the caller. |
 | `Mrb::rescue` | `begin`/`rescue` combinator: a safe composition of the already-graduated `Mrb::protect` (`mrb_protect_error`) and `Value::is_kind_of` (`mrb_obj_is_kind_of`) class-list filter, the typed-surface equivalent of mruby's `mrb_rescue` / `mrb_rescue_exceptions` with a `&[RClass]` slice replacing the raw `RClass**` array. Binds no new C symbol — keeping it a composition is the point. An empty class list intercepts nothing (no implicit `StandardError` default — a caller wanting the bare-`rescue` default names `StandardError` itself); an exception matching no listed class, and a Rust panic, are not caught and propagate unchanged. |
 | `ParseMessage` | One compiler diagnostic's line, column, and text, read through accessors. mruby publishes `struct mrb_parser_message` as a parser field rather than through any call, so there is no C API to bind: the typed surface copies the slot out while the parser is alive and hands back an owned value that outlives it. `Ccontext::load_nstring` returns the first recorded error as `Error::Syntax`, and `Ccontext::warnings` answers the load's warnings. |
 | `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` and `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as arbitrary owned bytes). |

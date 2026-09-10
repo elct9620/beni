@@ -1,11 +1,13 @@
-//! `mrb_protect_error` closure wrapper on `Mrb`.
+//! Protected execution on `Mrb`: `mrb_protect_error` and the
+//! combinators composed over it.
 //!
-//! Inherent method that wraps mruby's `mrb_protect_error` so any
-//! Ruby exception the body raises is caught and surfaced as
-//! `Err(Error::Exception)` instead of long-jumping past the Rust
-//! caller, and any Rust panic the body raises is caught at the FFI
-//! boundary and surfaced as `Err(Error::Panic)` instead of unwinding
-//! into mruby's C frames.
+//! `protect` wraps mruby's `mrb_protect_error` so any Ruby exception
+//! the body raises is caught and surfaced as `Err(Error::Exception)`
+//! instead of long-jumping past the Rust caller, and any Rust panic
+//! the body raises is caught at the FFI boundary and surfaced as
+//! `Err(Error::Panic)` instead of unwinding into mruby's C frames.
+//! `rescue` and `ensure` compose that one primitive into Ruby's
+//! `begin`/`rescue` and `begin`/`ensure`, binding no further C symbol.
 
 use crate::{Error, Mrb, RClass, Value};
 use beni_sys as sys;
@@ -163,6 +165,37 @@ impl Mrb {
                 self.protect(|mrb| handler(mrb, exc))
             }
             Err(other) => Err(other),
+        }
+    }
+
+    /// Run `body` under exception protection and run `ensure`
+    /// afterwards, mirroring a Ruby `begin`/`ensure`. A Rust-native
+    /// composition of `Mrb::protect` — no new bound C symbol.
+    ///
+    /// `ensure` runs on every exit `body` can take — normal
+    /// completion, a raised exception, and a Rust panic — and its own
+    /// return value is discarded: only its effects reach the caller.
+    /// An `ensure` that completes leaves `body`'s outcome, `Ok` or
+    /// `Err`, unchanged; one that raises or panics replaces that
+    /// outcome with its own `Err`.
+    ///
+    /// `ensure` runs under exception protection of its own, so a raise
+    /// inside it surfaces as that `Err` rather than long-jumping past
+    /// the caller.
+    ///
+    /// The same "capture `Copy` values only" caveat as `Mrb::protect`
+    /// applies to both closures: a raised exception long-jumps out
+    /// before the closure returns, so non-`Copy` captures are not
+    /// dropped on that path.
+    pub fn ensure<F, G>(&self, body: F, ensure: G) -> Result<Value, Error>
+    where
+        F: FnOnce(&Mrb) -> Value,
+        G: FnOnce(&Mrb) -> Value,
+    {
+        let outcome = self.protect(body);
+        match self.protect(ensure) {
+            Ok(_) => outcome,
+            Err(from_ensure) => Err(from_ensure),
         }
     }
 }

@@ -1,5 +1,6 @@
 use crate::support::open_mrb;
 use beni::{Error, Mrb, Value};
+use core::cell::Cell;
 
 #[test]
 fn protect_returns_the_body_value_on_success() {
@@ -239,4 +240,146 @@ fn rescue_does_not_catch_a_body_panic() {
         .protect(|m| m.str_new(b"alive").as_value())
         .expect("the VM must survive the caught panic");
     assert_eq!(again.to_string(&mrb), "alive");
+}
+
+#[test]
+fn ensure_returns_the_body_value_and_runs_the_ensure_closure() {
+    let mrb = open_mrb();
+    let ran = Cell::new(false);
+
+    let got = mrb
+        .ensure(
+            |m| m.str_new(b"body ok").as_value(),
+            |_| {
+                ran.set(true);
+                Value::nil()
+            },
+        )
+        .expect("a non-raising body comes back Ok");
+
+    assert_eq!(got.to_string(&mrb), "body ok");
+    assert!(ran.get(), "the ensure closure runs on the normal exit");
+}
+
+#[test]
+fn ensure_keeps_the_body_error_when_the_ensure_closure_completes() {
+    let mrb = open_mrb();
+    let ran = Cell::new(false);
+
+    let err = mrb
+        .ensure(
+            |m| raise_named(m, c"RuntimeError", c"boom from body"),
+            |_| {
+                ran.set(true);
+                Value::nil()
+            },
+        )
+        .expect_err("a body raise surfaces as Err");
+
+    assert!(ran.get(), "the ensure closure runs on the raise exit");
+    match err {
+        Error::Exception(_) => assert!(err.message(&mrb).contains("boom from body")),
+        other => panic!("the body raise stays Error::Exception, got {other}"),
+    }
+}
+
+#[test]
+fn ensure_replaces_a_body_error_with_its_own_raise() {
+    let mrb = open_mrb();
+
+    let err = mrb
+        .ensure(
+            |m| raise_named(m, c"RuntimeError", c"boom from body"),
+            |m| raise_named(m, c"ArgumentError", c"boom from ensure"),
+        )
+        .expect_err("an ensure raise surfaces as Err");
+
+    let argument_error = mrb
+        .class_get(c"ArgumentError")
+        .expect("ArgumentError is a core class");
+    match err {
+        Error::Exception(exc) => {
+            assert!(
+                exc.is_kind_of(&mrb, argument_error),
+                "the ensure closure's exception replaces the body's"
+            );
+            assert!(exc.to_string(&mrb).contains("boom from ensure"));
+        }
+        other => panic!("the ensure raise stays Error::Exception, got {other}"),
+    }
+}
+
+#[test]
+fn ensure_replaces_a_body_value_with_its_own_raise() {
+    let mrb = open_mrb();
+
+    let err = mrb
+        .ensure(
+            |m| m.str_new(b"body ok").as_value(),
+            |m| raise_named(m, c"RuntimeError", c"boom from ensure"),
+        )
+        .expect_err("an ensure raise replaces the body's Ok");
+
+    match err {
+        Error::Exception(_) => assert!(err.message(&mrb).contains("boom from ensure")),
+        other => panic!("the ensure raise stays Error::Exception, got {other}"),
+    }
+}
+
+#[test]
+fn ensure_runs_the_ensure_closure_when_the_body_panics() {
+    let mrb = open_mrb();
+    let ran = Cell::new(false);
+
+    let err = mrb
+        .ensure(
+            |_| panic!("boom from body"),
+            |_| {
+                ran.set(true);
+                Value::nil()
+            },
+        )
+        .expect_err("a body panic surfaces as Err");
+
+    assert!(ran.get(), "the ensure closure runs on the panic exit");
+    match err {
+        Error::Panic(msg) => assert!(msg.contains("boom from body")),
+        other => panic!("a Rust panic must surface as Error::Panic, got {other}"),
+    }
+}
+
+#[test]
+fn ensure_surfaces_an_ensure_closure_panic_as_err() {
+    let mrb = open_mrb();
+
+    let err = mrb
+        .ensure(
+            |m| m.str_new(b"body ok").as_value(),
+            |_| panic!("boom from ensure"),
+        )
+        .expect_err("an ensure panic replaces the body's Ok");
+
+    match err {
+        Error::Panic(msg) => assert!(msg.contains("boom from ensure")),
+        other => panic!("a Rust panic must surface as Error::Panic, got {other}"),
+    }
+    // The VM stays usable after the caught ensure panic.
+    let again = mrb
+        .protect(|m| m.str_new(b"alive").as_value())
+        .expect("the VM must survive the caught ensure panic");
+    assert_eq!(again.to_string(&mrb), "alive");
+}
+
+#[test]
+fn ensure_discards_the_ensure_closure_value() {
+    let mrb = open_mrb();
+
+    let got = mrb
+        .ensure(
+            |m| m.str_new(b"body ok").as_value(),
+            |m| m.str_new(b"ensure value").as_value(),
+        )
+        .expect("a completing ensure closure leaves the body's Ok");
+
+    assert_eq!(got.to_string(&mrb), "body ok");
 }
