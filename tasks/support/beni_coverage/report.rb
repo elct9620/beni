@@ -41,7 +41,7 @@ module BeniCoverage
 
         mruby #{@version} · sys detection: #{mode} · #{outside_note}
 
-        Legend: ✅ covered · — missing · ⊘ outside the measure
+        Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
         #{summary_table}
       MD
@@ -92,13 +92,13 @@ module BeniCoverage
 
     def symbol_row(entry)
       kind = entry.kind == :function ? "fn" : "macro"
-      typed = @coverage.exclusion(entry.name) ? "⊘" : mark(@coverage.typed?(entry.name))
+      typed = @coverage.exclusion(entry.name) ? "🚫" : mark(@coverage.typed?(entry.name))
       "| `#{entry.name}` | #{kind} | #{mark(@coverage.in_sys?(entry.name))} | " \
         "#{typed} | #{@coverage.note(entry.name)} |"
     end
 
     def mark(covered)
-      covered ? "✅" : "—"
+      covered ? "✅" : "❌"
     end
   end
 end

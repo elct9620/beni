@@ -5,7 +5,7 @@
 
 mruby 4.0.0 · sys detection: linked (parsed bindings.rs) · 466 scanned · outside the measure: 29 declined, 7 conditional
 
-Legend: ✅ covered · — missing · ⊘ outside the measure
+Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
@@ -20,31 +20,31 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `MRB_ARGS_ANY` | macro | ✅ | ✅ | a typed method's `-1` arity, derived by `Module::define_method` |
 | `MRB_ARGS_ARG` | macro | ✅ | ✅ | a typed method's required-and-optional arity, derived by `Module::define_method` (the `method!(f, req, opt)` form's aspec) |
 | `MRB_ARGS_BLOCK` | macro | ✅ | ✅ | a typed method's block-accepting flag, derived by `Module::define_method` (the `method!(f, req, &)` form's aspec, OR-ed into the positional aspec) |
-| `MRB_ARGS_KEY` | macro | — | — |  |
-| `MRB_ARGS_NOBLOCK` | macro | — | — |  |
+| `MRB_ARGS_KEY` | macro | ❌ | ❌ |  |
+| `MRB_ARGS_NOBLOCK` | macro | ❌ | ❌ |  |
 | `MRB_ARGS_NONE` | macro | ✅ | ✅ | a typed method's `0` arity, derived by `Module::define_method` (the no-argument aspec a zero-arity definition declares) |
-| `MRB_ARGS_OPT` | macro | — | ✅ | a typed method's optional positional arity, derived by `Module::define_method` (the optional component of the `method!(f, req, opt)` aspec) |
-| `MRB_ARGS_POST` | macro | — | — |  |
+| `MRB_ARGS_OPT` | macro | ❌ | ✅ | a typed method's optional positional arity, derived by `Module::define_method` (the optional component of the `method!(f, req, opt)` aspec) |
+| `MRB_ARGS_POST` | macro | ❌ | ❌ |  |
 | `MRB_ARGS_REQ` | macro | ✅ | ✅ | a typed method's positional arity, derived by `Module::define_method` |
-| `MRB_ARGS_REST` | macro | — | ✅ | defined as `MRB_ARGS_ANY` |
-| `mrb_alloca` | macro | — | ⊘ | declined: VM scratch allocator, a `#define` over `mrb_temp_alloc` — see `mrb_malloc` |
+| `MRB_ARGS_REST` | macro | ❌ | ✅ | defined as `MRB_ARGS_ANY` |
+| `mrb_alloca` | macro | ❌ | 🚫 | declined: VM scratch allocator, a `#define` over `mrb_temp_alloc` — see `mrb_malloc` |
 | `mrb_any_to_s` | fn | ✅ | ✅ | `Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::obj_as_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly |
 | `mrb_argnum_error` | fn | ✅ | ✅ | `Error::argnum` |
 | `mrb_as_float` | macro | ✅ | ✅ | `Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast |
 | `mrb_as_int` | macro | ✅ | ✅ | `Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast |
 | `mrb_attr_get` | fn | ✅ | ✅ | `Value::iv_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `iv_get` already takes a raw `mrb_sym`, so it yields an identical value for every key a typed caller can form and no separate item is needed |
-| `mrb_basic_alloc_func` | fn | ✅ | ⊘ | declined: the default allocator `mrb_open_allocf` installs; `Mrb::open` opens with `mrb_open`, so no typed caller reaches it |
+| `mrb_basic_alloc_func` | fn | ✅ | 🚫 | declined: the default allocator `mrb_open_allocf` installs; `Mrb::open` opens with `mrb_open`, so no typed caller reaches it |
 | `mrb_block_given_p` | fn | ✅ | ✅ | `Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises |
-| `mrb_bug` | fn | ✅ | — |  |
-| `mrb_calloc` | fn | ✅ | ⊘ | declined: VM allocator — see `mrb_malloc` |
+| `mrb_bug` | fn | ✅ | ❌ |  |
+| `mrb_calloc` | fn | ✅ | 🚫 | declined: VM allocator — see `mrb_malloc` |
 | `mrb_check_array_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `Array` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it |
-| `mrb_check_convert_type` | macro | — | — |  |
-| `mrb_check_frozen` | fn | ✅ | ⊘ | declined: takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `Value::check_frozen` |
+| `mrb_check_convert_type` | macro | ❌ | ❌ |  |
+| `mrb_check_frozen` | fn | ✅ | 🚫 | declined: takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `Value::check_frozen` |
 | `mrb_check_frozen_value` | fn | ✅ | ✅ | `Value::check_frozen` — the frozen-state precondition guard, the `mrb_value` form a typed caller can reach |
 | `mrb_check_hash_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `Hash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type` |
-| `mrb_check_intern` | fn | ✅ | — |  |
-| `mrb_check_intern_cstr` | fn | ✅ | — |  |
-| `mrb_check_intern_str` | fn | ✅ | — |  |
+| `mrb_check_intern` | fn | ✅ | ❌ |  |
+| `mrb_check_intern_cstr` | fn | ✅ | ❌ |  |
+| `mrb_check_intern_str` | fn | ✅ | ❌ |  |
 | `mrb_check_string_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type` |
 | `mrb_check_type` | fn | ✅ | ✅ | subsumed: the `FromValue` downcasts and the `Value::is_*` tag predicates — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot |
 | `mrb_class_defined` | fn | ✅ | ✅ | `Mrb::class_defined` with a name key — interns and routes through `mrb_class_defined_id` |
@@ -61,8 +61,8 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_class_path` | fn | ✅ | ✅ | `Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous |
 | `mrb_close` | fn | ✅ | ✅ | `Mrb::drop` |
 | `mrb_cmp` | fn | ✅ | ✅ | `Value::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable |
-| `mrb_context_run` | macro | — | — |  |
-| `mrb_convert_type` | macro | — | — |  |
+| `mrb_context_run` | macro | ❌ | ❌ |  |
+| `mrb_convert_type` | macro | ❌ | ❌ |  |
 | `mrb_define_alias` | fn | ✅ | ✅ | `Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id` |
 | `mrb_define_alias_id` | fn | ✅ | ✅ | `Module::alias_method` with `Symbol` keys (the symbol-or-name key, both names keyed independently) |
 | `mrb_define_class` | fn | ✅ | ✅ | `Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id` |
@@ -94,21 +94,21 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_ensure_string_type` | fn | ✅ | ✅ | `Value::ensure_string` — the raising String-tag coercion to an `RString` handle |
 | `mrb_eql` | fn | ✅ | ✅ | `Value::eql` |
 | `mrb_equal` | fn | ✅ | ✅ | `Value::equal` |
-| `mrb_exc_get` | macro | — | ✅ | subsumed: `Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it |
+| `mrb_exc_get` | macro | ❌ | ✅ | subsumed: `Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it |
 | `mrb_exc_get_id` | fn | ✅ | ✅ | `Mrb::exc_get` (the symbol-or-name key) — fetch a built-in exception class, guaranteed an `Exception` subclass |
 | `mrb_exc_new` | fn | ✅ | ✅ | `RClass::exc_new`, also via `Error::new` (see Error extension) |
 | `mrb_exc_raise` | fn | ✅ | ✅ | raised from `Err` by the dispatch bridge (see Error extension) |
-| `mrb_fiber_alive_p` | fn | ✅ | — |  |
-| `mrb_fiber_new` | fn | ✅ | — |  |
-| `mrb_fiber_resume` | fn | ✅ | — |  |
-| `mrb_fiber_yield` | fn | ✅ | — |  |
-| `mrb_field_write_barrier` | fn | ✅ | ⊘ | declined: the two-object form, taking both as `struct RBasic*` — see `mrb_write_barrier` |
-| `mrb_field_write_barrier_value` | macro | — | ⊘ | declined: the `mrb_value` form of `mrb_field_write_barrier`, still taking the owner as `struct RBasic*` — see `mrb_write_barrier` |
-| `mrb_format` | fn | ✅ | — |  |
-| `mrb_free` | fn | ✅ | ⊘ | declined: VM allocator — see `mrb_malloc` |
-| `mrb_frozen_error` | fn | ✅ | ⊘ | declined: raises what `mrb_check_frozen` checks for, taking the object as `void*` the same way (`vendor/mruby/include/mruby.h:1446`) — see `mrb_check_frozen`; the pointer form cannot express the immediate mruby raises the same `FrozenError` for, which the `mrb_value` form tests before raising (`vendor/mruby/src/error.c:693-699`) |
+| `mrb_fiber_alive_p` | fn | ✅ | ❌ |  |
+| `mrb_fiber_new` | fn | ✅ | ❌ |  |
+| `mrb_fiber_resume` | fn | ✅ | ❌ |  |
+| `mrb_fiber_yield` | fn | ✅ | ❌ |  |
+| `mrb_field_write_barrier` | fn | ✅ | 🚫 | declined: the two-object form, taking both as `struct RBasic*` — see `mrb_write_barrier` |
+| `mrb_field_write_barrier_value` | macro | ❌ | 🚫 | declined: the `mrb_value` form of `mrb_field_write_barrier`, still taking the owner as `struct RBasic*` — see `mrb_write_barrier` |
+| `mrb_format` | fn | ✅ | ❌ |  |
+| `mrb_free` | fn | ✅ | 🚫 | declined: VM allocator — see `mrb_malloc` |
+| `mrb_frozen_error` | fn | ✅ | 🚫 | declined: raises what `mrb_check_frozen` checks for, taking the object as `void*` the same way (`vendor/mruby/include/mruby.h:1446`) — see `mrb_check_frozen`; the pointer form cannot express the immediate mruby raises the same `FrozenError` for, which the `mrb_value` form tests before raising (`vendor/mruby/src/error.c:693-699`) |
 | `mrb_full_gc` | fn | ✅ | ✅ | `Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive) |
-| `mrb_func_basic_p` | fn | ✅ | — |  |
+| `mrb_func_basic_p` | fn | ✅ | ❌ |  |
 | `mrb_funcall` | fn | ✅ | ✅ | subsumed: `Value::funcall`, `Value::funcall_argv` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch |
 | `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym) |
 | `mrb_funcall_id` | fn | ✅ | ✅ | subsumed: `Value::funcall`, `Value::funcall_argv` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc` |
@@ -116,17 +116,17 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_garbage_collect` | fn | ✅ | ✅ | subsumed: `Mrb::full_gc` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection |
 | `mrb_gc_arena_restore` | macro | ✅ | ✅ | `ArenaScope::keep`/`drop` (see ArenaScope extension) |
 | `mrb_gc_arena_save` | macro | ✅ | ✅ | `Mrb::arena_scope` (see ArenaScope extension) |
-| `mrb_gc_mark` | fn | ✅ | ⊘ | declined: marks one object during the collector's mark phase — mruby's `mrb_data_type` carries only `struct_name` and `dfree` (`vendor/mruby/include/mruby/data.h:22-28`), so an embedder has no mark hook to write and no typed caller reaches it (contrast magnus's `gc::Marker`, which exists because CRuby's `rb_data_type_t` has `dmark`) |
-| `mrb_gc_mark_value` | macro | — | ⊘ | declined: the `mrb_value` form of `mrb_gc_mark` — see `mrb_gc_mark` |
+| `mrb_gc_mark` | fn | ✅ | 🚫 | declined: marks one object during the collector's mark phase — mruby's `mrb_data_type` carries only `struct_name` and `dfree` (`vendor/mruby/include/mruby/data.h:22-28`), so an embedder has no mark hook to write and no typed caller reaches it (contrast magnus's `gc::Marker`, which exists because CRuby's `rb_data_type_t` has `dmark`) |
+| `mrb_gc_mark_value` | macro | ❌ | 🚫 | declined: the `mrb_value` form of `mrb_gc_mark` — see `mrb_gc_mark` |
 | `mrb_gc_protect` | fn | ✅ | ✅ | `ArenaScope::keep` (see ArenaScope extension) |
 | `mrb_gc_register` | fn | ✅ | ✅ | `Mrb::gc_register_forever` — root a value for the interpreter's remaining lifetime. Only the never-released shape graduates: mruby's registry is keyed by value, so a removal drops every root over it, and a shape that never removes cannot drop another holder's (the releasable shape is the GcRoot extension) |
-| `mrb_gc_unregister` | fn | ✅ | ⊘ | declined: removes a root by value, so it drops every registration of that value at once (`vendor/mruby/src/gc.c:537-553`) — no typed shape can release one holder's root without releasing another's. The releasable root is the GcRoot extension, whose slot supplies the identity this call lacks; the never-released half is `Mrb::gc_register_forever` |
+| `mrb_gc_unregister` | fn | ✅ | 🚫 | declined: removes a root by value, so it drops every registration of that value at once (`vendor/mruby/src/gc.c:537-553`) — no typed shape can release one holder's root without releasing another's. The releasable root is the GcRoot extension, whose slot supplies the identity this call lacks; the never-released half is `Mrb::gc_register_forever` |
 | `mrb_get_arg1` | fn | ✅ | ✅ | `Mrb::arg1` — the single required argument, raising `ArgumentError` on any other count (the strict counterpart to a `format::O` read) |
 | `mrb_get_argc` | fn | ✅ | ✅ | `Mrb::argc` |
 | `mrb_get_args` | fn | ✅ | ✅ | state::args — the format markers and frame-read helpers; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol |
-| `mrb_get_args_a` | fn | ✅ | — |  |
+| `mrb_get_args_a` | fn | ✅ | ❌ |  |
 | `mrb_get_argv` | fn | ✅ | ✅ | `Mrb::argv` — the call frame's positional arguments as a borrowed slice, the companion to `Mrb::argc` |
-| `mrb_get_mid` | fn | ✅ | — |  |
+| `mrb_get_mid` | fn | ✅ | ❌ |  |
 | `mrb_include_module` | fn | ✅ | ✅ | `Module::include_module` |
 | `mrb_incremental_gc` | fn | ✅ | ✅ | `Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive) |
 | `mrb_inspect` | fn | ✅ | ✅ | `Value::inspect` |
@@ -136,120 +136,120 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_intern_check_cstr` | fn | ✅ | ✅ | `Mrb::intern_check` — a NUL-terminated name is bytes passed to the check primitive this convenience wrapper forwards to |
 | `mrb_intern_check_str` | fn | ✅ | ✅ | `Mrb::intern_check` — an mruby String value's bytes pass to the check primitive this convenience wrapper forwards to |
 | `mrb_intern_cstr` | fn | ✅ | ✅ | `Mrb::intern_cstr` |
-| `mrb_intern_lit` | macro | — | ✅ | `Mrb::intern_static` — the literal macro `mrb_intern_lit(mrb, lit)` is `mrb_intern_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
+| `mrb_intern_lit` | macro | ❌ | ✅ | `Mrb::intern_static` — the literal macro `mrb_intern_lit(mrb, lit)` is `mrb_intern_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_intern_static` | fn | ✅ | ✅ | `Mrb::intern_static` |
 | `mrb_intern_str` | fn | ✅ | ✅ | `Mrb::intern_str` |
-| `mrb_locale_free` | macro | — | ⊘ | conditional: `_WIN32` — see `mrb_locale_from_utf8` |
-| `mrb_locale_from_utf8` | fn | — | ⊘ | conditional: `_WIN32` — `vendor/mruby/include/mruby.h:1248` makes it an identity macro off Windows, where there is no encoding to convert |
-| `mrb_malloc` | fn | ✅ | ⊘ | declined: VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `RClass::data_wrap` is the graduated seam between the two |
-| `mrb_malloc_simple` | fn | ✅ | ⊘ | declined: VM allocator, the non-raising variant — see `mrb_malloc` |
-| `mrb_method_cache_clear` | fn | ✅ | — |  |
+| `mrb_locale_free` | macro | ❌ | 🚫 | conditional: `_WIN32` — see `mrb_locale_from_utf8` |
+| `mrb_locale_from_utf8` | fn | ❌ | 🚫 | conditional: `_WIN32` — `vendor/mruby/include/mruby.h:1248` makes it an identity macro off Windows, where there is no encoding to convert |
+| `mrb_malloc` | fn | ✅ | 🚫 | declined: VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `RClass::data_wrap` is the graduated seam between the two |
+| `mrb_malloc_simple` | fn | ✅ | 🚫 | declined: VM allocator, the non-raising variant — see `mrb_malloc` |
+| `mrb_method_cache_clear` | fn | ✅ | ❌ |  |
 | `mrb_module_get` | fn | ✅ | ✅ | `Mrb::module_get` with a name key — interns and routes through `mrb_module_get_id` |
 | `mrb_module_get_id` | fn | ✅ | ✅ | `Mrb::module_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) |
 | `mrb_module_get_under` | fn | ✅ | ✅ | `Module::module_get` with a name key — interns and routes through `mrb_module_get_under_id` |
 | `mrb_module_get_under_id` | fn | ✅ | ✅ | `Module::module_get` with a `Symbol` key (the symbol-or-name key) |
 | `mrb_module_new` | fn | ✅ | ✅ | `Mrb::module_new` — create an anonymous module, bound to no constant |
 | `mrb_name_error` | fn | ✅ | ✅ | subsumed: `RClass::obj_new` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef` |
-| `mrb_notimplement` | fn | ✅ | — |  |
-| `mrb_notimplement_m` | fn | ✅ | — |  |
-| `mrb_obj_alloc` | fn | ✅ | ⊘ | declined: allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `RClass::data_wrap` |
+| `mrb_notimplement` | fn | ✅ | ❌ |  |
+| `mrb_notimplement_m` | fn | ✅ | ❌ |  |
+| `mrb_obj_alloc` | fn | ✅ | 🚫 | declined: allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `RClass::data_wrap` |
 | `mrb_obj_class` | fn | ✅ | ✅ | `Value::class` |
 | `mrb_obj_classname` | fn | ✅ | ✅ | `Value::classname` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form |
 | `mrb_obj_clone` | fn | ✅ | ✅ | `Value::obj_clone` |
 | `mrb_obj_dup` | fn | ✅ | ✅ | `Value::obj_dup` |
-| `mrb_obj_eq` | fn | ✅ | — |  |
+| `mrb_obj_eq` | fn | ✅ | ❌ |  |
 | `mrb_obj_equal` | fn | ✅ | ✅ | `Value::obj_equal` |
 | `mrb_obj_freeze` | fn | ✅ | ✅ | `Value::freeze` |
 | `mrb_obj_id` | fn | ✅ | ✅ | `Value::object_id` — the value-level identity id; `mrb_obj_eq` (the boxing-internal identity primitive `mrb_obj_equal` wraps), `mrb_obj_itself` (returns its own receiver), and `mrb_obj_respond_to` (the raw-`RClass*` form of the graduated value-level `mrb_respond_to`) stay in `sys` |
-| `mrb_obj_inspect` | fn | ✅ | — |  |
+| `mrb_obj_inspect` | fn | ✅ | ❌ |  |
 | `mrb_obj_is_instance_of` | fn | ✅ | ✅ | `Value::is_instance_of` |
 | `mrb_obj_is_kind_of` | fn | ✅ | ✅ | `Value::is_kind_of` |
-| `mrb_obj_itself` | fn | ✅ | — |  |
+| `mrb_obj_itself` | fn | ✅ | ❌ |  |
 | `mrb_obj_new` | fn | ✅ | ✅ | `RClass::obj_new` |
-| `mrb_obj_respond_to` | fn | ✅ | — |  |
+| `mrb_obj_respond_to` | fn | ✅ | ❌ |  |
 | `mrb_obj_to_sym` | fn | ✅ | ✅ | `Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path |
 | `mrb_open` | fn | ✅ | ✅ | `Mrb::open` |
-| `mrb_open_core` | fn | ✅ | — |  |
-| `mrb_p` | fn | ✅ | — |  |
+| `mrb_open_core` | fn | ✅ | ❌ |  |
+| `mrb_p` | fn | ✅ | ❌ |  |
 | `mrb_prepend_module` | fn | ✅ | ✅ | `Module::prepend_module` |
-| `mrb_print_backtrace` | fn | ✅ | — |  |
-| `mrb_print_error` | fn | ✅ | ⊘ | declined: writes the pending exception and its backtrace to the process's standard error (`vendor/mruby/src/error.c:843-866`) — no typed shape carries a write to the host's stderr, and SPEC holds the same line for the compiler's diagnostics: where a diagnostic is written is the host's choice, not beni's. `Error::message` and `Error::backtrace` hand a Rust caller the same text to write where it chooses |
+| `mrb_print_backtrace` | fn | ✅ | ❌ |  |
+| `mrb_print_error` | fn | ✅ | 🚫 | declined: writes the pending exception and its backtrace to the process's standard error (`vendor/mruby/src/error.c:843-866`) — no typed shape carries a write to the host's stderr, and SPEC holds the same line for the compiler's diagnostics: where a diagnostic is written is the host's choice, not beni's. `Error::message` and `Error::backtrace` hand a Rust caller the same text to write where it chooses |
 | `mrb_raise` | fn | ✅ | ✅ | `RClass::raise` |
 | `mrb_raisef` | fn | ✅ | ✅ | subsumed: `RClass::raise`, `Error::new` — the formatting variant of `mrb_raise`, whose body builds the message through mruby's own format engine and ends in the same `mrb_exc_raise` (`vendor/mruby/src/error.c:456-468`); a Rust caller formats the message in Rust before handing it over, the magnus-aligned shape SPEC's error contract names, so the engine is a means the Rust shape already carries rather than a capability of its own |
-| `mrb_realloc` | fn | ✅ | ⊘ | declined: VM allocator — see `mrb_malloc` |
-| `mrb_realloc_simple` | fn | ✅ | ⊘ | declined: VM allocator, the non-raising variant — see `mrb_malloc` |
-| `mrb_recursive_func_p` | fn | ✅ | — |  |
-| `mrb_recursive_method_p` | fn | ✅ | — |  |
+| `mrb_realloc` | fn | ✅ | 🚫 | declined: VM allocator — see `mrb_malloc` |
+| `mrb_realloc_simple` | fn | ✅ | 🚫 | declined: VM allocator, the non-raising variant — see `mrb_malloc` |
+| `mrb_recursive_func_p` | fn | ✅ | ❌ |  |
+| `mrb_recursive_method_p` | fn | ✅ | ❌ |  |
 | `mrb_respond_to` | fn | ✅ | ✅ | `Value::respond_to` |
-| `mrb_show_copyright` | fn | ✅ | — |  |
-| `mrb_show_version` | fn | ✅ | — |  |
+| `mrb_show_copyright` | fn | ✅ | ❌ |  |
+| `mrb_show_version` | fn | ✅ | ❌ |  |
 | `mrb_singleton_class` | fn | ✅ | ✅ | `Value::singleton_class` — the value's per-instance eigenclass (Ruby's `singleton_class`), returning a typed `RClass`; nil/true/false yield their predefined classes and every other immediate raises a TypeError. The raw-`RClass*` form `mrb_singleton_class_ptr`, which hands back a possibly-null pointer and demands VM-internal reasoning, stays in `sys` |
-| `mrb_singleton_class_ptr` | fn | ✅ | — |  |
-| `mrb_stack_extend` | fn | ✅ | — |  |
-| `mrb_state_atexit` | fn | ✅ | — |  |
+| `mrb_singleton_class_ptr` | fn | ✅ | ❌ |  |
+| `mrb_stack_extend` | fn | ✅ | ❌ |  |
+| `mrb_state_atexit` | fn | ✅ | ❌ |  |
 | `mrb_str_new` | fn | ✅ | ✅ | `Mrb::str_new` |
 | `mrb_str_new_cstr` | fn | ✅ | ✅ | `Mrb::str_new_cstr` |
-| `mrb_str_new_cstr_frozen` | macro | — | — |  |
-| `mrb_str_new_frozen` | macro | — | — |  |
-| `mrb_str_new_lit` | macro | — | ✅ | `Mrb::str_new_static` — the literal macro `mrb_str_new_lit(mrb, lit)` is `mrb_str_new_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
-| `mrb_str_new_lit_frozen` | macro | — | — |  |
+| `mrb_str_new_cstr_frozen` | macro | ❌ | ❌ |  |
+| `mrb_str_new_frozen` | macro | ❌ | ❌ |  |
+| `mrb_str_new_lit` | macro | ❌ | ✅ | `Mrb::str_new_static` — the literal macro `mrb_str_new_lit(mrb, lit)` is `mrb_str_new_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
+| `mrb_str_new_lit_frozen` | macro | ❌ | ❌ |  |
 | `mrb_str_new_static` | fn | ✅ | ✅ | `Mrb::str_new_static` |
-| `mrb_str_new_static_frozen` | macro | — | — |  |
-| `mrb_str_to_str` | macro | — | ✅ | defined as `mrb_obj_as_string` |
-| `mrb_string_type` | macro | — | ✅ | defined as `mrb_ensure_string_type` |
-| `mrb_strlen_lit` | macro | — | — |  |
-| `mrb_sym2name` | macro | — | ✅ | defined as `mrb_sym_name` |
-| `mrb_sym2name_len` | macro | — | ✅ | defined as `mrb_sym_name_len` |
-| `mrb_sym2str` | macro | — | ✅ | defined as `mrb_sym_str` |
+| `mrb_str_new_static_frozen` | macro | ❌ | ❌ |  |
+| `mrb_str_to_str` | macro | ❌ | ✅ | defined as `mrb_obj_as_string` |
+| `mrb_string_type` | macro | ❌ | ✅ | defined as `mrb_ensure_string_type` |
+| `mrb_strlen_lit` | macro | ❌ | ❌ |  |
+| `mrb_sym2name` | macro | ❌ | ✅ | defined as `mrb_sym_name` |
+| `mrb_sym2name_len` | macro | ❌ | ✅ | defined as `mrb_sym_name_len` |
+| `mrb_sym2str` | macro | ❌ | ✅ | defined as `mrb_sym_str` |
 | `mrb_sym_dump` | fn | ✅ | ✅ | `Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), returned as an owned `String`, not a borrow: it draws on the same shared `mrb->symbuf` scratch an inline name unpacks into and the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). Never raises |
 | `mrb_sym_name` | fn | ✅ | ✅ | `Mrb::sym_name`, `Symbol::name` — returns an owned UTF-8 `String`, not a borrow: mruby unpacks an inline (short) symbol's name into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (unlike CRuby's permanent static symbol names, this cannot wear magnus's `Cow<'static>` shape). Escaped to its quoted dump form when the name carries an embedded NUL |
 | `mrb_sym_name_len` | fn | ✅ | ✅ | `Mrb::sym_name_len`, `Symbol::name_bytes` — returns an owned `Vec<u8>`, not a borrow: an inline (short) symbol's name unpacks into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). The true length carries out of band so an embedded NUL is preserved unescaped |
 | `mrb_sym_str` | fn | ✅ | ✅ | `Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises |
-| `mrb_temp_alloc` | fn | ✅ | ⊘ | declined: VM scratch allocator tied to the arena — see `mrb_malloc` |
-| `mrb_to_float` | macro | — | ✅ | defined as `mrb_ensure_float_type` |
-| `mrb_to_int` | macro | — | ✅ | defined as `mrb_ensure_int_type` |
-| `mrb_to_integer` | macro | — | ✅ | defined as `mrb_ensure_int_type` |
-| `mrb_to_str` | macro | — | ✅ | defined as `mrb_ensure_string_type` |
+| `mrb_temp_alloc` | fn | ✅ | 🚫 | declined: VM scratch allocator tied to the arena — see `mrb_malloc` |
+| `mrb_to_float` | macro | ❌ | ✅ | defined as `mrb_ensure_float_type` |
+| `mrb_to_int` | macro | ❌ | ✅ | defined as `mrb_ensure_int_type` |
+| `mrb_to_integer` | macro | ❌ | ✅ | defined as `mrb_ensure_int_type` |
+| `mrb_to_str` | macro | ❌ | ✅ | defined as `mrb_ensure_string_type` |
 | `mrb_top_run` | fn | ✅ | ✅ | `Mrb::load_bytecode` |
 | `mrb_top_self` | fn | ✅ | ✅ | `Mrb::load_bytecode` |
-| `mrb_toplevel_run` | macro | — | — |  |
-| `mrb_toplevel_run_keep` | macro | — | — |  |
-| `mrb_type_convert` | fn | ✅ | — |  |
-| `mrb_type_convert_check` | fn | ✅ | — |  |
-| `mrb_undef_class_method` | fn | ✅ | — |  |
+| `mrb_toplevel_run` | macro | ❌ | ❌ |  |
+| `mrb_toplevel_run_keep` | macro | ❌ | ❌ |  |
+| `mrb_type_convert` | fn | ✅ | ❌ |  |
+| `mrb_type_convert_check` | fn | ✅ | ❌ |  |
+| `mrb_undef_class_method` | fn | ✅ | ❌ |  |
 | `mrb_undef_class_method_id` | fn | ✅ | ✅ | `Object::undef_singleton_method` — undefine a class method (a class's singleton method); routes both the symbol-or-name key through the raising `_id` form, so the `mrb_undef_class_method` string variant stays in `sys` |
-| `mrb_undef_method` | fn | ✅ | — |  |
+| `mrb_undef_method` | fn | ✅ | ❌ |  |
 | `mrb_undef_method_id` | fn | ✅ | ✅ | `Module::undef_method` — Ruby's `Module#undef_method`; both the symbol-or-name key route through the raising `_id` form, so the `mrb_undef_method` string variant (which does not raise) stays in `sys` |
-| `mrb_utf8_free` | macro | — | ⊘ | conditional: `_WIN32` — see `mrb_locale_from_utf8` |
-| `mrb_utf8_from_locale` | fn | — | ⊘ | conditional: `_WIN32` — see `mrb_locale_from_utf8` |
-| `mrb_vformat` | fn | ✅ | — |  |
-| `mrb_vm_exec` | fn | ✅ | — |  |
-| `mrb_vm_run` | fn | ✅ | — |  |
-| `mrb_warn` | fn | ✅ | — |  |
-| `mrb_write_barrier` | fn | ✅ | ⊘ | declined: repaints an object the collector already marked, needed only when a caller writes an object's fields directly through `struct RBasic*` — a pointer beni does not expose (see `mrb_str_ptr`); every write the typed surface reaches runs its own barrier, as `mrb_ary_set` does at `vendor/mruby/src/array.c:1123` |
+| `mrb_utf8_free` | macro | ❌ | 🚫 | conditional: `_WIN32` — see `mrb_locale_from_utf8` |
+| `mrb_utf8_from_locale` | fn | ❌ | 🚫 | conditional: `_WIN32` — see `mrb_locale_from_utf8` |
+| `mrb_vformat` | fn | ✅ | ❌ |  |
+| `mrb_vm_exec` | fn | ✅ | ❌ |  |
+| `mrb_vm_run` | fn | ✅ | ❌ |  |
+| `mrb_warn` | fn | ✅ | ❌ |  |
+| `mrb_write_barrier` | fn | ✅ | 🚫 | declined: repaints an object the collector already marked, needed only when a caller writes an object's fields directly through `struct RBasic*` — a pointer beni does not expose (see `mrb_str_ptr`); every write the typed surface reaches runs its own barrier, as `mrb_ary_set` does at `vendor/mruby/src/array.c:1123` |
 | `mrb_yield` | fn | ✅ | ✅ | subsumed: `Proc::call` — the one-argument form of `mrb_yield_argv` (`vendor/mruby/src/vm.c:1328` passes `1, &arg` to the same `yield_with_attr`); a Rust slice of one carries it |
 | `mrb_yield_argv` | fn | ✅ | ✅ | `Proc::call` |
-| `mrb_yield_with_class` | fn | ✅ | — |  |
+| `mrb_yield_with_class` | fn | ✅ | ❌ |  |
 ## mruby/array.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `RARRAY_LEN` | macro | ✅ | ✅ | `Array::len` |
-| `RARRAY_PTR` | macro | — | — |  |
+| `RARRAY_PTR` | macro | ❌ | ❌ |  |
 | `mrb_ary_clear` | fn | ✅ | ✅ | `Array::clear` |
 | `mrb_ary_concat` | fn | ✅ | ✅ | `Array::concat` |
 | `mrb_ary_dup` | fn | ✅ | ✅ | `Array::dup` |
 | `mrb_ary_entry` | fn | ✅ | ✅ | `Array::entry`, `Value::ary_entry` |
 | `mrb_ary_join` | fn | ✅ | ✅ | `Array::join` |
-| `mrb_ary_make_shared_copy` | fn | ✅ | — |  |
-| `mrb_ary_modify` | fn | ✅ | — |  |
+| `mrb_ary_make_shared_copy` | fn | ✅ | ❌ |  |
+| `mrb_ary_modify` | fn | ✅ | ❌ |  |
 | `mrb_ary_new` | fn | ✅ | ✅ | `Mrb::ary_new` |
 | `mrb_ary_new_capa` | fn | ✅ | ✅ | `Mrb::ary_new_capa` |
 | `mrb_ary_new_from_values` | fn | ✅ | ✅ | `Mrb::ary_new_from_values` |
 | `mrb_ary_pop` | fn | ✅ | ✅ | `Array::pop` |
-| `mrb_ary_ptr` | macro | — | ⊘ | declined: unchecked cast to `struct RArray*` — see `mrb_str_ptr` |
+| `mrb_ary_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RArray*` — see `mrb_str_ptr` |
 | `mrb_ary_push` | fn | ✅ | ✅ | `Array::push` |
-| `mrb_ary_ref` | macro | — | ✅ | defined as `mrb_ary_entry` |
+| `mrb_ary_ref` | macro | ❌ | ✅ | defined as `mrb_ary_entry` |
 | `mrb_ary_replace` | fn | ✅ | ✅ | `Array::replace` |
 | `mrb_ary_resize` | fn | ✅ | ✅ | `Array::resize` |
 | `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
@@ -257,99 +257,99 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_ary_splat` | fn | ✅ | ✅ | `Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `Array`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `Array` downcast (the tag-test that reads a non-Array as absent) |
 | `mrb_ary_splice` | fn | ✅ | ✅ | `Array::splice` |
 | `mrb_ary_unshift` | fn | ✅ | ✅ | `Array::unshift` |
-| `mrb_ary_value` | macro | — | ✅ | defined as `mrb_obj_value` |
+| `mrb_ary_value` | macro | ❌ | ✅ | defined as `mrb_obj_value` |
 | `mrb_assoc_new` | fn | ✅ | ✅ | `Mrb::assoc_new` |
 ## mruby/class.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `MRB_SET_INSTANCE_TT` | macro | ✅ | ✅ | `RClass::set_instance_data_tt` |
-| `mrb_alias_method` | fn | ✅ | — |  |
-| `mrb_class` | fn | ✅ | — |  |
-| `mrb_class_outer` | fn | ✅ | — |  |
+| `mrb_alias_method` | fn | ✅ | ❌ |  |
+| `mrb_class` | fn | ✅ | ❌ |  |
+| `mrb_class_outer` | fn | ✅ | ❌ |  |
 | `mrb_class_ptr` | macro | ✅ | ✅ | `Value::as_class_ptr` |
 | `mrb_class_real` | fn | ✅ | ✅ | `RClass::real` — resolve a class handle to its real class, skipping singleton / include classes; `mrb_class` (the raw class of a value, which may be a singleton or include class and needs VM-internal reasoning) stays in `sys`, and `Value::class` via `mrb_obj_class` already returns the real class of a value |
-| `mrb_define_method_raw` | fn | ✅ | — |  |
-| `mrb_mc_clear_by_class` | macro | ✅ | — |  |
-| `mrb_method_search` | fn | ✅ | — |  |
-| `mrb_method_search_vm` | fn | ✅ | — |  |
-| `mrb_mt_foreach` | fn | ✅ | — |  |
+| `mrb_define_method_raw` | fn | ✅ | ❌ |  |
+| `mrb_mc_clear_by_class` | macro | ✅ | ❌ |  |
+| `mrb_method_search` | fn | ✅ | ❌ |  |
+| `mrb_method_search_vm` | fn | ✅ | ❌ |  |
+| `mrb_mt_foreach` | fn | ✅ | ❌ |  |
 | `mrb_remove_method` | fn | ✅ | ✅ | `Module::remove_method` — Ruby's `Module#remove_method`; deletes the method's own definition from the handle (the name reverts to an ancestor's method), distinct from `Module::undef_method` which masks ancestor lookups. The symbol-or-name key routes through this raising form, which takes a `mrb_sym` directly with no string variant |
 ## mruby/compile.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_ccontext_cleanup_local_variables` | fn | ✅ | — |  |
+| `mrb_ccontext_cleanup_local_variables` | fn | ✅ | ❌ |  |
 | `mrb_ccontext_filename` | fn | ✅ | ✅ | `Ccontext::new` — carried by the `compiler` capability feature |
 | `mrb_ccontext_free` | fn | ✅ | ✅ | `Ccontext::drop` — carried by the `compiler` capability feature |
 | `mrb_ccontext_new` | fn | ✅ | ✅ | `Ccontext::new` — carried by the `compiler` capability feature |
-| `mrb_ccontext_partial_hook` | fn | ✅ | — |  |
+| `mrb_ccontext_partial_hook` | fn | ✅ | ❌ |  |
 | `mrb_generate_code` | fn | ✅ | ✅ | subsumed: `Ccontext::compile` — the codegen half alone, taking the parser `mrb_parse_nstring` produced (`vendor/mruby/mrbgems/mruby-compiler/core/codegen.c:7336-7339`); the typed compile drives the parse and the codegen from source, so the parser the C form takes is what the Rust shape already carries, and beni hands a parser to no caller; carried by the `compiler` capability feature |
-| `mrb_load_detect_file_cxt` | fn | ✅ | — |  |
+| `mrb_load_detect_file_cxt` | fn | ✅ | ❌ |  |
 | `mrb_load_exec` | fn | ✅ | ✅ | `Ccontext::load_nstring` — carried by the `compiler` capability feature |
-| `mrb_load_file` | fn | ✅ | — |  |
-| `mrb_load_file_cxt` | fn | ✅ | — |  |
+| `mrb_load_file` | fn | ✅ | ❌ |  |
+| `mrb_load_file_cxt` | fn | ✅ | ❌ |  |
 | `mrb_load_nstring` | fn | ✅ | ✅ | subsumed: `Mrb::load_string` — the context-free form, whose body is `mrb_load_nstring_cxt(mrb, s, len, NULL)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7868-7871`); the typed load borrows an unnamed context in the NULL's place so the compiler's diagnostics are captured rather than printed, which is all a fresh context changes for one load; carried by the `compiler` capability feature |
 | `mrb_load_nstring_cxt` | fn | ✅ | ✅ | subsumed: `Ccontext::load_nstring` — the one-call form, whose body is `mrb_load_exec(mrb, mrb_parse_nstring(mrb, s, len, c), c)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7862-7865`); the typed load drives those two calls itself so it can read the parser's diagnostic buffer between them, which the one-call form frees before returning; carried by the `compiler` capability feature |
 | `mrb_load_string` | fn | ✅ | ✅ | `Mrb::load_string` — the cstr `mrb_load_string(mrb, s)` is `mrb_load_nstring` over `strlen(s)`; a Rust `&[u8]` carries its own length, so the length-carrying call subsumes it and no separate item is needed; carried by the `compiler` capability feature |
 | `mrb_load_string_cxt` | fn | ✅ | ✅ | subsumed: `Ccontext::load_nstring` — the NUL-terminated form of `mrb_load_nstring_cxt` over `strlen`; a Rust byte slice carries its own length, so the length-taking call subsumes it; carried by the `compiler` capability feature |
-| `mrb_parse_file` | fn | ✅ | — |  |
+| `mrb_parse_file` | fn | ✅ | ❌ |  |
 | `mrb_parse_nstring` | fn | ✅ | ✅ | `Ccontext::load_nstring` — carried by the `compiler` capability feature |
-| `mrb_parse_string` | fn | ✅ | — |  |
+| `mrb_parse_string` | fn | ✅ | ❌ |  |
 | `mrb_parser_free` | fn | ✅ | ✅ | `Ccontext::load_nstring` — carried by the `compiler` capability feature |
-| `mrb_parser_get_filename` | fn | ✅ | — |  |
-| `mrb_parser_new` | fn | ✅ | — |  |
-| `mrb_parser_parse` | fn | ✅ | — |  |
-| `mrb_parser_set_filename` | fn | ✅ | — |  |
+| `mrb_parser_get_filename` | fn | ✅ | ❌ |  |
+| `mrb_parser_new` | fn | ✅ | ❌ |  |
+| `mrb_parser_parse` | fn | ✅ | ❌ |  |
+| `mrb_parser_set_filename` | fn | ✅ | ❌ |  |
 ## mruby/data.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `DATA_CHECK_GET_PTR` | macro | — | ✅ | defined as `mrb_data_check_get_ptr` |
-| `DATA_GET_PTR` | macro | — | — |  |
-| `DATA_PTR` | macro | — | ⊘ | declined: reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `Value::data_get`, which returns `None` where this returns a wrong-typed pointer |
-| `DATA_TYPE` | macro | — | ⊘ | declined: reads `RDATA(d)->type` with no type check — see `DATA_PTR` |
-| `mrb_check_datatype` | macro | — | — |  |
-| `mrb_data_check_and_get` | macro | — | — |  |
+| `DATA_CHECK_GET_PTR` | macro | ❌ | ✅ | defined as `mrb_data_check_get_ptr` |
+| `DATA_GET_PTR` | macro | ❌ | ❌ |  |
+| `DATA_PTR` | macro | ❌ | 🚫 | declined: reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `Value::data_get`, which returns `None` where this returns a wrong-typed pointer |
+| `DATA_TYPE` | macro | ❌ | 🚫 | declined: reads `RDATA(d)->type` with no type check — see `DATA_PTR` |
+| `mrb_check_datatype` | macro | ❌ | ❌ |  |
+| `mrb_data_check_and_get` | macro | ❌ | ❌ |  |
 | `mrb_data_check_get_ptr` | fn | ✅ | ✅ | `Value::data_get` |
-| `mrb_data_check_type` | fn | ✅ | — |  |
-| `mrb_data_get_ptr` | fn | ✅ | — |  |
+| `mrb_data_check_type` | fn | ✅ | ❌ |  |
+| `mrb_data_get_ptr` | fn | ✅ | ❌ |  |
 | `mrb_data_init` | fn | ✅ | ✅ | `Value::data_reinit` |
 | `mrb_data_object_alloc` | fn | ✅ | ✅ | `RClass::data_wrap` — fallible (returns `Result`, protects the alloc and reclaims the box on a raise); the CDATA mark stays the separate `RClass::set_instance_data_tt` setup step, not folded in (see DataType extension) |
-| `mrb_get_datatype` | macro | — | — |  |
+| `mrb_get_datatype` | macro | ❌ | ❌ |  |
 ## mruby/dump.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_load_irep_file` | fn | ✅ | — |  |
-| `mrb_load_irep_file_cxt` | fn | ✅ | — |  |
-| `mrb_read_irep` | fn | ✅ | — |  |
+| `mrb_load_irep_file` | fn | ✅ | ❌ |  |
+| `mrb_load_irep_file_cxt` | fn | ✅ | ❌ |  |
+| `mrb_read_irep` | fn | ✅ | ❌ |  |
 | `mrb_read_irep_buf` | fn | ✅ | ✅ | `Mrb::load_bytecode` |
 ## mruby/error.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `mrb_break_value_get` | macro | ✅ | ✅ | `Break::value` |
-| `mrb_break_value_set` | macro | — | — |  |
+| `mrb_break_value_set` | macro | ❌ | ❌ |  |
 | `mrb_check_error` | fn | ✅ | ✅ | `Mrb::clear_exc` |
 | `mrb_clear_error` | fn | ✅ | ✅ | subsumed: `Mrb::clear_exc` — the inner call of `mrb_check_error`, whose body is `if (mrb->exc) { mrb_clear_error(mrb); return TRUE; }` (`vendor/mruby/src/error.c:876-891`); the bool the C form returns is what the Rust shape drops, and clearing the pending exception is the whole of what remains |
-| `mrb_ensure` | fn | ✅ | — |  |
-| `mrb_exc_new_lit` | macro | — | ✅ | subsumed: `RClass::exc_new_str` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it |
+| `mrb_ensure` | fn | ✅ | ❌ |  |
+| `mrb_exc_new_lit` | macro | ❌ | ✅ | subsumed: `RClass::exc_new_str` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it |
 | `mrb_exc_new_str` | fn | ✅ | ✅ | `RClass::exc_new_str` — build an exception carrying an existing mruby `RString` as-is; the static String tag means the underlying type guard never fires |
-| `mrb_exc_ptr` | macro | — | — |  |
+| `mrb_exc_ptr` | macro | ❌ | ❌ |  |
 | `mrb_no_method_error` | fn | ✅ | ✅ | subsumed: `RClass::obj_new` — `NoMethodError#initialize(message, name, args)` sets the same `@name` and `@args` the C form writes directly (`vendor/mruby/src/error.c:634-635`, `vendor/mruby/mrblib/10error.rb:11-19`); see `mrb_name_error` |
 | `mrb_protect` | fn | ✅ | ✅ | subsumed: `Mrb::protect` — the older `mrb_func_t` + `mrb_value data` form, whose body is `mrb_protect_error(mrb, protect_body, &protect_data, state)` and nothing else (`vendor/mruby/mrbgems/mruby-error/src/exception.c:34-37`); a Rust closure carries the body-and-data pair the C form spells out as two arguments |
 | `mrb_protect_error` | fn | ✅ | ✅ | `Mrb::protect` |
 | `mrb_rescue` | fn | ✅ | ✅ | subsumed: `Mrb::rescue` — the StandardError form of `mrb_rescue_exceptions`, whose body passes `1, &mrb->eStandardError_class` (`vendor/mruby/mrbgems/mruby-error/src/exception.c:86-89`); a caller naming `StandardError` in the class slice reaches it — the bare-`rescue` default SPEC names |
 | `mrb_rescue_exceptions` | fn | ✅ | ✅ | subsumed: `Mrb::rescue` — `mrb_protect_error` followed by an `mrb_obj_is_kind_of` walk of the class array (`vendor/mruby/mrbgems/mruby-error/src/exception.c:109-133`), which is the composition `rescue` is; the `&[RClass]` slice carries the `len` the C form spells out beside `classes`, and the closures carry the two `mrb_func_t` + `mrb_value` data pairs. The arena restore and exception clear that bracket the C form are `mrb_protect_error`'s own (`vendor/mruby/src/vm.c:548,566-567`), so each `protect` call already performs them |
-| `mrb_sys_fail` | fn | ✅ | ⊘ | declined: declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from a class and a message, which `RClass::raise` already reaches from a Rust `std::io::Error` |
+| `mrb_sys_fail` | fn | ✅ | 🚫 | declined: declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from a class and a message, which `RClass::raise` already reaches from a Rust `std::io::Error` |
 ## mruby/gc.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_free_context` | fn | ✅ | ⊘ | declined: releases a `struct mrb_context*` — VM-internal, the same call-frame machinery whose indices stay in `sys`; `Mrb::drop` releases the interpreter and every context it owns |
+| `mrb_free_context` | fn | ✅ | 🚫 | declined: releases a `struct mrb_context*` — VM-internal, the same call-frame machinery whose indices stay in `sys`; `Mrb::drop` releases the interpreter and every context it owns |
 | `mrb_gc_add_region` | fn | ✅ | ✅ | `Mrb::gc_add_region` — hand the collector a caller-owned buffer to carve into heap pages, answering the page count (zero when it holds none); the `&'static mut [u8]` taken by move encodes both invariants the C API leaves to the caller — the buffer outlives the interpreter, and no caller reaches it again |
-| `mrb_object_dead_p` | fn | ✅ | ⊘ | declined: asks whether the collector has reclaimed a `struct RBasic*` — see `mrb_str_ptr`; a typed `Value` names a live object or it is not one |
+| `mrb_object_dead_p` | fn | ✅ | 🚫 | declined: asks whether the collector has reclaimed a `struct RBasic*` — see `mrb_str_ptr`; a typed `Value` names a live object or it is not one |
 ## mruby/hash.h
 
 | Symbol | Kind | sys | typed | Note |
@@ -366,156 +366,156 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_hash_merge` | fn | ✅ | ✅ | `Hash::update` |
 | `mrb_hash_new` | fn | ✅ | ✅ | `Mrb::hash_new` |
 | `mrb_hash_new_capa` | fn | ✅ | ✅ | `Mrb::hash_new_capa` |
-| `mrb_hash_ptr` | macro | — | ⊘ | declined: unchecked cast to `struct RHash*` — see `mrb_str_ptr` |
+| `mrb_hash_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RHash*` — see `mrb_str_ptr` |
 | `mrb_hash_set` | fn | ✅ | ✅ | `Hash::set` |
 | `mrb_hash_size` | fn | ✅ | ✅ | `Hash::len` |
-| `mrb_hash_value` | macro | — | ✅ | defined as `mrb_obj_value` |
+| `mrb_hash_value` | macro | ❌ | ✅ | defined as `mrb_obj_value` |
 | `mrb_hash_values` | fn | ✅ | ✅ | `Hash::values` |
 ## mruby/irep.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_add_irep` | fn | ✅ | — |  |
-| `mrb_irep_catch_handler_pack` | macro | — | — |  |
-| `mrb_irep_catch_handler_unpack` | macro | — | — |  |
-| `mrb_load_irep` | fn | ✅ | — |  |
+| `mrb_add_irep` | fn | ✅ | ❌ |  |
+| `mrb_irep_catch_handler_pack` | macro | ❌ | ❌ |  |
+| `mrb_irep_catch_handler_unpack` | macro | ❌ | ❌ |  |
+| `mrb_load_irep` | fn | ✅ | ❌ |  |
 | `mrb_load_irep_buf` | fn | ✅ | ✅ | subsumed: `Mrb::load_bytecode` — the read-and-run form, whose body is `load_irep(mrb, mrb_proc_read_irep_buf(mrb, buf, bufsize), NULL)` and nothing else (`vendor/mruby/src/load.c:783-798`); the typed load drives the read and the run itself so it can name which structural check a blob failed, where the one-call form reports every one of them as `irep load error`, and it answers the same `ScriptError` for the same condition |
-| `mrb_load_irep_buf_cxt` | fn | ✅ | — |  |
-| `mrb_load_irep_cxt` | fn | ✅ | — |  |
+| `mrb_load_irep_buf_cxt` | fn | ✅ | ❌ |  |
+| `mrb_load_irep_cxt` | fn | ✅ | ❌ |  |
 ## mruby/numeric.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_fixnum_to_str` | macro | — | ✅ | defined as `mrb_integer_to_str` |
+| `mrb_fixnum_to_str` | macro | ❌ | ✅ | defined as `mrb_integer_to_str` |
 | `mrb_float_to_integer` | fn | ✅ | ✅ | `Value::float_to_int` — convert a Float value to the Integer value it truncates toward zero (Ruby's Float#to_i / Float#to_int); guards the Float tag (TypeError) and raises RangeError on an infinite or NaN float |
-| `mrb_int_to_cstr` | fn | ✅ | — |  |
+| `mrb_int_to_cstr` | fn | ✅ | ❌ |  |
 | `mrb_integer_to_str` | fn | ✅ | ✅ | `Value::int_to_str` — render an Integer value to an RString in a radix (Ruby's Integer#to_s(base)); guards the Integer tag (TypeError) and raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys` |
 | `mrb_num_add` | fn | ✅ | ✅ | `Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width |
-| `mrb_num_minus` | macro | — | ✅ | defined as `mrb_num_sub` |
+| `mrb_num_minus` | macro | ❌ | ✅ | defined as `mrb_num_sub` |
 | `mrb_num_mul` | fn | ✅ | ✅ | `Value::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
-| `mrb_num_plus` | macro | — | ✅ | defined as `mrb_num_add` |
+| `mrb_num_plus` | macro | ❌ | ✅ | defined as `mrb_num_add` |
 | `mrb_num_sub` | fn | ✅ | ✅ | `Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
 ## mruby/proc.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_cfunc_env_get` | macro | — | — |  |
-| `mrb_closure_new_cfunc` | fn | ✅ | — |  |
-| `mrb_load_proc` | fn | ✅ | — |  |
-| `mrb_proc_cfunc_env_get` | fn | ✅ | — |  |
-| `mrb_proc_new_cfunc` | fn | ✅ | — |  |
-| `mrb_proc_new_cfunc_with_env` | fn | ✅ | — |  |
-| `mrb_proc_ptr` | macro | — | ⊘ | declined: unchecked cast to `struct RProc*` — see `mrb_str_ptr` |
-| `mrb_vm_ci_env_clear` | fn | ✅ | — |  |
+| `mrb_cfunc_env_get` | macro | ❌ | ❌ |  |
+| `mrb_closure_new_cfunc` | fn | ✅ | ❌ |  |
+| `mrb_load_proc` | fn | ✅ | ❌ |  |
+| `mrb_proc_cfunc_env_get` | fn | ✅ | ❌ |  |
+| `mrb_proc_new_cfunc` | fn | ✅ | ❌ |  |
+| `mrb_proc_new_cfunc_with_env` | fn | ✅ | ❌ |  |
+| `mrb_proc_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RProc*` — see `mrb_str_ptr` |
+| `mrb_vm_ci_env_clear` | fn | ✅ | ❌ |  |
 ## mruby/range.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_gc_free_range` | macro | — | ⊘ | conditional: `MRB_RANGE_EMBED` — beni's ABI names no boxing mode, and mruby then defaults to `MRB_WORD_BOXING` (`vendor/mruby/include/mrbconf.h:63-65`), which embeds a Range's bounds and expands the macro to `((void)0)` (`vendor/mruby/include/mruby/range.h:28`) |
+| `mrb_gc_free_range` | macro | ❌ | 🚫 | conditional: `MRB_RANGE_EMBED` — beni's ABI names no boxing mode, and mruby then defaults to `MRB_WORD_BOXING` (`vendor/mruby/include/mrbconf.h:63-65`), which embeds a Range's bounds and expands the macro to `((void)0)` (`vendor/mruby/include/mruby/range.h:28`) |
 | `mrb_range_beg` | macro | ✅ | ✅ | `Range::begin` |
 | `mrb_range_beg_len` | fn | ✅ | ✅ | `Range::beg_len` — the normalized slice a Range covers of a collection of a given length (Ruby's `Array#[range]` / `String#[range]`); returns the three-way `RangeBegLen` outcome (in-range, out-of-range, non-Range mismatch), raising TypeError on a non-integer bound, caught by `Mrb::protect` into `Err` |
 | `mrb_range_end` | macro | ✅ | ✅ | `Range::end` |
 | `mrb_range_excl_p` | macro | ✅ | ✅ | `Range::is_exclusive` |
 | `mrb_range_new` | fn | ✅ | ✅ | `Mrb::range_new` |
-| `mrb_range_ptr` | fn | ✅ | ⊘ | declined: unchecked cast to `struct RRange*` — see `mrb_str_ptr` |
-| `mrb_range_raw_ptr` | macro | — | — |  |
-| `mrb_range_value` | macro | — | ✅ | defined as `mrb_obj_value` |
+| `mrb_range_ptr` | fn | ✅ | 🚫 | declined: unchecked cast to `struct RRange*` — see `mrb_str_ptr` |
+| `mrb_range_raw_ptr` | macro | ❌ | ❌ |  |
+| `mrb_range_value` | macro | ❌ | ✅ | defined as `mrb_obj_value` |
 ## mruby/string.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `RSTRING_CAPA` | macro | — | — |  |
-| `RSTRING_CSTR` | macro | — | ✅ | defined as `mrb_string_cstr` |
-| `RSTRING_EMBED_LEN` | macro | — | — |  |
-| `RSTRING_END` | macro | — | — |  |
+| `RSTRING_CAPA` | macro | ❌ | ❌ |  |
+| `RSTRING_CSTR` | macro | ❌ | ✅ | defined as `mrb_string_cstr` |
+| `RSTRING_EMBED_LEN` | macro | ❌ | ❌ |  |
+| `RSTRING_END` | macro | ❌ | ❌ |  |
 | `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes`, `RString::len` |
 | `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes` |
 | `mrb_obj_as_string` | fn | ✅ | ✅ | `Value::obj_as_string` |
-| `mrb_ptr_to_str` | fn | ✅ | — |  |
+| `mrb_ptr_to_str` | fn | ✅ | ❌ |  |
 | `mrb_str_append` | fn | ✅ | ✅ | `RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed |
-| `mrb_str_buf_append` | macro | — | ✅ | defined as `mrb_str_cat_str` |
-| `mrb_str_buf_cat` | macro | — | ✅ | defined as `mrb_str_cat` |
-| `mrb_str_buf_new` | macro | — | ✅ | defined as `mrb_str_new_capa` |
+| `mrb_str_buf_append` | macro | ❌ | ✅ | defined as `mrb_str_cat_str` |
+| `mrb_str_buf_cat` | macro | ❌ | ✅ | defined as `mrb_str_cat` |
+| `mrb_str_buf_new` | macro | ❌ | ✅ | defined as `mrb_str_new_capa` |
 | `mrb_str_cat` | fn | ✅ | ✅ | `RString::cat` |
-| `mrb_str_cat2` | macro | — | ✅ | defined as `mrb_str_cat_cstr` |
+| `mrb_str_cat2` | macro | ❌ | ✅ | defined as `mrb_str_cat_cstr` |
 | `mrb_str_cat_cstr` | fn | ✅ | ✅ | `RString::cat_cstr` |
-| `mrb_str_cat_lit` | macro | — | ✅ | `RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
+| `mrb_str_cat_lit` | macro | ❌ | ✅ | `RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_str_cat_str` | fn | ✅ | ✅ | `RString::cat_str` |
 | `mrb_str_cmp` | fn | ✅ | ✅ | `RString::cmp` |
 | `mrb_str_concat` | fn | ✅ | ✅ | `RString::concat` |
 | `mrb_str_dup` | fn | ✅ | ✅ | `RString::dup` |
 | `mrb_str_equal` | fn | ✅ | ✅ | `RString::eq` — total byte equality of two strings (length check then memcmp); dispatches nothing and never raises |
 | `mrb_str_index` | fn | ✅ | ✅ | `RString::index` — byte index of the first substring match at or after an offset, or None when absent; never raises |
-| `mrb_str_index_lit` | macro | — | ✅ | `RString::index` — the literal macro `mrb_str_index_lit(mrb, str, lit, off)` is `mrb_str_index` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
+| `mrb_str_index_lit` | macro | ❌ | ✅ | `RString::index` — the literal macro `mrb_str_index_lit(mrb, str, lit, off)` is `mrb_str_index` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_str_intern` | fn | ✅ | ✅ | `RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns directly and never raises. Distinct from `mrb_obj_to_sym` → `Value::to_sym`, which coerces an arbitrary value and can raise, and from `Symbol::new`, which interns Rust bytes |
-| `mrb_str_modify` | fn | ✅ | — |  |
-| `mrb_str_modify_keep_ascii` | fn | ✅ | — |  |
+| `mrb_str_modify` | fn | ✅ | ❌ |  |
+| `mrb_str_modify_keep_ascii` | fn | ✅ | ❌ |  |
 | `mrb_str_new_capa` | fn | ✅ | ✅ | `Mrb::str_new_capa` |
 | `mrb_str_plus` | fn | ✅ | ✅ | `RString::plus` |
-| `mrb_str_ptr` | macro | — | ⊘ | declined: unchecked cast to `struct RString*` — Principle 11: beni's `RString` is `#[repr(transparent)]` over `Value`, not a struct pointer, so there is no typed shape to add |
+| `mrb_str_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RString*` — Principle 11: beni's `RString` is `#[repr(transparent)]` over `Value`, not a struct pointer, so there is no typed shape to add |
 | `mrb_str_resize` | fn | ✅ | ✅ | `RString::resize` |
-| `mrb_str_strlen` | macro | — | — |  |
+| `mrb_str_strlen` | macro | ❌ | ❌ |  |
 | `mrb_str_substr` | fn | ✅ | ✅ | `RString::substr` |
 | `mrb_str_to_cstr` | fn | ✅ | ✅ | `RString::to_cstr` — like `mrb_string_cstr` it raises ArgumentError on an embedded NUL, differing only in which buffer the returned C pointer addresses (`mrb_str_to_cstr` copies into a fresh RString and leaves the receiver untouched; `mrb_string_cstr` NUL-terminates the receiver in place). `to_cstr` returns an owned `CString` rebuilt from the receiver's NUL-free bytes and never exposes that pointer, so the buffer-ownership distinction collapses to an identical owned result; no separate item is needed |
 | `mrb_str_to_dbl` | fn | ✅ | ✅ | `RString::to_f` — strict float parse (badcheck on); raises ArgumentError on non-float input |
 | `mrb_str_to_integer` | fn | ✅ | ✅ | `RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input |
-| `mrb_str_to_inum` | macro | — | ✅ | `RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError |
+| `mrb_str_to_inum` | macro | ❌ | ✅ | `RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError |
 | `mrb_string_cstr` | fn | ✅ | ✅ | `RString::to_cstr` |
-| `mrb_string_value_cstr` | fn | ✅ | — |  |
-| `mrb_string_value_len` | macro | — | ✅ | defined as `RSTRING_LEN` |
-| `mrb_string_value_ptr` | macro | — | ✅ | defined as `RSTRING_PTR` |
+| `mrb_string_value_cstr` | fn | ✅ | ❌ |  |
+| `mrb_string_value_len` | macro | ❌ | ✅ | defined as `RSTRING_LEN` |
+| `mrb_string_value_ptr` | macro | ❌ | ✅ | defined as `RSTRING_PTR` |
 ## mruby/value.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_array_p` | macro | — | ✅ | `Value::is_array`, via the value tag |
-| `mrb_bigint_p` | macro | — | ⊘ | conditional: `MRB_USE_BIGINT` — without it `vendor/mruby/include/mruby/value.h:322` expands the macro to `FALSE`; beni's pinned ABI sets only `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT` |
+| `mrb_array_p` | macro | ❌ | ✅ | `Value::is_array`, via the value tag |
+| `mrb_bigint_p` | macro | ❌ | 🚫 | conditional: `MRB_USE_BIGINT` — without it `vendor/mruby/include/mruby/value.h:322` expands the macro to `FALSE`; beni's pinned ABI sets only `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT` |
 | `mrb_bool` | macro | ✅ | ✅ | defined as `mrb_test` |
 | `mrb_bool_value` | fn | ✅ | ✅ | `IntoValue for bool` — a Rust bool boxes to the true/false immediate (see convert extension) |
 | `mrb_break_p` | macro | ✅ | ✅ | `Value::as_break` |
-| `mrb_class_p` | macro | — | ✅ | `Value::is_class`, via the value tag |
-| `mrb_cptr_p` | macro | — | — |  |
-| `mrb_cptr_value` | fn | ✅ | — |  |
-| `mrb_data_p` | macro | — | ✅ | `Value::is_data`, via the value tag |
-| `mrb_env_p` | macro | — | — |  |
-| `mrb_exception_p` | macro | — | ✅ | `Value::is_exception`, via the value tag |
+| `mrb_class_p` | macro | ❌ | ✅ | `Value::is_class`, via the value tag |
+| `mrb_cptr_p` | macro | ❌ | ❌ |  |
+| `mrb_cptr_value` | fn | ✅ | ❌ |  |
+| `mrb_data_p` | macro | ❌ | ✅ | `Value::is_data`, via the value tag |
+| `mrb_env_p` | macro | ❌ | ❌ |  |
+| `mrb_exception_p` | macro | ❌ | ✅ | `Value::is_exception`, via the value tag |
 | `mrb_false_p` | macro | ✅ | ✅ | `Value::is_false` |
 | `mrb_false_value` | fn | ✅ | ✅ | `Value::false_` |
-| `mrb_fiber_p` | macro | — | — |  |
-| `mrb_fixnum_p` | macro | — | — |  |
-| `mrb_fixnum_value` | fn | ✅ | — |  |
-| `mrb_float_p` | macro | — | ✅ | `Value::is_float`, via the value tag |
-| `mrb_float_read` | fn | ✅ | — |  |
+| `mrb_fiber_p` | macro | ❌ | ❌ |  |
+| `mrb_fixnum_p` | macro | ❌ | ❌ |  |
+| `mrb_fixnum_value` | fn | ✅ | ❌ |  |
+| `mrb_float_p` | macro | ❌ | ✅ | `Value::is_float`, via the value tag |
+| `mrb_float_read` | fn | ✅ | ❌ |  |
 | `mrb_float_value` | fn | ✅ | ✅ | `Value::from_float` |
-| `mrb_free_p` | macro | — | — |  |
-| `mrb_hash_p` | macro | — | ✅ | `Value::is_hash`, via the value tag |
-| `mrb_iclass_p` | macro | — | — |  |
-| `mrb_immediate_p` | macro | — | — |  |
-| `mrb_int_read` | fn | ✅ | — |  |
+| `mrb_free_p` | macro | ❌ | ❌ |  |
+| `mrb_hash_p` | macro | ❌ | ✅ | `Value::is_hash`, via the value tag |
+| `mrb_iclass_p` | macro | ❌ | ❌ |  |
+| `mrb_immediate_p` | macro | ❌ | ❌ |  |
+| `mrb_int_read` | fn | ✅ | ❌ |  |
 | `mrb_int_value` | fn | ✅ | ✅ | `Value::from_int` |
-| `mrb_integer_p` | macro | — | ✅ | `Value::is_integer` — true for any Integer; the immediate-only `mrb_fixnum_p`, which diverges from this under word boxing, is intentionally not graduated |
-| `mrb_istruct_p` | macro | — | — |  |
-| `mrb_module_p` | macro | — | ✅ | `Value::is_module`, via the value tag |
-| `mrb_msvc_snprintf` | fn | — | ⊘ | conditional: `_MSC_VER` — MSVC's `snprintf` shim, absent from every toolchain beni builds with |
-| `mrb_msvc_vsnprintf` | fn | — | — |  |
+| `mrb_integer_p` | macro | ❌ | ✅ | `Value::is_integer` — true for any Integer; the immediate-only `mrb_fixnum_p`, which diverges from this under word boxing, is intentionally not graduated |
+| `mrb_istruct_p` | macro | ❌ | ❌ |  |
+| `mrb_module_p` | macro | ❌ | ✅ | `Value::is_module`, via the value tag |
+| `mrb_msvc_snprintf` | fn | ❌ | 🚫 | conditional: `_MSC_VER` — MSVC's `snprintf` shim, absent from every toolchain beni builds with |
+| `mrb_msvc_vsnprintf` | fn | ❌ | ❌ |  |
 | `mrb_nil_p` | macro | ✅ | ✅ | `Value::is_nil` |
 | `mrb_nil_value` | fn | ✅ | ✅ | `Value::nil` |
 | `mrb_obj_value` | fn | ✅ | ✅ | `RClass::to_value`, `RClass::data_wrap` |
-| `mrb_object_p` | macro | — | — |  |
-| `mrb_proc_p` | macro | — | ✅ | `Value::is_proc`, via the value tag |
-| `mrb_range_p` | macro | — | ✅ | `Value::is_range`, via the value tag |
-| `mrb_read_float` | fn | ✅ | — |  |
-| `mrb_read_int` | fn | ✅ | — |  |
-| `mrb_ro_data_p` | macro | ✅ | — |  |
-| `mrb_sclass_p` | macro | — | — |  |
-| `mrb_string_p` | macro | — | ✅ | `Value::is_string`, via the value tag |
-| `mrb_symbol_p` | macro | — | ✅ | `Value::is_symbol`, via the value tag |
+| `mrb_object_p` | macro | ❌ | ❌ |  |
+| `mrb_proc_p` | macro | ❌ | ✅ | `Value::is_proc`, via the value tag |
+| `mrb_range_p` | macro | ❌ | ✅ | `Value::is_range`, via the value tag |
+| `mrb_read_float` | fn | ✅ | ❌ |  |
+| `mrb_read_int` | fn | ✅ | ❌ |  |
+| `mrb_ro_data_p` | macro | ✅ | ❌ |  |
+| `mrb_sclass_p` | macro | ❌ | ❌ |  |
+| `mrb_string_p` | macro | ❌ | ✅ | `Value::is_string`, via the value tag |
+| `mrb_symbol_p` | macro | ❌ | ✅ | `Value::is_symbol`, via the value tag |
 | `mrb_symbol_value` | fn | ✅ | ✅ | `Symbol::from_sym` |
 | `mrb_test` | macro | ✅ | ✅ | `Value::to_bool` |
 | `mrb_true_p` | macro | ✅ | ✅ | `Value::is_true` |
 | `mrb_true_value` | fn | ✅ | ✅ | `Value::true_` |
-| `mrb_undef_p` | macro | ✅ | — |  |
-| `mrb_undef_value` | fn | ✅ | — |  |
+| `mrb_undef_p` | macro | ✅ | ❌ |  |
+| `mrb_undef_value` | fn | ✅ | ❌ |  |
 ## mruby/variable.h
 
 | Symbol | Kind | sys | typed | Note |
@@ -531,18 +531,18 @@ Legend: ✅ covered · — missing · ⊘ outside the measure
 | `mrb_gv_get` | fn | ✅ | ✅ | `Mrb::gv_get` |
 | `mrb_gv_remove` | fn | ✅ | ✅ | `Mrb::gv_remove` |
 | `mrb_gv_set` | fn | ✅ | ✅ | `Mrb::gv_set` |
-| `mrb_iv_copy` | fn | ✅ | — |  |
+| `mrb_iv_copy` | fn | ✅ | ❌ |  |
 | `mrb_iv_defined` | fn | ✅ | ✅ | `Value::iv_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys` |
 | `mrb_iv_foreach` | fn | ✅ | ✅ | `Value::each_iv` — closure-based iteration over a snapshot of a value's set instance variables, name as a typed `Symbol`; the closure returns `ForEach::{Continue,Stop}` to proceed or end early, the iteration dispatches no Ruby so no `Result` is needed (magnus binds no ivar foreach) |
 | `mrb_iv_get` | fn | ✅ | ✅ | `Value::iv_get` |
-| `mrb_iv_name_sym_check` | fn | ✅ | — |  |
-| `mrb_iv_name_sym_p` | fn | ✅ | — |  |
+| `mrb_iv_name_sym_check` | fn | ✅ | ❌ |  |
+| `mrb_iv_name_sym_p` | fn | ✅ | ❌ |  |
 | `mrb_iv_remove` | fn | ✅ | ✅ | `Value::iv_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None` |
 | `mrb_iv_set` | fn | ✅ | ✅ | `Value::iv_set` |
-| `mrb_mod_cv_set` | fn | ✅ | — |  |
-| `mrb_obj_iv_defined` | fn | ✅ | — |  |
-| `mrb_obj_iv_get` | fn | ✅ | — |  |
-| `mrb_obj_iv_set` | fn | ✅ | — |  |
+| `mrb_mod_cv_set` | fn | ✅ | ❌ |  |
+| `mrb_obj_iv_defined` | fn | ✅ | ❌ |  |
+| `mrb_obj_iv_get` | fn | ✅ | ❌ |  |
+| `mrb_obj_iv_set` | fn | ✅ | ❌ |  |
 ## get_args format specifiers
 
 `mrb_get_args`' format string is a specifier vocabulary — one symbol,
