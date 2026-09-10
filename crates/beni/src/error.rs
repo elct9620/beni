@@ -14,8 +14,10 @@ use beni_sys as sys;
 #[derive(Debug, Clone)]
 pub enum Error {
     /// An mruby exception captured while the VM is live. The carried
-    /// `Value` is the exception object; like every `Value` it is only
-    /// meaningful while the originating VM is open.
+    /// `Value` is the exception object, meaningful only while the
+    /// originating VM is open; it crosses out arena-protected, so its
+    /// message and backtrace read without rooting it first, while
+    /// holding it past that arena scope needs a `GcRoot`.
     Exception(Value),
     /// Source that did not parse, carrying the compiler's first
     /// recorded diagnostic. Distinct from `Exception` because a
