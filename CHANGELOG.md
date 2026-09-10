@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.14.0](https://github.com/elct9620/beni/compare/v0.13.0...v0.14.0) (2026-09-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** `Range::end_` is now `Range::end`.
+* **beni:** `Mrb::load_bytecode` returns `Result<Value, Error>` instead of `c_int`, and `Mrb::load_irep_buf` is removed — call `load_bytecode`.
+
+### Features
+
+* **beni-sys:** build for the other macOS architecture ([61b1dc9](https://github.com/elct9620/beni/commit/61b1dc92b36ffd977db5a5a1cb8eb9694d1f8bbd))
+* **beni-sys:** look the archive up under the name its sidecar gives ([135f2d1](https://github.com/elct9620/beni/commit/135f2d17aba19b91dd5b7dffd8874799104f8069))
+* **beni-sys:** read a link set named in either toolchain's form ([c300b73](https://github.com/elct9620/beni/commit/c300b73b56e9924e7dc8654275178d26392872a7))
+* **beni-sys:** read an archive's compile flags in MSVC's spelling ([901ccb3](https://github.com/elct9620/beni/commit/901ccb36f945224e1d8c85b2a8e8b404fd6141b0))
+* **beni:** answer a bytecode load the way every other load does ([f2d5af2](https://github.com/elct9620/beni/commit/f2d5af2244447d43c611fabdaf43316e8cf228b5))
+* **beni:** graduate the Mrb::ensure combinator ([47abf29](https://github.com/elct9620/beni/commit/47abf29d286303ccaab4bac85f29dd35d387fb92))
+
+
+### Bug Fixes
+
+* **beni-sys:** keep the POSIX pre-include off a platform without it ([0d8d50e](https://github.com/elct9620/beni/commit/0d8d50e8f789c3c20f6187cbd50017c188710c5e))
+* **beni-sys:** parse under a standard the archive's own compiler kept ([e80507c](https://github.com/elct9620/beni/commit/e80507c6620643ffb54a1426639e3a5e14eae0ad))
+* **beni:** verify the archive the sidecar names, not one file name ([d53d67c](https://github.com/elct9620/beni/commit/d53d67c48f1bc1d5e07ab87bc050bb48e9e387fa))
+* **coverage:** mark every coverage state the same way ([2a5b19f](https://github.com/elct9620/beni/commit/2a5b19fc7bea2ca6d2a06f37d4c7b44e73b6572d))
+* **rust:** probe for cargo without a lookup tool ([622dbb9](https://github.com/elct9620/beni/commit/622dbb9cbb2ec0354426a7939e0e5a9ccd987cd0))
+* **scenarios:** probe for cargo the way every other harness does ([96d673b](https://github.com/elct9620/beni/commit/96d673bae074204617c8c0a84291d44133b71454))
+* **vendor:** name a build platform beni pins no tarball for ([4dac535](https://github.com/elct9620/beni/commit/4dac53598c4e5d937ee1838eedb31af2e0cb1cd7))
+* **vendor:** name the tarball from the directory it unpacks into ([e10f0c6](https://github.com/elct9620/beni/commit/e10f0c68fb540543feb8260508ac3eaab8f35536))
+
+
+### Code Refactoring
+
+* **beni:** name a range's end after what it reads ([fec0c2f](https://github.com/elct9620/beni/commit/fec0c2fe21f84ae9ff2e9c54e3194afbaa364476))
+
 ## [0.13.0](https://github.com/elct9620/beni/compare/v0.12.0...v0.13.0) (2026-09-08)
 
 
