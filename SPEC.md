@@ -608,7 +608,14 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 
 - Class and module definition are methods on the live `Mrb` handle:
   `define_class(name, superclass)` and `define_module(name)` return typed
-  `RClass` and `RModule` handles. Methods are registered on those handles
+  `RClass` and `RModule` handles. Class definition — top-level on the `Mrb`
+  handle and within a namespace through the `Module` trait — under a name
+  the namespace itself already binds (a top-level constant, for top-level
+  definition) to an ordinary class — not a singleton class — whose superclass
+  is the one given yields that bound class itself, whatever modules are
+  prepended to it, and leaves the binding untouched; a Rust `Err` carrying a
+  `TypeError` surfaces when the name is bound to anything else, a class with a
+  different superclass included. Methods are registered on those handles
   through the `Module` and `Object` traits (mirroring `magnus::Module` and
   `magnus::Object`), accepting Rust closures whose arguments and return
   values cross the boundary through `IntoValue` / `FromValue`; the `Module`
@@ -656,13 +663,12 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   registered code. A consumer's own exception class is defined under a name
   from an exception-class superclass — top-level on the `Mrb` handle and within
   a namespace through the `Module` trait, symbol-or-name keyed — yielding the
-  handle directly, mirroring `magnus`'s `define_error`. A class already bound
-  to that name with that same superclass is fetched rather than redefined; a
-  Rust `Err` surfaces when a class bound to that name has a different
-  superclass, or the name is bound to something that is not a class. The
-  handle reaches the rest of the class surface: it registers methods and binds
-  constants through the `Module` and `Object` traits, and yields the class
-  handle for any operation that takes one.
+  handle directly, mirroring `magnus`'s `define_error`. A name already bound
+  resolves exactly as class definition resolves it — the bound ordinary class
+  itself when its superclass is the one given, an `Err` otherwise. The handle reaches
+  the rest of the class surface: it registers methods and binds constants
+  through the `Module` and `Object` traits, and yields the class handle for
+  any operation that takes one.
 - The class/module lookup family also answers, as a total boolean predicate,
   whether a class or module is defined under a given name — top-level on the
   `Mrb` handle and within a namespace through the `Module` trait, both
@@ -1148,7 +1154,7 @@ The `compiler` capability feature carries everything in this section.
 | A load under a borrowed compile context producing compiler warnings | the load's outcome is unchanged; the warnings reach no caller, and none are written to standard error |
 | Compiling source without running it, where the source does not parse or a codegen step fails | the same `Err` a load that runs surfaces, and no compiled program is produced |
 | The `compiler` feature enabled against an archive built without mruby's compiler gem | both crates build, and the consumer's own link fails on the symbols the archive does not carry |
-| mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
+| A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
 | A registered method body's single-argument read receiving other than one positional argument | raised as an `ArgumentError` to the Ruby caller |
