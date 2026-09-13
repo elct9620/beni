@@ -88,26 +88,20 @@ impl<T> DataType<T> {
 }
 
 impl RClass {
-    /// Mark this class so its instances allocate as data carriers
-    /// (`MRB_TT_CDATA`). Call once at class setup, before wrapping any
-    /// instance through `RClass::data_wrap`. A singleton class, whose one
-    /// instance is the object it belongs to, and an exception class, whose
-    /// instances must stay exceptions, refuse the mark with a `TypeError`
-    /// and stay unmarked.
+    /// Mark this class, and any class later defined from it, so its
+    /// instances allocate as data carriers (`MRB_TT_CDATA`) for
+    /// `RClass::data_wrap`. Only a class whose instances are plain objects
+    /// or already data carriers accepts; a singleton class or a built-in
+    /// layout (an exception, a string, a number, …) refuses with a
+    /// `TypeError` and stays unmarked, so mruby never reads a carrier as
+    /// that layout.
     pub fn set_instance_data_tt(self, mrb: &Mrb) -> Result<(), Error> {
-        let refused = if self.to_value(mrb).is_sclass() {
-            Some("a singleton class")
-        } else if crate::class::is_exception_class(self.as_raw()) {
-            Some("an exception class")
-        } else {
-            None
-        };
-        if let Some(kind) = refused {
-            let message = format!("can't mark {kind} to carry Rust data");
+        let tt = crate::class::instance_tt(self.as_raw());
+        if tt != sys::MRB_TT_OBJECT && tt != sys::MRB_TT_CDATA {
             return Err(Error::Exception(crate::method::core_exception(
                 mrb,
                 c"TypeError",
-                &message,
+                "can't mark a class to carry Rust data unless its instances are plain objects or data carriers",
             )));
         }
         // SAFETY: `self` originates from the live VM borrowed as `mrb`;

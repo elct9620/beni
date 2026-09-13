@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::DataType;
+use beni::{DataType, FromValue, IntoValue};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload with no observable drop — exercises wrap / get / type
@@ -292,8 +292,9 @@ fn release_hook_contains_a_panicking_drop_on_close() {
     );
 }
 
-/// `err` carries a `TypeError` whose message names `refused`.
-fn assert_mark_refused(mrb: &beni::Mrb, err: beni::Error, refused: &str) {
+/// `err` is the marking refusal: a `TypeError` naming the layouts that
+/// accept the mark.
+fn assert_mark_refused(mrb: &beni::Mrb, err: beni::Error) {
     use beni::Module;
 
     let message = err.message(mrb);
@@ -302,8 +303,8 @@ fn assert_mark_refused(mrb: &beni::Mrb, err: beni::Error, refused: &str) {
         other => panic!("the refusal must carry an exception, got {other:?}"),
     }
     assert!(
-        message.contains(refused),
-        "the refusal must name {refused}: {message}"
+        message.contains("plain objects or data carriers"),
+        "the refusal must name the layouts that accept the mark: {message}"
     );
 }
 
@@ -322,7 +323,7 @@ fn marking_refuses_a_singleton_class_so_no_carrier_shares_it() {
     let err = singleton
         .set_instance_data_tt(&mrb)
         .expect_err("a singleton class must refuse the mark");
-    assert_mark_refused(&mrb, err, "a singleton class");
+    assert_mark_refused(&mrb, err);
 
     // Left unmarked, the singleton class allocates no carrier that would
     // share it with the object it belongs to.
@@ -348,9 +349,70 @@ fn marking_refuses_an_exception_class_so_its_instances_stay_exceptions() {
         let err = class
             .set_instance_data_tt(&mrb)
             .expect_err("an exception class must refuse the mark");
-        assert_mark_refused(&mrb, err, "an exception class");
+        assert_mark_refused(&mrb, err);
         let still = <beni::ExceptionClass as beni::FromValue>::from_value(class.to_value(&mrb))
             .expect("the refused class is still an exception class");
         assert!(still.exc_new(&mrb, "still an exception").is_exception());
     }
+}
+
+#[test]
+fn marking_refuses_every_built_in_layout_so_its_instances_keep_it() {
+    let mrb = open_mrb();
+    mrb.load_string(b"class BeniDataRefusedString < String; end")
+        .expect("defining the String subclass must succeed");
+
+    for name in [
+        c"String",
+        c"Array",
+        c"Hash",
+        c"Range",
+        c"Proc",
+        c"Float",
+        c"Integer",
+        c"Symbol",
+        c"Module",
+        c"Class",
+        c"BeniDataRefusedString",
+    ] {
+        let class = mrb.class_get(name).expect("the class is defined");
+        let err = class
+            .set_instance_data_tt(&mrb)
+            .expect_err("a built-in layout must refuse the mark");
+        assert_mark_refused(&mrb, err);
+    }
+
+    // Left unmarked, each class still allocates in its own layout: strings
+    // and floats box, and the subclass's instances are strings its
+    // inherited methods read.
+    assert_eq!(
+        String::from_value(mrb.str_new(b"box").as_value()),
+        Some("box".to_string())
+    );
+    assert!(1.5f64.into_value(&mrb).is_float());
+    let joined = mrb
+        .load_string(b"BeniDataRefusedString.new('abc') + 'def'")
+        .expect("the subclass still builds strings");
+    assert_eq!(String::from_value(joined), Some("abcdef".to_string()));
+}
+
+#[test]
+fn a_class_defined_from_a_marked_class_carries_data_and_accepts_the_mark() {
+    let mrb = open_mrb();
+    let base = mrb
+        .define_class(c"BeniDataMarkedBase", mrb.object_class())
+        .expect("defining the base class must succeed");
+    base.set_instance_data_tt(&mrb)
+        .expect("marking an ordinary class must succeed");
+    let derived = mrb
+        .define_class(c"BeniDataMarkedDerived", base)
+        .expect("defining the subclass must succeed");
+
+    let obj = derived
+        .data_wrap(&mrb, Holder { tag: 3 }, &HOLDER_TYPE)
+        .expect("a class defined from a marked class is marked too");
+    assert_eq!(obj.data_get(&mrb, &HOLDER_TYPE).map(|h| h.tag), Some(3));
+    derived
+        .set_instance_data_tt(&mrb)
+        .expect("a class whose instances are data carriers accepts the mark");
 }

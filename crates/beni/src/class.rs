@@ -189,13 +189,20 @@ where
     .map(|v| unsafe { v.as_class_ptr() })
 }
 
-/// Whether `class` is an exception class — `Exception` itself or a class
-/// descending from it, told by the exception instance type they share.
-/// Reads the class's flags and never raises.
-pub(crate) fn is_exception_class(class: *mut sys::RClass) -> bool {
+/// The type `class` allocates its instances as. Reads the class's flags
+/// and never raises.
+pub(crate) fn instance_tt(class: *mut sys::RClass) -> sys::mrb_vtype {
     // SAFETY: `class` names a live class; the shim only reads its flag
     // bits.
-    unsafe { sys::mrb_class_exception_p_func(class) }
+    unsafe { sys::mrb_instance_tt_func(class) }
+}
+
+/// Whether `class` is an exception class — `Exception` itself or a class
+/// descending from it, told by the exception instance type `Exception`
+/// sets and its descendants inherit. That type is also the one
+/// `mrb_exc_new` allocates without raising.
+pub(crate) fn is_exception_class(class: *mut sys::RClass) -> bool {
+    instance_tt(class) == sys::MRB_TT_EXCEPTION
 }
 
 impl RClass {

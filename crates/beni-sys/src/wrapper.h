@@ -326,16 +326,15 @@ mrb_set_instance_tt_func(struct RClass *c, enum mrb_vtype tt)
   MRB_SET_INSTANCE_TT(c, tt);
 }
 
-/* Whether a class allocates its instances as exceptions — the instance
- * type `Exception` sets (src/error.c:908) and every class descending
- * from it inherits (src/class.c:3219), so it answers for exactly the
- * exception classes. It is also the one condition under which
- * `mrb_exc_new` allocates without raising (src/gc.c:574-581). Reads the
- * `MRB_INSTANCE_TT(c)` flag bits, which bindgen cannot expand. */
-static inline mrb_bool
-mrb_class_exception_p_func(struct RClass *c)
+/* The type a class allocates its instances as — the counterpart read of
+ * `mrb_set_instance_tt_func`. A class takes its superclass's type when
+ * defined (src/class.c:3219), and `mrb_obj_alloc` refuses to allocate any
+ * other type for it (src/gc.c:571-577). Reads the `MRB_INSTANCE_TT(c)`
+ * flag bits, which bindgen cannot expand. */
+static inline enum mrb_vtype
+mrb_instance_tt_func(struct RClass *c)
 {
-  return MRB_INSTANCE_TT(c) == MRB_TT_EXCEPTION;
+  return MRB_INSTANCE_TT(c);
 }
 
 /* Integer conversion across the numeric types. Counterpart to the
