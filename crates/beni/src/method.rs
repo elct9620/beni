@@ -36,6 +36,7 @@
 //! non-capturing closures; a capturing closure fails to compile
 //! because the expansion nests it inside an `extern "C" fn`.
 
+use crate::state::args::read_frame;
 use crate::{Error, FromValue, IntoValue, Mrb, Value};
 use beni_sys as sys;
 
@@ -149,18 +150,6 @@ fn arg_type_error<T>(mrb: &Mrb) -> Error {
         core::any::type_name::<T>()
     );
     Error::Exception(core_exception(mrb, c"TypeError", &msg))
-}
-
-/// Run a call-frame read under exception protection. `mrb_get_args`
-/// raises for a call the registered arity does not accept; protected,
-/// that raise comes back as the `Err` the bridge raises only once it
-/// is outside its panic boundary.
-fn read_frame(mrb: &Mrb, read: impl FnOnce(&Mrb)) -> Result<(), Error> {
-    mrb.protect_ffi(|mrb| {
-        read(mrb);
-        Value::nil()
-    })
-    .map(|_| ())
 }
 
 /// Convert `err` into a pending mruby exception and long-jump to the

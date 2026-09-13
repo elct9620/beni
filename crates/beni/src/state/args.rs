@@ -27,6 +27,13 @@
 //!   - `format::NRestKwBlock` — `"n*:&"` → symbol + rest array + keyword
 //!     Hash bucket + block slot
 //!
+//! Every read answers a `Result`, the shape magnus's `scan_args` has: a
+//! call that does not fit the format — too few or too many positionals,
+//! or an argument of the wrong type — comes back as the `Err` carrying
+//! the exception mruby raised for it, read under a protect with no panic
+//! boundary of its own so the raise crosses plain frames alone. A
+//! rest-only format fits every call and always answers `Ok`.
+//!
 //! Rest-form variants hand back a slice tied to `&self` — the borrow
 //! the bridge body holds for the whole call. The slice stays valid
 //! across a VM re-entry (a funcall or an allocation) the body performs
@@ -55,21 +62,33 @@
 //! Add a marker ZST under `format` and implement `Format`:
 //!
 //! ```ignore
-//! use beni::{Format, Mrb, Value};
+//! use beni::{Error, Format, Mrb, Value};
 //!
 //! pub struct Bool; // a not-yet-implemented `"b"` boolean reader
 //! impl Format for Bool {
 //!     type Output<'a> = Value;
 //!     const FMT: &'static core::ffi::CStr = c"b";
-//!     fn read(mrb: &Mrb) -> Self::Output<'_> {
-//!         // mrb_get_args(mrb, "b", &out) — see `format::O` for the pattern
+//!     fn read(mrb: &Mrb) -> Result<Self::Output<'_>, Error> {
+//!         // read_frame(mrb, |mrb| mrb_get_args(mrb, "b", &out)) — see `format::O`
 //!         # unimplemented!()
 //!     }
 //! }
 //! ```
 
-use crate::{Mrb, Value};
+use crate::{Error, Mrb, Value};
 use beni_sys as sys;
+
+/// Run a call-frame read under exception protection. `mrb_get_args`
+/// raises for a call the read's shape does not accept; protected, that
+/// raise comes back as the `Err` carrying mruby's exception, across
+/// plain frames alone.
+pub(crate) fn read_frame(mrb: &Mrb, read: impl FnOnce(&Mrb)) -> Result<(), Error> {
+    mrb.protect_ffi(|mrb| {
+        read(mrb);
+        Value::nil()
+    })
+    .map(|_| ())
+}
 
 /// Type-level marker for a single `mrb_get_args` format string.
 ///
@@ -94,40 +113,37 @@ pub trait Format {
     const FMT: &'static core::ffi::CStr;
 
     /// Read the call-frame argv against `Self::FMT` and project it
-    /// into `Format::Output`. The body issues exactly one
-    /// `mrb_get_args` call with the per-format out-parameter shape.
-    fn read(mrb: &Mrb) -> Self::Output<'_>;
+    /// into `Format::Output`, or answer the `Err` a call that does not
+    /// fit the format raises. A format that can fail reads through
+    /// `read_frame`; a rest-only format cannot fail and reads directly.
+    fn read(mrb: &Mrb) -> Result<Self::Output<'_>, Error>;
 }
 
 impl Mrb {
-    /// Read the call-frame argv using a `Format` marker. The
-    /// monomorphised call expands to a single `mrb_get_args` against
-    /// `F::FMT` and returns the typed tuple from `F::Output`.
+    /// Read the call-frame argv using a `Format` marker, answering the
+    /// typed tuple from `F::Output`, or the `Err` carrying the exception
+    /// mruby raises when the call does not fit the format. Mirrors
+    /// magnus's `scan_args`.
     ///
     /// ```ignore
     /// use beni::format::{Io, Rest};
-    /// let (fd, mode_val) = mrb.get_args::<Io>();
-    /// let argv = mrb.get_args::<Rest>();
+    /// let (fd, mode_val) = mrb.get_args::<Io>()?;
+    /// let argv = mrb.get_args::<Rest>()?;
     /// ```
     #[inline]
-    pub fn get_args<F: Format>(&self) -> F::Output<'_> {
+    pub fn get_args<F: Format>(&self) -> Result<F::Output<'_>, Error> {
         F::read(self)
     }
 
-    /// Read the single required argument from the call frame. Raises
-    /// `ArgumentError` to the Ruby caller unless exactly one positional
-    /// argument is present — the strict counterpart to a `format::O`
-    /// read, which takes the first slot without checking the count.
-    ///
-    /// Callable only from a `-1` method body, the frame mruby raises
-    /// out of; the long-jump runs no Rust drops, so the caller must
-    /// hold no live value needing `Drop`.
+    /// Read the single required argument from the call frame: the one
+    /// positional, or the keyword hash when the call passed keywords
+    /// and no positional. Any other count answers the `Err` carrying
+    /// mruby's `ArgumentError`.
     #[inline]
-    pub fn arg1(&self) -> Value {
-        // SAFETY: `self` is alive by the `&self` borrow. The raise
-        // on a wrong argument count long-jumps to the Ruby caller,
-        // which the `-1` bridge frame is the contract for.
-        Value::from_raw(unsafe { sys::mrb_get_arg1(self.as_ptr()) })
+    pub fn arg1(&self) -> Result<Value, Error> {
+        // SAFETY: `mrb` is alive inside the protect frame; a wrong
+        // argument count raises, which `protect_ffi` catches.
+        self.protect_ffi(|mrb| Value::from_raw(unsafe { sys::mrb_get_arg1(mrb.as_ptr()) }))
     }
 
     /// Whether the current call was passed a block. A plain boolean
@@ -177,9 +193,10 @@ impl Mrb {
 /// one mruby format string to a typed Rust return.
 pub mod format {
     use super::capture_all_kwargs;
+    use super::read_frame;
     use super::slice_from_argv;
     use super::sys;
-    use super::{Format, Mrb, Value};
+    use super::{Error, Format, Mrb, Value};
 
     /// `mrb_get_args(mrb, "o", &val)` — read a single positional
     /// argument as a `Value`.
@@ -188,19 +205,21 @@ pub mod format {
         type Output<'a> = Value;
         const FMT: &'static core::ffi::CStr = c"o";
 
-        fn read(mrb: &Mrb) -> Value {
+        fn read(mrb: &Mrb) -> Result<Value, Error> {
             let mut raw = sys::mrb_value::zeroed();
-            // SAFETY: `mrb` is alive by the `&Mrb` borrow; `&mut raw`
-            // is a valid `*mut mrb_value`; the `"o"` format writes
-            // exactly one cell.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut raw as *mut sys::mrb_value,
-                );
-            }
-            Value::from_raw(raw)
+            read_frame(mrb, |mrb| {
+                // SAFETY: `mrb` is alive by the `&Mrb` borrow; `&mut raw`
+                // is a valid `*mut mrb_value`; the `"o"` format writes
+                // exactly one cell.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut raw as *mut sys::mrb_value,
+                    );
+                }
+            })?;
+            Ok(Value::from_raw(raw))
         }
     }
 
@@ -212,11 +231,13 @@ pub mod format {
         type Output<'a> = &'a [Value];
         const FMT: &'static core::ffi::CStr = c"*";
 
-        fn read(mrb: &Mrb) -> &[Value] {
+        fn read(mrb: &Mrb) -> Result<&[Value], Error> {
             let mut argv: *const sys::mrb_value = core::ptr::null();
             let mut argc: sys::mrb_int = 0;
             // SAFETY: as `O::read`; the `"*"` format writes the argv
-            // pointer + length pair.
+            // pointer + length pair and fits every call, so it never
+            // raises. It stays outside a protect frame, whose arena
+            // restore would unroot the array the rest is copied into.
             unsafe {
                 sys::mrb_get_args(
                     mrb.as_ptr(),
@@ -225,22 +246,39 @@ pub mod format {
                     &mut argc as *mut sys::mrb_int,
                 );
             }
-            slice_from_argv(argv, argc)
+            Ok(slice_from_argv(argv, argc))
         }
     }
 
     /// `mrb_get_args(mrb, "n*", &sym, &argv, &argc)` — read a leading
     /// symbol followed by a rest array.
+    ///
+    /// The symbol read can raise while the rest copy must stay out of a
+    /// protect frame, so the call is first checked under protection with
+    /// the rest left uncopied (`*!`), then read for real.
     pub struct NRest;
     impl Format for NRest {
         type Output<'a> = (sys::mrb_sym, &'a [Value]);
         const FMT: &'static core::ffi::CStr = c"n*";
 
-        fn read(mrb: &Mrb) -> (sys::mrb_sym, &[Value]) {
+        fn read(mrb: &Mrb) -> Result<(sys::mrb_sym, &[Value]), Error> {
             let mut sym: sys::mrb_sym = 0;
             let mut argv: *const sys::mrb_value = core::ptr::null();
             let mut argc: sys::mrb_int = 0;
-            // SAFETY: as `O::read`.
+            read_frame(mrb, |mrb| {
+                // SAFETY: as below, with the rest left uncopied.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        c"n*!".as_ptr(),
+                        &mut sym as *mut sys::mrb_sym,
+                        &mut argv as *mut *const sys::mrb_value,
+                        &mut argc as *mut sys::mrb_int,
+                    );
+                }
+            })?;
+            // SAFETY: as `O::read`; the checked call already fit this
+            // shape, so this read does not raise.
             unsafe {
                 sys::mrb_get_args(
                     mrb.as_ptr(),
@@ -250,7 +288,7 @@ pub mod format {
                     &mut argc as *mut sys::mrb_int,
                 );
             }
-            (sym, slice_from_argv(argv, argc))
+            Ok((sym, slice_from_argv(argv, argc)))
         }
     }
 
@@ -260,17 +298,31 @@ pub mod format {
     /// `mrb_value` without invoking `mrb_proc_copy`, so the captured
     /// block stays non-orphan
     /// (`vendor/mruby/src/class.c:1593-1604`). When the caller supplied
-    /// no block the slot decodes as `mrb_nil`.
+    /// no block the slot decodes as `mrb_nil`. Checked, then read, as
+    /// `NRest` is.
     pub struct NRestBlock;
     impl Format for NRestBlock {
         type Output<'a> = (sys::mrb_sym, &'a [Value], Value);
         const FMT: &'static core::ffi::CStr = c"n*&";
 
-        fn read(mrb: &Mrb) -> (sys::mrb_sym, &[Value], Value) {
+        fn read(mrb: &Mrb) -> Result<(sys::mrb_sym, &[Value], Value), Error> {
             let mut sym: sys::mrb_sym = 0;
             let mut argv: *const sys::mrb_value = core::ptr::null();
             let mut argc: sys::mrb_int = 0;
             let mut block_raw = sys::mrb_value::zeroed();
+            read_frame(mrb, |mrb| {
+                // SAFETY: as below, with the rest left uncopied.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        c"n*!&".as_ptr(),
+                        &mut sym as *mut sys::mrb_sym,
+                        &mut argv as *mut *const sys::mrb_value,
+                        &mut argc as *mut sys::mrb_int,
+                        &mut block_raw as *mut sys::mrb_value,
+                    );
+                }
+            })?;
             // SAFETY: as `O::read`; the `"n*&"` format writes the
             // leading symbol, the argv pointer + length pair, and a
             // single block-slot value.
@@ -284,7 +336,7 @@ pub mod format {
                     &mut block_raw as *mut sys::mrb_value,
                 );
             }
-            (sym, slice_from_argv(argv, argc), Value::from_raw(block_raw))
+            Ok((sym, slice_from_argv(argv, argc), Value::from_raw(block_raw)))
         }
     }
 
@@ -298,77 +350,82 @@ pub mod format {
         type Output<'a> = (sys::mrb_int, Value);
         const FMT: &'static core::ffi::CStr = c"io";
 
-        fn read(mrb: &Mrb) -> (sys::mrb_int, Value) {
+        fn read(mrb: &Mrb) -> Result<(sys::mrb_int, Value), Error> {
             let mut n: sys::mrb_int = 0;
             let mut raw = sys::mrb_value::zeroed();
-            // SAFETY: as `O::read`.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut n as *mut sys::mrb_int,
-                    &mut raw as *mut sys::mrb_value,
-                );
-            }
-            (n, Value::from_raw(raw))
+            read_frame(mrb, |mrb| {
+                // SAFETY: as `O::read`.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut n as *mut sys::mrb_int,
+                        &mut raw as *mut sys::mrb_value,
+                    );
+                }
+            })?;
+            Ok((n, Value::from_raw(raw)))
         }
     }
 
     /// `mrb_get_args(mrb, "S", &val)` — read a single String argument.
-    /// mruby checks the argument is a String (raising `TypeError`
-    /// otherwise) before writing, so the result is always a
-    /// String-tagged `Value` — the strict counterpart to `O`.
+    /// mruby checks the argument is a String, answering the `TypeError`
+    /// as the `Err` otherwise, so the result is always a String-tagged
+    /// `Value` — the strict counterpart to `O`.
     pub struct S;
     impl Format for S {
         type Output<'a> = Value;
         const FMT: &'static core::ffi::CStr = c"S";
 
-        fn read(mrb: &Mrb) -> Value {
+        fn read(mrb: &Mrb) -> Result<Value, Error> {
             let mut raw = sys::mrb_value::zeroed();
-            // SAFETY: as `O::read`; the `"S"` format writes exactly
-            // one String-checked cell.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut raw as *mut sys::mrb_value,
-                );
-            }
-            Value::from_raw(raw)
+            read_frame(mrb, |mrb| {
+                // SAFETY: as `O::read`; the `"S"` format writes exactly
+                // one String-checked cell.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut raw as *mut sys::mrb_value,
+                    );
+                }
+            })?;
+            Ok(Value::from_raw(raw))
         }
     }
 
-    /// `mrb_get_args(mrb, "s", &ptr, &len)` — read a String argument as
-    /// a borrowed byte slice pointing at the string's own buffer. mruby
-    /// checks the argument is a String before writing. The slice is
-    /// valid while that String is unmodified; a body that mutates or
-    /// reallocates the argument String while holding the slice
-    /// invalidates it. A zero-length string folds to an empty slice.
+    /// `mrb_get_args(mrb, "s", &ptr, &len)` — read a String argument's
+    /// bytes as a copy of their own, so nothing the body later does to
+    /// the String reaches them. mruby checks the argument is a String,
+    /// answering the `TypeError` as the `Err` otherwise. A zero-length
+    /// string yields an empty copy.
     pub struct Str;
     impl Format for Str {
-        type Output<'a> = &'a [u8];
+        type Output<'a> = Vec<u8>;
         const FMT: &'static core::ffi::CStr = c"s";
 
-        fn read(mrb: &Mrb) -> &[u8] {
+        fn read(mrb: &Mrb) -> Result<Vec<u8>, Error> {
             let mut ptr: *const core::ffi::c_char = core::ptr::null();
             let mut len: sys::mrb_int = 0;
-            // SAFETY: as `O::read`; the `"s"` format writes the
-            // string's byte pointer + length pair.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut ptr as *mut *const core::ffi::c_char,
-                    &mut len as *mut sys::mrb_int,
-                );
-            }
+            read_frame(mrb, |mrb| {
+                // SAFETY: as `O::read`; the `"s"` format writes the
+                // string's byte pointer + length pair.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut ptr as *mut *const core::ffi::c_char,
+                        &mut len as *mut sys::mrb_int,
+                    );
+                }
+            })?;
             if len > 0 && !ptr.is_null() {
-                // SAFETY: mruby owns the string buffer for the
-                // duration of the call frame, which outlives this
-                // borrow; `len` is its byte length.
-                unsafe { core::slice::from_raw_parts(ptr as *const u8, len as usize) }
+                // SAFETY: the String is a frame argument, alive for the
+                // call, and nothing has run since the read; the bytes
+                // are copied before this returns.
+                Ok(unsafe { core::slice::from_raw_parts(ptr as *const u8, len as usize) }.to_vec())
             } else {
-                &[]
+                Ok(Vec::new())
             }
         }
     }
@@ -384,13 +441,12 @@ pub mod format {
         type Output<'a> = (&'a [Value], Value);
         const FMT: &'static core::ffi::CStr = c"*&";
 
-        fn read(mrb: &Mrb) -> (&[Value], Value) {
+        fn read(mrb: &Mrb) -> Result<(&[Value], Value), Error> {
             let mut argv: *const sys::mrb_value = core::ptr::null();
             let mut argc: sys::mrb_int = 0;
             let mut block_raw = sys::mrb_value::zeroed();
-            // SAFETY: as `O::read`; the `"*&"` format writes the
-            // argv pointer + length pair and a single block-slot
-            // value.
+            // SAFETY: as `Rest::read`; the `"*&"` format also writes a
+            // single block-slot value and fits every call.
             unsafe {
                 sys::mrb_get_args(
                     mrb.as_ptr(),
@@ -400,7 +456,7 @@ pub mod format {
                     &mut block_raw as *mut sys::mrb_value,
                 );
             }
-            (slice_from_argv(argv, argc), Value::from_raw(block_raw))
+            Ok((slice_from_argv(argv, argc), Value::from_raw(block_raw)))
         }
     }
 
@@ -415,22 +471,29 @@ pub mod format {
         type Output<'a> = crate::Hash;
         const FMT: &'static core::ffi::CStr = c":";
 
-        fn read(mrb: &Mrb) -> crate::Hash {
-            let mut out = sys::mrb_value::zeroed();
-            let mut kwargs = capture_all_kwargs(&mut out);
-            // SAFETY: as `O::read`; the `":"` format reads the keyword
-            // dict through the `mrb_kwargs` input struct. Capture-all
-            // sends every pair to `rest`, which mruby fills with an
-            // empty Hash when none were passed, so `out` is Hash-tagged.
-            unsafe {
-                sys::mrb_get_args(
-                    mrb.as_ptr(),
-                    Self::FMT.as_ptr(),
-                    &mut kwargs as *mut sys::mrb_kwargs,
-                );
-            }
-            // SAFETY: capture-all guarantees `out` is a Hash value.
-            unsafe { crate::Hash::from_value_unchecked(Value::from_raw(out)) }
+        fn read(mrb: &Mrb) -> Result<crate::Hash, Error> {
+            // The bucket may be a Hash allocated by this read, so it
+            // leaves the protect frame as its result, which the frame
+            // keeps rooted past its arena restore.
+            let bucket = mrb.protect_ffi(|mrb| {
+                let mut out = sys::mrb_value::zeroed();
+                let mut kwargs = capture_all_kwargs(&mut out);
+                // SAFETY: as `O::read`; the `":"` format reads the
+                // keyword dict through the `mrb_kwargs` input struct.
+                // Capture-all sends every pair to `rest`, which mruby
+                // fills with an empty Hash when none were passed, so
+                // `out` is Hash-tagged.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        Self::FMT.as_ptr(),
+                        &mut kwargs as *mut sys::mrb_kwargs,
+                    );
+                }
+                Value::from_raw(out)
+            })?;
+            // SAFETY: capture-all guarantees the bucket is a Hash value.
+            Ok(unsafe { crate::Hash::from_value_unchecked(bucket) })
         }
     }
 
@@ -441,19 +504,34 @@ pub mod format {
     /// keyword arguments in their own `Hash` (empty rather than nil when
     /// none were passed) instead of folding them into the rest, while an
     /// explicit positional `Hash` stays in the rest. An absent block
-    /// decodes as nil.
+    /// decodes as nil. Checked, then read, as `NRest` is.
     pub struct NRestKwBlock;
     impl Format for NRestKwBlock {
         type Output<'a> = (sys::mrb_sym, &'a [Value], crate::Hash, Value);
         const FMT: &'static core::ffi::CStr = c"n*:&";
 
-        fn read(mrb: &Mrb) -> (sys::mrb_sym, &[Value], crate::Hash, Value) {
+        fn read(mrb: &Mrb) -> Result<(sys::mrb_sym, &[Value], crate::Hash, Value), Error> {
             let mut sym: sys::mrb_sym = 0;
             let mut argv: *const sys::mrb_value = core::ptr::null();
             let mut argc: sys::mrb_int = 0;
             let mut out = sys::mrb_value::zeroed();
             let mut kwargs = capture_all_kwargs(&mut out);
             let mut block_raw = sys::mrb_value::zeroed();
+            read_frame(mrb, |mrb| {
+                // SAFETY: as below, with the rest left uncopied; the
+                // bucket this check fills is discarded.
+                unsafe {
+                    sys::mrb_get_args(
+                        mrb.as_ptr(),
+                        c"n*!:&".as_ptr(),
+                        &mut sym as *mut sys::mrb_sym,
+                        &mut argv as *mut *const sys::mrb_value,
+                        &mut argc as *mut sys::mrb_int,
+                        &mut kwargs as *mut sys::mrb_kwargs,
+                        &mut block_raw as *mut sys::mrb_value,
+                    );
+                }
+            })?;
             // SAFETY: as `O::read`; the `"n*:&"` format writes the
             // leading symbol, the argv pointer + length pair, the
             // keyword dict through the `mrb_kwargs` input struct, and a
@@ -471,12 +549,12 @@ pub mod format {
             }
             // SAFETY: capture-all guarantees `out` is a Hash value.
             let kw = unsafe { crate::Hash::from_value_unchecked(Value::from_raw(out)) };
-            (
+            Ok((
                 sym,
                 slice_from_argv(argv, argc),
                 kw,
                 Value::from_raw(block_raw),
-            )
+            ))
         }
     }
 }

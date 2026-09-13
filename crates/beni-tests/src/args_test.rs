@@ -1,13 +1,13 @@
 use crate::support::open_mrb;
 use beni::format::{Io, Kw, NRest, NRestKwBlock, Rest, RestBlock, Str, S};
-use beni::{Mrb, Value};
+use beni::{Error, Mrb, Value};
 
 /// Registered through `beni::method!(rest_count, -1)`: reads the rest
 /// array via the `"*"` format and returns its length as an mruby
 /// Integer.
-fn rest_count(mrb: &Mrb, _self: Value) -> Value {
-    let args = mrb.get_args::<Rest>();
-    Value::from_int(mrb, args.len() as beni::sys::mrb_int)
+fn rest_count(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let args = mrb.get_args::<Rest>()?;
+    Ok(Value::from_int(mrb, args.len() as beni::sys::mrb_int))
 }
 
 /// Registered through `beni::method!(io_first, -1)`: reads the leading
@@ -15,14 +15,14 @@ fn rest_count(mrb: &Mrb, _self: Value) -> Value {
 /// integer only when the object slot survived as `99` — so a read
 /// that overruns the integer slot into the adjacent object fails
 /// the assertion instead of passing.
-fn io_first(mrb: &Mrb, _self: Value) -> Value {
+fn io_first(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     use beni::FromValue;
-    let (n, val) = mrb.get_args::<Io>();
-    if i32::from_value(val) == Some(99) {
+    let (n, val) = mrb.get_args::<Io>()?;
+    Ok(if i32::from_value(val) == Some(99) {
         Value::from_int(mrb, n)
     } else {
         Value::from_int(mrb, -1)
-    }
+    })
 }
 
 /// Registered through `beni::method!(nrest_after_sym, -1)`: reads the
@@ -30,13 +30,13 @@ fn io_first(mrb: &Mrb, _self: Value) -> Value {
 /// rest length only when the symbol decoded as `:tag` — so a read
 /// that folds the symbol into the rest array (or shifts the count)
 /// fails the assertion instead of passing.
-fn nrest_after_sym(mrb: &Mrb, _self: Value) -> Value {
-    let (sym, rest) = mrb.get_args::<NRest>();
-    if sym == mrb.intern_cstr(c"tag") {
+fn nrest_after_sym(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let (sym, rest) = mrb.get_args::<NRest>()?;
+    Ok(if sym == mrb.intern_cstr(c"tag") {
         Value::from_int(mrb, rest.len() as beni::sys::mrb_int)
     } else {
         Value::from_int(mrb, -1)
-    }
+    })
 }
 
 // The `"*"` count out-param is written by mruby through `mrb_int*`
@@ -142,29 +142,29 @@ fn nrest_format_splits_the_leading_symbol() {
 
 /// Registered through `beni::method!(s_echo, -1)`: reads the `"S"` String
 /// argument and returns it unchanged.
-fn s_echo(mrb: &Mrb, _self: Value) -> Value {
+fn s_echo(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     mrb.get_args::<S>()
 }
 
 /// Registered through `beni::method!(str_echo, -1)`: reads the `"s"`
-/// byte slice and copies it back into a fresh String, so the test
+/// bytes and copies them back into a fresh String, so the test
 /// verifies both the pointer and the length survived the read.
-fn str_echo(mrb: &Mrb, _self: Value) -> Value {
-    let bytes = mrb.get_args::<Str>();
-    mrb.str_new(bytes).as_value()
+fn str_echo(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let bytes = mrb.get_args::<Str>()?;
+    Ok(mrb.str_new(&bytes).as_value())
 }
 
 /// Registered through `beni::method!(rest_block_report, -1)`: reads the
 /// `"*&"` rest array and block slot, returning the rest length when
 /// a block was given and `-1` otherwise — so a read that folds the
 /// block into the rest (or misplaces it) fails the assertion.
-fn rest_block_report(mrb: &Mrb, _self: Value) -> Value {
-    let (rest, block) = mrb.get_args::<RestBlock>();
-    if block.is_nil() {
+fn rest_block_report(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let (rest, block) = mrb.get_args::<RestBlock>()?;
+    Ok(if block.is_nil() {
         Value::from_int(mrb, -1)
     } else {
         Value::from_int(mrb, rest.len() as beni::sys::mrb_int)
-    }
+    })
 }
 
 #[test]
@@ -254,7 +254,7 @@ fn rest_block_format_splits_rest_from_block() {
 
 /// Registered through `beni::method!(arg1_echo, -1)`: reads the single
 /// required argument via `Mrb::arg1` and returns it unchanged.
-fn arg1_echo(mrb: &Mrb, _self: Value) -> Value {
+fn arg1_echo(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     mrb.arg1()
 }
 
@@ -439,8 +439,8 @@ fn block_given_reports_whether_a_block_was_passed() {
 /// borrow stays valid across VM re-entry: mruby backs it with a
 /// GC-arena-rooted copy, so a read that had dangled would surface as a
 /// corrupted join rather than the original bytes.
-fn rest_borrowed_survives_reentry(mrb: &Mrb, _self: Value) -> Value {
-    let rest = mrb.get_args::<Rest>();
+fn rest_borrowed_survives_reentry(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let rest = mrb.get_args::<Rest>()?;
     // Re-enter the VM while holding the borrow: compilation allocates
     // heavily and the recursion grows the value stack. The rest borrow
     // survives because it views an arena-backed copy, not the live stack.
@@ -461,7 +461,7 @@ fn rest_borrowed_survives_reentry(mrb: &Mrb, _self: Value) -> Value {
     for v in rest {
         joined.push_str(&v.to_string(mrb));
     }
-    mrb.str_new(joined.as_bytes()).as_value()
+    Ok(mrb.str_new(joined.as_bytes()).as_value())
 }
 
 #[test]
@@ -495,9 +495,9 @@ fn rest_borrowed_slice_survives_vm_reentry() {
 /// Registered through `beni::method!(kw_size, -1)`: reads the `":"` keyword
 /// bucket and returns its size. A nil bucket could not answer `size`,
 /// so a clean `0` proves the empty case is an empty Hash, not nil.
-fn kw_size(mrb: &Mrb, _self: Value) -> Value {
-    let kw = mrb.get_args::<Kw>();
-    Value::from_int(mrb, kw.len(mrb) as beni::sys::mrb_int)
+fn kw_size(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let kw = mrb.get_args::<Kw>()?;
+    Ok(Value::from_int(mrb, kw.len(mrb) as beni::sys::mrb_int))
 }
 
 /// Registered through `beni::method!(nrest_kwblock_encode, -1)`: reads the
@@ -506,15 +506,15 @@ fn kw_size(mrb: &Mrb, _self: Value) -> Value {
 /// the leading symbol decoded as `:tag` — so a read that folds the
 /// keywords into the rest, drops the symbol, or misplaces the block
 /// fails the assertion instead of passing.
-fn nrest_kwblock_encode(mrb: &Mrb, _self: Value) -> Value {
-    let (sym, rest, kw, block) = mrb.get_args::<NRestKwBlock>();
+fn nrest_kwblock_encode(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let (sym, rest, kw, block) = mrb.get_args::<NRestKwBlock>()?;
     if sym != mrb.intern_cstr(c"tag") {
-        return Value::from_int(mrb, -1);
+        return Ok(Value::from_int(mrb, -1));
     }
     let block_bit = if block.is_nil() { 0 } else { 1 };
     let code =
         rest.len() as beni::sys::mrb_int * 100 + kw.len(mrb) as beni::sys::mrb_int * 10 + block_bit;
-    Value::from_int(mrb, code)
+    Ok(Value::from_int(mrb, code))
 }
 
 #[test]
@@ -609,4 +609,170 @@ fn nrest_kwblock_separates_positionals_keywords_and_block() {
         .load_nstring(b"$beni_kwblock_recv.nrest_kwblock_encode(:tag)")
         .expect("the test source must compile and run");
     assert_eq!(i32::from_value(empty), Some(0));
+}
+
+thread_local! {
+    static GUARD_DROPS: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+}
+
+// Held by a reader body across its read, so a test can see whether the
+// body was left through its own return rather than jumped over.
+struct ReadGuard;
+
+impl Drop for ReadGuard {
+    fn drop(&mut self) {
+        GUARD_DROPS.with(|drops| drops.set(drops.get() + 1));
+    }
+}
+
+// A `-1` method body that holds a guard while it performs one read and
+// hands any failure back through `?`.
+macro_rules! guarded_read {
+    ($name:ident, |$mrb:ident| $read:expr) => {
+        fn $name($mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+            let _guard = ReadGuard;
+            let _ = $read?;
+            Ok(Value::nil())
+        }
+    };
+}
+
+guarded_read!(guarded_o, |mrb| mrb.get_args::<beni::format::O>());
+guarded_read!(guarded_s, |mrb| mrb.get_args::<S>());
+guarded_read!(guarded_str, |mrb| mrb.get_args::<Str>());
+guarded_read!(guarded_io, |mrb| mrb.get_args::<Io>());
+guarded_read!(guarded_nrest, |mrb| mrb.get_args::<NRest>());
+guarded_read!(guarded_nrest_block, |mrb| mrb
+    .get_args::<beni::format::NRestBlock>());
+guarded_read!(guarded_kw, |mrb| mrb.get_args::<Kw>());
+guarded_read!(guarded_nrest_kw_block, |mrb| mrb.get_args::<NRestKwBlock>());
+guarded_read!(guarded_arg1, |mrb| mrb.arg1());
+
+#[test]
+fn a_call_that_does_not_fit_the_read_surfaces_to_the_body_as_err() {
+    use beni::Module;
+
+    let mrb = open_mrb();
+    let object = mrb.object_class();
+    let one = Value::from_int(&mrb, 1);
+    let text = mrb.str_new(b"x").as_value();
+    let cases: [(&core::ffi::CStr, beni::MethodDef, Vec<Value>, &str); 9] = [
+        (
+            c"read_o",
+            beni::method!(guarded_o, -1),
+            vec![],
+            "ArgumentError",
+        ),
+        (
+            c"read_s",
+            beni::method!(guarded_s, -1),
+            vec![one],
+            "TypeError",
+        ),
+        (
+            c"read_str",
+            beni::method!(guarded_str, -1),
+            vec![one],
+            "TypeError",
+        ),
+        (
+            c"read_io",
+            beni::method!(guarded_io, -1),
+            vec![text, one],
+            "TypeError",
+        ),
+        (
+            c"read_nrest",
+            beni::method!(guarded_nrest, -1),
+            vec![],
+            "ArgumentError",
+        ),
+        (
+            c"read_nrest_block",
+            beni::method!(guarded_nrest_block, -1),
+            vec![],
+            "ArgumentError",
+        ),
+        (
+            c"read_kw",
+            beni::method!(guarded_kw, -1),
+            vec![one],
+            "ArgumentError",
+        ),
+        (
+            c"read_nrest_kw_block",
+            beni::method!(guarded_nrest_kw_block, -1),
+            vec![],
+            "ArgumentError",
+        ),
+        (
+            c"read_arg1",
+            beni::method!(guarded_arg1, -1),
+            vec![one, one],
+            "ArgumentError",
+        ),
+    ];
+
+    for (name, def, args, class) in cases {
+        object
+            .define_method(&mrb, name, def)
+            .expect("registering the reader must succeed");
+        let before = GUARD_DROPS.with(core::cell::Cell::get);
+
+        let err = Value::nil()
+            .funcall(&mrb, name, &args)
+            .expect_err("a call the read does not fit must reach the caller as a raise");
+
+        let Error::Exception(exc) = err else {
+            panic!("{name:?} must raise an exception, got {err}");
+        };
+        assert_eq!(exc.classname(&mrb), class, "{name:?}");
+        assert_eq!(
+            GUARD_DROPS.with(core::cell::Cell::get),
+            before + 1,
+            "{name:?} must leave its body through the body's own return"
+        );
+    }
+}
+
+// As `rest_borrowed_survives_reentry`, through a format whose leading
+// symbol read is checked before the rest is copied.
+fn nrest_borrowed_survives_reentry(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let (_sym, rest) = mrb.get_args::<NRest>()?;
+    let cxt = beni::Ccontext::new(mrb, c"reentry_probe.rb").expect("compile context");
+    cxt.load_nstring(
+        b"def __probe_deep(n); return 0 if n <= 0; Array.new(16){ 'y' * 40 }; __probe_deep(n - 1); end; __probe_deep(400)",
+    )
+    .expect("the test source must compile and run");
+    mrb.full_gc();
+    let mut joined = String::new();
+    for v in rest {
+        joined.push_str(&v.to_string(mrb));
+    }
+    Ok(mrb.str_new(joined.as_bytes()).as_value())
+}
+
+#[test]
+fn nrest_rest_slice_survives_vm_reentry() {
+    use beni::Module;
+
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(
+            &mrb,
+            c"nrest_borrowed_survives_reentry",
+            beni::method!(nrest_borrowed_survives_reentry, -1),
+        )
+        .expect("registering the bridge must succeed");
+    let args = [
+        mrb.intern(b"tag").as_value(),
+        mrb.str_new(b"al").as_value(),
+        mrb.str_new(b"pha").as_value(),
+    ];
+
+    let got = Value::nil()
+        .funcall(&mrb, c"nrest_borrowed_survives_reentry", &args)
+        .expect("the read must not raise");
+
+    assert_eq!(got.to_string(&mrb), "alpha");
 }

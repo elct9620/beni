@@ -5,17 +5,17 @@ use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, Symbol, Val
 /// Yielder method in the boundary-terminating shape kobako uses:
 /// read the captured (non-orphan) block, yield it, and on a real
 /// `break` report its carried value back as the method's result.
-fn report_break(mrb: &Mrb, _self: Value) -> Value {
-    let (_sym, _rest, block_val) = mrb.get_args::<format::NRestBlock>();
+fn report_break(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let (_sym, _rest, block_val) = mrb.get_args::<format::NRestBlock>()?;
     let block = Proc::from_value(block_val).expect("the captured block is a Proc");
-    match block.call(mrb, &[]) {
+    Ok(match block.call(mrb, &[]) {
         Ok(_) => Value::from_int(mrb, -1),
         Err(Error::Exception(exc)) => match exc.as_break() {
             Some(brk) => brk.value(),
             None => Value::from_int(mrb, -2),
         },
         Err(_) => Value::from_int(mrb, -3),
-    }
+    })
 }
 
 #[test]
