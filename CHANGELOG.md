@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.15.0](https://github.com/elct9620/beni/compare/v0.14.1...v0.15.0) (2026-09-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** build exceptions only from an exception class
+* **beni:** refuse to mark a singleton or exception class as a carrier
+* **beni:** let a value convert back to any class-family handle
+* **beni:** let a class or module handle become a value safely
+
+### Features
+
+* **beni:** build exceptions only from an exception class ([40036fd](https://github.com/elct9620/beni/commit/40036fd21393d34574ad9aa9dd01883be6122a6d))
+* **beni:** define a consumer's own exception class directly ([17edb88](https://github.com/elct9620/beni/commit/17edb882959527af535fb3cbea72c39f3520946f))
+* **beni:** let a class or module handle become a value safely ([dcc3b4a](https://github.com/elct9620/beni/commit/dcc3b4ae43409f923b8cc940eeba384859a2d6be))
+* **beni:** let a value convert back to any class-family handle ([685fc09](https://github.com/elct9620/beni/commit/685fc09d7a2e6d7c4a5c40bd57cf2ab33d0b6e78))
+* **beni:** let every typed handle be returned from a method ([14c7f15](https://github.com/elct9620/beni/commit/14c7f158db19b8fd21e65ed70fb68e4f97f9c8e4))
+
+
+### Bug Fixes
+
+* **beni:** fetch a bound class as itself when defining one ([5844663](https://github.com/elct9620/beni/commit/58446635cfb0b28dab81a47c47d7cd130414d6a5))
+* **beni:** refuse the carrier mark on every built-in layout ([cc1e8e8](https://github.com/elct9620/beni/commit/cc1e8e8eaaa54bd218a7fef86baacd87fe5fa0b2))
+* **beni:** refuse to mark a singleton or exception class as a carrier ([e78551b](https://github.com/elct9620/beni/commit/e78551b8ba8c9553356dd86c38ae5a3f62a06641))
+
 ## [0.14.1](https://github.com/elct9620/beni/compare/v0.14.0...v0.14.1) (2026-09-10)
 
 
