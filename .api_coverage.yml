@@ -253,16 +253,16 @@ typed:
   mrb_obj_freeze: Value::freeze
   mrb_obj_id: "`Value::object_id` — the value-level identity id; `mrb_obj_eq` (the boxing-internal identity primitive `mrb_obj_equal` wraps), `mrb_obj_itself` (returns its own receiver), and `mrb_obj_respond_to` (the raw-`RClass*` form of the graduated value-level `mrb_respond_to`) stay in `sys`"
   mrb_obj_is_instance_of: Value::is_instance_of
-  mrb_obj_is_kind_of: Value::is_kind_of
+  mrb_obj_is_kind_of: "`Value::is_kind_of`, `Error::is_kind_of`"
   mrb_obj_new: RClass::obj_new
   mrb_obj_to_sym: "`Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path"
   mrb_obj_value: "`RClass::to_value`, `RModule::to_value`, `ExceptionClass::to_value`, `RClass::data_wrap`"
   mrb_open: Mrb::open
   mrb_prepend_module: Module::prepend_module
-  mrb_protect_error: Mrb::protect
+  mrb_protect_error: sys::protect
   mrb_raise: ExceptionClass::raise
   mrb_range_beg: Range::begin
-  mrb_range_beg_len: "`Range::beg_len` — the normalized slice a Range covers of a collection of a given length (Ruby's `Array#[range]` / `String#[range]`); returns the three-way `RangeBegLen` outcome (in-range, out-of-range, non-Range mismatch), raising TypeError on a non-integer bound, caught by `Mrb::protect` into `Err`"
+  mrb_range_beg_len: "`Range::beg_len` — the normalized slice a Range covers of a collection of a given length (Ruby's `Array#[range]` / `String#[range]`); returns the three-way `RangeBegLen` outcome (in-range, out-of-range, non-Range mismatch), raising TypeError on a non-integer bound, caught by exception protection into `Err`"
   mrb_range_end: Range::end
   mrb_range_excl_p: Range::is_exclusive
   mrb_range_new: Mrb::range_new
@@ -321,7 +321,9 @@ extensions:
   Error: >-
     Result-based error model: a handler's `Err(Error)` is raised into the
     VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught
-    back into `Err` by `Mrb::protect` (`mrb_protect_error`). `Error::new`
+    back into `Err` by exception protection (`mrb_protect_error`), which
+    `sys::protect` offers a raw call. `Error::is_kind_of` asks the carried
+    exception Ruby's `is_a?` (`mrb_obj_is_kind_of`). `Error::new`
     builds an exception error from a class and a message (via
     `ExceptionClass::exc_new`) for a handler to raise its own exception, and
     `Error::argnum` builds the canonical wrong-argument-count
@@ -384,26 +386,12 @@ extensions:
     `Module::define_error` compose `mrb_define_class_id` /
     `mrb_define_class_under_id` with an exception-class superclass. Binds no
     new C symbol.
-  Mrb::rescue: >-
-    `begin`/`rescue` combinator: a safe composition of the already-graduated
-    `Mrb::protect` (`mrb_protect_error`) and `Value::is_kind_of`
-    (`mrb_obj_is_kind_of`) class-list filter, the typed-surface equivalent of
-    mruby's `mrb_rescue` / `mrb_rescue_exceptions` with a `&[RClass]` slice
-    replacing the raw `RClass**` array. Binds no new C symbol — keeping it a
-    composition is the point. An empty class list intercepts nothing (no
-    implicit `StandardError` default — a caller wanting the bare-`rescue`
-    default names `StandardError` itself); an exception matching no listed
-    class, and a Rust panic, are not caught and propagate unchanged.
-  Mrb::ensure: >-
-    `begin`/`ensure` combinator: a safe composition of the already-graduated
-    `Mrb::protect`, the typed-surface equivalent of mruby's `mrb_ensure` with
-    two Rust closures replacing its two `mrb_func_t` + `mrb_value` data pairs.
-    Binds no new C symbol — keeping it a composition is what lets an archive
-    built without the `mruby-error` gem carry it. The ensure closure runs on
-    every exit the body takes and its own value is discarded; one that raises
-    or panics replaces the body's outcome, and it runs under exception
-    protection of its own so that raise surfaces as an `Err` rather than
-    long-jumping past the caller.
+  sys::catch_unwind: >-
+    Panic boundary for a Rust closure handed to mruby as a C callback,
+    magnus's `rb_sys::catch_unwind`: runs the closure under
+    `std::panic::catch_unwind` and answers `Error::Panic` carrying the
+    payload's message. The registered-method bridge and `Mrb::init_gem`
+    go through it. Binds no C symbol.
   Array::entries: >-
     `ExactSizeIterator` walk of an array by C-level index: composes the
     already-graduated `Array::entry` (`mrb_ary_entry`) and `Array::len`
@@ -457,16 +445,16 @@ subsumed:
   mrb_generate_code: "`Ccontext::compile` — the codegen half alone, taking the parser `mrb_parse_nstring` produced (`vendor/mruby/mrbgems/mruby-compiler/core/codegen.c:7336-7339`); the typed compile drives the parse and the codegen from source, so the parser the C form takes is what the Rust shape already carries, and beni hands a parser to no caller; carried by the `compiler` capability feature"
   mrb_load_string_cxt: "`Ccontext::load_nstring` — the NUL-terminated form of `mrb_load_nstring_cxt` over `strlen`; a Rust byte slice carries its own length, so the length-taking call subsumes it; carried by the `compiler` capability feature"
   mrb_garbage_collect: "`Mrb::full_gc` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection"
-  mrb_protect: "`Mrb::protect` — the older `mrb_func_t` + `mrb_value data` form, whose body is `mrb_protect_error(mrb, protect_body, &protect_data, state)` and nothing else (`vendor/mruby/mrbgems/mruby-error/src/exception.c:34-37`); a Rust closure carries the body-and-data pair the C form spells out as two arguments"
-  mrb_rescue_exceptions: "`Mrb::rescue` — `mrb_protect_error` followed by an `mrb_obj_is_kind_of` walk of the class array (`vendor/mruby/mrbgems/mruby-error/src/exception.c:109-133`), which is the composition `rescue` is; the `&[RClass]` slice carries the `len` the C form spells out beside `classes`, and the closures carry the two `mrb_func_t` + `mrb_value` data pairs. The arena restore and exception clear that bracket the C form are `mrb_protect_error`'s own (`vendor/mruby/src/vm.c:548,566-567`), so each `protect` call already performs them"
-  mrb_rescue: "`Mrb::rescue` — the StandardError form of `mrb_rescue_exceptions`, whose body passes `1, &mrb->eStandardError_class` (`vendor/mruby/mrbgems/mruby-error/src/exception.c:86-89`); a caller naming `StandardError` in the class slice reaches it — the bare-`rescue` default SPEC names"
+  mrb_protect: "`sys::protect` — the older `mrb_func_t` + `mrb_value data` form, whose body is `mrb_protect_error(mrb, protect_body, &protect_data, state)` and nothing else (`vendor/mruby/mrbgems/mruby-error/src/exception.c:34-37`); a Rust closure carries the body-and-data pair the C form spells out as two arguments"
+  mrb_rescue_exceptions: "`sys::protect`, `Error::is_kind_of` — `mrb_protect_error` followed by an `mrb_obj_is_kind_of` walk of the class array (`vendor/mruby/mrbgems/mruby-error/src/exception.c:109-133`). In Rust that walk and the handler are Rust control flow: a `match` on the `Err` a call answers, guarded by `Error::is_kind_of`, carries the class array and both `mrb_func_t` + `mrb_value` data pairs the C form spells out, and a typed operation answers that `Err` with no protection of the caller's own. The arena restore and exception clear that bracket the C form are `mrb_protect_error`'s own (`vendor/mruby/src/vm.c:548,566-567`), so every protected call already performs them"
+  mrb_rescue: "`sys::protect`, `Error::is_kind_of` — the StandardError form of `mrb_rescue_exceptions`, whose body passes `1, &mrb->eStandardError_class` (`vendor/mruby/mrbgems/mruby-error/src/exception.c:86-89`); a `match` guard naming `StandardError` reaches it"
   mrb_raisef: "`ExceptionClass::raise`, `Error::new` — the formatting variant of `mrb_raise`, whose body builds the message through mruby's own format engine and ends in the same `mrb_exc_raise` (`vendor/mruby/src/error.c:456-468`); a Rust caller formats the message in Rust before handing it over, the magnus-aligned shape SPEC's error contract names, so the engine is a means the Rust shape already carries rather than a capability of its own"
   mrb_name_error: "`RClass::obj_new` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef`"
   mrb_no_method_error: "`RClass::obj_new` — `NoMethodError#initialize(message, name, args)` sets the same `@name` and `@args` the C form writes directly (`vendor/mruby/src/error.c:634-635`, `vendor/mruby/mrblib/10error.rb:11-19`); see `mrb_name_error`"
   mrb_exc_new_lit: "`ExceptionClass::exc_new_str` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it"
   mrb_exc_get: "`Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it"
   mrb_clear_error: "`Mrb::clear_exc` — the inner call of `mrb_check_error`, whose body is `if (mrb->exc) { mrb_clear_error(mrb); return TRUE; }` (`vendor/mruby/src/error.c:876-891`); the bool the C form returns is what the Rust shape drops, and clearing the pending exception is the whole of what remains"
-  mrb_ensure: "`Mrb::ensure` — `mrb_protect_error`, then the cleanup call, then a rethrow of the caught exception (`vendor/mruby/mrbgems/mruby-error/src/exception.c:56-68`), which is the composition `ensure` is; the two closures carry the `mrb_func_t` + `mrb_value` data pairs, and the rethrow the C form ends in is the `Err` the typed surface returns in its place. The C form brackets both calls in one arena save to keep the body's result alive across the cleanup; each `mrb_protect_error` re-protects the value it surfaces before returning (`vendor/mruby/src/vm.c:566-567`), so the body's result outlives the second `protect`'s own restore"
+  mrb_ensure: "`sys::protect` — `mrb_protect_error`, then the cleanup call, then a rethrow of the caught exception (`vendor/mruby/mrbgems/mruby-error/src/exception.c:56-68`). In Rust the cleanup is the code after the call and the rethrow is the `Err` that call answers, a cleanup's own `Err` replacing it through `?`, so the two `mrb_func_t` + `mrb_value` data pairs are Rust control flow. The C form brackets both calls in one arena save to keep the body's result alive across the cleanup; each `mrb_protect_error` re-protects the value it surfaces before returning (`vendor/mruby/src/vm.c:566-567`), so the call's result outlives the cleanup's own protected calls"
   mrb_check_array_type: "`FromValue` -> `Array` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it"
   mrb_check_hash_type: "`FromValue` -> `Hash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type`"
   mrb_check_string_type: "`FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type`"
