@@ -286,8 +286,8 @@ the Rust/Ruby boundary:
 
 | Conversion | Direction | Rule |
 |---|---|---|
-| `IntoValue` | Rust value → `Value` | total — cannot fail |
-| `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag (subclass instances included for strings and containers); any other tag rejects |
+| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`i32` / `f64` / `bool`) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `Proc` / `Symbol` / `Range` — yields the value naming that same object, raising nothing and running no Ruby |
+| `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `RModule` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag, subclass instances included for strings and containers — a class handle converts on the class or the singleton-class tag, a module handle on the module tag; any other tag rejects |
 | `FromValue` → `bool` | `Value` → `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true`; total, never rejects |
 
 A value also converts to an `RString` handle by the same String type tag, but
@@ -299,11 +299,14 @@ coercion. The downcast suits a handler that treats a non-String as absent; the
 raising form suits one that requires a String argument and rejects anything else.
 
 Every type tag also carries a per-type predicate (`Value::is_array`,
-`is_string`, `is_integer`, … — the analogue of mruby's `mrb_*_p` macros). Where
-a tag has a typed handle, its predicate and `FromValue` downcast — magnus's
-`TryConvert` analogue — agree exactly: the predicate holds for precisely the
-values the downcast accepts. The predicate answers "what type is this?"; the
-downcast hands back the handle to operate on it.
+`is_string`, `is_integer`, `is_sclass`, … — the analogue of mruby's `mrb_*_p`
+macros). A typed handle's `FromValue` downcast — magnus's `TryConvert`
+analogue — agrees exactly with the predicates of the tags it converts on: it
+accepts precisely the values one of those predicates holds for. The class
+predicate answers for the class tag alone and the singleton-class predicate for
+the singleton-class tag, so the class handle's downcast accepts what either one
+holds for. The predicate answers "what type is this?"; the downcast hands back
+the handle to operate on it.
 
 #### Strings
 
@@ -655,7 +658,8 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   include-class links skipped — yielding the first user-facing class in the
   chain. A handle that is already a real class returns itself; the resolution
   walks the class structure and never raises. This is the named normalization a
-  consumer reaches for after obtaining a handle that may be a singleton or
+  consumer reaches for after obtaining a handle that may be a singleton class
+  (through the singleton-class read or the class handle's downcast) or an
   include class (through the raw FFI seam); the value-level "class the value
   belongs to" already returns the real class, so it needs no separate
   resolution. The raw class of a value before that normalization — which may be
