@@ -42,8 +42,8 @@ the archive it builds.
   `BENI_VENDOR_DIR` pointing at that vendor tree, links the archive and runs a
   Ruby surface it defined through `Mrb::open`.
 - The `beni` crate's behavior is verified from outside the crate, through its
-  public paths alone, so every export those paths cross — the `sys` re-export
-  among them — fails the suite the moment it stops being public.
+  public paths alone, so every export those paths cross — the `sys` escape
+  hatch among them — fails the suite the moment it stops being public.
 - The `beni` crate builds and links with its default features disabled
   against an archive built without mruby's compiler gem, and none of the
   compiler surface is reachable in that build.
@@ -280,9 +280,8 @@ Selection, checksums, and cross-compile activation:
 #### Handle, values, and conversions
 
 The crate owns every Rust-level abstraction over the C API: an RAII interpreter
-handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes, class and module
-definition, and closure-based exception protection. Two typed conversions cross
-the Rust/Ruby boundary:
+handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes, and class and module
+definition. Two typed conversions cross the Rust/Ruby boundary:
 
 | Conversion | Direction | Rule |
 |---|---|---|
@@ -516,18 +515,35 @@ preserves all three.
 
 #### Errors and the raise/return contract
 
-A registered method or protected closure raises its own exception: it builds one
+A registered method raises its own exception: it builds one
 from an exception-class handle and a message — the message either Rust bytes copied into
 a fresh string, or an existing mruby `RString` value carried as-is without a
 Rust-side copy — or, when validating its own argument count, from a given count
 and the expected minimum and maximum, yielding the canonical `ArgumentError`
 ("wrong number of arguments (given N, expected …)") mruby itself produces. Either
-way it returns the exception as an `Err`, which crosses the boundary like any
-other `Err` — to a registered method's Ruby caller as an mruby exception, to a
-protected closure's Rust caller as the `Err` value. Building the exception
+way it returns the exception as an `Err`, which reaches the method's Ruby caller
+as an mruby exception like any other `Err`. Building the exception
 neither raises nor runs user Ruby: the handle names a class whose instances are
 exceptions, and the `RString`-valued form is statically a string, so neither
 has a type to reject.
+
+An `Err` answers whether the exception it carries is an instance of a given
+class or module, walking the ancestry as Ruby's `is_a?` does; a parse failure, a
+panic, and a break object carry no exception and answer no. Rescuing by class
+is a `match` on that answer and cleanup is the code after the operation, so the
+typed surface carries no `begin`/`rescue` or `begin`/`ensure` combinator.
+
+`beni::sys` carries every raw binding and two helpers for code working below the
+typed surface:
+
+- `sys::protect` runs a body inside mruby's protected frame and answers its
+  value; an exception a raw binding raises there surfaces as an `Err` carrying
+  it. The raise skips the
+  destructors of the frames it crosses, which the code making that raw call
+  keeps free of anything to drop; a panic in the body aborts the process.
+- `sys::catch_unwind` surfaces a panic in its closure as an `Err` carrying the
+  panic's message — the boundary a Rust closure handed to mruby as a C callback
+  needs.
 
 Every mutating or dispatching operation across the typed surface follows one
 raise/return contract:
@@ -885,8 +901,8 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   during interpreter setup; the gem defines its classes, modules, and methods
   there. An `Err` from `init` aborts setup and surfaces to the embedder.
 - A typed `Proc` handle wraps an mruby block. `Proc::call` invokes it with
-  an argument slice under the same exception protection as closure-based
-  `protect`: the block's normal return is the `Ok` value, and any non-local
+  an argument slice under exception protection: the block's normal return is
+  the `Ok` value, and any non-local
   exit — a raised exception, or a `break` / `return` object the block throws
   — surfaces as a Rust `Err` instead of unwinding across FFI. `Value::as_break`
   views an escaped value as a typed `Break` when it carries mruby's break tag
@@ -903,41 +919,6 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 - A dump carries the instructions alone. The line numbers a loaded program's
   exceptions are backtraced from, and the local variable names, are each carried
   only when the caller asks for that one.
-- `Mrb::rescue` runs a body closure under exception protection and recovers a
-  caught exception with a handler closure, mirroring a Ruby `begin`/`rescue`
-  over a chosen set of exception classes. It takes a class list as a slice of
-  typed `RClass` handles, a body, and a handler. The body's normal completion
-  is the `Ok` value. If the body raises an exception that is an instance of any
-  class in the list, the handler runs and its result — `Ok` or `Err` — is the
-  outcome; the handler receives the caught exception as a `Value` and runs on a
-  handle whose pending exception is already cleared, so it operates on a clean
-  VM. An exception that is an instance of no class in the list is not rescued:
-  it propagates as the body's `Err` unchanged. An empty class list therefore
-  matches nothing and rescues nothing — every exception propagates — and a
-  caller wanting the bare-`rescue` default names the `StandardError` class in
-  the list. A Rust panic is not an exception and is never rescued: a panic in
-  the body surfaces as the panic `Err` regardless of the class list, and a panic
-  in the handler — which also runs under exception protection — surfaces as that
-  panic `Err`, both honoring the same no-long-jump contract `Mrb::protect`
-  carries. `rescue` is a Rust-native
-  composition of the already-graduated `Mrb::protect` and `Value::is_kind_of`,
-  not a new bound C symbol; the safe `RClass` slice replaces mruby's raw class
-  array, so the capability needs no VM-internal reasoning and lives on the typed
-  surface.
-- `Mrb::ensure` runs a body closure under exception protection and runs an
-  ensure closure afterwards, mirroring a Ruby `begin`/`ensure`. It takes a body
-  and an ensure closure, and answers the body's outcome unless the ensure
-  closure replaces it. The ensure closure runs on every exit the body can take —
-  normal completion, a raised exception, and a Rust panic — and its own return
-  value is discarded: only its effects reach the caller. An ensure closure that
-  completes leaves the body's outcome, `Ok` or `Err`, unchanged; one that raises
-  replaces that outcome with its own `Err`. A Rust panic is not an exception: a
-  panic in the body runs the ensure closure and then surfaces as the panic
-  `Err`, and a panic in the ensure closure replaces the body's outcome the way a
-  raise there does. `ensure` is a Rust-native composition of the
-  already-graduated `Mrb::protect`, not a new bound C symbol; both closures run
-  under exception protection, so neither a body raise nor an ensure raise
-  long-jumps past the caller.
 
 #### User data
 
@@ -1152,7 +1133,7 @@ The `compiler` capability feature carries everything in this section.
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root |
 | The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
-| Ruby exception raised inside protected execution | surfaced as a Rust `Err`, never unwinds across FFI |
+| An exception raised by a raw binding inside a `sys::protect` body | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle; never unwinds past the caller |
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable read or assignment to a receiver that is not a class or module — assignment also to a frozen one, or a constant fetch, assignment, or removal to a receiver that is not a class or module — assignment and removal also to a frozen one | surfaced as a Rust `Err`, never unwinds across FFI |
 | A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
@@ -1164,14 +1145,6 @@ The `compiler` capability feature carries everything in this section.
 | A precompiled bytecode blob the interpreter cannot read as a program | surfaced as a Rust `Err` carrying a `ScriptError` whose message names which structural check failed; nothing runs |
 | A precompiled bytecode program raising while it runs | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle |
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
-| A `Mrb::rescue` body raising an exception instance of a class in the list | the handler runs on a handle with no pending exception and receives the caught exception; its result is the outcome |
-| A `Mrb::rescue` body raising an exception instance of no class in the list | not rescued; surfaced as the body's Rust `Err` unchanged, never unwinds across FFI |
-| A `Mrb::rescue` handler itself raising | surfaced as the handler's Rust `Err`, never unwinds across FFI |
-| A `Mrb::rescue` handler itself panicking — the handler runs under exception protection | caught at the FFI boundary and surfaced as a Rust `Err` (`Error::Panic`), never rescued and never unwinds across FFI |
-| A `Mrb::ensure` body raising an exception, with an ensure closure that completes | the ensure closure runs; surfaced as the body's Rust `Err` unchanged, never unwinds across FFI |
-| A `Mrb::ensure` ensure closure itself raising | surfaced as the ensure closure's Rust `Err`, replacing the body's outcome, never unwinds across FFI |
-| A `Mrb::ensure` body panicking | the ensure closure runs; caught at the FFI boundary and surfaced as a Rust `Err` (`Error::Panic`), never unwinds across FFI |
-| A `Mrb::ensure` ensure closure itself panicking — the closure runs under exception protection | caught at the FFI boundary and surfaced as a Rust `Err` (`Error::Panic`), replacing the body's outcome, never unwinds across FFI |
 | Creating a compile context against a live interpreter failing | returns no context, never aborts |
 | A codegen step failing, or the program raising while it runs, under a compile context | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle, never unwinds across FFI |
 | Source that does not parse | surfaced as a Rust `Err` carrying a parse message with the first recorded diagnostic's line, column, and text; nothing written to standard error |
@@ -1182,7 +1155,8 @@ The `compiler` capability feature carries everything in this section.
 | Compiling source without running it, where the source does not parse or a codegen step fails | the same `Err` a load that runs surfaces, and no compiled program is produced |
 | The `compiler` feature enabled against an archive built without mruby's compiler gem | both crates build, and the consumer's own link fails on the symbols the archive does not carry |
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
-| Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
+| Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, `sys::catch_unwind`) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
+| Rust panic raised inside a `sys::protect` body | the process aborts at the FFI boundary; never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
 | A registered method body's shape-typed or single-argument read that the call does not fit — a wrong positional count, or an argument of the wrong type | surfaced to the body as a Rust `Err` carrying the exception mruby raises for the mismatch; nothing raises past the body |
 | A heap region buffer too small to hold one heap page | no pages are added and the count answers zero; the interpreter keeps allocating as before |
