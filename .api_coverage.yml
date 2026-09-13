@@ -190,10 +190,10 @@ typed:
   mrb_gc_arena_save: "`Mrb::arena_scope` (see ArenaScope extension)"
   mrb_gc_protect: "`ArenaScope::keep` (see ArenaScope extension)"
   mrb_gc_register: "`Mrb::gc_register_forever` — root a value for the interpreter's remaining lifetime. Only the never-released shape graduates: mruby's registry is keyed by value, so a removal drops every root over it, and a shape that never removes cannot drop another holder's (the releasable shape is the GcRoot extension)"
-  mrb_get_arg1: "`Mrb::arg1` — the single required argument, raising `ArgumentError` on any other count (the strict counterpart to a `format::O` read)"
+  mrb_get_arg1: "`Mrb::arg1` — the single required argument, or the keyword hash when the call passed keywords alone; any other count comes back as the `ArgumentError` `Err`"
   mrb_get_argc: Mrb::argc
   mrb_get_args: "state::args — the format markers and frame-read helpers; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol"
-  mrb_get_argv: "`Mrb::argv` — the call frame's positional arguments as a borrowed slice, the companion to `Mrb::argc`"
+  mrb_get_argv: "`Mrb::argv` — a copy of the call frame's positional arguments, valid across a VM re-entry, the companion to `Mrb::argc`; `Mrb::argv_unchecked` is the zero-copy view of the same frame"
   mrb_gv_get: Mrb::gv_get
   mrb_gv_remove: Mrb::gv_remove
   mrb_gv_set: Mrb::gv_set
@@ -431,7 +431,7 @@ get_args_formats:
   S: { status: covered, via: "format::S, or read + Value::ensure_string" }
   A: { status: covered, via: "read + FromValue<Array> / Value::ensure_array" }
   H: { status: covered, via: "read + FromValue<Hash> / Value::ensure_hash" }
-  s: { status: covered, via: "format::Str — borrowed bytes into the String buffer" }
+  s: { status: covered, via: "format::Str — a copy of the String argument's bytes" }
   z: { status: covered, via: "read + RString::to_cstr" }
   a: { status: covered, via: "read + Array::entries" }
   c: { status: covered, via: "read + FromValue<RClass> / FromValue<RModule>" }
