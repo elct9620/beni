@@ -9,13 +9,15 @@
 //! those primitives are the C-bind floor, these traits are the safe
 //! typed seam consumers call.
 //!
-//! Scope covers the scalar leaf types (`i32` / `f64` / `bool`), an
-//! owned `String` or byte vector, and the typed handles (`RString` /
-//! `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` /
-//! `Symbol` / `Range`): every handle converts into the value naming its object,
-//! and back through a checked downcast discriminated by the value's
-//! type tag — string and container subclass instances convert. Every
-//! conversion is by value, copying rather than borrowing VM storage.
+//! Scope covers `Value` itself, the scalar leaf types (`i32` / `i64` /
+//! `f64` / `bool`), an owned `String` or byte vector, the typed handles
+//! (`RString` / `Array` / `Hash` / `RClass` / `RModule` /
+//! `ExceptionClass` / `Proc` / `Symbol` / `Range`), and an `Option` of
+//! any of them that reads `nil` as `None`: every handle converts into
+//! the value naming its object, and back through a checked downcast
+//! discriminated by the value's type tag — string and container
+//! subclass instances convert. Every conversion is by value, copying
+//! rather than borrowing VM storage.
 
 use crate::{
     Array, ExceptionClass, Hash, Mrb, Proc, RClass, RModule, RString, Range, Symbol, Value,
@@ -143,6 +145,28 @@ impl IntoValue for ExceptionClass {
     }
 }
 
+impl FromValue for Value {
+    // Identity, the counterpart of `IntoValue for Value`: a parameter
+    // that accepts any value converts without rejecting one.
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        Some(value)
+    }
+}
+
+impl<T: FromValue> FromValue for Option<T> {
+    // `nil` reads as absent, mruby's `!` nilable read; any other value
+    // converts by `T`'s rule, so what `T` rejects stays rejected.
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        if value.is_nil() {
+            Some(None)
+        } else {
+            T::from_value(value).map(Some)
+        }
+    }
+}
+
 impl FromValue for i32 {
     // Mirror of the `IntoValue for i32` allow: `try_from` is a real
     // range check under 64-bit `sys::mrb_int` and an infallible
@@ -161,6 +185,19 @@ impl FromValue for i32 {
         // out-of-i32-range integer is not representable — downcast
         // failure, same contract as a type-tag mismatch.
         Self::try_from(raw).ok()
+    }
+}
+
+impl FromValue for i64 {
+    // `sys::mrb_int` is at most 64 bits under every config, so an
+    // Integer-tagged value always fits and only the tag rejects.
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the unbox precondition (MRB_TT_INTEGER tagging) is
+        // established by the `is_integer` guard immediately before it.
+        value
+            .is_integer()
+            .then(|| i64::from(unsafe { value.unbox_integer() }))
     }
 }
 

@@ -1,4 +1,4 @@
-use beni::{Error, FromValue, IntoValue, Mrb, Value};
+use beni::{Error, FromValue, IntoValue, Mrb, RString, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::support::open_mrb;
@@ -396,4 +396,139 @@ fn a_returned_handle_reaches_ruby_as_the_object_it_names() {
         );
         assert!(got.is_true(), "`{probe}` must answer the same object");
     }
+}
+
+// A reporter whose location parts may each be nil: renders what it was
+// given, with `-` for an absent part.
+fn report(
+    mrb: &Mrb,
+    _self: Value,
+    message: String,
+    file: Option<String>,
+    line: Option<i64>,
+) -> RString {
+    let file = file.unwrap_or_else(|| "-".to_owned());
+    let line = line.map_or_else(|| "-".to_owned(), |l| l.to_string());
+    mrb.str_new(format!("{message}@{file}:{line}").as_bytes())
+}
+
+fn passthrough(_mrb: &Mrb, _self: Value, value: Value) -> Value {
+    value
+}
+
+// Tells the three states of a nilable optional apart: omitted, given
+// nil, and given an Integer.
+fn nilable_optional(_mrb: &Mrb, _self: Value, given: Option<Option<i64>>) -> i32 {
+    match given {
+        None => 0,
+        Some(None) => 1,
+        Some(Some(_)) => 2,
+    }
+}
+
+fn rendered(mrb: &Mrb, value: Value) -> String {
+    String::from_value(value)
+        .unwrap_or_else(|| panic!("expected a String, got {}", value.classname(mrb)))
+}
+
+#[test]
+fn nilable_parameters_bind_none_for_nil_and_the_value_otherwise() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniReporter");
+    class
+        .define_method(&mrb, c"error", beni::method!(report, 3))
+        .expect("registering the typed method must succeed");
+    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let message = mrb.str_new(b"boom").as_value();
+
+    let absent = receiver
+        .funcall(&mrb, c"error", &[message, Value::nil(), Value::nil()])
+        .expect("nil is accepted for a nilable parameter");
+    let present = receiver
+        .funcall(
+            &mrb,
+            c"error",
+            &[
+                message,
+                mrb.str_new(b"a.rb").as_value(),
+                Value::from_int(&mrb, 42),
+            ],
+        )
+        .expect("the inner type is accepted for a nilable parameter");
+
+    assert_eq!(rendered(&mrb, absent), "boom@-:-");
+    assert_eq!(rendered(&mrb, present), "boom@a.rb:42");
+}
+
+#[test]
+fn a_nilable_parameter_still_rejects_what_its_inner_type_rejects() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniStrictReporter");
+    class
+        .define_method(&mrb, c"error", beni::method!(report, 3))
+        .expect("registering the typed method must succeed");
+    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+
+    let err = receiver
+        .funcall(
+            &mrb,
+            c"error",
+            &[
+                mrb.str_new(b"boom").as_value(),
+                Value::from_int(&mrb, 1),
+                Value::nil(),
+            ],
+        )
+        .expect_err("an Integer where a nilable String is expected must raise");
+
+    let Error::Exception(exc) = &err else {
+        panic!("a rejected argument raises, got {err:?}");
+    };
+    assert_eq!(exc.classname(&mrb), "TypeError");
+}
+
+#[test]
+fn a_value_parameter_receives_the_argument_itself() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniPassthrough");
+    class
+        .define_method(&mrb, c"pass", beni::method!(passthrough, 1))
+        .expect("registering the typed method must succeed");
+    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let argument = mrb.str_new(b"same").as_value();
+
+    let got = receiver
+        .funcall(&mrb, c"pass", &[argument])
+        .expect("any value is accepted");
+
+    assert!(got.obj_equal(&mrb, argument));
+}
+
+#[test]
+fn a_nilable_optional_tells_omission_from_an_explicit_nil() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniNilableOptional");
+    class
+        .define_method(&mrb, c"given", beni::method!(nilable_optional, 0, 1))
+        .expect("registering the typed method must succeed");
+    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let call = |args: &[Value]| {
+        i32::from_value(
+            receiver
+                .funcall(&mrb, c"given", args)
+                .expect("the call must not raise"),
+        )
+    };
+
+    assert_eq!(call(&[]), Some(0), "omitted binds None");
+    assert_eq!(
+        call(&[Value::nil()]),
+        Some(1),
+        "an explicit nil binds Some(None)"
+    );
+    assert_eq!(
+        call(&[Value::from_int(&mrb, 5)]),
+        Some(2),
+        "an Integer binds Some(Some(_))"
+    );
 }

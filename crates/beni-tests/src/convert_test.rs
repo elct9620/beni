@@ -237,3 +237,58 @@ fn exception_class_round_trips_and_names_the_same_class() {
     assert_eq!(back.as_raw(), runtime_error.as_raw());
     assert_eq!(runtime_error.as_r_class().as_raw(), runtime_error.as_raw());
 }
+
+#[test]
+fn value_converts_as_itself() {
+    let mrb = open_mrb();
+
+    for value in [
+        Value::nil(),
+        Value::from_int(&mrb, 7),
+        mrb.str_new(b"s").as_value(),
+    ] {
+        let got = Value::from_value(value).expect("a value never rejects");
+        assert!(got.obj_equal(&mrb, value), "the same object comes back");
+    }
+}
+
+#[test]
+fn i64_holds_every_integer_the_configured_width_carries() {
+    let mrb = open_mrb();
+    let widest = Value::from_int(&mrb, beni::sys::mrb_int::MAX);
+
+    assert_eq!(
+        i64::from_value(widest),
+        Some(i64::from(beni::sys::mrb_int::MAX))
+    );
+    assert_eq!(i64::from_value(Value::from_int(&mrb, -3)), Some(-3));
+    assert_eq!(
+        i64::from_value(1.5f64.into_value(&mrb)),
+        None,
+        "a Float is not widened"
+    );
+    assert_eq!(i64::from_value(Value::nil()), None);
+}
+
+#[test]
+fn option_reads_nil_as_none_and_defers_the_rest_to_its_inner_type() {
+    let mrb = open_mrb();
+
+    assert!(matches!(
+        Option::<RString>::from_value(Value::nil()),
+        Some(None)
+    ));
+    assert!(matches!(
+        Option::<RString>::from_value(mrb.str_new(b"s").as_value()),
+        Some(Some(_))
+    ));
+    assert!(
+        Option::<RString>::from_value(Value::from_int(&mrb, 1)).is_none(),
+        "what the inner type rejects stays rejected"
+    );
+    assert_eq!(
+        Option::<bool>::from_value(false.into_value(&mrb)),
+        Some(Some(false)),
+        "only nil reads as absent, not every falsy value"
+    );
+}
