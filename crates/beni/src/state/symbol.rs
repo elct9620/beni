@@ -76,6 +76,11 @@ impl Mrb {
     /// (an mruby String value) both forward to.
     #[inline]
     pub fn intern_check(&self, name: &[u8]) -> Option<Symbol> {
+        // mruby raises for a name of `UINT16_MAX` bytes or more
+        // (`sym_validate_len`) and so never interns one.
+        if name.len() >= u16::MAX as usize {
+            return None;
+        }
         // SAFETY: `self` is alive; `name` is a valid byte slice and its
         // length is passed alongside, so the borrow need not be NUL-safe.
         let sym = unsafe {

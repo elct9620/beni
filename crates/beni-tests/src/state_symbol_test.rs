@@ -153,3 +153,14 @@ fn sym_dump_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     assert_eq!(first, "aa");
     assert_eq!(second, "bb");
 }
+
+#[test]
+fn intern_check_misses_a_name_too_long_to_intern_without_raising() {
+    let mrb = open_mrb();
+
+    // mruby rejects a symbol name of `UINT16_MAX` bytes or more, so a
+    // name that long can never have been interned.
+    let too_long = vec![b'a'; u16::MAX as usize];
+
+    assert!(mrb.intern_check(&too_long).is_none());
+}
