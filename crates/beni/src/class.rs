@@ -189,6 +189,48 @@ where
     .map(|v| unsafe { v.as_class_ptr() })
 }
 
+/// Resolve a class definition whose `name` the namespace `outer` itself
+/// already binds, as Ruby's `class` keyword resolves a reopened class: the
+/// bound ordinary class when `superclass` is its superclass, the
+/// `TypeError` otherwise, and `None` for an unbound name the definition
+/// then creates. mruby's C definition is not asked here because its fetch
+/// yields a prepended class's origin include class instead of the class.
+pub(crate) fn bound_class(
+    mrb: &Mrb,
+    outer: *mut sys::RClass,
+    name: sys::mrb_sym,
+    superclass: RClass,
+) -> Option<Result<RClass, Error>> {
+    // SAFETY: `outer` names a live class or module of this VM;
+    // `mrb_obj_value` only boxes the pointer.
+    let outer = Value::from_raw(unsafe { sys::mrb_obj_value(outer as *mut core::ffi::c_void) });
+    if !outer.const_defined_at(mrb, name) {
+        return None;
+    }
+    Some(outer.const_get(mrb, name).and_then(|bound| {
+        let name = crate::Symbol::from_sym(name).name(mrb).unwrap_or_default();
+        let type_error = |message: String| {
+            Err(Error::Exception(crate::method::core_exception(
+                mrb,
+                c"TypeError",
+                &message,
+            )))
+        };
+        if !bound.is_class() {
+            return type_error(format!("{name} is not a class"));
+        }
+        // SAFETY: the class tag was checked just above.
+        let class = RClass::from_raw(unsafe { bound.as_class_ptr() });
+        // SAFETY: `class` is a live class; its `super` link is either
+        // null or another class-family struct `mrb_class_real` walks.
+        let defined_from = RClass::from_raw(unsafe { (*class.as_raw()).super_ }).real();
+        if defined_from.as_raw() != superclass.as_raw() {
+            return type_error(format!("superclass mismatch for class {name}"));
+        }
+        Ok(class)
+    }))
+}
+
 /// The type `class` allocates its instances as. Reads the class's flags
 /// and never raises.
 pub(crate) fn instance_tt(class: *mut sys::RClass) -> sys::mrb_vtype {
@@ -415,10 +457,10 @@ impl ExceptionClass {
 pub trait Module: private::ClassLike {
     /// `mrb_define_class_under_id(mrb, self, name, superclass)` —
     /// define (or fetch) the nested class `self::name` inheriting from
-    /// `superclass`. The name is a symbol-or-name key (`IntoSym`),
-    /// resolved to its symbol before the `_id` definition call. mruby
-    /// rejects a superclass mismatch with an existing definition, or a
-    /// same-named constant that is not a class.
+    /// `superclass`. The name is a symbol-or-name key (`IntoSym`). A
+    /// name `self` already binds yields that ordinary class itself when
+    /// `superclass` is its superclass, prepended modules and all, and a
+    /// `TypeError` for anything else bound there.
     fn define_class<K: IntoSym>(
         self,
         mrb: &Mrb,
@@ -426,6 +468,9 @@ pub trait Module: private::ClassLike {
         superclass: RClass,
     ) -> Result<RClass, Error> {
         let sym = name.into_sym(mrb);
+        if let Some(bound) = bound_class(mrb, self.raw(), sym, superclass) {
+            return bound;
+        }
         protect_class_ptr(mrb, |mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and `superclass` originate from the same VM;

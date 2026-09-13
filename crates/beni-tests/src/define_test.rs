@@ -279,6 +279,121 @@ fn define_error_fetches_a_same_named_class_and_rejects_a_conflict() {
     );
 }
 
+/// `err` carries a `TypeError`.
+fn assert_type_error(mrb: &Mrb, err: beni::Error) {
+    match err {
+        beni::Error::Exception(exc) => assert_eq!(exc.class(mrb).name(mrb), "TypeError"),
+        other => panic!("the refusal must carry an exception, got {other:?}"),
+    }
+}
+
+#[test]
+fn define_class_fetches_a_prepended_class_as_itself() {
+    let mrb = open_mrb();
+    mrb.load_string(
+        b"module BeniPrepender; end
+          class BeniPrepended; prepend BeniPrepender; end
+          module BeniPrependNs
+            class Inner; prepend BeniPrepender; end
+          end
+          $beni_inner_before = BeniPrependNs::Inner",
+    )
+    .expect("the prepended classes must be defined");
+
+    let before = mrb.class_get(c"BeniPrepended").expect("the class is bound");
+    let fetched = mrb
+        .define_class(c"BeniPrepended", mrb.object_class())
+        .expect("the same superclass must fetch the bound class");
+    assert_eq!(fetched.as_raw(), before.as_raw());
+    assert!(fetched.to_value(&mrb).is_class());
+
+    let ns = mrb
+        .module_get(c"BeniPrependNs")
+        .expect("the namespace is bound");
+    let inner = ns
+        .define_class(&mrb, c"Inner", mrb.object_class())
+        .expect("the same superclass must fetch the nested class");
+    assert!(inner.to_value(&mrb).is_class());
+    let unchanged = mrb
+        .load_string(b"BeniPrependNs::Inner.equal?($beni_inner_before)")
+        .expect("reading the constant back must succeed");
+    assert_eq!(
+        bool::from_value(unchanged),
+        Some(true),
+        "the fetch must leave the binding untouched"
+    );
+}
+
+#[test]
+fn define_error_on_a_prepended_exception_class_builds_its_exceptions() {
+    let mrb = open_mrb();
+    mrb.load_string(
+        b"module BeniErrorPrepender; end
+          class BeniPrependedError < StandardError; prepend BeniErrorPrepender; end",
+    )
+    .expect("the prepended exception class must be defined");
+    let standard_error = mrb
+        .exc_get(c"StandardError")
+        .expect("StandardError is a core exception class");
+
+    let fetched = mrb
+        .define_error(c"BeniPrependedError", standard_error)
+        .expect("the same superclass must fetch the bound class");
+    let bound = mrb
+        .exc_get(c"BeniPrependedError")
+        .expect("the bound class is an exception class");
+    assert_eq!(fetched.as_raw(), bound.as_raw());
+
+    let err = beni::Error::new(&mrb, fetched, "boom");
+    assert_eq!(err.message(&mrb), "boom");
+    match err {
+        beni::Error::Exception(exc) => {
+            assert_eq!(exc.class(&mrb).name(&mrb), "BeniPrependedError")
+        }
+        other => panic!("the built error must carry an exception, got {other:?}"),
+    }
+}
+
+#[test]
+fn define_class_refuses_a_name_bound_to_a_singleton_class() {
+    let mrb = open_mrb();
+    mrb.load_string(
+        b"BeniBoundSingleton = Object.new.singleton_class
+          BeniBoundErrorSingleton = StandardError.new.singleton_class",
+    )
+    .expect("binding the singleton classes must succeed");
+    let standard_error = mrb
+        .exc_get(c"StandardError")
+        .expect("StandardError is a core exception class");
+
+    let err = mrb
+        .define_class(c"BeniBoundSingleton", mrb.object_class())
+        .expect_err("a singleton class is not an ordinary class");
+    assert_type_error(&mrb, err);
+    let err = mrb
+        .define_error(c"BeniBoundErrorSingleton", standard_error)
+        .expect_err("a singleton class is not an exception class");
+    assert_type_error(&mrb, err);
+}
+
+#[test]
+fn define_class_refuses_a_superclass_mismatch_as_a_type_error() {
+    let mrb = open_mrb();
+    let string = mrb.class_get(c"String").expect("String is a core class");
+    mrb.define_class(c"BeniMismatched", mrb.object_class())
+        .expect("the first definition must succeed");
+
+    let err = mrb
+        .define_class(c"BeniMismatched", string)
+        .expect_err("a different superclass must be refused");
+    assert_type_error(&mrb, err);
+    let err = mrb
+        .object_class()
+        .define_class(&mrb, c"BeniMismatched", string)
+        .expect_err("the namespaced form refuses it too");
+    assert_type_error(&mrb, err);
+}
+
 #[test]
 fn gv_get_reads_nil_for_unset_global() {
     let mrb = open_mrb();

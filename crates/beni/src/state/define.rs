@@ -41,14 +41,20 @@ impl Mrb {
         .map(RModule::from_raw)
     }
 
-    /// `mrb_define_class_id(mrb, name, super_)` — define a top-level
-    /// class named `name` inheriting from `super_`. The name is a
-    /// symbol-or-name key (`IntoSym`). mruby rejects a superclass
-    /// mismatch with an existing definition, or a same-named constant
-    /// that is not a class.
+    /// `mrb_define_class_id(mrb, name, super_)` — define (or fetch) a
+    /// top-level class named `name` inheriting from `super_`. The name is
+    /// a symbol-or-name key (`IntoSym`). A name already bound at the top
+    /// level yields that ordinary class itself when `super_` is its
+    /// superclass, prepended modules and all, and a `TypeError` for
+    /// anything else bound there.
     #[inline]
     pub fn define_class<K: IntoSym>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
         let sym = name.into_sym(self);
+        if let Some(bound) =
+            crate::class::bound_class(self, self.object_class().as_raw(), sym, super_)
+        {
+            return bound;
+        }
         crate::class::protect_class_ptr(self, |mrb| {
             // SAFETY: as `define_module`; `super_` was produced by
             // the same VM.
@@ -60,8 +66,8 @@ impl Mrb {
     /// Define (or fetch) the top-level exception class named `name`
     /// descending from `superclass`, yielding it as an `ExceptionClass`.
     /// Mirrors magnus's `define_error`. The name is a symbol-or-name key
-    /// (`IntoSym`); mruby rejects a superclass mismatch with an existing
-    /// definition, or a same-named constant that is not a class.
+    /// (`IntoSym`), and a name already bound resolves as
+    /// `Mrb::define_class` resolves it.
     #[inline]
     pub fn define_error<K: IntoSym>(
         &self,
