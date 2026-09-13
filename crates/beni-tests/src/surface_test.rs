@@ -264,6 +264,9 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::str_new_static;
     let _ = Mrb::sym_dump;
     let _ = Mrb::sym_name_len;
+    let _ = Mrb::set_user_data::<u8>;
+    let _ = Mrb::user_data::<u8>;
+    let _ = Mrb::take_user_data::<u8>;
     let _ = RClass::as_raw;
     let _ = RClass::from_raw;
     let _ = RString::cat_cstr;

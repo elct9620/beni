@@ -30,4 +30,5 @@ mod state_test;
 mod string_test;
 mod surface_test;
 mod symbol_test;
+mod user_data_test;
 mod value_test;

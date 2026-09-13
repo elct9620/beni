@@ -43,6 +43,7 @@
 //!   * `load` — RITE bytecode loaders
 //!   * `protect` — closure-based `mrb_protect_error`
 //!   * `root` — GC roots outliving the frame that made the value
+//!   * `user_data` — the one slot of embedder data the owner installs
 //!
 //! Splitting per concern keeps each file's surface small and the
 //! rustdoc on each cluster focused.
@@ -55,6 +56,7 @@ pub mod load;
 pub mod protect;
 pub mod root;
 pub mod symbol;
+pub mod user_data;
 
 use crate::{Error, RClass, Value};
 use beni_sys as sys;
@@ -135,7 +137,9 @@ impl Mrb {
     /// Raw `*mut mrb_state`. Use only at FFI boundaries that have
     /// not yet migrated to safe methods. The returned pointer is
     /// valid for the lifetime of `&self`; callers must not call
-    /// `mrb_close` on it (the `Mrb` Drop owns that).
+    /// `mrb_close` on it (the `Mrb` Drop owns that), and its `ud`
+    /// field is the user-data slot's, so a write to it is the
+    /// writer's own unsafe act.
     #[inline]
     pub fn as_ptr(&self) -> *mut sys::mrb_state {
         self.state.as_ptr()
@@ -169,7 +173,9 @@ impl Mrb {
     /// # Safety
     ///
     /// `*mrb_ref` must be a live mruby state that remains open for
-    /// the lifetime of the returned borrow. Passing storage holding
+    /// the lifetime of the returned borrow, and whose `ud` field is
+    /// NULL or was written by `Mrb::set_user_data` — the user-data
+    /// reads take the field for that slot. Passing storage holding
     /// NULL is undefined behaviour.
     #[inline]
     pub unsafe fn borrow_raw(mrb_ref: &*mut sys::mrb_state) -> &Mrb {
@@ -316,6 +322,7 @@ impl Mrb {
 
 impl Drop for Mrb {
     fn drop(&mut self) {
+        self.drop_user_data();
         // SAFETY: `state` was produced by `mrb_open` in `Mrb::open`
         // and has not been closed elsewhere — `as_ptr` hands out
         // borrows but never takes ownership.
