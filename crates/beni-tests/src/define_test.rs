@@ -194,6 +194,91 @@ fn exc_get_surfaces_err_for_missing_constant() {
     );
 }
 
+fn raise_own_error(mrb: &Mrb, _self: Value) -> Result<Value, beni::Error> {
+    let own = mrb
+        .exc_get(c"BeniRaisedError")
+        .expect("the consumer's exception class is defined");
+    Err(beni::Error::new(mrb, own, "raised from Rust"))
+}
+
+#[test]
+fn define_error_yields_an_exception_class_ruby_code_rescues() {
+    let mrb = open_mrb();
+    let standard_error = mrb
+        .exc_get(c"StandardError")
+        .expect("StandardError is a core exception class");
+    let own = mrb
+        .define_error(c"BeniRaisedError", standard_error)
+        .expect("defining the exception class must succeed");
+    assert_eq!(own.name(&mrb), "BeniRaisedError");
+
+    mrb.object_class()
+        .define_method(&mrb, c"beni_raise", beni::method!(raise_own_error, 0))
+        .expect("registering the raising method must succeed");
+    let cxt = beni::Ccontext::new(&mrb, c"define_error_test.rb")
+        .expect("allocating the compile context must succeed");
+    let got = cxt
+        .load_nstring(
+            b"begin; beni_raise; rescue StandardError => e; \"#{e.class}:#{e.message}\"; end",
+        )
+        .expect("the test source must compile and run");
+    assert!(
+        mrb.pending_exc().is_nil(),
+        "the rescue must leave no pending exception: {}",
+        mrb.pending_exc().to_string(&mrb)
+    );
+    assert_eq!(got.to_string(&mrb), "BeniRaisedError:raised from Rust");
+}
+
+#[test]
+fn define_error_nests_under_a_namespace() {
+    let mrb = open_mrb();
+    let runtime_error = mrb
+        .exc_get(c"RuntimeError")
+        .expect("RuntimeError is a core exception class");
+    let namespace = mrb
+        .define_module(c"BeniErrors")
+        .expect("defining the namespace must succeed");
+
+    let nested = namespace
+        .define_error(&mrb, c"ParseError", runtime_error)
+        .expect("defining the nested exception class must succeed");
+    assert_eq!(nested.name(&mrb), "BeniErrors::ParseError");
+    assert!(nested.exc_new(&mrb, "nested").is_exception());
+}
+
+#[test]
+fn define_error_fetches_a_same_named_class_and_rejects_a_conflict() {
+    let mrb = open_mrb();
+    let standard_error = mrb
+        .exc_get(c"StandardError")
+        .expect("StandardError is a core exception class");
+    let runtime_error = mrb
+        .exc_get(c"RuntimeError")
+        .expect("RuntimeError is a core exception class");
+
+    let first = mrb
+        .define_error(c"BeniTwiceError", standard_error)
+        .expect("the first definition must succeed");
+    let again = mrb
+        .define_error(c"BeniTwiceError", standard_error)
+        .expect("the same superclass must fetch the existing class");
+    assert_eq!(again.as_raw(), first.as_raw());
+
+    assert!(
+        mrb.define_error(c"BeniTwiceError", runtime_error).is_err(),
+        "a different superclass must surface as Err"
+    );
+
+    mrb.object_class()
+        .define_const(&mrb, c"BeniNotAClass", Value::from_int(&mrb, 1))
+        .expect("binding the constant must succeed");
+    assert!(
+        mrb.define_error(c"BeniNotAClass", standard_error).is_err(),
+        "a name bound to a non-class must surface as Err"
+    );
+}
+
 #[test]
 fn gv_get_reads_nil_for_unset_global() {
     let mrb = open_mrb();

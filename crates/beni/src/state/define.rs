@@ -57,6 +57,23 @@ impl Mrb {
         .map(RClass::from_raw)
     }
 
+    /// Define (or fetch) the top-level exception class named `name`
+    /// descending from `superclass`, yielding it as an `ExceptionClass`.
+    /// Mirrors magnus's `define_error`. The name is a symbol-or-name key
+    /// (`IntoSym`); mruby rejects a superclass mismatch with an existing
+    /// definition, or a same-named constant that is not a class.
+    #[inline]
+    pub fn define_error<K: IntoSym>(
+        &self,
+        name: K,
+        superclass: ExceptionClass,
+    ) -> Result<ExceptionClass, Error> {
+        // A class defined or fetched under an exception-class superclass
+        // descends from it, so it is an exception class too.
+        self.define_class(name, superclass.as_r_class())
+            .map(|class| ExceptionClass::from_raw_unchecked(class.as_raw()))
+    }
+
     /// `mrb_class_new(mrb, super_)` — create an anonymous class
     /// inheriting from `super_`, bound to no constant. The class gains a
     /// name only when later bound to a constant. mruby rejects a

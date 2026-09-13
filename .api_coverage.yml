@@ -375,6 +375,13 @@ extensions:
     the value box/unbox primitives, including `FromValue for String` and
     `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as
     arbitrary owned bytes).
+  ExceptionClass: >-
+    Typed handle on an exception class, magnus's `ExceptionClass`: only it
+    builds or raises an exception, so `mrb_exc_new` / `mrb_exc_new_str` never
+    meet a class whose instances are not exceptions. `Mrb::define_error` and
+    `Module::define_error` compose `mrb_define_class_id` /
+    `mrb_define_class_under_id` with an exception-class superclass. Binds no
+    new C symbol.
   Mrb::rescue: >-
     `begin`/`rescue` combinator: a safe composition of the already-graduated
     `Mrb::protect` (`mrb_protect_error`) and `Value::is_kind_of`

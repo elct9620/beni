@@ -60,7 +60,8 @@ pub struct RModule(pub(crate) *mut sys::RClass);
 /// Mirrors `magnus::ExceptionClass`. `#[repr(transparent)]` over
 /// `*mut RClass`.
 ///
-/// Obtain one via `Mrb::exc_get` for a built-in exception class, or
+/// Obtain one via `Mrb::exc_get` for a built-in exception class,
+/// `Mrb::define_error` / `Module::define_error` for a consumer's own, or
 /// `ExceptionClass::from_value` for a class held as a value. Only this
 /// handle builds exceptions — the general class handle cannot:
 ///
@@ -427,6 +428,22 @@ pub trait Module: private::ClassLike {
             }
         })
         .map(RClass::from_raw)
+    }
+
+    /// Define (or fetch) the nested exception class `self::name`
+    /// descending from `superclass`, yielding it as an `ExceptionClass`.
+    /// Mirrors magnus's `Module::define_error`; rejected as
+    /// `Module::define_class` is.
+    fn define_error<K: IntoSym>(
+        self,
+        mrb: &Mrb,
+        name: K,
+        superclass: ExceptionClass,
+    ) -> Result<ExceptionClass, Error> {
+        // A class defined or fetched under an exception-class superclass
+        // descends from it, so it is an exception class too.
+        self.define_class(mrb, name, superclass.as_r_class())
+            .map(|class| ExceptionClass::from_raw_unchecked(class.as_raw()))
     }
 
     /// `mrb_define_module_under_id(mrb, self, name)` — define (or
