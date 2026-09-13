@@ -55,8 +55,8 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
         .expect("the Symbol-keyed method must be callable by name");
     assert_eq!(unsafe { got.unbox_integer() }, 7);
 
-    // SAFETY: `fetched` is a live handle from this VM.
-    let const_val = unsafe { fetched.to_value(&mrb) }
+    let const_val = fetched
+        .to_value(&mrb)
         .const_get(&mrb, mrb.intern_cstr(c"ANSWER"))
         .expect("the Symbol-keyed constant must read by name");
     assert_eq!(unsafe { const_val.unbox_integer() }, 7);
@@ -112,8 +112,8 @@ fn symbol_key_registers_private_singleton_and_module_function() {
         .funcall(&mrb, c"secret", &[])
         .expect("the Symbol-keyed private method must be reachable via funcall");
     assert_eq!(unsafe { private.unbox_integer() }, 7);
-    // SAFETY: `class` is a live handle from this VM.
-    let singleton = unsafe { class.to_value(&mrb) }
+    let singleton = class
+        .to_value(&mrb)
         .funcall(&mrb, c"klass_answer", &[])
         .expect("the Symbol-keyed singleton method must be callable");
     assert_eq!(unsafe { singleton.unbox_integer() }, 9);
@@ -439,8 +439,7 @@ fn module_and_object_traits_register_methods() {
     class
         .define_singleton_method(&mrb, c"class_answer", beni::method!(answer_nine, 0))
         .expect("registering the singleton method must succeed");
-    // SAFETY: `class` is a live handle from this VM.
-    let class_value = unsafe { class.to_value(&mrb) };
+    let class_value = class.to_value(&mrb);
     let got = class_value
         .funcall(&mrb, c"class_answer", &[])
         .expect("the registered class method must not raise");
@@ -816,8 +815,7 @@ fn undef_singleton_method_marks_a_class_method_undefined() {
         .expect("registering the class method must succeed");
 
     // The class method responds before undefinition.
-    // SAFETY: `class` is a live handle from this VM.
-    let class_value = unsafe { class.to_value(&mrb) };
+    let class_value = class.to_value(&mrb);
     let got = class_value
         .funcall(&mrb, c"class_answer", &[])
         .expect("the class method must be callable before undefinition");

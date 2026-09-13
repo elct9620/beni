@@ -97,6 +97,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = DataType::<i32>::new;
     let _ = RModule::from_raw;
     let _ = RModule::as_raw;
+    let _ = RModule::to_value;
     let _ = <RClass as Module>::define_class::<&core::ffi::CStr>;
     let _ = <RClass as Module>::define_module::<&core::ffi::CStr>;
     let _ = <RClass as Module>::class_get::<&core::ffi::CStr>;

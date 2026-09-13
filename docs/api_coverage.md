@@ -500,7 +500,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_msvc_vsnprintf` | fn | ❌ | ❌ |  |
 | `mrb_nil_p` | macro | ✅ | ✅ | `Value::is_nil` |
 | `mrb_nil_value` | fn | ✅ | ✅ | `Value::nil` |
-| `mrb_obj_value` | fn | ✅ | ✅ | `RClass::to_value`, `RClass::data_wrap` |
+| `mrb_obj_value` | fn | ✅ | ✅ | `RClass::to_value`, `RModule::to_value`, `RClass::data_wrap` |
 | `mrb_object_p` | macro | ❌ | ❌ |  |
 | `mrb_proc_p` | macro | ❌ | ✅ | `Value::is_proc`, via the value tag |
 | `mrb_range_p` | macro | ❌ | ✅ | `Value::is_range`, via the value tag |

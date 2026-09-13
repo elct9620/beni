@@ -83,6 +83,25 @@ fn module_new_creates_an_unnamed_mixable_module() {
 }
 
 #[test]
+fn module_new_takes_its_name_from_the_constant_it_is_assigned_to() {
+    let mrb = open_mrb();
+
+    // An anonymous module reaches a constant only as a value; the
+    // assignment is what gives it a name.
+    let module = mrb.module_new();
+    mrb.object_class()
+        .to_value(&mrb)
+        .const_set(
+            &mrb,
+            mrb.intern_cstr(c"BeniBoundModule"),
+            module.to_value(&mrb),
+        )
+        .expect("assigning the module to a constant must succeed");
+
+    assert_eq!(module.name(&mrb), "BeniBoundModule");
+}
+
+#[test]
 fn module_get_fetches_a_defined_module() {
     let mrb = open_mrb();
 

@@ -199,26 +199,19 @@ impl RClass {
         RClass::from_raw(unsafe { sys::mrb_class_real(self.0) })
     }
 
-    /// Reify this class handle as an mruby `Value` via mruby's own
-    /// `mrb_obj_value` (an `MRB_INLINE` reached through bindgen's
-    /// static-fn trampoline). Used by call paths that need to pass
-    /// the class through generic mruby APIs that accept `mrb_value`
-    /// (e.g. `mrb_const_defined` / `mrb_const_get` /
-    /// `Object#constants`).
+    /// `mrb_obj_value(self)` — the `Value` naming this class, for the
+    /// value-level APIs (constants, dispatch, singleton class) that take
+    /// any value. Raises nothing and runs no Ruby.
     ///
     /// Named `to_value`, not `as_value`: `RClass` wraps a `*mut RClass`
-    /// pointer, so reification is an `mrb_obj_value` call against the
-    /// live VM, not the free field read the `Value`-newtype handles
-    /// (`Array` / `Symbol` / `Proc`) expose as `as_value`.
-    ///
-    /// # Safety
-    ///
-    /// `self` must be a live class handle produced by the same VM
-    /// as `mrb` (and not yet freed).
+    /// pointer, so the value is boxed through mruby's `mrb_obj_value`
+    /// rather than read out of a field the way the `Value`-newtype
+    /// handles (`Array` / `Symbol` / `Proc`) expose it as `as_value`.
     #[inline]
-    pub unsafe fn to_value(self, _mrb: &Mrb) -> Value {
-        // SAFETY: forwarded from caller; mrb_obj_value reads only
-        // the pointer payload and reuses mruby's own boxing logic.
+    pub fn to_value(self, _mrb: &Mrb) -> Value {
+        // SAFETY: `self` names a class of this VM — the pairing every
+        // handle method relies on; `mrb_obj_value` only boxes the
+        // pointer.
         Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
     }
 
@@ -321,6 +314,15 @@ impl RModule {
     #[inline]
     pub const fn as_raw(self) -> *mut sys::RClass {
         self.0
+    }
+
+    /// `mrb_obj_value(self)` — the `Value` naming this module; the
+    /// counterpart of `RClass::to_value`. Raises nothing and runs no
+    /// Ruby.
+    #[inline]
+    pub fn to_value(self, _mrb: &Mrb) -> Value {
+        // SAFETY: as `RClass::to_value`.
+        Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
     }
 }
 
