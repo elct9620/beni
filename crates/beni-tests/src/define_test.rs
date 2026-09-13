@@ -435,3 +435,34 @@ fn gv_remove_clears_a_global_back_to_nil() {
     mrb.gv_remove(sym);
     assert!(mrb.gv_get(sym).is_nil());
 }
+
+#[test]
+fn define_global_const_binds_a_top_level_constant() {
+    let mrb = open_mrb();
+
+    mrb.define_global_const(c"BENI_GLOBAL_ANSWER", Value::from_int(&mrb, 42))
+        .expect("binding a top-level constant must succeed");
+
+    let got = mrb
+        .load_string(b"BENI_GLOBAL_ANSWER")
+        .expect("the constant reads back from Ruby");
+    assert_eq!(i64::from_value(got), Some(42));
+}
+
+#[test]
+fn define_global_const_surfaces_a_frozen_object_as_err() {
+    let mrb = open_mrb();
+    mrb.load_string(b"Object.freeze")
+        .expect("freezing Object must succeed");
+    let frozen_error = mrb.exc_get(c"FrozenError").expect("a core exception class");
+
+    let err = mrb
+        .define_global_const(c"BENI_GLOBAL_ON_FROZEN", Value::nil())
+        .expect_err("binding onto a frozen Object must surface as Err");
+
+    assert!(err.is_kind_of(&mrb, frozen_error));
+    assert!(
+        mrb.pending_exc().is_nil(),
+        "the caught exception must not stay pending"
+    );
+}

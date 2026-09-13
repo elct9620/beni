@@ -171,12 +171,19 @@ impl Mrb {
     }
 
     /// `mrb_define_global_const(mrb, name, val)` — bind a top-level
-    /// constant. Reachable as `name` and as `Object::name`.
+    /// constant. Reachable as `name` and as `Object::name`. Runs inside
+    /// exception protection, so a frozen `Object` surfaces as
+    /// `Err(Error::Exception)` rather than long-jumping, as
+    /// `Module::define_const` does for any other receiver.
     #[inline]
-    pub fn define_global_const(&self, name: &core::ffi::CStr, val: Value) {
-        // SAFETY: `self` is alive; `name` is NUL-terminated; `val`
-        // originates from the same VM.
-        unsafe { sys::mrb_define_global_const(self.as_ptr(), name.as_ptr(), val.as_raw()) };
+    pub fn define_global_const(&self, name: &core::ffi::CStr, val: Value) -> Result<(), Error> {
+        self.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `name` is
+            // NUL-terminated; `val` originates from the same VM.
+            unsafe { sys::mrb_define_global_const(mrb.as_ptr(), name.as_ptr(), val.as_raw()) };
+            Value::nil()
+        })
+        .map(|_| ())
     }
 
     /// `mrb_gv_set(mrb, sym, val)` — assign a global variable.
