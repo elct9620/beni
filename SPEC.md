@@ -934,6 +934,24 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   under exception protection, so neither a body raise nor an ensure raise
   long-jumps past the caller.
 
+#### User data
+
+- An interpreter holds at most one piece of user data: a Rust value of any type
+  that can cross threads, kept in the auxiliary-data slot mruby's state carries
+  for an embedder. The interpreter drops the value it holds when it closes.
+- Any borrow of the interpreter reads the value — a gem's installation and a
+  registered method included — while only the handle's owner installs or takes
+  it. A read borrows the held value in place rather than copying it, and lasts
+  as long as the borrow of the interpreter it was read through.
+- Installing into a slot that already holds a value is refused: the offered
+  value is handed back and the held one stays in place, so replacing a value is
+  taking it first. Taking yields the held value and leaves the slot empty.
+- A read or a take names the type it expects. Naming a type other than the one
+  held, or reaching an empty slot, answers nothing, and a take that answers
+  nothing leaves the slot as it was.
+- mruby publishes no call for the slot, so it belongs to this surface: a write
+  to it through `beni::sys` is the writer's own unsafe act.
+
 #### Loading precompiled bytecode
 
 No part of this section is carried by the `compiler` capability feature.
@@ -1135,6 +1153,7 @@ The `compiler` capability feature carries everything in this section.
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
+| Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
 | A precompiled bytecode blob the interpreter cannot read as a program | surfaced as a Rust `Err` carrying a `ScriptError` whose message names which structural check failed; nothing runs |
