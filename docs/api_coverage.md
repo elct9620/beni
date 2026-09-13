@@ -10,8 +10,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
 | function | 319 | 318 (100%) | 226 (71%) |
-| macro | 111 | 28 (25%) | 70 (63%) |
-| total | 430 | 346 (80%) | 296 (69%) |
+| macro | 111 | 28 (25%) | 71 (64%) |
+| total | 430 | 346 (80%) | 297 (69%) |
 
 ## mruby.h
 
@@ -507,7 +507,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_read_float` | fn | ✅ | ❌ |  |
 | `mrb_read_int` | fn | ✅ | ❌ |  |
 | `mrb_ro_data_p` | macro | ✅ | ❌ |  |
-| `mrb_sclass_p` | macro | ❌ | ❌ |  |
+| `mrb_sclass_p` | macro | ❌ | ✅ | `Value::is_sclass`, via the value tag |
 | `mrb_string_p` | macro | ❌ | ✅ | `Value::is_string`, via the value tag |
 | `mrb_symbol_p` | macro | ❌ | ✅ | `Value::is_symbol`, via the value tag |
 | `mrb_symbol_value` | fn | ✅ | ✅ | `Symbol::from_sym` |
@@ -552,14 +552,14 @@ covered (✅); the Via column names the surface that covers each one.
 | Specifier | Covered | Via |
 |-----------|:-------:|-----|
 | `o` | ✅ | format::O, or the composable read |
-| `C` | ✅ | read + FromValue<RClass> / Value::is_class |
+| `C` | ✅ | read + FromValue<RClass> / FromValue<RModule>, or Value::is_class / is_sclass / is_module |
 | `S` | ✅ | format::S, or read + Value::ensure_string |
 | `A` | ✅ | read + FromValue<Array> / Value::ensure_array |
 | `H` | ✅ | read + FromValue<Hash> / Value::ensure_hash |
 | `s` | ✅ | format::Str — borrowed bytes into the String buffer |
 | `z` | ✅ | read + RString::to_cstr |
 | `a` | ✅ | read + Array::entries |
-| `c` | ✅ | read + FromValue<RClass> |
+| `c` | ✅ | read + FromValue<RClass> / FromValue<RModule> |
 | `f` | ✅ | read + FromValue<f64> / Value::ensure_float |
 | `i` | ✅ | format::Io, or read + FromValue<i32> / Value::ensure_int |
 | `b` | ✅ | read + Value::to_bool |

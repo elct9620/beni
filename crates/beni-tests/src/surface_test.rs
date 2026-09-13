@@ -67,6 +67,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::is_array;
     let _ = Value::is_hash;
     let _ = Value::is_class;
+    let _ = Value::is_sclass;
     let _ = Value::is_proc;
     let _ = Value::is_data;
     let _ = Value::is_string;
@@ -190,6 +191,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <Hash as FromValue>::from_value;
     let _ = <Range as FromValue>::from_value;
     let _ = <RClass as FromValue>::from_value;
+    let _ = <RModule as FromValue>::from_value;
     let _ = <Proc as FromValue>::from_value;
     let _ = <Symbol as FromValue>::from_value;
     let _ = <Symbol as IntoValue>::into_value;

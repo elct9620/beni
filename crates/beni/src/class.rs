@@ -187,10 +187,10 @@ impl RClass {
     /// A handle that is already a real class returns itself. The
     /// resolution walks the class structure and never raises, so it
     /// needs no `Mrb::protect`. The normalization a consumer reaches for
-    /// after obtaining a handle that may be a singleton or include class
-    /// through `RClass::from_raw` / `Value::as_class_ptr`; the
-    /// real-class result `Value::class` already returns needs no further
-    /// resolution.
+    /// after obtaining a handle that may be a singleton class (through
+    /// `Value::singleton_class` or `RClass::from_value`) or an include
+    /// class (through `RClass::from_raw`); the real-class result
+    /// `Value::class` already returns needs no further resolution.
     #[inline]
     pub fn real(self) -> RClass {
         // SAFETY: `mrb_class_real` only walks the `super` chain past

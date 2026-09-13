@@ -106,6 +106,7 @@ typed:
   mrb_module_p: "`Value::is_module`, via the value tag"
   mrb_proc_p: "`Value::is_proc`, via the value tag"
   mrb_range_p: "`Value::is_range`, via the value tag"
+  mrb_sclass_p: "`Value::is_sclass`, via the value tag"
   mrb_string_p: "`Value::is_string`, via the value tag"
   mrb_symbol_p: "`Value::is_symbol`, via the value tag"
   mrb_break_value_get: Break::value
@@ -417,14 +418,14 @@ extensions:
 # checks that every specifier a `format::` marker reads is marked covered.
 get_args_formats:
   o: { status: covered, via: "format::O, or the composable read" }
-  C: { status: covered, via: "read + FromValue<RClass> / Value::is_class" }
+  C: { status: covered, via: "read + FromValue<RClass> / FromValue<RModule>, or Value::is_class / is_sclass / is_module" }
   S: { status: covered, via: "format::S, or read + Value::ensure_string" }
   A: { status: covered, via: "read + FromValue<Array> / Value::ensure_array" }
   H: { status: covered, via: "read + FromValue<Hash> / Value::ensure_hash" }
   s: { status: covered, via: "format::Str — borrowed bytes into the String buffer" }
   z: { status: covered, via: "read + RString::to_cstr" }
   a: { status: covered, via: "read + Array::entries" }
-  c: { status: covered, via: "read + FromValue<RClass>" }
+  c: { status: covered, via: "read + FromValue<RClass> / FromValue<RModule>" }
   f: { status: covered, via: "read + FromValue<f64> / Value::ensure_float" }
   i: { status: covered, via: "format::Io, or read + FromValue<i32> / Value::ensure_int" }
   b: { status: covered, via: "read + Value::to_bool" }

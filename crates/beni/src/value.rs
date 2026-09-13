@@ -694,15 +694,17 @@ impl Value {
         unsafe { RString::from_value_unchecked(v) }
     }
 
-    /// Recover the `*mut RClass` pointer from a class-tagged
-    /// `Value`, via the `mrb_class_ptr_func` static-inline wrapper in
+    /// Recover the `*mut RClass` pointer from a class, singleton-class,
+    /// or module `Value` — mruby models all three with one C struct —
+    /// via the `mrb_class_ptr_func` static-inline wrapper in
     /// `wrapper.h` — the `mrb_class_ptr(v)` macro expands inside the
     /// C compiler, which sees the same boxing config the linked
     /// archive was built with.
     ///
     /// # Safety
     ///
-    /// `self` must be a class-tagged `Value`.
+    /// `self` must carry `MRB_TT_CLASS`, `MRB_TT_SCLASS`, or
+    /// `MRB_TT_MODULE`.
     #[inline]
     pub unsafe fn as_class_ptr(self) -> *mut sys::RClass {
         // SAFETY: forwarded from caller.
@@ -887,19 +889,27 @@ impl Value {
 
     /// TRUE when `self` carries `MRB_TT_CLASS` — the class tag only;
     /// modules (`MRB_TT_MODULE`) and singleton classes
-    /// (`MRB_TT_SCLASS`) are excluded per SPEC's downcast rule. See
-    /// `Value::is_integer`. Pair with `Value::as_class_ptr` for the
-    /// direct-unbox path.
+    /// (`MRB_TT_SCLASS`) carry their own tags. See `Value::is_integer`.
+    /// Pair with `Value::as_class_ptr` for the direct-unbox path.
     #[inline]
     pub fn is_class(self) -> bool {
         // SAFETY: as `is_integer`.
         unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CLASS }
     }
 
+    /// TRUE when `self` carries `MRB_TT_SCLASS` — a singleton class,
+    /// the tag `Value::singleton_class` yields for an ordinary object.
+    /// `RClass`'s downcast accepts it alongside `Value::is_class`. See
+    /// `Value::is_integer`.
+    #[inline]
+    pub fn is_sclass(self) -> bool {
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_SCLASS }
+    }
+
     /// TRUE when `self` carries `MRB_TT_MODULE` — the module tag only;
     /// classes (`MRB_TT_CLASS`) are excluded, the complement of
-    /// `Value::is_class`. See `Value::is_integer`. No typed handle binds
-    /// this tag yet, so the predicate stands alone.
+    /// `Value::is_class`. See `Value::is_integer`.
     #[inline]
     pub fn is_module(self) -> bool {
         // SAFETY: as `is_integer`.

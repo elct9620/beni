@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Error, IntoSym, Module, Mrb, Object, RClass, Value};
+use beni::{Error, FromValue, IntoSym, Module, Mrb, Object, RClass, Value};
 
 /// Registration target answering a fixed Integer for the trait
 /// tests below.
@@ -910,13 +910,7 @@ fn real_resolves_a_singleton_class_to_its_attached_object_class() {
         "reaching the singleton class must not raise: {}",
         mrb.pending_exc().to_string(&mrb)
     );
-    // A singleton class carries `MRB_TT_SCLASS`, not the plain class
-    // tag `is_class` gates on, yet it still wraps an `RClass` the
-    // `mrb_class_ptr` cast recovers — the raw-seam handle a consumer
-    // would hold before normalizing.
-    // SAFETY: `singleton_class` returns a class-family value (SCLASS),
-    // so its payload is an `RClass` pointer the cast reads.
-    let sclass = RClass::from_raw(unsafe { sclass_val.as_class_ptr() });
+    let sclass = RClass::from_value(sclass_val).expect("a singleton class is a class handle");
 
     // The singleton handle is not itself a real class — its name is
     // the `#<Class:...>` form — but `real` walks past it to a named

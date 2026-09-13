@@ -13,10 +13,9 @@
 //! owned `String` or byte vector, and the typed handles (`RString` /
 //! `Array` / `Hash` / `RClass` / `RModule` / `Proc` / `Symbol` /
 //! `Range`): every handle converts into the value naming its object,
-//! and all but `RModule` back through a checked downcast discriminated
-//! by the value's type tag — string and container subclass instances
-//! convert. Every conversion is by value, copying rather than
-//! borrowing VM storage.
+//! and back through a checked downcast discriminated by the value's
+//! type tag — string and container subclass instances convert. Every
+//! conversion is by value, copying rather than borrowing VM storage.
 
 use crate::{Array, Hash, Mrb, Proc, RClass, RModule, RString, Range, Symbol, Value};
 
@@ -198,13 +197,25 @@ impl FromValue for Hash {
 }
 
 impl FromValue for RClass {
+    // A singleton class is a class handle too — `Value::singleton_class`
+    // hands one out — so both class tags convert.
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the unbox precondition (class tagging) is
-        // established by the `is_class` guard immediately before it.
-        value
-            .is_class()
+        // SAFETY: the unbox precondition (class or singleton-class
+        // tagging) is established by the guard immediately before it.
+        (value.is_class() || value.is_sclass())
             .then(|| RClass::from_raw(unsafe { value.as_class_ptr() }))
+    }
+}
+
+impl FromValue for RModule {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the unbox precondition (MRB_TT_MODULE tagging) is
+        // established by the `is_module` guard immediately before it.
+        value
+            .is_module()
+            .then(|| RModule::from_raw(unsafe { value.as_class_ptr() }))
     }
 }
 

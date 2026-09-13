@@ -203,6 +203,16 @@ fn tag_predicates_discriminate_module_range_and_exception() {
     assert!(!class.is_module());
     assert!(!module.is_class());
 
+    // A singleton class carries its own tag, claimed by neither.
+    let singleton = cxt
+        .load_nstring(b"'beni'.singleton_class")
+        .expect("the test source must compile and run");
+    assert!(singleton.is_sclass());
+    assert!(!singleton.is_class());
+    assert!(!singleton.is_module());
+    assert!(!class.is_sclass());
+    assert!(!module.is_sclass());
+
     // No predicate claims an unrelated tag, nor an immediate.
     assert!(!range.is_module());
     assert!(!exception.is_range());

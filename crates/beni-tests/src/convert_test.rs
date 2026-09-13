@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Array, FromValue, Hash, IntoValue, RClass, RString, Value};
+use beni::{Array, FromValue, Hash, IntoValue, RClass, RModule, RString, Value};
 
 // Boxes through mruby's generic `mrb_int_value` / `mrb_float_value`
 // constructors and unboxes through the macro-expanding C helpers —
@@ -124,30 +124,67 @@ fn container_downcast_includes_subclass_instances() {
 }
 
 #[test]
-fn class_downcast_admits_only_the_class_tag() {
-    use beni::Module;
-
+fn class_family_downcasts_agree_with_their_predicates() {
     let mrb = open_mrb();
     let cxt = beni::Ccontext::new(&mrb, c"convert_test.rb")
         .expect("allocating the compile context must succeed");
 
-    let class_val = cxt
-        .load_nstring(b"String")
-        .expect("the test source must compile and run");
-    let module_val = cxt
-        .load_nstring(b"Kernel")
-        .expect("the test source must compile and run");
-    assert!(
-        mrb.pending_exc().is_nil(),
-        "looking up the constants must not raise: {}",
-        mrb.pending_exc().to_string(&mrb)
-    );
+    for source in [
+        &b"String"[..],
+        b"'beni'.singleton_class",
+        b"Kernel",
+        b"'beni'",
+        b"42",
+        b"nil",
+    ] {
+        let value = cxt
+            .load_nstring(source)
+            .expect("the test source must compile and run");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "evaluating the source must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
 
-    let class = RClass::from_value(class_val).expect("a Class value carries MRB_TT_CLASS");
-    assert_eq!(class.name(&mrb), "String");
+        // The class handle converts on the class and the singleton-class
+        // tags, the module handle on the module tag, and on nothing else.
+        assert_eq!(
+            RClass::from_value(value).is_some(),
+            value.is_class() || value.is_sclass(),
+            "{}",
+            String::from_utf8_lossy(source)
+        );
+        assert_eq!(
+            RModule::from_value(value).is_some(),
+            value.is_module(),
+            "{}",
+            String::from_utf8_lossy(source)
+        );
+    }
+}
 
-    // Modules and non-class values reject — MRB_TT_MODULE is not
-    // the class tag.
-    assert!(RClass::from_value(module_val).is_none());
-    assert!(RClass::from_value(42i32.into_value(&mrb)).is_none());
+#[test]
+fn every_class_family_handle_round_trips_through_its_value() {
+    let mrb = open_mrb();
+
+    let class = mrb.class_get(c"String").expect("String is a core class");
+    let singleton = mrb
+        .str_new(b"beni")
+        .as_value()
+        .singleton_class(&mrb)
+        .expect("an ordinary object has a singleton class");
+    let module = mrb.module_get(c"Kernel").expect("Kernel is a core module");
+
+    for handle in [class, singleton] {
+        let back = RClass::from_value(handle.into_value(&mrb))
+            .expect("a class handle's value converts back");
+        assert_eq!(back.as_raw(), handle.as_raw());
+    }
+    let back = RModule::from_value(module.into_value(&mrb))
+        .expect("a module handle's value converts back");
+    assert_eq!(back.as_raw(), module.as_raw());
+
+    // A module is never a class, nor a class a module.
+    assert!(RClass::from_value(module.into_value(&mrb)).is_none());
+    assert!(RModule::from_value(class.into_value(&mrb)).is_none());
 }
