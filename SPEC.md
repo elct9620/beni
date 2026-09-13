@@ -536,7 +536,7 @@ raise/return contract:
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the receiver is not a class or module, or the name resolves to no class variable | `Result` |
 | Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
-| Marks a class so its instances carry Rust data | the class is a singleton class or an exception class (a `TypeError`) | `Result` |
+| Marks a class so its instances carry Rust data | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`) | `Result` |
 | Wraps a Rust value as a data carrier — allocating a fresh instance of a marked class to carry it | the class cannot carry a data carrier — it was never marked — so the allocation raises a `TypeError`; the unwrapped Rust value is reclaimed rather than leaked | `Result` |
 | Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
@@ -765,20 +765,25 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   need no separate form: a singleton method defined on a class is its class
   method, mirroring magnus.
 - A Rust-owned value backs an mruby object through the data-carrier
-  mechanism (`CDATA`): a class is marked so its instances carry Rust data,
-  a Rust value is wrapped as an instance of that class, and it is extracted
-  back type-checked against the data type it was registered under — a value
-  carrying a different data type, or none, does not extract. Marking is
-  fallible: a singleton class, whose one instance is the object it belongs to,
-  and an exception class, whose instances must stay exceptions, reject the mark
-  with an `Err` carrying a `TypeError` and stay unmarked. Wrapping is fallible: a class that has been marked yields an `Ok` carrying the new
-  instance, while a class that cannot carry a data carrier — one never
-  marked — surfaces the `TypeError` mruby raises for that allocation as a
-  Rust `Err`, and the Rust value waiting to be handed to the carrier is
-  recovered rather than leaked. A bare carrier that holds no payload yet —
-  the instance an mruby `dup` or `clone` allocates before `initialize_copy`
-  runs — can have a Rust value installed into it. The install targets a
-  bare carrier: it does not release any payload the carrier already holds,
+  mechanism (`CDATA`): a class is marked so its instances are data carriers
+  holding Rust data, a Rust value is wrapped as an instance of that class, and
+  it is extracted back type-checked against the data type it was registered
+  under — a value carrying a different data type, or none, does not extract.
+  A class defined from a marked superclass is marked too. Marking is
+  fallible: only a class whose instances are plain objects or data carriers
+  accepts the mark. A singleton class, whose one instance is the object it
+  belongs to, and a class whose instances have a built-in layout of their
+  own — an exception, a string, an array, a hash, a range, a proc, a number,
+  a class or module, subclasses included — reject the mark with an `Err`
+  carrying a `TypeError` and stay unmarked, so every instance keeps the layout
+  mruby's own methods read. Wrapping is fallible: a marked class yields an
+  `Ok` carrying the new instance, while an unmarked class surfaces the
+  `TypeError` mruby raises for that allocation as a Rust `Err`, and the Rust
+  value waiting to be handed to the carrier is recovered rather than leaked.
+  A bare carrier that holds no payload yet — the instance an mruby `dup` or
+  `clone` allocates before `initialize_copy` runs — can have a Rust value
+  installed into it. The install targets a bare carrier: it does not release
+  any payload the carrier already holds,
   and on a value that carries no data type it does nothing — a total
   operation safe on any value. It is the seam through which a typed object
   copies its Rust state. The mruby garbage collector owns a successfully
@@ -1119,7 +1124,7 @@ The `compiler` capability feature carries everything in this section.
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable read or assignment to a receiver that is not a class or module — assignment also to a frozen one, or a constant fetch, assignment, or removal to a receiver that is not a class or module — assignment and removal also to a frozen one | surfaced as a Rust `Err`, never unwinds across FFI |
 | A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
-| A singleton class, or an exception class, marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
+| A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
@@ -1159,6 +1164,7 @@ The `compiler` capability feature carries everything in this section.
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
 | exception class | `Exception` itself or an ordinary class descending from it — never a singleton class — so every instance it allocates is an exception; the class an `ExceptionClass` handle names |
+| plain object | an instance in the ordinary object layout `Object` and `BasicObject` give their instances, rather than a built-in type's own layout (an exception, a string, a number, …) or a data carrier's; a class allocates its instances in the layout its superclass allocated in when the class was defined |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
 | toolchain definition | a top-level `toolchain <name>` block carrying `version` and `sha256` — replaces the named toolchain's built-in pair |
