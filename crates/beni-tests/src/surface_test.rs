@@ -125,6 +125,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Error::message;
     let _ = Error::backtrace;
     let _ = Error::argnum;
+    let _ = Error::is_kind_of::<RClass>;
     let _ = MethodDef::new;
     struct _SurfaceGem;
     impl Gem for _SurfaceGem {

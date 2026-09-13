@@ -6,7 +6,7 @@
 //! instead of letting the raise long-jump across Rust frames, and a
 //! Rust panic caught at the FFI boundary travels the same channel.
 
-use crate::{ExceptionClass, Mrb, ParseMessage, Value};
+use crate::{ExceptionClass, Module, Mrb, ParseMessage, Value};
 use beni_sys as sys;
 
 /// Error surfaced to Rust callers when mruby rejects an operation or
@@ -114,6 +114,26 @@ impl Error {
             Error::Exception(exc) => exc.to_string(mrb),
             Error::Syntax(parse) => parse.message().to_owned(),
             Error::Panic(msg) => msg.clone(),
+        }
+    }
+
+    /// `mrb_obj_is_kind_of(mrb, exc, class)` — whether the exception
+    /// this error carries is an instance of `class` or of a class that
+    /// inherits or includes it, Ruby's `is_a?`; magnus's
+    /// `Error::is_kind_of`, taking the interpreter because mruby resolves
+    /// a value's class through it. A syntax error and a panic carry no
+    /// exception and answer false, and so does a break object, which has
+    /// no class to walk.
+    pub fn is_kind_of<T: Module>(&self, mrb: &Mrb, class: T) -> bool {
+        match self {
+            // SAFETY: `mrb` is alive and `exc` shares the VM; `class` is a
+            // typed class or module handle, so the class-kind check
+            // `mrb_obj_is_kind_of` raises on never fires, and the walk
+            // itself only reads the class chain.
+            Error::Exception(exc) => unsafe {
+                sys::mrb_obj_is_kind_of(mrb.as_ptr(), exc.as_raw(), class.raw())
+            },
+            Error::Syntax(_) | Error::Panic(_) => false,
         }
     }
 }

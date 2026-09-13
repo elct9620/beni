@@ -1,5 +1,6 @@
 use crate::support::open_mrb;
-use beni::{Error, Mrb};
+use beni::state::args::format;
+use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, Value};
 
 #[test]
 fn new_builds_an_exception_error_carrying_the_message() {
@@ -201,4 +202,92 @@ fn a_protected_raise_keeps_its_exception_through_a_collection() {
 
     assert_exception_survives_a_collection(&mrb, &err);
     assert!(err.message(&mrb).contains("boom"));
+}
+
+#[test]
+fn is_kind_of_walks_the_ancestry_of_the_carried_exception() {
+    let mrb = open_mrb();
+    let class = |name: &core::ffi::CStr| mrb.exc_get(name).expect("a core exception class");
+
+    let err = mrb
+        .load_string(b"raise ArgumentError, 'bad'")
+        .expect_err("the raise must surface as Err");
+
+    assert!(err.is_kind_of(&mrb, class(c"ArgumentError")));
+    assert!(err.is_kind_of(&mrb, class(c"StandardError")));
+    assert!(err.is_kind_of(&mrb, mrb.object_class()));
+    assert!(!err.is_kind_of(&mrb, class(c"TypeError")));
+}
+
+#[test]
+fn is_kind_of_answers_for_a_module_the_exception_class_includes() {
+    let mrb = open_mrb();
+
+    let err = mrb
+        .load_string(
+            b"module BeniTag; end; module BeniUnrelated; end
+              class BeniTaggedError < StandardError; include BeniTag; end
+              raise BeniTaggedError",
+        )
+        .expect_err("the raise must surface as Err");
+
+    let tag = mrb.module_get(c"BeniTag").expect("the module is defined");
+    let unrelated = mrb
+        .module_get(c"BeniUnrelated")
+        .expect("the module is defined");
+    assert!(err.is_kind_of(&mrb, tag));
+    assert!(!err.is_kind_of(&mrb, unrelated));
+}
+
+#[test]
+fn is_kind_of_answers_false_for_an_error_carrying_no_exception() {
+    let mrb = open_mrb();
+    let exception = mrb.exc_get(c"Exception").expect("a core exception class");
+    let syntax_error = mrb.exc_get(c"SyntaxError").expect("a core exception class");
+
+    let syntax = mrb
+        .load_string(b"end")
+        .expect_err("source that does not parse must surface as Err");
+
+    assert!(matches!(syntax, Error::Syntax(_)));
+    assert!(!syntax.is_kind_of(&mrb, syntax_error));
+    assert!(!syntax.is_kind_of(&mrb, exception));
+    assert!(!Error::Panic("boom".to_owned()).is_kind_of(&mrb, exception));
+}
+
+/// Yield the captured block, which breaks out, and answer whether the
+/// escaped break error counts as an `Exception`.
+fn break_is_an_exception(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let (_sym, _rest, block_val) = mrb.get_args::<format::NRestBlock>()?;
+    let block = Proc::from_value(block_val).expect("the captured block is a Proc");
+    let exception = mrb.exc_get(c"Exception")?;
+    let err = block.call(mrb, &[]).expect_err("the block breaks out");
+    let Error::Exception(escaped) = &err else {
+        panic!("a break surfaces as Error::Exception, got {err}");
+    };
+    assert!(
+        escaped.as_break().is_some(),
+        "the escaped value is a break object"
+    );
+    Ok(err.is_kind_of(mrb, exception).into_value(mrb))
+}
+
+#[test]
+fn is_kind_of_answers_false_for_a_break_object() {
+    let mrb = open_mrb();
+    let class = mrb
+        .define_class(c"BeniBreakKindProbe", mrb.object_class())
+        .expect("defining the probe class must succeed");
+    class
+        .define_method(&mrb, c"run", beni::method!(break_is_an_exception, -1))
+        .expect("registering the probe method must succeed");
+    let recv = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    mrb.gv_set(mrb.intern_cstr(c"$beni_break_kind_recv"), recv);
+
+    let cxt = Ccontext::new(&mrb, c"break_kind_test.rb").expect("allocating the compile context");
+    let got = cxt
+        .load_nstring(b"$beni_break_kind_recv.run(:tag) { break 1 }")
+        .expect("the probe answers without raising");
+
+    assert!(!bool::from_value(got).expect("the probe answers a boolean"));
 }
