@@ -40,8 +40,6 @@ use crate::state::args::read_frame;
 use crate::{Error, FromValue, IntoValue, Mrb, Value};
 use beni_sys as sys;
 
-use crate::error::panic_message;
-
 /// Bridge + arity pair produced by the `method!` macro and
 /// consumed by `Module::define_method` /
 /// `Object::define_singleton_method`, which derives the mruby aspec
@@ -198,11 +196,7 @@ unsafe fn handle_error<F>(mrb: &Mrb, f: F) -> Value
 where
     F: FnOnce() -> Result<Value, Error>,
 {
-    let res = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
-        Ok(res) => res,
-        Err(payload) => Err(Error::Panic(panic_message(payload))),
-    };
-    match res {
+    match crate::sys::catch_unwind(std::panic::AssertUnwindSafe(f)).and_then(|res| res) {
         Ok(value) => value,
         // SAFETY: forwarded from the caller's bridge-frame contract.
         Err(err) => unsafe { raise_error(mrb, err) },

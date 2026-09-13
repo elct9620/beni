@@ -36,3 +36,21 @@ fn protect_surfaces_a_raw_binding_raise_as_err_on_a_clean_handle() {
         "the caught exception must not stay pending on the handle"
     );
 }
+
+#[test]
+fn catch_unwind_answers_the_closure_value() {
+    let got = beni::sys::catch_unwind(|| 7).expect("a closure that returns must come back Ok");
+
+    assert_eq!(got, 7);
+}
+
+#[test]
+fn catch_unwind_surfaces_a_panic_as_err_carrying_its_message() {
+    let err = beni::sys::catch_unwind(|| -> i32 { panic!("boom from a callback") })
+        .expect_err("a panic inside the closure must surface as Err");
+
+    match err {
+        Error::Panic(msg) => assert_eq!(msg, "boom from a callback"),
+        other => panic!("a panic must surface as Error::Panic, got {other}"),
+    }
+}

@@ -15,7 +15,8 @@ surface, this crate owns every abstraction above it.
 - `method!` — registers a typed Rust function as an mruby method,
   with argument conversion and a sealed panic boundary
 - `beni::sys` — raw-FFI escape hatch carrying all of `beni-sys`, with
-  `sys::protect` to catch a raw binding's raise as a Rust `Err`
+  `sys::protect` to catch a raw binding's raise and `sys::catch_unwind`
+  to catch a C callback's panic, each as a Rust `Err`
 
 ## Usage
 

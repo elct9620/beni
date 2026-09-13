@@ -23,3 +23,17 @@ where
 {
     mrb.protect(body)
 }
+
+/// Run `func`, answering its value, or `Err(Error::Panic)` carrying the
+/// message of a panic inside it — magnus's `rb_sys::catch_unwind`.
+///
+/// Wrap the body of a Rust closure handed to a raw binding as a C
+/// callback, so its panic stops here instead of unwinding into mruby's
+/// frames.
+pub fn catch_unwind<F, T>(func: F) -> Result<T, Error>
+where
+    F: FnOnce() -> T + std::panic::UnwindSafe,
+{
+    std::panic::catch_unwind(func)
+        .map_err(|payload| Error::Panic(crate::error::panic_message(payload)))
+}

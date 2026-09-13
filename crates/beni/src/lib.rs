@@ -30,7 +30,7 @@
 //!                      error / parse  (Error + ParseMessage — the shapes
 //!                                      a failure is reported in)
 //!
-//! L0  raw FFI          sys          (beni-sys::* + sys::protect)
+//! L0  raw FFI          sys          (beni-sys::* + protect / catch_unwind)
 //! ```
 //!
 //! ## Capability features
@@ -44,8 +44,9 @@
 //!
 //! `beni::sys` carries every `beni-sys` binding (`sys::mrb_value`,
 //! `sys::mrb_state`, `sys::mrb_func_t`, …) under a short import path,
-//! together with `sys::protect` for catching a raw binding's raise as
-//! an `Err` — the counterpart of magnus's `rb_sys` module.
+//! together with `sys::protect`, which catches a raw binding's raise as
+//! an `Err`, and `sys::catch_unwind`, which does the same for a panic in
+//! a C callback — the counterpart of magnus's `rb_sys` module.
 
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]

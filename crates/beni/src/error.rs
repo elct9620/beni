@@ -25,9 +25,9 @@ pub enum Error {
     /// object and no backtrace behind it.
     Syntax(ParseMessage),
     /// A Rust panic caught at the FFI boundary, carrying the panic
-    /// payload's message. Surfaced to Rust callers (a `Gem::init`
-    /// body); inside a registered method the panic is re-raised to the
-    /// Ruby caller as a `RuntimeError` instead.
+    /// payload's message. Surfaced to Rust callers (a `Gem::init` body,
+    /// `sys::catch_unwind`); inside a registered method the panic is
+    /// re-raised to the Ruby caller as a `RuntimeError` instead.
     Panic(String),
 }
 
@@ -140,8 +140,8 @@ impl std::error::Error for Error {}
 
 /// Render a `catch_unwind` payload as the panic message — `&str` and
 /// `String` payloads (the `panic!` macro's products) pass through,
-/// anything else falls back to a fixed marker. Shared by every panic
-/// boundary in the crate (`Mrb::init_gem`, registered methods).
+/// anything else falls back to a fixed marker. The message
+/// `sys::catch_unwind` carries in `Error::Panic`.
 pub(crate) fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
     match payload.downcast::<String>() {
         Ok(msg) => *msg,

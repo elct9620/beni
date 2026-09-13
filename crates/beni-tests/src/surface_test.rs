@@ -350,6 +350,7 @@ fn typed_mrb_func_t_coerces_from_value_bridge() {
 #[test]
 fn raw_layer_helpers_are_reachable_from_outside() {
     let _ = beni::sys::protect::<fn(&Mrb) -> Value>;
+    let _ = beni::sys::catch_unwind::<fn() -> u8, u8>;
 }
 
 /// The drift net for the `compiler` capability feature. An item the
