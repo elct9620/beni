@@ -541,6 +541,7 @@ raise/return contract:
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
 | Marks a class so its instances carry Rust data | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`) | `Result` |
 | Wraps a Rust value as a data carrier — allocating a fresh instance of a marked class to carry it | the class cannot carry a data carrier — it was never marked — so the allocation raises a `TypeError`; the unwrapped Rust value is reclaimed rather than leaked | `Result` |
+| Reads the call's arguments by shape — a shape-typed read or the single-argument read in a method registered for any arity | the call does not fit the read's shape: too few or too many positionals, or an argument of the wrong type; a rest-only shape fits every call | `Result` |
 | Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
@@ -703,25 +704,29 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   receiving converted positionals: a shape-typed read projects the frame
   against a format marker into a typed tuple, a single-argument read returns
   the one required argument, a count read returns the number of arguments
-  passed, and an argument-array read returns all positional arguments as a
-  borrowed slice. The single-argument read raises `ArgumentError` to the Ruby
-  caller unless exactly one positional argument is present. The count read and
-  the argument-array read are total — they never raise. A shape-typed read
+  passed, and an argument-array read returns all positional arguments. Every
+  shape-typed read and the single-argument read answer a `Result`: a call that
+  does not fit the read's shape — too few or too many positionals, or an
+  argument of the wrong type — surfaces as an `Err` carrying the exception
+  mruby raises for the mismatch, and nothing raises past the body, which
+  decides how the failure leaves it. The single-argument read's shape is
+  exactly one positional, the keyword hash standing in for it when the call
+  passed keywords and no positional; a read whose shape is a rest array alone,
+  with or without the block, fits every call and always answers `Ok`. The count
+  read and the argument-array read are total — they never fail. A shape-typed read
   whose format captures a rest array hands back a slice that stays valid for
   the whole call: it survives any VM re-entry — a funcall or an allocation —
   the body performs while holding it, so a body that re-enters with rest
-  arguments in hand needs no copy of its own. The argument-array read's slice
-  instead views the live call frame directly and is valid only until the next
-  VM re-entry: a body that must hold positional arguments across a funcall or
-  allocation reads them through a rest format rather than the argument-array
-  read. Each slice has exactly the count read's length, ties its borrow to the
-  `Mrb` handle the body holds, and is empty for an empty argument list. A
-  shape-typed read whose format borrows a String argument's bytes rather than a
-  positional slot hands back a byte slice into that String's own buffer, valid
-  while the String is unmodified: a body that mutates or reallocates the
-  argument String while holding the slice invalidates it, while a VM re-entry
-  that leaves the String untouched keeps it valid. A zero-length String yields
-  an empty slice.
+  arguments in hand needs no copy of its own; the slice ties its borrow to the
+  `Mrb` handle the body holds. The argument-array read hands back a copy of the
+  positionals of its own, likewise valid whatever the body re-enters. A
+  zero-copy view of the same positionals is an `unsafe` read: it views the live
+  call frame, which a VM re-entry may move, so its caller keeps the view from
+  spanning a re-entry. The rest-only read's slice, the argument-array copy, and
+  the view each hold exactly the count read's length and are empty for an
+  empty argument list. A shape-typed read whose format reads a String
+  argument's bytes rather than a positional slot hands back a copy of those
+  bytes; a zero-length String yields an empty copy.
 - A shape-typed read composes its shape from independent parts — required
   positionals, optional positionals, an optional rest, trailing required
   positionals, a keyword bucket, and a block — and hands each part back
@@ -1179,7 +1184,7 @@ The `compiler` capability feature carries everything in this section.
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, exception-protected closure) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, exception-protected closure) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
-| A registered method body's single-argument read receiving other than one positional argument | raised as an `ArgumentError` to the Ruby caller |
+| A registered method body's shape-typed or single-argument read that the call does not fit — a wrong positional count, or an argument of the wrong type | surfaced to the body as a Rust `Err` carrying the exception mruby raises for the mismatch; nothing raises past the body |
 | A heap region buffer too small to hold one heap page | no pages are added and the count answers zero; the interpreter keeps allocating as before |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
 
