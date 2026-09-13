@@ -287,8 +287,11 @@ the Rust/Ruby boundary:
 | Conversion | Direction | Rule |
 |---|---|---|
 | `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`i32` / `f64` / `bool`) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` — yields the value naming that same object, raising nothing and running no Ruby |
+| `FromValue` → `Value` | `Value` → `Value` | identity — the value itself; total, never rejects |
 | `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag, subclass instances included for strings and containers — a class handle converts on the class or the singleton-class tag, a module handle on the module tag, an exception-class handle on the class tag when that class is an exception class; any other value rejects |
 | `FromValue` → `bool` | `Value` → `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true`; total, never rejects |
+| `FromValue` → `i32` / `i64` / `f64` | `Value` → Rust number | converts an Integer that fits the configured integer width to an integer and a Float to `f64`, never across the two; `i64` holds every such Integer, while `i32` rejects one outside its own range; any other value rejects, an arbitrary-width Integer beyond the configured width included |
+| `FromValue` → `Option<T>` | `Value` → `Option<T>` | `nil` to `None`; any other value converts by `T`'s rule to `Some`, rejecting what `T` rejects |
 
 A value also converts to an `RString` handle by the same String type tag, but
 surfacing the mismatch as an `Err` rather than rejecting to `None`: it succeeds
@@ -735,8 +738,8 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 - A typed method registration declares a fixed count of required positionals
   and, after them, a count of optional positionals: each required positional
   crosses through `FromValue`, and each optional positional crosses as an
-  `Option` of its type — present in the call binds `Some`, omitted binds
-  `None`. Mirroring `magnus`'s trailing-`Option` arguments, the optional slots
+  `Option` of its type — present in the call binds `Some` of the argument
+  converted through `FromValue`, omitted binds `None`. Mirroring `magnus`'s trailing-`Option` arguments, the optional slots
   are the trailing parameters of the registered Rust function. The registration
   derives the argument-spec aspec from the two counts: required-only declares
   the required aspec, and a required-plus-optional declaration the
