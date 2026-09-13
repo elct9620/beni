@@ -328,3 +328,72 @@ fn result_returning_method_raises_its_err() {
         err.message(&mrb)
     );
 }
+
+fn echo_string(_mrb: &Mrb, _self: Value, v: beni::RString) -> beni::RString {
+    v
+}
+
+fn echo_array(_mrb: &Mrb, _self: Value, v: beni::Array) -> beni::Array {
+    v
+}
+
+fn echo_hash(_mrb: &Mrb, _self: Value, v: beni::Hash) -> beni::Hash {
+    v
+}
+
+fn echo_proc(_mrb: &Mrb, _self: Value, v: beni::Proc) -> beni::Proc {
+    v
+}
+
+fn echo_range(_mrb: &Mrb, _self: Value, v: beni::Range) -> beni::Range {
+    v
+}
+
+fn echo_class(_mrb: &Mrb, _self: Value, v: beni::RClass) -> beni::RClass {
+    v
+}
+
+fn kernel_module(mrb: &Mrb, _self: Value) -> beni::RModule {
+    mrb.module_get(c"Kernel").expect("Kernel is a core module")
+}
+
+#[test]
+fn a_returned_handle_reaches_ruby_as_the_object_it_names() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniHandleEcho");
+    for (name, method) in [
+        (c"string", beni::method!(echo_string, 1)),
+        (c"array", beni::method!(echo_array, 1)),
+        (c"hash", beni::method!(echo_hash, 1)),
+        (c"proc", beni::method!(echo_proc, 1)),
+        (c"range", beni::method!(echo_range, 1)),
+        (c"klass", beni::method!(echo_class, 1)),
+        (c"kernel", beni::method!(kernel_module, 0)),
+    ] {
+        class
+            .define_method(&mrb, name, method)
+            .expect("registering the handle-returning method must succeed");
+    }
+
+    let cxt = beni::Ccontext::new(&mrb, c"handle_echo_test.rb")
+        .expect("allocating the compile context must succeed");
+    for probe in [
+        "s = 'beni'; BeniHandleEcho.new.string(s).equal?(s)",
+        "a = [1]; BeniHandleEcho.new.array(a).equal?(a)",
+        "h = { a: 1 }; BeniHandleEcho.new.hash(h).equal?(h)",
+        "pr = proc {}; BeniHandleEcho.new.proc(pr).equal?(pr)",
+        "r = (1..2); BeniHandleEcho.new.range(r).equal?(r)",
+        "BeniHandleEcho.new.klass(String).equal?(String)",
+        "BeniHandleEcho.new.kernel.equal?(Kernel)",
+    ] {
+        let got = cxt
+            .load_nstring(probe.as_bytes())
+            .expect("the probe must compile and run");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "`{probe}` must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert!(got.is_true(), "`{probe}` must answer the same object");
+    }
+}

@@ -10,13 +10,15 @@
 //! typed seam consumers call.
 //!
 //! Scope covers the scalar leaf types (`i32` / `f64` / `bool`), an
-//! owned `String` or byte vector, and checked downcasts to the typed
-//! handles (`RString` / `Array` / `Hash` / `RClass` / `Proc` /
-//! `Symbol` / `Range`), discriminated by the value's type tag — string
-//! and container subclass instances convert. Every conversion is by
-//! value, copying rather than borrowing VM storage.
+//! owned `String` or byte vector, and the typed handles (`RString` /
+//! `Array` / `Hash` / `RClass` / `RModule` / `Proc` / `Symbol` /
+//! `Range`): every handle converts into the value naming its object,
+//! and all but `RModule` back through a checked downcast discriminated
+//! by the value's type tag — string and container subclass instances
+//! convert. Every conversion is by value, copying rather than
+//! borrowing VM storage.
 
-use crate::{Array, Hash, Mrb, Proc, RClass, RString, Range, Symbol, Value};
+use crate::{Array, Hash, Mrb, Proc, RClass, RModule, RString, Range, Symbol, Value};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
@@ -74,12 +76,62 @@ impl IntoValue for bool {
     }
 }
 
+// A handle on a Ruby object converts into the value naming that same
+// object: the `Value`-newtype handles unwrap it, the class handles box
+// their pointer.
 impl IntoValue for Symbol {
-    // A `Symbol` already wraps its Symbol-tagged `Value`; boxing is the
-    // identity unwrap, like `IntoValue for Value`.
     #[inline]
     fn into_value(self, _mrb: &Mrb) -> Value {
         self.as_value()
+    }
+}
+
+impl IntoValue for RString {
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self.as_value()
+    }
+}
+
+impl IntoValue for Array {
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self.as_value()
+    }
+}
+
+impl IntoValue for Hash {
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self.as_value()
+    }
+}
+
+impl IntoValue for Proc {
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self.as_value()
+    }
+}
+
+impl IntoValue for Range {
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self.as_value()
+    }
+}
+
+impl IntoValue for RClass {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        self.to_value(mrb)
+    }
+}
+
+impl IntoValue for RModule {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        self.to_value(mrb)
     }
 }
 

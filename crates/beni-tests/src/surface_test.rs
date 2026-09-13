@@ -193,6 +193,13 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <Proc as FromValue>::from_value;
     let _ = <Symbol as FromValue>::from_value;
     let _ = <Symbol as IntoValue>::into_value;
+    let _ = <RString as IntoValue>::into_value;
+    let _ = <Array as IntoValue>::into_value;
+    let _ = <Hash as IntoValue>::into_value;
+    let _ = <Proc as IntoValue>::into_value;
+    let _ = <Range as IntoValue>::into_value;
+    let _ = <RClass as IntoValue>::into_value;
+    let _ = <RModule as IntoValue>::into_value;
     let _ = Array::clear;
     let _ = Array::concat;
     let _ = Array::dup;
