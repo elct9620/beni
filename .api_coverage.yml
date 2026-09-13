@@ -436,7 +436,7 @@ get_args_formats:
   a: { status: covered, via: "read + Array::entries" }
   c: { status: covered, via: "read + FromValue<RClass> / FromValue<RModule>" }
   f: { status: covered, via: "read + FromValue<f64> / Value::ensure_float" }
-  i: { status: covered, via: "format::Io, or read + FromValue<i32> / Value::ensure_int" }
+  i: { status: covered, via: "format::Io, or read + FromValue<i32> / FromValue<i64> / Value::ensure_int" }
   b: { status: covered, via: "read + Value::to_bool" }
   n: { status: covered, via: "format::NRest / NRestBlock / NRestKwBlock, or read + FromValue<Symbol>" }
   d: { status: covered, via: "read + Value::data_get" }
@@ -445,7 +445,7 @@ get_args_formats:
   "|": { status: covered, via: "optional-positional registration (Option crossing), or Mrb::argv indexing" }
   "?": { status: covered, via: "optional-given answered by the Option crossing" }
   ":": { status: covered, via: "format::Kw / NRestKwBlock — the keyword bucket" }
-  "!": { status: covered, via: "nilable read as Option<T> in the conversion layer" }
+  "!": { status: covered, via: "read + FromValue<Option<T>> — nil reads as None, any other value by T's rule" }
   "+": { status: covered, via: "read + Value::check_frozen" }
 subsumed:
   mrb_funcall: "`Value::funcall`, `Value::funcall_argv` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"

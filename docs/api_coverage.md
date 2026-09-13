@@ -561,7 +561,7 @@ covered (✅); the Via column names the surface that covers each one.
 | `a` | ✅ | read + Array::entries |
 | `c` | ✅ | read + FromValue<RClass> / FromValue<RModule> |
 | `f` | ✅ | read + FromValue<f64> / Value::ensure_float |
-| `i` | ✅ | format::Io, or read + FromValue<i32> / Value::ensure_int |
+| `i` | ✅ | format::Io, or read + FromValue<i32> / FromValue<i64> / Value::ensure_int |
 | `b` | ✅ | read + Value::to_bool |
 | `n` | ✅ | format::NRest / NRestBlock / NRestKwBlock, or read + FromValue<Symbol> |
 | `d` | ✅ | read + Value::data_get |
@@ -570,7 +570,7 @@ covered (✅); the Via column names the surface that covers each one.
 | `\|` | ✅ | optional-positional registration (Option crossing), or Mrb::argv indexing |
 | `?` | ✅ | optional-given answered by the Option crossing |
 | `:` | ✅ | format::Kw / NRestKwBlock — the keyword bucket |
-| `!` | ✅ | nilable read as Option<T> in the conversion layer |
+| `!` | ✅ | read + FromValue<Option<T>> — nil reads as None, any other value by T's rule |
 | `+` | ✅ | read + Value::check_frozen |
 ## Admitted internal symbols
 
