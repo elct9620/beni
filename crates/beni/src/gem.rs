@@ -30,8 +30,8 @@ impl Mrb {
         // The panic boundary for `Gem::init` bodies: catching
         // here keeps the unwind inside the wrapper. The closure
         // only borrows `self`, so no observable broken state
-        // survives the catch (AssertUnwindSafe as in
-        // `Mrb::protect`).
+        // survives the catch (AssertUnwindSafe as in the
+        // registered-method bridge).
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| G::init(self))) {
             Ok(result) => result,
             Err(payload) => Err(Error::Panic(crate::error::panic_message(payload))),

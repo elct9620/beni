@@ -15,7 +15,7 @@
 //!   * `mrb_gv_set` / `mrb_gv_get` — assign or read a Ruby `$global`.
 //!
 //! Class and module definitions and lookups run inside
-//! `Mrb::protect` so an mruby raise surfaces as
+//! exception protection so an mruby raise surfaces as
 //! `Err(Error::Exception)` — the same contract as the `Module`
 //! trait, whose nested-namespace counterparts (`define_class` /
 //! `define_module` / `class_get` on a handle) live on

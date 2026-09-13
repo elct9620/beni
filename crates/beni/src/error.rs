@@ -25,9 +25,9 @@ pub enum Error {
     /// object and no backtrace behind it.
     Syntax(ParseMessage),
     /// A Rust panic caught at the FFI boundary, carrying the panic
-    /// payload's message. Surfaced to Rust callers (`Mrb::protect`
-    /// bodies); inside a registered method the panic is re-raised to
-    /// the Ruby caller as a `RuntimeError` instead.
+    /// payload's message. Surfaced to Rust callers (a `Gem::init`
+    /// body); inside a registered method the panic is re-raised to the
+    /// Ruby caller as a `RuntimeError` instead.
     Panic(String),
 }
 
@@ -49,7 +49,7 @@ impl Error {
     /// renders "expected `min`", a negative `max` renders "expected
     /// `min`+", and `min < max` renders "expected `min`..`max`". The
     /// message comes from mruby's own `mrb_argnum_error`, captured
-    /// through `Mrb::protect` so its raise surfaces as the returned
+    /// through exception protection so its raise surfaces as the returned
     /// `Error::Exception` instead of long-jumping. `given` saturates to
     /// `sys::mrb_int::MAX` (the archive's configured integer width), like
     /// `Mrb::str_new`; real argument counts stay far below that.
@@ -141,7 +141,7 @@ impl std::error::Error for Error {}
 /// Render a `catch_unwind` payload as the panic message — `&str` and
 /// `String` payloads (the `panic!` macro's products) pass through,
 /// anything else falls back to a fixed marker. Shared by every panic
-/// boundary in the crate (`Mrb::protect`, registered methods).
+/// boundary in the crate (`Mrb::init_gem`, registered methods).
 pub(crate) fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
     match payload.downcast::<String>() {
         Ok(msg) => *msg,

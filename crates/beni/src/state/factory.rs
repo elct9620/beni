@@ -185,7 +185,7 @@ impl Mrb {
     /// `Range` from a begin value, an end value, and an exclusive-end
     /// flag, Ruby's `Range.new(begin, end, exclusive)`. mruby compares
     /// the two bounds and raises `ArgumentError` ("bad value for range")
-    /// when they cannot be compared; the call runs under `Mrb::protect`,
+    /// when they cannot be compared; the call runs under exception protection,
     /// so that surfaces as `Err` rather than long-jumping. `nil` bounds
     /// and a numeric pair always succeed.
     #[inline]

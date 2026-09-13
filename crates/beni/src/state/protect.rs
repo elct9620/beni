@@ -1,138 +1,26 @@
-//! Protected execution on `Mrb`: `mrb_protect_error` and the
-//! combinators composed over it.
+//! Protected execution on `Mrb`: `mrb_protect_error` around a body that
+//! only calls into mruby.
 //!
-//! `protect` wraps mruby's `mrb_protect_error` so any Ruby exception
-//! the body raises is caught and surfaced as `Err(Error::Exception)`
-//! instead of long-jumping past the Rust caller, and any Rust panic
-//! the body raises is caught at the FFI boundary and surfaced as
-//! `Err(Error::Panic)` instead of unwinding into mruby's C frames.
-//! `rescue` and `ensure` compose that one primitive into Ruby's
-//! `begin`/`rescue` and `begin`/`ensure`, binding no further C symbol.
+//! A raise inside the body long-jumps to the protected frame, so the
+//! frames it crosses carry no panic boundary: a `catch_unwind` between
+//! the raise and its jump target would make the long-jump undefined
+//! behavior. Typed operations run their raising mruby calls here, and so
+//! does the public `beni::sys::protect`.
 
-use crate::{Error, Mrb, RClass, Value};
+use crate::{Error, Mrb, Value};
 use beni_sys as sys;
-
-/// Trampoline-slot state for `Mrb::protect`. Starts as `Body`; the
-/// trampoline takes the closure out to run it and, when the body
-/// panics, parks the panic message back in the slot so the Rust side
-/// of the FFI call can surface it as `Error::Panic`.
-enum Slot<F> {
-    Body(F),
-    Taken,
-    Panicked(String),
-}
-
-use crate::error::panic_message;
 
 impl Mrb {
     /// `mrb_protect_error(mrb, body, userdata, &error)` — run `body`
-    /// inside a protected frame. On success returns `Ok(value)` with
-    /// the body's return value; on a raised Ruby exception returns
-    /// `Err(Error::Exception)`; on a Rust panic inside the body
-    /// returns `Err(Error::Panic)` — the panic is caught before it
-    /// can unwind into mruby's C frames.
-    ///
-    /// ## Closure form
-    ///
-    /// The closure receives a borrowed `&Mrb` (the same VM `self`
-    /// points to) so it can call safe methods inside the protected
-    /// frame without re-acquiring the borrow. It must return a
-    /// `Value` — the protected frame's value is whatever the
-    /// closure produces, mirroring mruby's own `body` contract.
-    ///
-    /// ## Drop semantics on the raise path
-    ///
-    /// When the closure raises a Ruby exception, mruby long-jumps out
-    /// of the body before the closure returns normally. Anything the
-    /// closure captured that needs `Drop` to run (heap allocations,
-    /// owned strings, etc.) **will not be dropped** on that path —
-    /// `setjmp`/`longjmp` does not unwind Rust stack frames. (A Rust
-    /// panic is different: `catch_unwind` runs drops normally before
-    /// the panic is converted to `Error::Panic`.)
-    ///
-    /// **Capture `Copy` values only** (`Value` is `Copy`) unless
-    /// the rare leak on the raise path is acceptable for the
-    /// captured state. The closure-slot pattern below keeps the
-    /// per-call overhead allocation-free; only the closure's own
-    /// captures are at risk.
-    pub fn protect<F>(&self, body: F) -> Result<Value, Error>
-    where
-        F: FnOnce(&Mrb) -> Value,
-    {
-        // Hold the closure in a stack-local slot so the trampoline
-        // can take it without owning a heap allocation. The slot's
-        // storage outlives the FFI call by virtue of being a local;
-        // on the Ruby-raise path the long-jump leaves it as `Taken`
-        // (the trampoline already took the closure out) and the
-        // subsequent return into Rust drops it cleanly. On the panic
-        // path the trampoline parks the message in the slot for the
-        // post-call check below.
-        let mut slot: Slot<F> = Slot::Body(body);
-
-        unsafe extern "C" fn trampoline<F>(
-            mrb: *mut sys::mrb_state,
-            userdata: *mut core::ffi::c_void,
-        ) -> sys::mrb_value
-        where
-            F: FnOnce(&Mrb) -> Value,
-        {
-            // SAFETY: userdata is the `&mut Slot<F>` from the
-            // caller; mrb is the same live state passed to
-            // mrb_protect_error.
-            let slot: &mut Slot<F> = unsafe { &mut *(userdata as *mut Slot<F>) };
-            let Slot::Body(body) = core::mem::replace(slot, Slot::Taken) else {
-                unreachable!("Mrb::protect trampoline invoked twice")
-            };
-            let mrb_ref = unsafe { Mrb::borrow_raw(&mrb) };
-            // The panic boundary (spec: a panic in an
-            // exception-protected closure surfaces as a Rust `Err`):
-            // catching here keeps the unwind out of
-            // `mrb_protect_error`'s C frame. AssertUnwindSafe matches
-            // magnus — the closure is consumed either way, so no
-            // observable broken state survives the catch.
-            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| body(mrb_ref))) {
-                Ok(value) => value.into_raw(),
-                Err(payload) => {
-                    *slot = Slot::Panicked(panic_message(payload));
-                    Value::zeroed().into_raw()
-                }
-            }
-        }
-
-        let mut error: sys::mrb_bool = false;
-        // SAFETY: `self` is alive; `trampoline::<F>` upholds the
-        // `mrb_protect_error_func` ABI; `userdata` points to `slot`
-        // on this stack frame which outlives the call. bindgen wraps
-        // function-typedef parameters in `Option<…>`, so the
-        // trampoline must be passed via `Some`.
-        let ret = unsafe {
-            sys::mrb_protect_error(
-                self.as_ptr(),
-                Some(trampoline::<F>),
-                &mut slot as *mut Slot<F> as *mut core::ffi::c_void,
-                &mut error,
-            )
-        };
-        if let Slot::Panicked(msg) = slot {
-            return Err(Error::Panic(msg));
-        }
-        let value = Value::from_raw(ret);
-        if error {
-            Err(Error::Exception(value))
-        } else {
-            Ok(value)
-        }
-    }
-
-    /// `mrb_protect_error` around a body that only calls into mruby.
+    /// inside a protected frame. On success returns `Ok(value)` with the
+    /// body's return value; on a raised Ruby exception returns
+    /// `Err(Error::Exception)` with the pending exception cleared.
     ///
     /// The trampoline carries no panic boundary, so a raise inside the
-    /// body reaches the jump target across plain frames alone — a
-    /// `catch_unwind` in between would make that long-jump undefined
-    /// behavior. A body that runs Rust which could panic belongs under
-    /// `Mrb::protect`; a panic here stops at the `extern "C"` boundary
-    /// and aborts.
-    pub(crate) fn protect_ffi<F>(&self, body: F) -> Result<Value, Error>
+    /// body reaches the jump target across plain frames alone. A panic in
+    /// the body stops at the `extern "C"` boundary and aborts; a body that
+    /// runs Rust which could panic catches it before it gets there.
+    pub(crate) fn protect<F>(&self, body: F) -> Result<Value, Error>
     where
         F: FnOnce(&Mrb) -> Value,
     {
@@ -149,14 +37,18 @@ impl Mrb {
             // mrb is the same live state passed to mrb_protect_error.
             let slot: &mut Option<F> = unsafe { &mut *(userdata as *mut Option<F>) };
             let Some(body) = slot.take() else {
-                unreachable!("Mrb::protect_ffi trampoline invoked twice")
+                unreachable!("Mrb::protect trampoline invoked twice")
             };
             let mrb_ref = unsafe { Mrb::borrow_raw(&mrb) };
             body(mrb_ref).into_raw()
         }
 
         let mut error: sys::mrb_bool = false;
-        // SAFETY: as `Mrb::protect`; `slot` outlives the call.
+        // SAFETY: `self` is alive; `trampoline::<F>` upholds the
+        // `mrb_protect_error_func` ABI; `userdata` points to `slot` on
+        // this stack frame, which outlives the call. bindgen wraps
+        // function-typedef parameters in `Option<…>`, so the trampoline
+        // is passed via `Some`.
         let ret = unsafe {
             sys::mrb_protect_error(
                 self.as_ptr(),
@@ -170,81 +62,6 @@ impl Mrb {
             Err(Error::Exception(value))
         } else {
             Ok(value)
-        }
-    }
-
-    /// Run `body` under exception protection and recover a caught
-    /// exception with `handler`, mirroring a Ruby `begin`/`rescue` over
-    /// the exception classes in `classes`. A Rust-native composition of
-    /// `Mrb::protect` and `Value::is_kind_of` — no new bound C symbol.
-    ///
-    /// `body`'s normal completion is the `Ok` value. When `body` raises
-    /// an exception that is an instance of any class in `classes`,
-    /// `handler` runs and its result — `Ok` or `Err` — is the outcome;
-    /// `handler` receives the caught exception as a `Value` and runs on
-    /// a clean VM (`protect` already cleared the pending exception as it
-    /// surfaced the `Err`). Because `handler` also runs under `protect`,
-    /// a raise inside it surfaces as the handler's `Err` rather than
-    /// long-jumping past the caller.
-    ///
-    /// What `rescue` does **not** catch:
-    ///
-    /// - An exception that is an instance of no class in `classes`
-    ///   propagates unchanged as `body`'s `Err`. An empty `classes`
-    ///   therefore rescues nothing; a caller wanting the bare-`rescue`
-    ///   default names `StandardError` in the list.
-    /// - A Rust panic inside `body` is not a Ruby exception: it
-    ///   surfaces as the panic `Err` regardless of `classes`, honoring
-    ///   the same no-long-jump contract `Mrb::protect` carries.
-    ///
-    /// The same "capture `Copy` values only" caveat as `Mrb::protect`
-    /// applies to `body`: a raised exception long-jumps out before the
-    /// closure returns, so non-`Copy` captures are not dropped on that
-    /// path.
-    pub fn rescue<F, G>(&self, classes: &[RClass], body: F, handler: G) -> Result<Value, Error>
-    where
-        F: FnOnce(&Mrb) -> Value,
-        G: FnOnce(&Mrb, Value) -> Value,
-    {
-        match self.protect(body) {
-            Ok(value) => Ok(value),
-            Err(Error::Exception(exc))
-                if classes.iter().any(|class| exc.is_kind_of(self, *class)) =>
-            {
-                self.protect(|mrb| handler(mrb, exc))
-            }
-            Err(other) => Err(other),
-        }
-    }
-
-    /// Run `body` under exception protection and run `ensure`
-    /// afterwards, mirroring a Ruby `begin`/`ensure`. A Rust-native
-    /// composition of `Mrb::protect` — no new bound C symbol.
-    ///
-    /// `ensure` runs on every exit `body` can take — normal
-    /// completion, a raised exception, and a Rust panic — and its own
-    /// return value is discarded: only its effects reach the caller.
-    /// An `ensure` that completes leaves `body`'s outcome, `Ok` or
-    /// `Err`, unchanged; one that raises or panics replaces that
-    /// outcome with its own `Err`.
-    ///
-    /// `ensure` runs under exception protection of its own, so a raise
-    /// inside it surfaces as that `Err` rather than long-jumping past
-    /// the caller.
-    ///
-    /// The same "capture `Copy` values only" caveat as `Mrb::protect`
-    /// applies to both closures: a raised exception long-jumps out
-    /// before the closure returns, so non-`Copy` captures are not
-    /// dropped on that path.
-    pub fn ensure<F, G>(&self, body: F, ensure: G) -> Result<Value, Error>
-    where
-        F: FnOnce(&Mrb) -> Value,
-        G: FnOnce(&Mrb) -> Value,
-    {
-        let outcome = self.protect(body);
-        match self.protect(ensure) {
-            Ok(_) => outcome,
-            Err(from_ensure) => Err(from_ensure),
         }
     }
 }

@@ -83,7 +83,7 @@ use beni_sys as sys;
 /// raise comes back as the `Err` carrying mruby's exception, across
 /// plain frames alone.
 pub(crate) fn read_frame(mrb: &Mrb, read: impl FnOnce(&Mrb)) -> Result<(), Error> {
-    mrb.protect_ffi(|mrb| {
+    mrb.protect(|mrb| {
         read(mrb);
         Value::nil()
     })
@@ -142,8 +142,8 @@ impl Mrb {
     #[inline]
     pub fn arg1(&self) -> Result<Value, Error> {
         // SAFETY: `mrb` is alive inside the protect frame; a wrong
-        // argument count raises, which `protect_ffi` catches.
-        self.protect_ffi(|mrb| Value::from_raw(unsafe { sys::mrb_get_arg1(mrb.as_ptr()) }))
+        // argument count raises, which `protect` catches.
+        self.protect(|mrb| Value::from_raw(unsafe { sys::mrb_get_arg1(mrb.as_ptr()) }))
     }
 
     /// Whether the current call was passed a block. A plain boolean
@@ -486,7 +486,7 @@ pub mod format {
             // The bucket may be a Hash allocated by this read, so it
             // leaves the protect frame as its result, which the frame
             // keeps rooted past its arena restore.
-            let bucket = mrb.protect_ffi(|mrb| {
+            let bucket = mrb.protect(|mrb| {
                 let mut out = sys::mrb_value::zeroed();
                 let mut kwargs = capture_all_kwargs(&mut out);
                 // SAFETY: as `O::read`; the `":"` format reads the

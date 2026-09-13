@@ -295,19 +295,6 @@ fn panicking_method_surfaces_as_ruby_exception() {
 }
 
 #[test]
-fn protect_surfaces_closure_panic_as_err() {
-    let mrb = open_mrb();
-
-    let err = mrb
-        .protect(|_| panic!("pop goes the closure"))
-        .expect_err("the panic must surface as Err");
-    match err {
-        Error::Panic(msg) => assert!(msg.contains("pop goes the closure")),
-        other => panic!("a closure panic must surface as Error::Panic, got {other}"),
-    }
-}
-
-#[test]
 fn result_returning_method_raises_its_err() {
     let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniFallible");

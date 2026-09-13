@@ -92,9 +92,7 @@ fn data_wrap_into_an_unmarked_class_errs_and_reclaims_the_box() {
     );
 
     // The VM survives the protected raise and stays usable.
-    let alive = mrb
-        .protect(|m| m.str_new(b"alive").as_value())
-        .expect("the VM must survive the failed wrap");
+    let alive = mrb.str_new(b"alive").as_value();
     assert_eq!(alive.to_string(&mrb), "alive");
 }
 

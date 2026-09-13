@@ -3,8 +3,8 @@
 //! This crate owns every Rust-level abstraction above the mruby C
 //! API: the `Mrb` / `Ccontext` RAII types, the `Value` / `RClass` /
 //! `Array` / `Hash` newtypes, the `IntoValue` / `FromValue` trait
-//! seam, the `Format`-based `mrb_get_args` dispatch, and the
-//! `protect` closure wrapper. The sibling `beni-sys` crate keeps
+//! seam, and the `Format`-based `mrb_get_args` dispatch. The sibling
+//! `beni-sys` crate keeps
 //! only the bindgen-generated `extern "C"` declarations and the
 //! layout-safe C shims — the same split magnus + rb-sys apply at
 //! the CRuby boundary.
@@ -14,7 +14,6 @@
 //! ```text
 //! L2  trait seams      convert        (IntoValue / FromValue)
 //!                      state::args    (Format trait + ZST + GAT dispatch)
-//!                      state::protect (closure-based mrb_protect_error)
 //!                      method         (method! bridges + MethodN crossing)
 //!                      gem            (Gem trait + Mrb::init_gem)
 //!
@@ -31,7 +30,7 @@
 //!                      error / parse  (Error + ParseMessage — the shapes
 //!                                      a failure is reported in)
 //!
-//! L0  raw FFI          beni-sys::*  (bindgen output + ABI constants)
+//! L0  raw FFI          sys          (beni-sys::* + sys::protect)
 //! ```
 //!
 //! ## Capability features
@@ -43,12 +42,10 @@
 //!
 //! ## Raw-FFI escape hatch
 //!
-//! `beni::sys` re-exports the entire `beni-sys` crate so call
-//! sites that still need the raw bindgen surface
-//! (`sys::mrb_value`, `sys::mrb_state`, `sys::mrb_func_t`,
-//! `sys::mrb_args_*`, …) keep a short import path. Anything that
-//! becomes wrappable in the typed surface above should leave this
-//! escape hatch over time.
+//! `beni::sys` carries every `beni-sys` binding (`sys::mrb_value`,
+//! `sys::mrb_state`, `sys::mrb_func_t`, …) under a short import path,
+//! together with `sys::protect` for catching a raw binding's raise as
+//! an `Err` — the counterpart of magnus's `rb_sys` module.
 
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
@@ -75,6 +72,7 @@ pub mod range;
 pub mod state;
 pub mod string;
 pub mod symbol;
+pub mod sys;
 pub mod value;
 
 pub use state::arena::ArenaScope;
@@ -101,12 +99,6 @@ pub use string::RString;
 pub use symbol::{IntoSym, Symbol};
 pub use value::cstr_ptr;
 pub use value::{Break, Value};
-
-/// Raw FFI escape hatch. Use `beni::sys::mrb_*` when the typed API
-/// in this crate's root does not yet cover a needed symbol. Anything
-/// promoted out of this namespace into the typed surface should
-/// disappear from new call sites over time.
-pub use beni_sys as sys;
 
 /// Typed counterpart of `sys::mrb_func_t` using the `Value` newtype
 /// for the receiver and return slots. `Value` is

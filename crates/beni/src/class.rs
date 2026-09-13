@@ -25,7 +25,7 @@
 //! ## Error contract
 //!
 //! Every definition, registration, lookup, and instance construction
-//! runs inside `Mrb::protect`, so an mruby raise (superclass mismatch,
+//! runs inside exception protection, so an mruby raise (superclass mismatch,
 //! frozen receiver, missing constant, a raising `initialize`, …)
 //! surfaces as `Err(Error::Exception)` instead of long-jumping across
 //! Rust frames.
@@ -276,7 +276,7 @@ impl RClass {
     /// chain threads through, and yielding the first user-facing class.
     /// A handle that is already a real class returns itself. The
     /// resolution walks the class structure and never raises, so it
-    /// needs no `Mrb::protect`. The normalization a consumer reaches for
+    /// needs no exception protection. The normalization a consumer reaches for
     /// after obtaining a handle that may be a singleton class (through
     /// `Value::singleton_class` or `RClass::from_value`) or an include
     /// class (through `RClass::from_raw`); the real-class result
@@ -452,7 +452,7 @@ impl ExceptionClass {
 
 /// Registration surface shared by classes and modules — beni's
 /// mirror of `magnus::Module`. Every method runs inside
-/// `Mrb::protect`, so an mruby raise surfaces as
+/// exception protection, so an mruby raise surfaces as
 /// `Err(Error::Exception)` and never unwinds across FFI.
 pub trait Module: private::ClassLike {
     /// `mrb_define_class_under_id(mrb, self, name, superclass)` —
@@ -616,7 +616,7 @@ pub trait Module: private::ClassLike {
 
     /// `mrb_define_const_id(mrb, self, name, val)` — bind the constant
     /// `name` to `val` on this class or module. The name is a
-    /// symbol-or-name key (`IntoSym`). Runs inside `Mrb::protect`, so a
+    /// symbol-or-name key (`IntoSym`). Runs inside exception protection, so a
     /// frozen-receiver rejection surfaces as `Err(Error::Exception)`
     /// rather than long-jumping — the same contract as the definition
     /// methods above.
@@ -636,7 +636,7 @@ pub trait Module: private::ClassLike {
     /// second name for the existing method `old` on this class or module,
     /// so a core method can be preserved before it is overridden. Both
     /// names are symbol-or-name keys (`IntoSym`), each interned to its
-    /// symbol before the `_id` alias call. Runs inside `Mrb::protect`, so
+    /// symbol before the `_id` alias call. Runs inside exception protection, so
     /// aliasing a method that does not exist surfaces as
     /// `Err(Error::Exception)` (mruby's `NameError`) rather than
     /// long-jumping — the same contract as the definition methods above.
@@ -683,7 +683,7 @@ pub trait Module: private::ClassLike {
     /// ancestor's method — distinct from `undef_method`, which masks
     /// ancestor lookups rather than stripping the definition. The name is a
     /// symbol-or-name key (`IntoSym`). Removing a name not defined directly
-    /// on the handle raises `NameError`; under `Mrb::protect` it surfaces as
+    /// on the handle raises `NameError`; under exception protection it surfaces as
     /// `Err(Error::Exception)` rather than long-jumping — the same contract
     /// as the definition methods above.
     fn remove_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
@@ -702,7 +702,7 @@ pub trait Module: private::ClassLike {
     /// `mrb_include_module(mrb, self, module)` — mix `module` into this
     /// class or module, Ruby's `include`. A frozen receiver raises
     /// `FrozenError` and a cyclic include raises `ArgumentError`; both
-    /// surface as `Err` via `Mrb::protect`.
+    /// surface as `Err` via exception protection.
     fn include_module(self, mrb: &Mrb, module: RModule) -> Result<(), Error> {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
@@ -719,7 +719,7 @@ pub trait Module: private::ClassLike {
     /// class or module ahead of the receiver, Ruby's `prepend`, so the
     /// module's methods override the receiver's own. A frozen receiver
     /// raises `FrozenError` and a cyclic prepend raises `ArgumentError`;
-    /// both surface as `Err` via `Mrb::protect`.
+    /// both surface as `Err` via exception protection.
     fn prepend_module(self, mrb: &Mrb, module: RModule) -> Result<(), Error> {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`

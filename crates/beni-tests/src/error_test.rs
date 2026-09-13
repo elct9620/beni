@@ -188,17 +188,16 @@ fn a_bytecode_load_error_keeps_its_exception_through_a_collection() {
 fn a_protected_raise_keeps_its_exception_through_a_collection() {
     let mrb = open_mrb();
 
-    let err = mrb
-        .protect(|m| {
-            // SAFETY: `m` is the live VM inside the protected frame;
-            // `RuntimeError` is a core class so the lookup cannot fail;
-            // `mrb_raise` long-jumps to the protect frame.
-            unsafe {
-                let runtime_error = beni::sys::mrb_class_get(m.as_ptr(), c"RuntimeError".as_ptr());
-                beni::sys::mrb_raise(m.as_ptr(), runtime_error, c"boom".as_ptr());
-            }
-        })
-        .expect_err("a raise inside the body must surface as Err");
+    let err = beni::sys::protect(&mrb, |m| {
+        // SAFETY: `m` is the live VM inside the protected frame;
+        // `RuntimeError` is a core class so the lookup cannot fail;
+        // `mrb_raise` long-jumps to the protect frame.
+        unsafe {
+            let runtime_error = beni::sys::mrb_class_get(m.as_ptr(), c"RuntimeError".as_ptr());
+            beni::sys::mrb_raise(m.as_ptr(), runtime_error, c"boom".as_ptr());
+        }
+    })
+    .expect_err("a raise inside the body must surface as Err");
 
     assert_exception_survives_a_collection(&mrb, &err);
     assert!(err.message(&mrb).contains("boom"));

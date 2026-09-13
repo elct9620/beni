@@ -250,7 +250,7 @@ impl Value {
     /// `ArgumentError`. The render guards its receiver on the Integer tag
     /// rather than trusting it, raising `TypeError` for any other tag so a
     /// non-Integer never reaches `mrb_integer_to_str`'s unchecked unbox.
-    /// Both raises run under `Mrb::protect`, so either surfaces as `Err`
+    /// Both raises run under exception protection, so either surfaces as `Err`
     /// rather than long-jumping. magnus offers no direct radix render, so
     /// this anchors on mruby's own `mrb_integer_to_str`.
     #[inline]
@@ -291,7 +291,7 @@ impl Value {
     /// in the VM's value domain, not a Rust scalar. `mrb_float_to_integer`
     /// guards its own receiver on the Float tag, raising `TypeError` for any
     /// other tag, and raises `RangeError` for an infinite or NaN float, which
-    /// has no integer; both raises run under `Mrb::protect`, so either
+    /// has no integer; both raises run under exception protection, so either
     /// surfaces as `Err` rather than long-jumping. magnus's `Float` exposes no
     /// such conversion, so this anchors on mruby's own `mrb_float_to_integer`.
     #[inline]
@@ -313,7 +313,7 @@ impl Value {
     /// mixed case widening the integer operand. `mrb_num_add` dispatches its
     /// receiver on the numeric tag, so a non-numeric operand raises `TypeError`
     /// and an integer result past the configured width raises `RangeError`;
-    /// both run under `Mrb::protect`, surfacing as `Err` rather than
+    /// both run under exception protection, surfacing as `Err` rather than
     /// long-jumping. magnus's `coerce_bin` routes through the full Ruby
     /// coercion protocol, which mruby has no counterpart to, so this anchors on
     /// mruby's own `mrb_num_add` (the obsolete macro `mrb_num_plus` aliases it).
@@ -334,7 +334,7 @@ impl Value {
     /// operands are integers and the result fits the configured width, a Float
     /// when either is a float; a non-numeric operand raises `TypeError` and an
     /// integer result past the configured width raises `RangeError`, both
-    /// caught by `Mrb::protect`. Anchors on mruby's own `mrb_num_sub` (the
+    /// caught by exception protection. Anchors on mruby's own `mrb_num_sub` (the
     /// obsolete macro `mrb_num_minus` aliases it).
     #[inline]
     pub fn sub(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
@@ -351,7 +351,7 @@ impl Value {
     /// operands are integers and the result fits the configured width, a Float
     /// when either is a float; a non-numeric operand raises `TypeError` and an
     /// integer result past the configured width raises `RangeError`, both
-    /// caught by `Mrb::protect`. Anchors on mruby's own `mrb_num_mul`.
+    /// caught by exception protection. Anchors on mruby's own `mrb_num_mul`.
     #[inline]
     pub fn mul(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
         mrb.protect(|mrb| {
@@ -364,7 +364,7 @@ impl Value {
 
     /// Coerce `self` to a string value — `self` unchanged when it is
     /// already a string, otherwise the result of its `to_s`. Runs under
-    /// `Mrb::protect`: `Ok` with the string value, or `Err` when `to_s`
+    /// exception protection: `Ok` with the string value, or `Err` when `to_s`
     /// does not return a string. Mirrors mruby's `mrb_obj_as_string`.
     #[inline]
     pub fn obj_as_string(self, mrb: &Mrb) -> Result<Value, Error> {
@@ -383,7 +383,7 @@ impl Value {
     /// it dispatches no `to_str` — so it is the raising counterpart to
     /// the `RString::from_value` downcast, not the dispatching `to_s`
     /// coercion `Value::obj_as_string` performs. The `TypeError` it would
-    /// long-jump is caught by `Mrb::protect` into the returned `Err`.
+    /// long-jump is caught by exception protection into the returned `Err`.
     /// Suits a handler that requires a String argument and rejects
     /// anything else; reach for the `FromValue` downcast instead when a
     /// non-String should read as absent. Mirrors mruby's
@@ -410,7 +410,7 @@ impl Value {
     /// carrying a `TypeError` for any other tag. It runs no user Ruby —
     /// it dispatches no `to_ary` — so it is the raising counterpart to
     /// the `Array::from_value` downcast. The `TypeError` it would
-    /// long-jump is caught by `Mrb::protect` into the returned `Err`.
+    /// long-jump is caught by exception protection into the returned `Err`.
     /// Suits a handler that requires an Array argument and rejects
     /// anything else; reach for the `FromValue` downcast instead when a
     /// non-Array should read as absent. Mirrors mruby's
@@ -440,7 +440,7 @@ impl Value {
     /// counterpart to `ensure_array`, which coerces by the Array tag alone
     /// and takes only an already-array value. A `TypeError` mruby raises
     /// when `to_a` returns a non-array non-`nil` value, or a raise from
-    /// `to_a` itself, is caught by `Mrb::protect` into the returned `Err`.
+    /// `to_a` itself, is caught by exception protection into the returned `Err`.
     /// Mirrors mruby's `mrb_ary_splat`.
     #[inline]
     pub fn to_ary(self, mrb: &Mrb) -> Result<crate::Array, Error> {
@@ -463,7 +463,7 @@ impl Value {
     /// carrying a `TypeError` for any other tag. It runs no user Ruby —
     /// it dispatches no `to_hash` — so it is the raising counterpart to
     /// the `Hash::from_value` downcast. The `TypeError` it would
-    /// long-jump is caught by `Mrb::protect` into the returned `Err`.
+    /// long-jump is caught by exception protection into the returned `Err`.
     /// Suits a handler that requires a Hash argument and rejects
     /// anything else; reach for the `FromValue` downcast instead when a
     /// non-Hash should read as absent. Mirrors mruby's
@@ -493,7 +493,7 @@ impl Value {
     /// same coercion out as a Rust `mrb_int`. It runs no user Ruby — it
     /// dispatches no `to_int` — so the `TypeError` mruby raises for a
     /// non-numeric value, or the `RangeError` it raises for an infinite or
-    /// NaN Float, is caught by `Mrb::protect` into the returned `Err`.
+    /// NaN Float, is caught by exception protection into the returned `Err`.
     /// Mirrors mruby's `mrb_ensure_int_type` (over `mrb_ensure_integer_type`,
     /// which the width narrowing wraps).
     #[inline]
@@ -515,7 +515,7 @@ impl Value {
     /// `Value::as_float` sibling reads the same coercion out as a Rust
     /// `mrb_float`. It runs no user Ruby — it dispatches no `to_f` — so the
     /// `TypeError` mruby raises for a non-numeric value is caught by
-    /// `Mrb::protect` into the returned `Err`. Mirrors mruby's
+    /// exception protection into the returned `Err`. Mirrors mruby's
     /// `mrb_ensure_float_type`.
     #[inline]
     pub fn ensure_float(self, mrb: &Mrb) -> Result<Value, Error> {
@@ -532,7 +532,7 @@ impl Value {
     /// id, a String value interns its contents, and any other value
     /// surfaces an `Err`. It runs no user Ruby — it dispatches no
     /// `to_sym` — so the `TypeError` mruby raises for a value that is
-    /// neither a symbol nor a string is caught by `Mrb::protect` into the
+    /// neither a symbol nor a string is caught by exception protection into the
     /// returned `Err`. Unlike `Symbol::new`, which interns Rust bytes,
     /// this coerces an existing mruby value. Mirrors mruby's
     /// `mrb_obj_to_sym`.
@@ -555,7 +555,7 @@ impl Value {
     /// `obj.dup` — a shallow copy of `self`: its instance variables are
     /// copied (not the objects they reference), the copy is unfrozen and
     /// carries no singleton class, and the class's `initialize_copy`
-    /// runs on it. An immediate returns itself. Runs under `Mrb::protect`:
+    /// runs on it. An immediate returns itself. Runs under exception protection:
     /// `Ok` with the copy, or `Err` when `initialize_copy` raises.
     /// Mirrors mruby's `mrb_obj_dup`.
     #[inline]
@@ -571,7 +571,7 @@ impl Value {
     /// `obj.clone` — like `dup` but also copies the singleton class and
     /// the frozen state, the deeper of the two duplications; the class's
     /// `initialize_copy` runs on the copy. An immediate returns itself.
-    /// Runs under `Mrb::protect`: `Ok` with the copy, or `Err` when
+    /// Runs under exception protection: `Ok` with the copy, or `Err` when
     /// `initialize_copy` raises. Mirrors mruby's `mrb_obj_clone`.
     #[inline]
     pub fn obj_clone(self, mrb: &Mrb) -> Result<Value, Error> {
@@ -660,7 +660,7 @@ impl Value {
     /// `mrb_inspect` dispatches the receiver's `inspect` (falling back to
     /// `to_s` when that does not return a String), so a user-defined
     /// `inspect` that raises is **swallowed**: an empty `String` is
-    /// returned. The dispatch runs under `Mrb::protect`, whose frame
+    /// returned. The dispatch runs under exception protection, whose frame
     /// catches the raise into `Err` and leaves no pending `mrb->exc` to
     /// corrupt later mruby calls in the same C bridge. Bytes that are not
     /// valid UTF-8 likewise collapse to an empty `String`.
@@ -715,7 +715,7 @@ impl Value {
     /// symbol-or-name key (`IntoSym`): a string name interns through
     /// `Mrb::intern_cstr`, an already-interned `Symbol` is reused without
     /// re-interning. The method runs arbitrary Ruby, so the call runs
-    /// under `Mrb::protect`: a normal return is the `Ok` value, any raise
+    /// under exception protection: a normal return is the `Ok` value, any raise
     /// is `Err` rather than a long-jump across FFI. Use
     /// `Value::funcall_argv` when the caller already holds an interned
     /// `sys::mrb_sym` (e.g. a dispatch site that cached the sym across a
@@ -732,7 +732,7 @@ impl Value {
     }
 
     /// `mrb_funcall_argv(mrb, self, sym, argc, argv)` — invoke the method
-    /// already interned as `sym`, under `Mrb::protect`. Counterpart to
+    /// already interned as `sym`, under exception protection. Counterpart to
     /// `Value::funcall` for sites that pre-intern (typically because the
     /// same symbol is queried via `respond_to?` first). The dispatched
     /// method runs arbitrary Ruby and may raise, which `protect` catches
@@ -770,7 +770,7 @@ impl Value {
 
     /// `mrb_funcall_with_block(mrb, self, sym, argc, argv, block)` —
     /// invoke the method named by `name` with `args`, handing it `block`
-    /// for the method to yield to, under `Mrb::protect`. The block-passing
+    /// for the method to yield to, under exception protection. The block-passing
     /// counterpart to `Value::funcall`: a method wanting no block uses
     /// `funcall`/`funcall_argv` rather than this with a nil block. The
     /// dispatched method runs arbitrary Ruby and may raise, which `protect`
@@ -1353,7 +1353,7 @@ impl Value {
     /// `true`, and `false` yield their predefined classes, which act as
     /// their singleton classes; every other immediate — an integer, a
     /// symbol, a float — has no singleton class, and the `TypeError` mruby
-    /// raises is caught by `Mrb::protect` into the returned `Err`. The raw
+    /// raises is caught by exception protection into the returned `Err`. The raw
     /// `RClass*` form (`mrb_singleton_class_ptr`), which hands back a
     /// possibly-null pointer and demands VM-internal reasoning, stays behind
     /// `beni::sys`. Mirrors magnus's `Object::singleton_class`.
@@ -1407,7 +1407,7 @@ impl Value {
     /// `mrb_check_frozen_value(mrb, self)` — a precondition guard that
     /// surfaces an `Err` when `self` is frozen, `Ok(())` otherwise. An
     /// immediate counts as frozen. Runs no user Ruby; the `FrozenError`
-    /// it would long-jump is caught by `Mrb::protect` into the returned
+    /// it would long-jump is caught by exception protection into the returned
     /// `Err`. The magnus-aligned way a handler rejects a write to a frozen
     /// receiver before attempting it — mruby's own mutating operations
     /// already perform this check internally, so this is the early-guard
@@ -1449,7 +1449,7 @@ impl Value {
 
     /// `mrb_equal(mrb, self, other)` — Ruby `==` equality. May run a
     /// user-defined `==`, so it runs under the same protection as
-    /// `Mrb::protect`: `Ok(bool)` for the comparison, or `Err` when the
+    /// exception protection: `Ok(bool)` for the comparison, or `Err` when the
     /// dispatched method raises.
     #[inline]
     pub fn equal(self, mrb: &Mrb, other: Value) -> Result<bool, Error> {
@@ -1486,7 +1486,7 @@ impl Value {
     }
 
     /// `mrb_cmp(mrb, self, other)` — Ruby's `<=>` three-way comparison.
-    /// Dispatches a user-defined `<=>`, so it runs under `Mrb::protect`:
+    /// Dispatches a user-defined `<=>`, so it runs under exception protection:
     /// `Ok(Some(ordering))` ranks the values by the sign of the result —
     /// negative, zero, or positive — following the `<=>` contract rather
     /// than assuming a -1 / 0 / 1 magnitude. `Ok(None)` yields nothing when
@@ -1525,7 +1525,7 @@ impl Value {
     /// the numeric types: an Integer reads directly and a Float truncates
     /// toward zero. A non-numeric value raises `TypeError` and a Float
     /// that is infinite or NaN raises `RangeError`, so the conversion runs
-    /// under `Mrb::protect`: `Ok` with the number, or `Err`. The
+    /// under exception protection: `Ok` with the number, or `Err`. The
     /// conversion runs no user Ruby — it dispatches no `to_int`. Distinct
     /// from `i32::from_value`, the exact-tag downcast that never converts
     /// across types and rejects a Float outright.
@@ -1555,7 +1555,7 @@ impl Value {
     /// `mrb_as_float(mrb, self)` — convert `self` to a Rust float across
     /// the numeric types: a Float reads directly and an Integer widens to
     /// a float. A non-numeric value raises `TypeError`, so like `as_int`
-    /// the conversion runs under `Mrb::protect` and dispatches no `to_f`.
+    /// the conversion runs under exception protection and dispatches no `to_f`.
     /// Distinct from `f64::from_value`, the exact-tag downcast that never
     /// converts across types and rejects an Integer outright.
     ///

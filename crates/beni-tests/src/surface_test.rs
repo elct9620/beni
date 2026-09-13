@@ -38,7 +38,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::intern_str;
     let _ = Mrb::sym_name;
     let _ = Mrb::load_bytecode;
-    let _ = Mrb::protect::<fn(&Mrb) -> Value>;
     let _ = Mrb::get_args::<format::O>;
     let _ = <format::O as Format>::read;
     let _ = <format::Rest as Format>::read;
@@ -260,8 +259,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::intern_check;
     let _ = Mrb::intern_static;
     let _ = Mrb::module_new;
-    let _ = Mrb::rescue::<fn(&Mrb) -> Value, fn(&Mrb, Value) -> Value>;
-    let _ = Mrb::ensure::<fn(&Mrb) -> Value, fn(&Mrb) -> Value>;
     let _ = Mrb::str_new_static;
     let _ = Mrb::sym_dump;
     let _ = Mrb::sym_name_len;
@@ -345,6 +342,14 @@ fn typed_mrb_func_t_coerces_from_value_bridge() {
         Value::zeroed()
     }
     let _f: beni::mrb_func_t = _stub;
+}
+
+/// The helpers `beni::sys` carries beside the raw bindings are free
+/// functions, which `rake api:surface` does not list, so each is named
+/// here by hand.
+#[test]
+fn raw_layer_helpers_are_reachable_from_outside() {
+    let _ = beni::sys::protect::<fn(&Mrb) -> Value>;
 }
 
 /// The drift net for the `compiler` capability feature. An item the

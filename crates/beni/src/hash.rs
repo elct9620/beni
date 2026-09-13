@@ -65,7 +65,7 @@ impl Hash {
     /// `mrb_hash_set(mrb, self, key, val)` — assign `key => val`.
     /// Assigning into a frozen hash raises `FrozenError`, and storing a
     /// key runs its Ruby `hash`/`eql?` which may raise; the call runs
-    /// under `Mrb::protect`, so either surfaces as `Err` rather than
+    /// under exception protection, so either surfaces as `Err` rather than
     /// long-jumping.
     #[inline]
     pub fn set(self, mrb: &Mrb, key: Value, val: Value) -> Result<(), Error> {
@@ -85,7 +85,7 @@ impl Hash {
     /// `mrb_hash_get(mrb, self, key)` — the value for `key`, or `nil`
     /// when absent. The lookup runs the key's `hash`/`eql?`, and an
     /// absent key runs the hash's `default`; either may raise, so the
-    /// call runs under `Mrb::protect` and surfaces that as `Err`.
+    /// call runs under exception protection and surfaces that as `Err`.
     #[inline]
     pub fn get(self, mrb: &Mrb, key: Value) -> Result<Value, Error> {
         mrb.protect(|mrb| {
@@ -148,7 +148,7 @@ impl Hash {
 
     /// `mrb_hash_key_p(mrb, self, key)` — whether `key` is present,
     /// Ruby's `Hash#key?`. Testing a key runs its `hash`/`eql?`, which
-    /// may raise; the call runs under `Mrb::protect`, so that surfaces as
+    /// may raise; the call runs under exception protection, so that surfaces as
     /// `Err`.
     #[inline]
     pub fn contains_key(self, mrb: &Mrb, key: Value) -> Result<bool, Error> {
@@ -171,7 +171,7 @@ impl Hash {
     /// `mrb_hash_fetch(mrb, self, key, default)` — the value for `key`,
     /// or `default` when absent, like Ruby's `Hash#fetch(key, default)`.
     /// The lookup runs the key's `hash`/`eql?`, which may raise; the call
-    /// runs under `Mrb::protect`, so that surfaces as `Err`.
+    /// runs under exception protection, so that surfaces as `Err`.
     #[inline]
     pub fn fetch(self, mrb: &Mrb, key: Value, default: Value) -> Result<Value, Error> {
         mrb.protect(|mrb| {
@@ -262,7 +262,7 @@ impl Hash {
     /// The walk dispatches no Ruby of its own, but a `body` that
     /// re-enters the VM to mutate this hash's table trips mruby's in-walk
     /// modification guard, which surfaces here as `Err` carrying the
-    /// `RuntimeError` mruby raises — the call runs under `Mrb::protect`,
+    /// `RuntimeError` mruby raises — the call runs under exception protection,
     /// so that raise is caught rather than long-jumping.
     ///
     /// A panic in `body` is caught at the FFI boundary, stops the walk,

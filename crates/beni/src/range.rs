@@ -117,7 +117,7 @@ impl Range {
     /// Returns the three-way `RangeBegLen` outcome — in-range, out-of-range,
     /// or non-Range mismatch — kept distinct so the caller can tell them
     /// apart. It dispatches nothing, but coercing a non-integer bound raises
-    /// `TypeError`; the call runs under `Mrb::protect`, so that surfaces as
+    /// `TypeError`; the call runs under exception protection, so that surfaces as
     /// `Err` rather than long-jumping. Mirrors magnus's `Range::beg_len`,
     /// which collapses the two non-`Ok` outcomes into one `Err`.
     #[inline]

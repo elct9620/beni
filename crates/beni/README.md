@@ -14,9 +14,8 @@ surface, this crate owns every abstraction above it.
 - `IntoValue` / `FromValue` — the Rust ⇄ mruby conversion seam
 - `method!` — registers a typed Rust function as an mruby method,
   with argument conversion and a sealed panic boundary
-- `protect` — closure-based `mrb_protect_error`, surfacing mruby
-  exceptions as Rust `Err`
-- `beni::sys` — raw-FFI escape hatch re-exporting all of `beni-sys`
+- `beni::sys` — raw-FFI escape hatch carrying all of `beni-sys`, with
+  `sys::protect` to catch a raw binding's raise as a Rust `Err`
 
 ## Usage
 

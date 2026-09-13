@@ -69,7 +69,7 @@ Build      Beni::Builder (drives            │   state::args (Format dispatch)
   │          mruby's own rake via            │   state::protect (mrb_protect_error)
   │          MRUBY_CONFIG; requests          L1  Mrb RAII · Value + typed
   │          flags.mak file tasks)           │   newtypes · Ccontext †
-Config     Beni::BuildConfig                 L0  pub use beni_sys as sys
+Config     Beni::BuildConfig                 L0  sys (beni_sys::* + protect)
   │          (beni:config: copies the      ──────────────────────────────
   │          staged upstream default)
 Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface

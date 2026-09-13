@@ -57,7 +57,7 @@ impl Array {
 
     /// `mrb_ary_push(mrb, self, val)` — append `val`, the way Ruby's
     /// `Array#push` extends its receiver. Appending to a frozen array
-    /// raises `FrozenError`; the call runs under `Mrb::protect`, so that
+    /// raises `FrozenError`; the call runs under exception protection, so that
     /// surfaces as `Err` rather than long-jumping.
     #[inline]
     pub fn push(self, mrb: &Mrb, val: Value) -> Result<(), Error> {
@@ -122,7 +122,7 @@ impl Array {
     /// `mrb_ary_resize(mrb, self, new_len)` — set the array's length:
     /// grow with `nil` to reach a longer length, or truncate to a shorter
     /// one. Resizing a frozen array raises `FrozenError`; the call runs
-    /// under `Mrb::protect`, so that surfaces as `Err`. `new_len`
+    /// under exception protection, so that surfaces as `Err`. `new_len`
     /// saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn resize(self, mrb: &Mrb, new_len: usize) -> Result<(), Error> {
@@ -265,7 +265,7 @@ impl Array {
     /// `mrb_ary_join(mrb, self, sep)` — render the elements into one
     /// string with `sep` between them, Ruby's `Array#join`. Each element's
     /// `to_s` runs, so a raise inside it surfaces as `Err`; the call runs
-    /// under `Mrb::protect`. A `None` separator joins with nothing between,
+    /// under exception protection. A `None` separator joins with nothing between,
     /// the way Ruby's `join` treats a `nil` argument.
     #[inline]
     pub fn join(self, mrb: &Mrb, sep: Option<RString>) -> Result<RString, Error> {

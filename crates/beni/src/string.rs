@@ -60,7 +60,7 @@ impl RString {
     /// backing buffer may reallocate, but `self` keeps naming the same
     /// `RString`, so it stays usable after the call. Appending to a
     /// frozen string raises `FrozenError`; the call runs under
-    /// `Mrb::protect`, so that surfaces as `Err` rather than
+    /// exception protection, so that surfaces as `Err` rather than
     /// long-jumping.
     #[inline]
     pub fn cat(self, mrb: &Mrb, bytes: &[u8]) -> Result<(), Error> {
@@ -89,7 +89,7 @@ impl RString {
     /// Ruby's `String#<<` extends its receiver with another string. The
     /// backing buffer may reallocate, but `self` keeps naming the same
     /// `RString`. Appending to a frozen string raises `FrozenError`; the
-    /// call runs under `Mrb::protect`, so that surfaces as `Err` rather
+    /// call runs under exception protection, so that surfaces as `Err` rather
     /// than long-jumping. Self-append (`s.cat_str(&mrb, s)`) is handled
     /// by `mrb_str_cat_str`, which snapshots the source before growing.
     #[inline]
@@ -114,7 +114,7 @@ impl RString {
     /// Ruby's `String#<<` extends its receiver. The backing buffer may
     /// reallocate, but `self` keeps naming the same `RString`. Appending
     /// to a frozen string raises `FrozenError`; the call runs under
-    /// `Mrb::protect`, so that surfaces as `Err` rather than long-jumping.
+    /// exception protection, so that surfaces as `Err` rather than long-jumping.
     #[inline]
     pub fn cat_cstr(self, mrb: &Mrb, s: &core::ffi::CStr) -> Result<(), Error> {
         mrb.protect(|mrb| {
@@ -139,7 +139,7 @@ impl RString {
     /// `other` runs the same coercion as `Value::obj_as_string` (a
     /// Symbol/Integer/Class renders directly, anything else dispatches
     /// `to_s`), which may raise; appending to a frozen receiver raises
-    /// `FrozenError`. The call runs under `Mrb::protect`, so either
+    /// `FrozenError`. The call runs under exception protection, so either
     /// surfaces as `Err` rather than long-jumping.
     #[inline]
     pub fn concat(self, mrb: &Mrb, other: Value) -> Result<(), Error> {
@@ -164,7 +164,7 @@ impl RString {
     /// resized string. Resizing a frozen string raises `FrozenError`,
     /// and a `len` mruby's integer cannot hold (including a length at its
     /// maximum) raises `ArgumentError`; the call runs under
-    /// `Mrb::protect`, so either surfaces as `Err` rather than
+    /// exception protection, so either surfaces as `Err` rather than
     /// long-jumping.
     #[inline]
     pub fn resize(self, mrb: &Mrb, len: usize) -> Result<(), Error> {
@@ -436,7 +436,7 @@ impl RString {
     /// `mrb_string_cstr(mrb, self)` — the bytes as an owned, NUL-terminated
     /// `CString` for a C boundary. A C string cannot carry an embedded NUL,
     /// so this read is fallible: an embedded NUL raises `ArgumentError`, and
-    /// the call runs under `Mrb::protect` so that surfaces as `Err` rather
+    /// the call runs under exception protection so that surfaces as `Err` rather
     /// than long-jumping. magnus has no direct C-string accessor, so this
     /// anchors on mruby's own `mrb_string_cstr`.
     #[inline]
@@ -465,7 +465,7 @@ impl RString {
     /// leading `0x` / `0b` / `0o` prefix. With strict checking on, any input
     /// that is not a clean integer in the base — trailing junk, an empty
     /// string, or a positive `base` outside 2 through 36 — raises
-    /// `ArgumentError`; the call runs under `Mrb::protect`, so that surfaces
+    /// `ArgumentError`; the call runs under exception protection, so that surfaces
     /// as `Err` rather than long-jumping. A negative `base` is not an error:
     /// `-n` aliases the radix `n` with prefix detection disabled.
     #[inline]
@@ -494,7 +494,7 @@ impl RString {
     /// an `Err`. The `base` is 2 through 36, or 0 to auto-detect a leading `0x`
     /// / `0b` / `0o` prefix; a positive `base` outside 2 through 36 is the one
     /// input the lenient parse cannot interpret and raises `ArgumentError`,
-    /// which the surrounding `Mrb::protect` surfaces as `Err` rather than
+    /// which the surrounding exception protection surfaces as `Err` rather than
     /// long-jumping. A negative `base` is not an error: `-n` aliases the radix
     /// `n` with prefix detection disabled.
     #[inline]
@@ -519,7 +519,7 @@ impl RString {
     /// strict counterpart of Ruby's lenient `String#to_f`. With strict
     /// checking on, any input that is not a clean float — trailing junk or
     /// bytes with no valid float at all — raises `ArgumentError`; the call
-    /// runs under `Mrb::protect`, so that surfaces as `Err` rather than
+    /// runs under exception protection, so that surfaces as `Err` rather than
     /// long-jumping. The `to_i` sibling for the integer parse.
     #[inline]
     pub fn to_f(self, mrb: &Mrb) -> Result<sys::mrb_float, Error> {
