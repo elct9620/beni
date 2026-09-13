@@ -21,5 +21,9 @@ resolver = "2"
 [workspace.package]
 version = "0.15.0"
 edition = "2021"
+# The first release where a panic reaching an `extern "C"` boundary
+# aborts instead of being undefined behavior, which the trampolines under
+# `beni::sys::protect` rely on.
+rust-version = "1.81"
 license = "Apache-2.0"
 repository = "https://github.com/elct9620/beni"

@@ -41,6 +41,7 @@
 name = "beni-sys"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "bindgen-driven mruby C API FFI bindings and layout-safe C shims; consumed by the typed `beni` wrapper crate."
