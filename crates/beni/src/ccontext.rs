@@ -101,11 +101,19 @@ impl<'mrb> Ccontext<'mrb> {
     /// that never compiled never ran.
     pub fn load_nstring(&self, source: &[u8]) -> Result<Value, Error> {
         let parser = self.parse(source)?;
-        // SAFETY: `parser` parsed cleanly; `mrb_load_exec` takes
-        // ownership of it, frees it, and runs the generated Proc.
-        let value =
-            Value::from_raw(unsafe { sys::mrb_load_exec(self.mrb.as_ptr(), parser, self.raw) });
-        self.mrb.outcome(value)
+        let raw = self.raw;
+        // Inside a running VM the program's raise long-jumps to the
+        // nearest jump target rather than returning, so the run needs a
+        // target of its own; at the top level it returns with the
+        // exception pending, which `outcome` reads back.
+        self.mrb
+            .protect(|mrb| {
+                // SAFETY: `parser` parsed cleanly; `mrb_load_exec`
+                // takes ownership of it, frees it, and runs the
+                // generated Proc.
+                Value::from_raw(unsafe { sys::mrb_load_exec(mrb.as_ptr(), parser, raw) })
+            })
+            .and_then(|value| self.mrb.outcome(value))
     }
 
     /// Compile `source` under this context without running it, yielding

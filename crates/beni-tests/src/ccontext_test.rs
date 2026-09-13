@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Ccontext, Error, FromValue};
+use beni::{Ccontext, Error, FromValue, Module, Mrb, Value};
 
 #[test]
 fn load_nstring_evaluates_source_under_the_stamped_filename() {
@@ -248,4 +248,31 @@ fn a_compiled_program_starts_without_the_contexts_top_level_locals() {
         seen_by_the_program.is_nil(),
         "the context's locals reach a program it runs, not one the caller runs"
     );
+}
+
+// Runs a load under a context of its own from inside a registered
+// method, answering the exception it came back with, or nil when none.
+fn load_nstring_inside(mrb: &Mrb, _self: Value) -> Value {
+    let cxt = Ccontext::new(mrb, c"nested.rb").expect("allocating the context must succeed");
+    match cxt.load_nstring(b"raise 'from the nested context'") {
+        Err(Error::Exception(exc)) => exc,
+        _ => Value::nil(),
+    }
+}
+
+#[test]
+fn load_nstring_inside_a_registered_method_hands_the_raise_back_as_err() {
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"load_inside", beni::method!(load_nstring_inside, 0))
+        .expect("defining the method must succeed");
+
+    let exc = Value::nil()
+        .funcall(&mrb, c"load_inside", &[])
+        .expect("the raise must come back to the method that ran the load");
+
+    assert_eq!(exc.classname(&mrb), "RuntimeError");
+    assert!(Error::Exception(exc)
+        .message(&mrb)
+        .contains("from the nested context"));
 }

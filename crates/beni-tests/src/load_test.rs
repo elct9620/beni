@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Ccontext, DumpOptions, Error, FromValue, Mrb};
+use beni::{Ccontext, DumpOptions, Error, FromValue, Module, Mrb, RString, Value};
 
 const HEADER_LEN: usize = core::mem::size_of::<beni::sys::rite_binary_header>();
 
@@ -184,4 +184,62 @@ fn load_bytecode_hands_back_an_exception_the_program_raised() {
         "the error carries the exception, so nothing stays pending"
     );
     assert!(err.message(&mrb).contains("from the loaded program"));
+}
+
+// A registered method answers the exception the load inside it came
+// back with, or nil when it came back with none — so a raise that
+// escaped the load reaches the method's caller instead.
+fn caught(outcome: Result<Value, Error>) -> Value {
+    match outcome {
+        Err(Error::Exception(exc)) => exc,
+        _ => Value::nil(),
+    }
+}
+
+fn load_string_inside(mrb: &Mrb, _self: Value) -> Value {
+    caught(mrb.load_string(b"raise 'from the nested load'"))
+}
+
+fn load_bytecode_inside(mrb: &Mrb, _self: Value, blob: RString) -> Value {
+    caught(mrb.load_bytecode(&blob.to_bytes()))
+}
+
+#[test]
+fn load_string_inside_a_registered_method_hands_the_raise_back_as_err() {
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"load_inside", beni::method!(load_string_inside, 0))
+        .expect("defining the method must succeed");
+
+    let exc = Value::nil()
+        .funcall(&mrb, c"load_inside", &[])
+        .expect("the raise must come back to the method that ran the load");
+
+    assert_eq!(exc.classname(&mrb), "RuntimeError");
+    assert!(Error::Exception(exc)
+        .message(&mrb)
+        .contains("from the nested load"));
+}
+
+#[test]
+fn load_bytecode_inside_a_registered_method_hands_the_raise_back_as_err() {
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"raiser.rb").expect("allocating the context must succeed");
+    let bytes = cxt
+        .compile(b"raise ArgumentError, 'from the nested program'")
+        .expect("the source must compile")
+        .dump(&mrb, DumpOptions::default())
+        .expect("a Proc compiled from source must dump");
+    mrb.object_class()
+        .define_method(&mrb, c"load_inside", beni::method!(load_bytecode_inside, 1))
+        .expect("defining the method must succeed");
+
+    let exc = Value::nil()
+        .funcall(&mrb, c"load_inside", &[mrb.str_new(&bytes).as_value()])
+        .expect("the raise must come back to the method that ran the load");
+
+    assert_eq!(exc.classname(&mrb), "ArgumentError");
+    assert!(Error::Exception(exc)
+        .message(&mrb)
+        .contains("from the nested program"));
 }

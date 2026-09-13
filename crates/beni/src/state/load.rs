@@ -84,10 +84,13 @@ impl Mrb {
         unsafe { sys::mrb_irep_decref(self.as_ptr(), irep) };
         // SAFETY: `mrb` is alive.
         let top_self = unsafe { sys::mrb_top_self(self.as_ptr()) };
-        // SAFETY: top-level Proc execution; any raise sets mrb->exc,
-        // which `outcome` reads back.
-        let value = Value::from_raw(unsafe { sys::mrb_top_run(self.as_ptr(), proc_, top_self, 0) });
-        self.outcome(value)
+        self.protect(|mrb| {
+            // SAFETY: top-level Proc execution; a raise inside a running
+            // VM long-jumps to this protect frame, and one at the top
+            // level returns with mrb->exc set, which `outcome` reads.
+            Value::from_raw(unsafe { sys::mrb_top_run(mrb.as_ptr(), proc_, top_self, 0) })
+        })
+        .and_then(|value| self.outcome(value))
     }
 }
 
