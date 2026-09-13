@@ -22,7 +22,7 @@
 //! `crate::RClass` / `crate::RModule`. Global variable access is a
 //! plain table operation that cannot raise.
 
-use crate::{Error, IntoSym, Mrb, RClass, RModule, Value};
+use crate::{Error, ExceptionClass, IntoSym, Mrb, RClass, RModule, Value};
 use beni_sys as sys;
 
 impl Mrb {
@@ -113,21 +113,23 @@ impl Mrb {
     }
 
     /// `mrb_exc_get_id(mrb, name)` — fetch the built-in exception
-    /// class named `name`, guaranteed to descend from `Exception`. The
-    /// name is a symbol-or-name key (`IntoSym`). mruby raises when the
-    /// constant is missing, is not a class, or is a class that is not
-    /// an `Exception` subclass (vendored `src/class.c`), so the lookup
+    /// class named `name` as an `ExceptionClass`. The name is a
+    /// symbol-or-name key (`IntoSym`). mruby raises when the constant is
+    /// missing, is not a class, or is a class that is not `Exception` or
+    /// a class descending from it (vendored `src/class.c`), so the lookup
     /// is fallible by contract. This is the typed path to a built-in
     /// exception class — `RuntimeError`, `ArgumentError`, `TypeError` —
     /// for raising from registered code.
     #[inline]
-    pub fn exc_get<K: IntoSym>(&self, name: K) -> Result<RClass, Error> {
+    pub fn exc_get<K: IntoSym>(&self, name: K) -> Result<ExceptionClass, Error> {
         let sym = name.into_sym(self);
         crate::class::protect_class_ptr(self, |mrb| {
             // SAFETY: as `define_module`.
             unsafe { sys::mrb_exc_get_id(mrb.as_ptr(), sym) }
         })
-        .map(RClass::from_raw)
+        // `mrb_exc_get_id` returns only a class whose ancestry reaches
+        // `Exception`, which is what makes it an exception class.
+        .map(ExceptionClass::from_raw_unchecked)
     }
 
     /// `mrb_module_get_id(mrb, name)` — fetch the top-level module

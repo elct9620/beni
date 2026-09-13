@@ -11,13 +11,15 @@
 //!
 //! Scope covers the scalar leaf types (`i32` / `f64` / `bool`), an
 //! owned `String` or byte vector, and the typed handles (`RString` /
-//! `Array` / `Hash` / `RClass` / `RModule` / `Proc` / `Symbol` /
-//! `Range`): every handle converts into the value naming its object,
+//! `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` /
+//! `Symbol` / `Range`): every handle converts into the value naming its object,
 //! and back through a checked downcast discriminated by the value's
 //! type tag — string and container subclass instances convert. Every
 //! conversion is by value, copying rather than borrowing VM storage.
 
-use crate::{Array, Hash, Mrb, Proc, RClass, RModule, RString, Range, Symbol, Value};
+use crate::{
+    Array, ExceptionClass, Hash, Mrb, Proc, RClass, RModule, RString, Range, Symbol, Value,
+};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
@@ -134,6 +136,13 @@ impl IntoValue for RModule {
     }
 }
 
+impl IntoValue for ExceptionClass {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        self.to_value(mrb)
+    }
+}
+
 impl FromValue for i32 {
     // Mirror of the `IntoValue for i32` allow: `try_from` is a real
     // range check under 64-bit `sys::mrb_int` and an infallible
@@ -216,6 +225,21 @@ impl FromValue for RModule {
         value
             .is_module()
             .then(|| RModule::from_raw(unsafe { value.as_class_ptr() }))
+    }
+}
+
+impl FromValue for ExceptionClass {
+    // Narrower than its tag: a class converts only when it is an
+    // exception class, which a singleton class never is.
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        if !value.is_class() {
+            return None;
+        }
+        // SAFETY: the unbox precondition (class tagging) is established
+        // by the `is_class` guard immediately above.
+        let class = unsafe { value.as_class_ptr() };
+        crate::class::is_exception_class(class).then(|| ExceptionClass::from_raw_unchecked(class))
     }
 }
 

@@ -6,7 +6,7 @@
 //! instead of letting the raise long-jump across Rust frames, and a
 //! Rust panic caught at the FFI boundary travels the same channel.
 
-use crate::{Mrb, ParseMessage, RClass, Value};
+use crate::{ExceptionClass, Mrb, ParseMessage, Value};
 use beni_sys as sys;
 
 /// Error surfaced to Rust callers when mruby rejects an operation or
@@ -37,9 +37,9 @@ impl Error {
     /// a handler raises its own exception — `return Err(Error::new(...))`
     /// — formatting `message` in Rust first when it is dynamic. The
     /// bytes are copied into the exception before returning, through
-    /// `RClass::exc_new`.
+    /// `ExceptionClass::exc_new`.
     #[inline]
-    pub fn new(mrb: &Mrb, class: RClass, message: &str) -> Self {
+    pub fn new(mrb: &Mrb, class: ExceptionClass, message: &str) -> Self {
         Error::Exception(class.exc_new(mrb, message))
     }
 

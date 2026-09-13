@@ -349,6 +349,8 @@ fn marking_refuses_an_exception_class_so_its_instances_stay_exceptions() {
             .set_instance_data_tt(&mrb)
             .expect_err("an exception class must refuse the mark");
         assert_mark_refused(&mrb, err, "an exception class");
-        assert!(class.exc_new(&mrb, "still an exception").is_exception());
+        let still = <beni::ExceptionClass as beni::FromValue>::from_value(class.to_value(&mrb))
+            .expect("the refused class is still an exception class");
+        assert!(still.exc_new(&mrb, "still an exception").is_exception());
     }
 }

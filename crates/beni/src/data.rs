@@ -97,7 +97,7 @@ impl RClass {
     pub fn set_instance_data_tt(self, mrb: &Mrb) -> Result<(), Error> {
         let refused = if self.to_value(mrb).is_sclass() {
             Some("a singleton class")
-        } else if crate::class::is_exception_class(mrb, self.as_raw()) {
+        } else if crate::class::is_exception_class(self.as_raw()) {
             Some("an exception class")
         } else {
             None

@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Array, FromValue, Hash, IntoValue, RClass, RModule, RString, Value};
+use beni::{Array, ExceptionClass, FromValue, Hash, IntoValue, RClass, RModule, RString, Value};
 
 // Boxes through mruby's generic `mrb_int_value` / `mrb_float_value`
 // constructors and unboxes through the macro-expanding C helpers —
@@ -187,4 +187,53 @@ fn every_class_family_handle_round_trips_through_its_value() {
     // A module is never a class, nor a class a module.
     assert!(RClass::from_value(module.into_value(&mrb)).is_none());
     assert!(RModule::from_value(class.into_value(&mrb)).is_none());
+}
+
+#[test]
+fn exception_class_downcast_accepts_exactly_exception_classes() {
+    let mrb = open_mrb();
+    let cxt = beni::Ccontext::new(&mrb, c"exception_class_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    for (source, is_exception_class) in [
+        (&b"Exception"[..], true),
+        (b"RuntimeError", true),
+        (
+            b"class BeniOwnError < RuntimeError; end; BeniOwnError",
+            true,
+        ),
+        (b"Object", false),
+        (b"Kernel", false),
+        (b"RuntimeError.new('x').singleton_class", false),
+        (b"RuntimeError.new('x')", false),
+        (b"42", false),
+    ] {
+        let value = cxt
+            .load_nstring(source)
+            .expect("the test source must compile and run");
+        assert!(
+            mrb.pending_exc().is_nil(),
+            "evaluating the source must not raise: {}",
+            mrb.pending_exc().to_string(&mrb)
+        );
+        assert_eq!(
+            ExceptionClass::from_value(value).is_some(),
+            is_exception_class,
+            "{}",
+            String::from_utf8_lossy(source)
+        );
+    }
+}
+
+#[test]
+fn exception_class_round_trips_and_names_the_same_class() {
+    let mrb = open_mrb();
+    let runtime_error = mrb
+        .exc_get(c"RuntimeError")
+        .expect("RuntimeError is a core exception class");
+
+    let back = ExceptionClass::from_value(runtime_error.into_value(&mrb))
+        .expect("an exception class handle's value converts back");
+    assert_eq!(back.as_raw(), runtime_error.as_raw());
+    assert_eq!(runtime_error.as_r_class().as_raw(), runtime_error.as_raw());
 }

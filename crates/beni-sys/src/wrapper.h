@@ -326,18 +326,16 @@ mrb_set_instance_tt_func(struct RClass *c, enum mrb_vtype tt)
   MRB_SET_INSTANCE_TT(c, tt);
 }
 
-/* Whether a class is `Exception` or descends from it — the ancestry
- * walk `mrb_exc_get_id` runs before handing a class back as an
- * exception class (src/class.c), which mruby exposes no function for.
- * An include class a mixed-in module threads into the chain is never
- * `Exception`, so the walk passes over it. */
+/* Whether a class allocates its instances as exceptions — the instance
+ * type `Exception` sets (src/error.c:908) and every class descending
+ * from it inherits (src/class.c:3219), so it answers for exactly the
+ * exception classes. It is also the one condition under which
+ * `mrb_exc_new` allocates without raising (src/gc.c:574-581). Reads the
+ * `MRB_INSTANCE_TT(c)` flag bits, which bindgen cannot expand. */
 static inline mrb_bool
-mrb_class_exception_p_func(mrb_state *mrb, struct RClass *c)
+mrb_class_exception_p_func(struct RClass *c)
 {
-  for (struct RClass *e = c; e; e = e->super) {
-    if (e == E_EXCEPTION) return TRUE;
-  }
-  return FALSE;
+  return MRB_INSTANCE_TT(c) == MRB_TT_EXCEPTION;
 }
 
 /* Integer conversion across the numeric types. Counterpart to the

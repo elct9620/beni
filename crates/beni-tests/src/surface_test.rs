@@ -89,9 +89,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RClass::real;
     let _ = RClass::to_value;
     let _ = RClass::obj_new;
-    let _ = RClass::raise;
-    let _ = RClass::exc_new;
-    let _ = RClass::exc_new_str;
     let _ = RClass::is_null;
     let _ = RClass::set_instance_data_tt;
     let _ = RClass::data_wrap::<i32>;
@@ -99,6 +96,12 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RModule::from_raw;
     let _ = RModule::as_raw;
     let _ = RModule::to_value;
+    let _ = ExceptionClass::as_raw;
+    let _ = ExceptionClass::as_r_class;
+    let _ = ExceptionClass::to_value;
+    let _ = ExceptionClass::raise;
+    let _ = ExceptionClass::exc_new;
+    let _ = ExceptionClass::exc_new_str;
     let _ = <RClass as Module>::define_class::<&core::ffi::CStr>;
     let _ = <RClass as Module>::define_module::<&core::ffi::CStr>;
     let _ = <RClass as Module>::class_get::<&core::ffi::CStr>;
@@ -115,6 +118,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <RModule as Module>::define_const::<&core::ffi::CStr>;
     let _ = <RClass as Object>::define_singleton_method::<&core::ffi::CStr>;
     let _ = <RModule as Object>::define_singleton_method::<&core::ffi::CStr>;
+    let _ = <ExceptionClass as Module>::define_method::<&core::ffi::CStr>;
+    let _ = <ExceptionClass as Object>::define_singleton_method::<&core::ffi::CStr>;
     let _ = Error::message;
     let _ = Error::backtrace;
     let _ = Error::argnum;
@@ -192,6 +197,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <Range as FromValue>::from_value;
     let _ = <RClass as FromValue>::from_value;
     let _ = <RModule as FromValue>::from_value;
+    let _ = <ExceptionClass as FromValue>::from_value;
     let _ = <Proc as FromValue>::from_value;
     let _ = <Symbol as FromValue>::from_value;
     let _ = <Symbol as IntoValue>::into_value;
@@ -202,6 +208,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <Range as IntoValue>::into_value;
     let _ = <RClass as IntoValue>::into_value;
     let _ = <RModule as IntoValue>::into_value;
+    let _ = <ExceptionClass as IntoValue>::into_value;
     let _ = Array::clear;
     let _ = Array::concat;
     let _ = Array::dup;

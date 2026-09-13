@@ -5,7 +5,7 @@ use beni::{Error, Mrb};
 fn new_builds_an_exception_error_carrying_the_message() {
     let mrb = open_mrb();
     let runtime_error = mrb
-        .class_get(c"RuntimeError")
+        .exc_get(c"RuntimeError")
         .expect("RuntimeError is a core class");
 
     let err = Error::new(&mrb, runtime_error, "boom");
@@ -113,7 +113,7 @@ fn backtrace_answers_empty_for_an_exception_holding_none() {
 
     // Built in Rust rather than raised, so nothing ever packed frames
     // onto it.
-    let err = Error::new(&mrb, mrb.class_get(c"RuntimeError").unwrap(), "unraised");
+    let err = Error::new(&mrb, mrb.exc_get(c"RuntimeError").unwrap(), "unraised");
 
     assert!(err.backtrace(&mrb).is_empty());
 }

@@ -1,6 +1,7 @@
-//! Typed `RClass` / `RModule` handles and the `Module` / `Object`
-//! registration traits — beni's mirror of `magnus::RClass` /
-//! `magnus::RModule` with `magnus::Module` / `magnus::Object`.
+//! Typed `RClass` / `RModule` / `ExceptionClass` handles and the
+//! `Module` / `Object` registration traits — beni's mirror of
+//! `magnus::RClass` / `magnus::RModule` / `magnus::ExceptionClass` with
+//! `magnus::Module` / `magnus::Object`.
 //!
 //! ## Why newtypes
 //!
@@ -9,15 +10,16 @@
 //! around untyped — easy to leak, easy to confuse with other opaque
 //! pointers, and impossible to attach inherent methods to from a
 //! sibling crate. mruby represents classes and modules with the same
-//! C `struct RClass`; the two Rust newtypes keep "this handle is a
-//! class" / "this handle is a module" distinct at the type level
-//! while sharing the registration surface through the traits.
+//! C `struct RClass`; the Rust newtypes keep "this handle is a class" /
+//! "this handle is a module" / "this class allocates exceptions"
+//! distinct at the type level while sharing the registration surface
+//! through the traits.
 //!
 //! ## ABI guarantee
 //!
-//! Both handles are `#[repr(transparent)]` over `*mut RClass`, so
-//! they are pointer-sized and share the C ABI on every target — a
-//! struct field of either type round-trips into mruby's own
+//! Every handle is `#[repr(transparent)]` over `*mut RClass`, so
+//! each is pointer-sized and shares the C ABI on every target — a
+//! struct field of any of them round-trips into mruby's own
 //! `RClass *` slot without conversion.
 //!
 //! ## Error contract
@@ -52,6 +54,26 @@ pub struct RClass(pub(crate) *mut sys::RClass);
 #[derive(Copy, Clone, Debug)]
 pub struct RModule(pub(crate) *mut sys::RClass);
 
+/// Typed handle on an exception class — `Exception` itself or an
+/// ordinary class descending from it, never a singleton class — so every
+/// instance it allocates is an exception, and building one never raises.
+/// Mirrors `magnus::ExceptionClass`. `#[repr(transparent)]` over
+/// `*mut RClass`.
+///
+/// Obtain one via `Mrb::exc_get` for a built-in exception class, or
+/// `ExceptionClass::from_value` for a class held as a value. Only this
+/// handle builds exceptions — the general class handle cannot:
+///
+/// ```compile_fail
+/// # use beni::Mrb;
+/// fn build(mrb: &Mrb) {
+///     let _ = mrb.object_class().exc_new(mrb, "boom");
+/// }
+/// ```
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug)]
+pub struct ExceptionClass(*mut sys::RClass);
+
 // SAFETY: a class handle carries neither the interpreter nor ownership
 // of the class it names, so crossing a thread with one is inert; it
 // means something only against the interpreter that produced it, the
@@ -60,6 +82,8 @@ unsafe impl Send for RClass {}
 unsafe impl Sync for RClass {}
 unsafe impl Send for RModule {}
 unsafe impl Sync for RModule {}
+unsafe impl Send for ExceptionClass {}
+unsafe impl Sync for ExceptionClass {}
 
 #[cfg(test)]
 mod tests {
@@ -68,13 +92,14 @@ mod tests {
         fn crosses<T: Send + Sync>() {}
         crosses::<crate::RClass>();
         crosses::<crate::RModule>();
+        crosses::<crate::ExceptionClass>();
     }
 }
 
 mod private {
     use beni_sys as sys;
 
-    /// Plumbing supertrait sealing `Module` / `Object` to the two
+    /// Plumbing supertrait sealing `Module` / `Object` to the class
     /// handle newtypes and giving their shared default bodies one
     /// raw-pointer accessor.
     pub trait ClassLike: Copy {
@@ -88,6 +113,12 @@ mod private {
     }
 
     impl ClassLike for super::RModule {
+        fn raw(self) -> *mut sys::RClass {
+            self.0
+        }
+    }
+
+    impl ClassLike for super::ExceptionClass {
         fn raw(self) -> *mut sys::RClass {
             self.0
         }
@@ -158,11 +189,12 @@ where
 }
 
 /// Whether `class` is an exception class — `Exception` itself or a class
-/// descending from it. Walks the class structure and never raises.
-pub(crate) fn is_exception_class(mrb: &Mrb, class: *mut sys::RClass) -> bool {
-    // SAFETY: `mrb` is alive and `class` names a class of it; the shim
-    // only follows `super` links.
-    unsafe { sys::mrb_class_exception_p_func(mrb.as_ptr(), class) }
+/// descending from it, told by the exception instance type they share.
+/// Reads the class's flags and never raises.
+pub(crate) fn is_exception_class(class: *mut sys::RClass) -> bool {
+    // SAFETY: `class` names a live class; the shim only reads its flag
+    // bits.
+    unsafe { sys::mrb_class_exception_p_func(class) }
 }
 
 impl RClass {
@@ -247,66 +279,6 @@ impl RClass {
             })
         })
     }
-
-    /// `mrb_raise(mrb, self, msg)` — raise an exception of this class
-    /// with `msg`. Diverges — `mrb_raise` long-jumps out and never
-    /// returns to the caller.
-    ///
-    /// # Safety
-    ///
-    /// Only callable from contexts that mruby may unwind out of (C
-    /// bridges, `mrb_funcall` handlers, `mrb_protect_error` bodies).
-    /// Calling from arbitrary Rust code would skip Rust drop frames
-    /// the stack expects to run.
-    #[inline]
-    pub unsafe fn raise(self, mrb: &Mrb, msg: &core::ffi::CStr) -> ! {
-        // SAFETY: bridge frame — caller upholds the unwind contract.
-        // `mrb_raise` is declared as never returning and the binding
-        // carries that, so it satisfies the diverging signature.
-        unsafe { sys::mrb_raise(mrb.as_ptr(), self.0, msg.as_ptr()) }
-    }
-
-    /// `mrb_exc_new(mrb, self, msg, len)` — build an exception of this
-    /// class carrying `msg`, without raising it. The bytes are copied
-    /// into the new object before the call returns. Counterpart to
-    /// `RClass::raise` for the path that returns the exception as a
-    /// `Value` — a bridge body wraps it in `Error::Exception` to raise
-    /// it to the Ruby caller at the boundary instead of long-jumping
-    /// mid-body. `msg.len()` saturates to `sys::mrb_int::MAX` (the
-    /// archive's configured integer width), like `Mrb::str_new`; real
-    /// handler messages stay far below that.
-    #[inline]
-    pub fn exc_new(self, mrb: &Mrb, msg: &str) -> Value {
-        let len = msg.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-        // SAFETY: `mrb` is alive; `self` originates from the same
-        // VM; `msg`'s bytes are copied into the new exception
-        // object before the call returns.
-        Value::from_raw(unsafe {
-            sys::mrb_exc_new(
-                mrb.as_ptr(),
-                self.0,
-                msg.as_ptr() as *const core::ffi::c_char,
-                len,
-            )
-        })
-    }
-
-    /// `mrb_exc_new_str(mrb, self, str)` — build an exception of this
-    /// class carrying an existing mruby string as its message, without
-    /// raising it. The counterpart to `RClass::exc_new` for a message a
-    /// consumer already holds as an `RString` (one it built, mutated, or
-    /// received), carried as-is with no Rust-side copy and no re-encoding
-    /// through bytes — distinct from `exc_new`, which allocates a fresh
-    /// string from Rust bytes. The `RString` is statically a string, so
-    /// the underlying type guard never fires: building never raises and
-    /// runs no user Ruby.
-    #[inline]
-    pub fn exc_new_str(self, mrb: &Mrb, str: RString) -> Value {
-        // SAFETY: `mrb` is alive; `self` and `str` originate from the
-        // same VM; `str` is a String-tagged value, so the call's
-        // string type guard cannot raise.
-        Value::from_raw(unsafe { sys::mrb_exc_new_str(mrb.as_ptr(), self.0, str.as_raw()) })
-    }
 }
 
 impl RModule {
@@ -331,6 +303,100 @@ impl RModule {
     pub fn to_value(self, _mrb: &Mrb) -> Value {
         // SAFETY: as `RClass::to_value`.
         Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
+    }
+}
+
+impl ExceptionClass {
+    /// Wrap a class pointer the caller has established is an exception
+    /// class — a lookup that guarantees it, or a checked downcast.
+    #[inline]
+    pub(crate) const fn from_raw_unchecked(p: *mut sys::RClass) -> Self {
+        Self(p)
+    }
+
+    /// Borrow the inner `*mut RClass` for raw FFI calls. The wrapper
+    /// itself stays usable after the borrow (`ExceptionClass: Copy`).
+    #[inline]
+    pub const fn as_raw(self) -> *mut sys::RClass {
+        self.0
+    }
+
+    /// The general class handle on this same class, for the operations
+    /// that take any class. Mirrors magnus's `Class::as_r_class`.
+    #[inline]
+    pub const fn as_r_class(self) -> RClass {
+        RClass(self.0)
+    }
+
+    /// `mrb_obj_value(self)` — the `Value` naming this exception class;
+    /// the counterpart of `RClass::to_value`. Raises nothing and runs no
+    /// Ruby.
+    #[inline]
+    pub fn to_value(self, _mrb: &Mrb) -> Value {
+        // SAFETY: as `RClass::to_value`.
+        Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
+    }
+
+    /// `mrb_raise(mrb, self, msg)` — raise an exception of this class
+    /// with `msg`. Diverges — `mrb_raise` long-jumps out and never
+    /// returns to the caller.
+    ///
+    /// # Safety
+    ///
+    /// Only callable from contexts that mruby may unwind out of (C
+    /// bridges, `mrb_funcall` handlers, `mrb_protect_error` bodies).
+    /// Calling from arbitrary Rust code would skip Rust drop frames
+    /// the stack expects to run.
+    #[inline]
+    pub unsafe fn raise(self, mrb: &Mrb, msg: &core::ffi::CStr) -> ! {
+        // SAFETY: bridge frame — caller upholds the unwind contract.
+        // `mrb_raise` is declared as never returning and the binding
+        // carries that, so it satisfies the diverging signature.
+        unsafe { sys::mrb_raise(mrb.as_ptr(), self.0, msg.as_ptr()) }
+    }
+
+    /// `mrb_exc_new(mrb, self, msg, len)` — build an exception of this
+    /// class carrying `msg`, without raising it. The bytes are copied
+    /// into the new object before the call returns. Counterpart to
+    /// `ExceptionClass::raise` for the path that returns the exception as
+    /// a `Value` — a bridge body wraps it in `Error::Exception` to raise
+    /// it to the Ruby caller at the boundary instead of long-jumping
+    /// mid-body. Building never raises: the class allocates exceptions.
+    /// `msg.len()` saturates to `sys::mrb_int::MAX` (the archive's
+    /// configured integer width), like `Mrb::str_new`; real handler
+    /// messages stay far below that.
+    #[inline]
+    pub fn exc_new(self, mrb: &Mrb, msg: &str) -> Value {
+        let len = msg.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        // SAFETY: `mrb` is alive; `self` is an exception class of the
+        // same VM, so the allocation cannot refuse its instance type;
+        // `msg`'s bytes are copied into the new exception object
+        // before the call returns.
+        Value::from_raw(unsafe {
+            sys::mrb_exc_new(
+                mrb.as_ptr(),
+                self.0,
+                msg.as_ptr() as *const core::ffi::c_char,
+                len,
+            )
+        })
+    }
+
+    /// `mrb_exc_new_str(mrb, self, str)` — build an exception of this
+    /// class carrying an existing mruby string as its message, without
+    /// raising it. The counterpart to `ExceptionClass::exc_new` for a
+    /// message a consumer already holds as an `RString` (one it built,
+    /// mutated, or received), carried as-is with no Rust-side copy and no
+    /// re-encoding through bytes — distinct from `exc_new`, which
+    /// allocates a fresh string from Rust bytes. Building never raises and
+    /// runs no user Ruby: the class allocates exceptions, and the
+    /// `RString` is statically a string.
+    #[inline]
+    pub fn exc_new_str(self, mrb: &Mrb, str: RString) -> Value {
+        // SAFETY: `mrb` is alive; `self` is an exception class and `str`
+        // a String-tagged value of the same VM, so neither the
+        // allocation nor the string type guard can raise.
+        Value::from_raw(unsafe { sys::mrb_exc_new_str(mrb.as_ptr(), self.0, str.as_raw()) })
     }
 }
 
@@ -642,6 +708,7 @@ pub trait Module: private::ClassLike {
 
 impl Module for RClass {}
 impl Module for RModule {}
+impl Module for ExceptionClass {}
 
 /// Per-object registration surface — beni's mirror of
 /// `magnus::Object`, currently covering singleton-method
@@ -702,3 +769,4 @@ pub trait Object: private::ClassLike {
 
 impl Object for RClass {}
 impl Object for RModule {}
+impl Object for ExceptionClass {}

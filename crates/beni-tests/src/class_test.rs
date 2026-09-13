@@ -929,7 +929,7 @@ fn real_resolves_a_singleton_class_to_its_attached_object_class() {
 fn exc_new_builds_an_exception_of_the_class_without_raising() {
     let mrb = open_mrb();
     let runtime_error = mrb
-        .class_get(c"RuntimeError")
+        .exc_get(c"RuntimeError")
         .expect("RuntimeError is present in every VM");
 
     let exc = runtime_error.exc_new(&mrb, "something failed");
@@ -945,7 +945,7 @@ fn exc_new_builds_an_exception_of_the_class_without_raising() {
 fn exc_new_str_carries_an_existing_string_value_without_raising() {
     let mrb = open_mrb();
     let runtime_error = mrb
-        .class_get(c"RuntimeError")
+        .exc_get(c"RuntimeError")
         .expect("RuntimeError is present in every VM");
 
     // A message the consumer already holds as an RString rides into
@@ -995,4 +995,21 @@ fn path_yields_none_for_an_anonymous_class() {
         .expect("creating an anonymous class under Object must succeed");
     assert_eq!(anon.path(&mrb), None);
     assert!(mrb.pending_exc().is_nil(), "path must not raise");
+}
+
+#[test]
+fn exception_class_registers_methods_through_the_module_trait() {
+    let mrb = open_mrb();
+    let runtime_error = mrb
+        .exc_get(c"RuntimeError")
+        .expect("RuntimeError is present in every VM");
+    runtime_error
+        .define_method(&mrb, c"beni_code", beni::method!(answer_seven, 0))
+        .expect("registering a method on an exception class must succeed");
+
+    let got = runtime_error
+        .exc_new(&mrb, "carrying a code")
+        .funcall(&mrb, c"beni_code", &[])
+        .expect("the registered method must be callable on the exception");
+    assert_eq!(unsafe { got.unbox_integer() }, 7);
 }

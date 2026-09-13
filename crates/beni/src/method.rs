@@ -128,14 +128,16 @@ where
     }
 }
 
-/// Build an exception of the named core class carrying `msg`'s
-/// bytes, copied into the VM. The lookup cannot miss for core
-/// classes (`TypeError`, `RuntimeError`).
+/// Build an exception of the named core exception class carrying
+/// `msg`'s bytes, copied into the VM. The lookup cannot miss for core
+/// exception classes (`TypeError`, `RuntimeError`).
 pub(crate) fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str) -> Value {
-    // SAFETY: `mrb` is alive; `class_name` is NUL-terminated and
-    // names a core class present in every VM.
-    let class =
-        crate::RClass::from_raw(unsafe { sys::mrb_class_get(mrb.as_ptr(), class_name.as_ptr()) });
+    // SAFETY: `mrb` is alive; `class_name` is NUL-terminated and names a
+    // core exception class present in every VM, so the pointer is an
+    // exception class.
+    let class = crate::ExceptionClass::from_raw_unchecked(unsafe {
+        sys::mrb_class_get(mrb.as_ptr(), class_name.as_ptr())
+    });
     class.exc_new(mrb, msg)
 }
 

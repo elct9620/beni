@@ -21,7 +21,8 @@
 //! L1  RAII / newtypes  state          (Mrb owning *mut mrb_state,
 //!                                      ArenaScope arena bracketing)
 //!                      value          (Value newtype + cstr! / cstr_ptr)
-//!                      class          (RClass / RModule handles + traits)
+//!                      class          (RClass / RModule / ExceptionClass
+//!                                      handles + traits)
 //!                      array / hash   (typed factories on top of Value)
 //!                      string / range (RString / Range newtypes)
 //!                      symbol / proc  (Symbol / Proc newtypes)
@@ -86,7 +87,7 @@ pub use state::args::{format, Format};
 pub use ccontext::Ccontext;
 
 pub use array::Array;
-pub use class::{Module, Object, RClass, RModule};
+pub use class::{ExceptionClass, Module, Object, RClass, RModule};
 pub use convert::{FromValue, IntoValue};
 pub use data::DataType;
 pub use error::Error;

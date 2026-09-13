@@ -113,7 +113,7 @@ fn pending_exc_reads_the_slot_and_clear_exc_empties_it() {
     // Install a real exception object; the read hands it back
     // without clearing the slot.
     let runtime_error = mrb
-        .class_get(c"RuntimeError")
+        .exc_get(c"RuntimeError")
         .expect("RuntimeError is a core class");
     let exc = runtime_error.exc_new(&mrb, "installed by the test");
     // SAFETY: `exc` is the exception object `exc_new` just built

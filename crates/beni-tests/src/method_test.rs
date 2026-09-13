@@ -43,7 +43,7 @@ fn apply_block(mrb: &Mrb, _self: Value, a: i32, block: Option<beni::Proc>) -> Re
 
 fn fallible(mrb: &Mrb, _self: Value) -> Result<i32, Error> {
     let runtime_error = mrb
-        .class_get(c"RuntimeError")
+        .exc_get(c"RuntimeError")
         .expect("RuntimeError is a core class");
     Err(Error::Exception(
         runtime_error.exc_new(mrb, "fallible body says no"),
