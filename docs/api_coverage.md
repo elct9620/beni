@@ -66,11 +66,11 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_define_alias` | fn | ✅ | ✅ | `Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id` |
 | `mrb_define_alias_id` | fn | ✅ | ✅ | `Module::alias_method` with `Symbol` keys (the symbol-or-name key, both names keyed independently) |
 | `mrb_define_class` | fn | ✅ | ✅ | `Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id` |
-| `mrb_define_class_id` | fn | ✅ | ✅ | `Mrb::define_class` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) |
+| `mrb_define_class_id` | fn | ✅ | ✅ | `Mrb::define_class` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) — the create path; a name already bound is fetched as the bound class itself, as the `class` keyword fetches it, since this call answers a prepended class with its origin include class |
 | `mrb_define_class_method` | fn | ✅ | ✅ | `Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment) |
 | `mrb_define_class_method_id` | fn | ✅ | ✅ | `Object::define_singleton_method` with a `Symbol` key on a class — a class's singleton method is its class method (magnus alignment) |
 | `mrb_define_class_under` | fn | ✅ | ✅ | `Module::define_class` with a name key — interns and routes through `mrb_define_class_under_id` |
-| `mrb_define_class_under_id` | fn | ✅ | ✅ | `Module::define_class` with a `Symbol` key (the symbol-or-name key) |
+| `mrb_define_class_under_id` | fn | ✅ | ✅ | `Module::define_class` with a `Symbol` key (the symbol-or-name key) — the create path; a bound name is fetched as for `mrb_define_class_id` |
 | `mrb_define_const` | fn | ✅ | ✅ | `Module::define_const` with a name key — interns and routes through `mrb_define_const_id` |
 | `mrb_define_const_id` | fn | ✅ | ✅ | `Module::define_const` with a `Symbol` key (the symbol-or-name key) |
 | `mrb_define_global_const` | fn | ✅ | ✅ | `Mrb::define_global_const` |
@@ -500,7 +500,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_msvc_vsnprintf` | fn | ❌ | ❌ |  |
 | `mrb_nil_p` | macro | ✅ | ✅ | `Value::is_nil` |
 | `mrb_nil_value` | fn | ✅ | ✅ | `Value::nil` |
-| `mrb_obj_value` | fn | ✅ | ✅ | `RClass::to_value`, `RModule::to_value`, `RClass::data_wrap` |
+| `mrb_obj_value` | fn | ✅ | ✅ | `RClass::to_value`, `RModule::to_value`, `ExceptionClass::to_value`, `RClass::data_wrap` |
 | `mrb_object_p` | macro | ❌ | ❌ |  |
 | `mrb_proc_p` | macro | ❌ | ✅ | `Value::is_proc`, via the value tag |
 | `mrb_range_p` | macro | ❌ | ✅ | `Value::is_range`, via the value tag |
@@ -589,7 +589,7 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 |------|-------------|
 | `ArenaScope` | RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore` with a `mrb_gc_protect` keep — a safety guard with no single C API. |
 | `Array::entries` | `ExactSizeIterator` walk of an array by C-level index: composes the already-graduated `Array::entry` (`mrb_ary_entry`) and `Array::len` (`RARRAY_LEN`) over a length snapshot taken when the walk begins, binding no new C symbol. A live view rather than a content snapshot — a re-entrant mutation is only partly visible, and a position the array no longer reaches reads `nil` — dispatching no Ruby, the idiomatic Rust surface over mruby's caller-side index loop (which the C API has no iterator primitive for). |
-| `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, adding Rust-side type safety to the data pointer. `RClass::data_wrap` returns a `Result` and runs the alloc under `protect`, reclaiming the boxed payload when the wrap raises: allocating against a class not yet marked CDATA raises, and marking is a deliberately separate class-setup step (`RClass::set_instance_data_tt`) — mruby's two-step design marks the class once at setup and wraps per instance, so `data_wrap` neither folds the mark in nor presumes it, leaving the caller to assemble both steps. The `DataType::dfree` release hook wraps the payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame of mruby's GC sweep, where unwinding is undefined. |
+| `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, adding Rust-side type safety to the data pointer. `RClass::data_wrap` returns a `Result` and runs the alloc under `protect`, reclaiming the boxed payload when the wrap raises: allocating against a class not yet marked CDATA raises, and marking is a deliberately separate class-setup step (`RClass::set_instance_data_tt`) — mruby's two-step design marks the class once at setup and wraps per instance, so `data_wrap` neither folds the mark in nor presumes it, leaving the caller to assemble both steps. The mark is refused unless the class allocates plain objects or is already a carrier, so no built-in layout is read as a carrier. The `DataType::dfree` release hook wraps the payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame of mruby's GC sweep, where unwinding is undefined. |
 | `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by `Mrb::protect` (`mrb_protect_error`). `Error::new` builds an exception error from a class and a message (via `ExceptionClass::exc_new`) for a handler to raise its own exception, and `Error::argnum` builds the canonical wrong-argument-count `ArgumentError` (via `mrb_argnum_error`) for a handler validating its own arity. |
 | `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `Value::funcall`, `Value::ensure_array`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
 | `ExceptionClass` | Typed handle on an exception class, magnus's `ExceptionClass`: only it builds or raises an exception, so `mrb_exc_new` / `mrb_exc_new_str` never meet a class whose instances are not exceptions. `Mrb::define_error` and `Module::define_error` compose `mrb_define_class_id` / `mrb_define_class_under_id` with an exception-class superclass. Binds no new C symbol. |

@@ -143,11 +143,11 @@ typed:
   mrb_define_alias: "`Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id`"
   mrb_define_alias_id: "`Module::alias_method` with `Symbol` keys (the symbol-or-name key, both names keyed independently)"
   mrb_define_class: "`Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id`"
-  mrb_define_class_id: "`Mrb::define_class` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`)"
+  mrb_define_class_id: "`Mrb::define_class` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) — the create path; a name already bound is fetched as the bound class itself, as the `class` keyword fetches it, since this call answers a prepended class with its origin include class"
   mrb_define_class_method: "`Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment)"
   mrb_define_class_method_id: "`Object::define_singleton_method` with a `Symbol` key on a class — a class's singleton method is its class method (magnus alignment)"
   mrb_define_class_under: "`Module::define_class` with a name key — interns and routes through `mrb_define_class_under_id`"
-  mrb_define_class_under_id: "`Module::define_class` with a `Symbol` key (the symbol-or-name key)"
+  mrb_define_class_under_id: "`Module::define_class` with a `Symbol` key (the symbol-or-name key) — the create path; a bound name is fetched as for `mrb_define_class_id`"
   mrb_define_const: "`Module::define_const` with a name key — interns and routes through `mrb_define_const_id`"
   mrb_define_const_id: "`Module::define_const` with a `Symbol` key (the symbol-or-name key)"
   mrb_define_global_const: Mrb::define_global_const
@@ -256,7 +256,7 @@ typed:
   mrb_obj_is_kind_of: Value::is_kind_of
   mrb_obj_new: RClass::obj_new
   mrb_obj_to_sym: "`Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path"
-  mrb_obj_value: "`RClass::to_value`, `RModule::to_value`, `RClass::data_wrap`"
+  mrb_obj_value: "`RClass::to_value`, `RModule::to_value`, `ExceptionClass::to_value`, `RClass::data_wrap`"
   mrb_open: Mrb::open
   mrb_prepend_module: Module::prepend_module
   mrb_protect_error: Mrb::protect
@@ -367,7 +367,9 @@ extensions:
     step (`RClass::set_instance_data_tt`) — mruby's two-step design marks
     the class once at setup and wraps per instance, so `data_wrap` neither
     folds the mark in nor presumes it, leaving the caller to assemble both
-    steps. The `DataType::dfree` release hook wraps the payload drop in
+    steps. The mark is refused unless the class allocates plain objects or
+    is already a carrier, so no built-in layout is read as a carrier. The
+    `DataType::dfree` release hook wraps the payload drop in
     `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame
     of mruby's GC sweep, where unwinding is undefined.
   convert: >-
