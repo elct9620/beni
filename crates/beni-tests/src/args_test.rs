@@ -776,3 +776,44 @@ fn nrest_rest_slice_survives_vm_reentry() {
 
     assert_eq!(got.to_string(&mrb), "alpha");
 }
+
+// Holds the argument-array read across a re-entry that grows the value
+// stack, then joins what it held.
+fn argv_survives_reentry(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let args = mrb.argv();
+    let cxt = beni::Ccontext::new(mrb, c"reentry_probe.rb").expect("compile context");
+    cxt.load_nstring(
+        b"def __probe_deep(n); return 0 if n <= 0; Array.new(16){ 'y' * 40 }; __probe_deep(n - 1); end; __probe_deep(400)",
+    )
+    .expect("the test source must compile and run");
+    mrb.full_gc();
+    let mut joined = String::new();
+    for v in &args {
+        joined.push_str(&v.to_string(mrb));
+    }
+    Ok(mrb.str_new(joined.as_bytes()).as_value())
+}
+
+#[test]
+fn argv_copy_survives_vm_reentry() {
+    use beni::Module;
+
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(
+            &mrb,
+            c"argv_survives_reentry",
+            beni::method!(argv_survives_reentry, -1),
+        )
+        .expect("registering the bridge must succeed");
+    let args = [
+        mrb.str_new(b"al").as_value(),
+        mrb.str_new(b"pha").as_value(),
+    ];
+
+    let got = Value::nil()
+        .funcall(&mrb, c"argv_survives_reentry", &args)
+        .expect("the read must not raise");
+
+    assert_eq!(got.to_string(&mrb), "alpha");
+}

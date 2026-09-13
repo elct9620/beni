@@ -166,23 +166,34 @@ impl Mrb {
         unsafe { sys::mrb_get_argc(self.as_ptr()) }
     }
 
-    /// Read the call frame's positional arguments as a borrowed slice,
-    /// the companion to `Mrb::argc`. The slice holds exactly `argc`
-    /// values and views the live call frame directly: it must not be
-    /// held across a VM re-entry, since a funcall or an allocation can
-    /// relocate the value stack and dangle it. To keep positional
-    /// arguments across a re-entry, read them through a rest format
-    /// (`get_args::<format::Rest>`), whose slice is re-entry-stable.
-    /// Splat arguments appear expanded, as the count read sees them. An
-    /// empty argument list yields an empty slice. Total: it never raises.
+    /// Read the call frame's positional arguments as a copy of their
+    /// own, the companion to `Mrb::argc`. The copy holds exactly `argc`
+    /// values and stays valid whatever the body re-enters: the values
+    /// are the frame's, kept alive for the whole call. Splat arguments
+    /// appear expanded, as the count read sees them. An empty argument
+    /// list yields an empty copy. Total: it never fails.
     #[inline]
-    pub fn argv(&self) -> &[Value] {
+    pub fn argv(&self) -> Vec<Value> {
+        // SAFETY: the view is copied before anything can re-enter.
+        unsafe { self.argv_unchecked() }.to_vec()
+    }
+
+    /// Read the call frame's positional arguments as a zero-copy view
+    /// of the live frame — `Mrb::argv` without its copy.
+    ///
+    /// # Safety
+    ///
+    /// The view must not be held across a VM re-entry: a funcall or an
+    /// allocation can grow the value stack, which moves it and leaves
+    /// the view dangling.
+    #[inline]
+    pub unsafe fn argv_unchecked(&self) -> &[Value] {
         // SAFETY: `self` is alive by the `&self` borrow. `mrb_get_argv`
         // returns a pointer to `mrb_get_argc` consecutive `mrb_value`s
-        // in the current call frame, valid for its duration; both reads
-        // derive their length and pointer from the same callinfo so they
-        // agree. `slice_from_argv` folds the `argc == 0` case into an
-        // empty slice without forming one from the pointer.
+        // in the current call frame; both reads derive their length and
+        // pointer from the same callinfo so they agree. `slice_from_argv`
+        // folds the `argc == 0` case into an empty slice without forming
+        // one from the pointer.
         let argv = unsafe { sys::mrb_get_argv(self.as_ptr()) };
         let argc = unsafe { sys::mrb_get_argc(self.as_ptr()) };
         slice_from_argv(argv, argc)
