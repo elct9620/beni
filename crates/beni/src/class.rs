@@ -157,6 +157,14 @@ where
     .map(|v| unsafe { v.as_class_ptr() })
 }
 
+/// Whether `class` is an exception class — `Exception` itself or a class
+/// descending from it. Walks the class structure and never raises.
+pub(crate) fn is_exception_class(mrb: &Mrb, class: *mut sys::RClass) -> bool {
+    // SAFETY: `mrb` is alive and `class` names a class of it; the shim
+    // only follows `super` links.
+    unsafe { sys::mrb_class_exception_p_func(mrb.as_ptr(), class) }
+}
+
 impl RClass {
     /// Wrap a raw `*mut RClass` produced by FFI. Most call sites get
     /// the pointer from the typed definition methods; `from_raw`

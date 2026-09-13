@@ -17,7 +17,9 @@ fn data_wrap_roundtrips_and_get_is_type_checked() {
     let class = mrb
         .define_class(c"BeniDataHolder", mrb.object_class())
         .expect("defining the carrier class must succeed");
-    class.set_instance_data_tt(&mrb);
+    class
+        .set_instance_data_tt(&mrb)
+        .expect("marking an ordinary class must succeed");
 
     let obj = class
         .data_wrap(&mrb, Holder { tag: 7 }, &HOLDER_TYPE)
@@ -102,7 +104,9 @@ fn data_reinit_installs_into_a_bare_carrier() {
     let class = mrb
         .define_class(c"BeniReinitHolder", mrb.object_class())
         .expect("defining the carrier class must succeed");
-    class.set_instance_data_tt(&mrb);
+    class
+        .set_instance_data_tt(&mrb)
+        .expect("marking an ordinary class must succeed");
 
     // A bare carrier — allocated as CDATA with no payload yet, the
     // shape mruby's dup/clone hands to initialize_copy.
@@ -170,7 +174,9 @@ fn release_hook_drops_the_boxed_value_on_close() {
         let class = mrb
             .define_class(c"BeniDropHolder", mrb.object_class())
             .expect("defining the carrier class must succeed");
-        class.set_instance_data_tt(&mrb);
+        class
+            .set_instance_data_tt(&mrb)
+            .expect("marking an ordinary class must succeed");
 
         // Root the carrier so it survives until close, then let the
         // VM drop: `mrb_close` sweeps it and invokes the release hook.
@@ -208,7 +214,9 @@ fn release_hook_runs_on_the_thread_the_interpreter_was_carried_to() {
     let class = mrb
         .define_class(c"BeniThreadHolder", mrb.object_class())
         .expect("defining the carrier class must succeed");
-    class.set_instance_data_tt(&mrb);
+    class
+        .set_instance_data_tt(&mrb)
+        .expect("marking an ordinary class must succeed");
 
     // Root the carrier so nothing collects it before the close that
     // happens on the far thread.
@@ -262,7 +270,9 @@ fn release_hook_contains_a_panicking_drop_on_close() {
         let class = mrb
             .define_class(c"BeniPanicHolder", mrb.object_class())
             .expect("defining the carrier class must succeed");
-        class.set_instance_data_tt(&mrb);
+        class
+            .set_instance_data_tt(&mrb)
+            .expect("marking an ordinary class must succeed");
 
         // Root the carrier so `mrb_close` sweeps it and invokes the
         // release hook, which drops a payload whose `Drop` panics.
@@ -280,4 +290,65 @@ fn release_hook_contains_a_panicking_drop_on_close() {
         1,
         "the release hook must run the payload's drop even when it panics"
     );
+}
+
+/// `err` carries a `TypeError` whose message names `refused`.
+fn assert_mark_refused(mrb: &beni::Mrb, err: beni::Error, refused: &str) {
+    use beni::Module;
+
+    let message = err.message(mrb);
+    match err {
+        beni::Error::Exception(exc) => assert_eq!(exc.class(mrb).name(mrb), "TypeError"),
+        other => panic!("the refusal must carry an exception, got {other:?}"),
+    }
+    assert!(
+        message.contains(refused),
+        "the refusal must name {refused}: {message}"
+    );
+}
+
+#[test]
+fn marking_refuses_a_singleton_class_so_no_carrier_shares_it() {
+    let mrb = open_mrb();
+    let cxt = beni::Ccontext::new(&mrb, c"data_singleton_test.rb")
+        .expect("allocating the compile context must succeed");
+    let owner = cxt
+        .load_nstring(b"Object.new")
+        .expect("the test source must compile and run");
+    let singleton = owner
+        .singleton_class(&mrb)
+        .expect("an ordinary object has a singleton class");
+
+    let err = singleton
+        .set_instance_data_tt(&mrb)
+        .expect_err("a singleton class must refuse the mark");
+    assert_mark_refused(&mrb, err, "a singleton class");
+
+    // Left unmarked, the singleton class allocates no carrier that would
+    // share it with the object it belongs to.
+    assert!(singleton
+        .data_wrap(&mrb, Holder { tag: 1 }, &HOLDER_TYPE)
+        .is_err());
+}
+
+#[test]
+fn marking_refuses_an_exception_class_so_its_instances_stay_exceptions() {
+    let mrb = open_mrb();
+    let exception = mrb
+        .class_get(c"Exception")
+        .expect("Exception is a core class");
+    let runtime_error = mrb
+        .class_get(c"RuntimeError")
+        .expect("RuntimeError is a core class");
+    let own = mrb
+        .define_class(c"BeniDataRefusedError", runtime_error)
+        .expect("defining the exception subclass must succeed");
+
+    for class in [exception, runtime_error, own] {
+        let err = class
+            .set_instance_data_tt(&mrb)
+            .expect_err("an exception class must refuse the mark");
+        assert_mark_refused(&mrb, err, "an exception class");
+        assert!(class.exc_new(&mrb, "still an exception").is_exception());
+    }
 }

@@ -56,7 +56,9 @@ fn carrier(mrb: &Mrb, name: &'static core::ffi::CStr) -> RClass {
     let class = mrb
         .define_class(name, mrb.object_class())
         .expect("defining the carrier class must succeed");
-    class.set_instance_data_tt(mrb);
+    class
+        .set_instance_data_tt(mrb)
+        .expect("marking an ordinary class must succeed");
     class
 }
 

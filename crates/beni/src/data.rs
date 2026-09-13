@@ -18,7 +18,7 @@
 //! data type, or a non-data value, yields `None` rather than a misread
 //! pointer.
 
-use crate::{Mrb, RClass, Value};
+use crate::{Error, Mrb, RClass, Value};
 use beni_sys as sys;
 use core::marker::PhantomData;
 
@@ -90,13 +90,30 @@ impl<T> DataType<T> {
 impl RClass {
     /// Mark this class so its instances allocate as data carriers
     /// (`MRB_TT_CDATA`). Call once at class setup, before wrapping any
-    /// instance through `RClass::data_wrap`.
-    #[inline]
-    pub fn set_instance_data_tt(self, _mrb: &Mrb) {
-        // SAFETY: `self` originates from the live VM borrowed as
-        // `_mrb`; the shim only rewrites the class's instance-tt
-        // flag bits.
+    /// instance through `RClass::data_wrap`. A singleton class, whose one
+    /// instance is the object it belongs to, and an exception class, whose
+    /// instances must stay exceptions, refuse the mark with a `TypeError`
+    /// and stay unmarked.
+    pub fn set_instance_data_tt(self, mrb: &Mrb) -> Result<(), Error> {
+        let refused = if self.to_value(mrb).is_sclass() {
+            Some("a singleton class")
+        } else if crate::class::is_exception_class(mrb, self.as_raw()) {
+            Some("an exception class")
+        } else {
+            None
+        };
+        if let Some(kind) = refused {
+            let message = format!("can't mark {kind} to carry Rust data");
+            return Err(Error::Exception(crate::method::core_exception(
+                mrb,
+                c"TypeError",
+                &message,
+            )));
+        }
+        // SAFETY: `self` originates from the live VM borrowed as `mrb`;
+        // the shim only rewrites the class's instance-tt flag bits.
         unsafe { sys::mrb_set_instance_tt_func(self.as_raw(), sys::MRB_TT_CDATA) };
+        Ok(())
     }
 
     /// Box `value` and wrap it as a fresh instance of this class,
@@ -136,7 +153,7 @@ impl RClass {
         mrb: &Mrb,
         value: T,
         ty: &'static DataType<T>,
-    ) -> Result<Value, crate::Error> {
+    ) -> Result<Value, Error> {
         let ptr = Box::into_raw(Box::new(value)) as *mut core::ffi::c_void;
         // `ptr` is `Copy`, so the closure captures a copy while this
         // frame keeps the original for the reclaim path. On success
