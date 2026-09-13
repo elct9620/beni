@@ -286,8 +286,8 @@ the Rust/Ruby boundary:
 
 | Conversion | Direction | Rule |
 |---|---|---|
-| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`i32` / `f64` / `bool`) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `Proc` / `Symbol` / `Range` — yields the value naming that same object, raising nothing and running no Ruby |
-| `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `RModule` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag, subclass instances included for strings and containers — a class handle converts on the class or the singleton-class tag, a module handle on the module tag; any other tag rejects |
+| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`i32` / `f64` / `bool`) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` — yields the value naming that same object, raising nothing and running no Ruby |
+| `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag, subclass instances included for strings and containers — a class handle converts on the class or the singleton-class tag, a module handle on the module tag, an exception-class handle on the class tag when that class is an exception class; any other value rejects |
 | `FromValue` → `bool` | `Value` → `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true`; total, never rejects |
 
 A value also converts to an `RString` handle by the same String type tag, but
@@ -298,15 +298,18 @@ to the `FromValue` → `RString` downcast, not the dispatching `to_s` string
 coercion. The downcast suits a handler that treats a non-String as absent; the
 raising form suits one that requires a String argument and rejects anything else.
 
-Every type tag also carries a per-type predicate (`Value::is_array`,
-`is_string`, `is_integer`, `is_sclass`, … — the analogue of mruby's `mrb_*_p`
-macros). A typed handle's `FromValue` downcast — magnus's `TryConvert`
-analogue — agrees exactly with the predicates of the tags it converts on: it
-accepts precisely the values one of those predicates holds for. The class
-predicate answers for the class tag alone and the singleton-class predicate for
-the singleton-class tag, so the class handle's downcast accepts what either one
-holds for. The predicate answers "what type is this?"; the downcast hands back
-the handle to operate on it.
+Every type tag a value on the typed surface can carry also carries a
+per-type predicate (`Value::is_array`, `is_string`, `is_integer`, `is_sclass`,
+… — the analogue of mruby's `mrb_*_p` macros). A typed handle's `FromValue`
+downcast — magnus's `TryConvert` analogue — agrees exactly with the predicates
+of the tags it converts on: it accepts precisely the values one of those
+predicates holds for. The class predicate answers for the class tag alone and
+the singleton-class predicate for the singleton-class tag, so the class
+handle's downcast accepts what either one holds for. The exception-class handle
+is the one handle narrower than its tag: its downcast accepts precisely the
+values the class predicate holds for whose class is an exception class. The
+predicate answers "what type is this?"; the downcast hands back the handle to
+operate on it.
 
 #### Strings
 
@@ -511,7 +514,7 @@ preserves all three.
 #### Errors and the raise/return contract
 
 A registered method or protected closure raises its own exception: it builds one
-from an exception class and a message — the message either Rust bytes copied into
+from an exception-class handle and a message — the message either Rust bytes copied into
 a fresh string, or an existing mruby `RString` value carried as-is without a
 Rust-side copy — or, when validating its own argument count, from a given count
 and the expected minimum and maximum, yielding the canonical `ArgumentError`
@@ -519,8 +522,9 @@ and the expected minimum and maximum, yielding the canonical `ArgumentError`
 way it returns the exception as an `Err`, which crosses the boundary like any
 other `Err` — to a registered method's Ruby caller as an mruby exception, to a
 protected closure's Rust caller as the `Err` value. Building the exception
-neither raises nor runs user Ruby: the `RString`-valued form is statically a
-string, so it has no type to reject.
+neither raises nor runs user Ruby: the handle names a class whose instances are
+exceptions, and the `RString`-valued form is statically a string, so neither
+has a type to reject.
 
 Every mutating or dispatching operation across the typed surface follows one
 raise/return contract:
@@ -532,6 +536,7 @@ raise/return contract:
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the receiver is not a class or module, or the name resolves to no class variable | `Result` |
 | Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
+| Marks a class so its instances carry Rust data | the class is a singleton class or an exception class (a `TypeError`) | `Result` |
 | Wraps a Rust value as a data carrier — allocating a fresh instance of a marked class to carry it | the class cannot carry a data carrier — it was never marked — so the allocation raises a `TypeError`; the unwrapped Rust value is reclaimed rather than leaked | `Result` |
 | Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
@@ -630,8 +635,8 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   class creation surfaces a Rust `Err` when mruby rejects the superclass — a
   non-class, a singleton class, or `Class` itself; anonymous module creation
   always succeeds.
-- Every definition and lookup keyed by a name — class, module, method, private
-  method, module function, class method, constant, the class/module and
+- Every definition and lookup keyed by a name — class, module, exception class,
+  method, private method, module function, class method, constant, the class/module and
   built-in exception-class lookups on `Mrb` and the class/module lookups within
   a namespace, and method dispatch on a value — accepts the
   name as a symbol-or-name key, mirroring `magnus`'s `IntoId`: a string key
@@ -641,12 +646,23 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   intern; the result is identical to passing the equivalent name, since both
   resolve to the same interned symbol. A method alias keys both the new and the
   original name this way — each accepted as a symbol-or-name key independently.
-- A built-in exception-class lookup on `Mrb` guarantees its result is a class
-  descending from `Exception`: it surfaces a Rust `Err` when the name resolves
+- An exception class has a typed handle of its own, `ExceptionClass` —
+  mirroring `magnus::ExceptionClass`. Building and raising an exception take
+  this handle rather than the general class handle. A built-in exception-class
+  lookup on `Mrb` yields one: it surfaces a Rust `Err` when the name resolves
   to no constant, when the constant is not a class, and when the resolved class
-  does not descend from `Exception`. This is the typed path to a built-in
-  exception class — `RuntimeError`, `ArgumentError`, `TypeError` — for raising
-  from registered code.
+  is not an exception class. This is the typed path to a built-in exception
+  class — `RuntimeError`, `ArgumentError`, `TypeError` — for raising from
+  registered code. A consumer's own exception class is defined under a name
+  from an exception-class superclass — top-level on the `Mrb` handle and within
+  a namespace through the `Module` trait, symbol-or-name keyed — yielding the
+  handle directly, mirroring `magnus`'s `define_error`. A class already bound
+  to that name with that same superclass is fetched rather than redefined; a
+  Rust `Err` surfaces when a class bound to that name has a different
+  superclass, or the name is bound to something that is not a class. The
+  handle reaches the rest of the class surface: it registers methods and binds
+  constants through the `Module` and `Object` traits, and yields the class
+  handle for any operation that takes one.
 - The class/module lookup family also answers, as a total boolean predicate,
   whether a class or module is defined under a given name — top-level on the
   `Mrb` handle and within a namespace through the `Module` trait, both
@@ -752,8 +768,10 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   mechanism (`CDATA`): a class is marked so its instances carry Rust data,
   a Rust value is wrapped as an instance of that class, and it is extracted
   back type-checked against the data type it was registered under — a value
-  carrying a different data type, or none, does not extract. Wrapping is
-  fallible: a class that has been marked yields an `Ok` carrying the new
+  carrying a different data type, or none, does not extract. Marking is
+  fallible: a singleton class, whose one instance is the object it belongs to,
+  and an exception class, whose instances must stay exceptions, reject the mark
+  with an `Err` carrying a `TypeError` and stay unmarked. Wrapping is fallible: a class that has been marked yields an `Ok` carrying the new
   instance, while a class that cannot carry a data carrier — one never
   marked — surfaces the `TypeError` mruby raises for that allocation as a
   Rust `Err`, and the Rust value waiting to be handed to the carrier is
@@ -1101,6 +1119,7 @@ The `compiler` capability feature carries everything in this section.
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable read or assignment to a receiver that is not a class or module — assignment also to a frozen one, or a constant fetch, assignment, or removal to a receiver that is not a class or module — assignment and removal also to a frozen one | surfaced as a Rust `Err`, never unwinds across FFI |
 | A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
+| A singleton class, or an exception class, marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
@@ -1139,6 +1158,7 @@ The `compiler` capability feature carries everything in this section.
 | toolchain | a vendored build dependency (mruby source, wasi-sdk) |
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
+| exception class | `Exception` itself or an ordinary class descending from it — never a singleton class — so every instance it allocates is an exception; the class an `ExceptionClass` handle names |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
 | toolchain definition | a top-level `toolchain <name>` block carrying `version` and `sha256` — replaces the named toolchain's built-in pair |
