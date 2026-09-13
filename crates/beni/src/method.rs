@@ -11,11 +11,10 @@
 //! crossing:
 //!
 //!   1. read the call-frame arguments via `mrb_get_args` (the `"o"`
-//!      format repeated per arity) — for a fixed-arity (`n>0`) cfunc
-//!      this is also the argument-count enforcement point: a
-//!      mismatched count raises `ArgumentError` (via a longjmp that
-//!      crosses the bridge's `catch_unwind`) before any `FromValue`
-//!      conversion runs,
+//!      format repeated per arity) under exception protection — this
+//!      is also the argument-count enforcement point: a mismatched
+//!      count comes back as an `ArgumentError` `Err` before any
+//!      `FromValue` conversion runs,
 //!   2. convert each through `FromValue` — a failed conversion
 //!      raises `TypeError` to the Ruby caller **before** the wrapped
 //!      function runs,
@@ -152,6 +151,18 @@ fn arg_type_error<T>(mrb: &Mrb) -> Error {
     Error::Exception(core_exception(mrb, c"TypeError", &msg))
 }
 
+/// Run a call-frame read under exception protection. `mrb_get_args`
+/// raises for a call the registered arity does not accept; protected,
+/// that raise comes back as the `Err` the bridge raises only once it
+/// is outside its panic boundary.
+fn read_frame(mrb: &Mrb, read: impl FnOnce(&Mrb)) -> Result<(), Error> {
+    mrb.protect_ffi(|mrb| {
+        read(mrb);
+        Value::nil()
+    })
+    .map(|_| ())
+}
+
 /// Convert `err` into a pending mruby exception and long-jump to the
 /// Ruby caller. A `Syntax` is wrapped as a `SyntaxError` and a
 /// `Panic` as a `RuntimeError`; each message `String` is dropped
@@ -229,16 +240,18 @@ macro_rules! define_method_trait {
             #[doc(hidden)]
             fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
                 $(let mut $arg = sys::mrb_value::zeroed();)*
-                // SAFETY: `mrb` is alive; each out-parameter is a
-                // valid `*mut mrb_value`; the format string holds
-                // one `o` per out-parameter.
-                unsafe {
-                    sys::mrb_get_args(
-                        mrb.as_ptr(),
-                        $fmt.as_ptr()
-                        $(, &mut $arg as *mut sys::mrb_value)*
-                    );
-                }
+                read_frame(mrb, |mrb| {
+                    // SAFETY: `mrb` is alive; each out-parameter is a
+                    // valid `*mut mrb_value`; the format string holds
+                    // one `o` per out-parameter.
+                    unsafe {
+                        sys::mrb_get_args(
+                            mrb.as_ptr(),
+                            $fmt.as_ptr()
+                            $(, &mut $arg as *mut sys::mrb_value)*
+                        );
+                    }
+                })?;
                 $(
                     let $arg = $t::from_value(Value::from_raw($arg))
                         .ok_or_else(|| arg_type_error::<$t>(mrb))?;
@@ -341,18 +354,20 @@ macro_rules! define_method_req_opt_trait {
                 // SAFETY: pure value computation; the undef sentinel
                 // marks an optional slot mruby leaves untouched.
                 $(let mut $opt = unsafe { sys::mrb_undef_value_func() };)*
-                // SAFETY: `mrb` is alive; each out-parameter is a
-                // valid `*mut mrb_value`; the format string holds
-                // one `o` per out-parameter, `|` before the
-                // optional group.
-                unsafe {
-                    sys::mrb_get_args(
-                        mrb.as_ptr(),
-                        $fmt.as_ptr()
-                        $(, &mut $req as *mut sys::mrb_value)*
-                        $(, &mut $opt as *mut sys::mrb_value)*
-                    );
-                }
+                read_frame(mrb, |mrb| {
+                    // SAFETY: `mrb` is alive; each out-parameter is a
+                    // valid `*mut mrb_value`; the format string holds
+                    // one `o` per out-parameter, `|` before the
+                    // optional group.
+                    unsafe {
+                        sys::mrb_get_args(
+                            mrb.as_ptr(),
+                            $fmt.as_ptr()
+                            $(, &mut $req as *mut sys::mrb_value)*
+                            $(, &mut $opt as *mut sys::mrb_value)*
+                        );
+                    }
+                })?;
                 $(
                     let $req = $rt::from_value(Value::from_raw($req))
                         .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
@@ -442,18 +457,20 @@ macro_rules! define_method_req_block_trait {
             fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
                 $(let mut $req = sys::mrb_value::zeroed();)*
                 let mut block = sys::mrb_value::zeroed();
-                // SAFETY: `mrb` is alive; each out-parameter is a
-                // valid `*mut mrb_value`; the format string holds
-                // one `o` per required out-parameter and a trailing
-                // `&` for the block slot.
-                unsafe {
-                    sys::mrb_get_args(
-                        mrb.as_ptr(),
-                        $fmt.as_ptr()
-                        $(, &mut $req as *mut sys::mrb_value)*,
-                        &mut block as *mut sys::mrb_value,
-                    );
-                }
+                read_frame(mrb, |mrb| {
+                    // SAFETY: `mrb` is alive; each out-parameter is a
+                    // valid `*mut mrb_value`; the format string holds
+                    // one `o` per required out-parameter and a trailing
+                    // `&` for the block slot.
+                    unsafe {
+                        sys::mrb_get_args(
+                            mrb.as_ptr(),
+                            $fmt.as_ptr()
+                            $(, &mut $req as *mut sys::mrb_value)*,
+                            &mut block as *mut sys::mrb_value,
+                        );
+                    }
+                })?;
                 $(
                     let $req = $rt::from_value(Value::from_raw($req))
                         .ok_or_else(|| arg_type_error::<$rt>(mrb))?;

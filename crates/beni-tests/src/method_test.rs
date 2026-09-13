@@ -86,9 +86,8 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
         .expect("the receiver constructs without raising");
 
     // `mrb_get_args` enforces the `MRB_ARGS_REQ(2)` count before any
-    // `FromValue` conversion runs, raising `ArgumentError` whose
-    // longjmp crosses the bridge's `catch_unwind` — both too few and
-    // too many positionals take that path.
+    // `FromValue` conversion runs — both too few and too many
+    // positionals reach the caller as `ArgumentError`.
     for wrong in [
         vec![Value::from_int(&mrb, 1)],
         vec![
@@ -106,7 +105,7 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
         }
     }
 
-    // The count-error longjmp left the VM intact: a correctly-counted
+    // The count error left the VM intact: a correctly-counted
     // call still dispatches and returns.
     let got = receiver
         .funcall(
@@ -114,7 +113,7 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
             c"add",
             &[Value::from_int(&mrb, 1), Value::from_int(&mrb, 2)],
         )
-        .expect("the VM survives the count-error longjmp and the next call runs");
+        .expect("the VM survives the count error and the next call runs");
     assert_eq!(i32::from_value(got), Some(3));
 }
 
@@ -531,4 +530,48 @@ fn a_nilable_optional_tells_omission_from_an_explicit_nil() {
         Some(2),
         "an Integer binds Some(Some(_))"
     );
+}
+
+// Asserts every call in `calls` raises `ArgumentError` to the caller.
+fn assert_each_raises_argument_error(
+    mrb: &Mrb,
+    receiver: Value,
+    name: &core::ffi::CStr,
+    calls: &[Vec<Value>],
+) {
+    for args in calls {
+        let err = receiver
+            .funcall(mrb, name, args)
+            .expect_err("a call the declared arity does not accept must surface as Err");
+        let Error::Exception(exc) = err else {
+            panic!("a wrong argument count must raise, not panic, got {err}");
+        };
+        assert_eq!(exc.classname(mrb), "ArgumentError");
+    }
+}
+
+#[test]
+fn optional_arity_raises_argument_error_outside_its_range() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniOptArity");
+    class
+        .define_method(&mrb, c"add", beni::method!(opt_add, 1, 1))
+        .expect("registering the typed method must succeed");
+    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let one = Value::from_int(&mrb, 1);
+
+    assert_each_raises_argument_error(&mrb, receiver, c"add", &[vec![], vec![one, one, one]]);
+}
+
+#[test]
+fn block_accepting_arity_raises_argument_error_on_wrong_count() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniBlockArity");
+    class
+        .define_method(&mrb, c"apply", beni::method!(apply_block, 1, &))
+        .expect("registering the typed method must succeed");
+    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let one = Value::from_int(&mrb, 1);
+
+    assert_each_raises_argument_error(&mrb, receiver, c"apply", &[vec![], vec![one, one]]);
 }

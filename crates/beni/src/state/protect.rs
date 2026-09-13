@@ -124,6 +124,55 @@ impl Mrb {
         }
     }
 
+    /// `mrb_protect_error` around a body that only calls into mruby.
+    ///
+    /// The trampoline carries no panic boundary, so a raise inside the
+    /// body reaches the jump target across plain frames alone — a
+    /// `catch_unwind` in between would make that long-jump undefined
+    /// behavior. A body that runs Rust which could panic belongs under
+    /// `Mrb::protect`; a panic here stops at the `extern "C"` boundary
+    /// and aborts.
+    pub(crate) fn protect_ffi<F>(&self, body: F) -> Result<Value, Error>
+    where
+        F: FnOnce(&Mrb) -> Value,
+    {
+        let mut slot: Option<F> = Some(body);
+
+        unsafe extern "C" fn trampoline<F>(
+            mrb: *mut sys::mrb_state,
+            userdata: *mut core::ffi::c_void,
+        ) -> sys::mrb_value
+        where
+            F: FnOnce(&Mrb) -> Value,
+        {
+            // SAFETY: userdata is the `&mut Option<F>` from the caller;
+            // mrb is the same live state passed to mrb_protect_error.
+            let slot: &mut Option<F> = unsafe { &mut *(userdata as *mut Option<F>) };
+            let Some(body) = slot.take() else {
+                unreachable!("Mrb::protect_ffi trampoline invoked twice")
+            };
+            let mrb_ref = unsafe { Mrb::borrow_raw(&mrb) };
+            body(mrb_ref).into_raw()
+        }
+
+        let mut error: sys::mrb_bool = false;
+        // SAFETY: as `Mrb::protect`; `slot` outlives the call.
+        let ret = unsafe {
+            sys::mrb_protect_error(
+                self.as_ptr(),
+                Some(trampoline::<F>),
+                &mut slot as *mut Option<F> as *mut core::ffi::c_void,
+                &mut error,
+            )
+        };
+        let value = Value::from_raw(ret);
+        if error {
+            Err(Error::Exception(value))
+        } else {
+            Ok(value)
+        }
+    }
+
     /// Run `body` under exception protection and recover a caught
     /// exception with `handler`, mirroring a Ruby `begin`/`rescue` over
     /// the exception classes in `classes`. A Rust-native composition of
