@@ -543,9 +543,10 @@ typed surface:
 
 - `sys::protect` runs a body inside mruby's protected frame and answers its
   value; an exception a raw binding raises there surfaces as an `Err` carrying
-  it. The raise skips the
-  destructors of the frames it crosses, which the code making that raw call
-  keeps free of anything to drop; a panic in the body aborts the process.
+  it. The raise leaves the frames it crosses without returning through them,
+  and whether their destructors run on the way is not guaranteed, so the code
+  making that raw call keeps its own frames free of anything that could need
+  dropping; a panic in the body aborts the process.
 - `sys::catch_unwind` surfaces a panic in its closure as an `Err` carrying the
   panic's message — the boundary a Rust closure handed to mruby as a C callback
   needs.
