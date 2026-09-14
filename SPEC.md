@@ -564,7 +564,7 @@ raise/return contract:
 | Marks a class so its instances carry Rust data | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`) | `Result` |
 | Wraps a Rust value as a data carrier — allocating a fresh instance of a marked class to carry it | the class cannot carry a data carrier — it was never marked — so the allocation raises a `TypeError`; the unwrapped Rust value is reclaimed rather than leaked | `Result` |
 | Reads the call's arguments by shape — a shape-typed read or the single-argument read in a method registered for any arity | the call does not fit the read's shape: too few or too many positionals, or an argument of the wrong type; a rest-only shape fits every call | `Result` |
-| Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
+| Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, the context's filename is too long to be a symbol, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
@@ -974,22 +974,27 @@ The `compiler` capability feature carries everything in this section.
   released when it is dropped, never outliving that interpreter and staying on
   the thread that made it. The filename is stamped onto everything compiled
   through it, so the exceptions the compiled program raises carry a
-  source-line backtrace. One context serves any number of loads and carries
-  the top-level local variables across them, so successive loads see each
-  other's locals.
+  source-line backtrace. The stamp is a symbol each load interns as it
+  compiles, so creating a context accepts any filename, and a filename of
+  `UINT16_MAX` bytes or more — too long to be a symbol — fails every load and
+  compile under that context with the creating interns' `ArgumentError`. One
+  context serves any number of loads and carries the top-level local variables
+  across them, so successive loads see each other's locals.
 - Compiling and running a slice of Ruby source under a context yields the
   program's result value as a Rust `Ok`. The source is a byte slice carrying
   its own length, so it needs no terminating NUL; the bytes need not be valid
-  UTF-8. Two failures surface as a Rust `Err`, distinguished by what the error
+  UTF-8. Failures surface as a Rust `Err`, distinguished by what the error
   carries rather than by the text of a message: source that does not parse
-  carries a parse message, while a codegen failure or an exception raised while
-  the program runs carries the exception, the pending exception cleared from
-  the handle as it crosses out. Only the exception carries a backtrace.
+  carries a parse message, while every other failure — a filename too long to
+  be a symbol, a codegen failure, or an exception raised while the program runs
+  — carries the exception, the pending exception cleared from the handle as it
+  crosses out. Only the exception carries a backtrace.
 - Compiling a slice of Ruby source under a context without running it yields the
-  compiled program as a typed `Proc`. The two failures surface as they do for a
-  load that runs — a parse failure carrying a parse message, a codegen failure
-  carrying the exception — so the two operations differ in what they produce and
-  in nothing else, the warnings the context answers included. Whether an
+  compiled program as a typed `Proc`. Its failures surface as they do for a
+  load that runs — a parse failure carrying a parse message, a filename too long
+  to be a symbol or a codegen failure carrying the exception — so the two
+  operations differ in what they produce and in nothing else, the warnings the
+  context answers included. Whether an
   operation stops before running is settled per operation and is never a state
   the context keeps, so no load's meaning depends on what an earlier call left
   behind.
@@ -1158,6 +1163,7 @@ The `compiler` capability feature carries everything in this section.
 | A block invoked through `Proc::call` exiting via a non-local `break` or `return` | the escaping mruby break object surfaces as a Rust `Err`, inspectable as a typed break view; beni does not classify the exit into an outcome |
 | Creating a compile context against a live interpreter failing | returns no context, never aborts |
 | A codegen step failing, or the program raising while it runs, under a compile context | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle, never unwinds across FFI |
+| A load or compile under a compile context whose filename is `UINT16_MAX` bytes or more | surfaced as a Rust `Err` carrying the `ArgumentError`, the pending exception cleared from the handle, never a parse message; creating the context succeeds |
 | Source that does not parse | surfaced as a Rust `Err` carrying a parse message with the first recorded diagnostic's line, column, and text; nothing written to standard error |
 | Source that does not parse, the compiler having recorded no diagnostic | surfaced as a Rust `Err` carrying a parse message with zero line, zero column, and empty text |
 | Allocating the context a load borrows failing | the load surfaces as a Rust `Err` carrying a parse message with zero line, zero column, and empty text, never aborts |
