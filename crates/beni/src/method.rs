@@ -153,7 +153,8 @@ fn arg_type_error<T>(mrb: &Mrb) -> Error {
 /// Convert `err` into a pending mruby exception and long-jump to the
 /// Ruby caller. A `Syntax` is wrapped as a `SyntaxError` and a
 /// `Panic` as a `RuntimeError`; each message `String` is dropped
-/// before the raise because the long-jump runs no Rust drops.
+/// before the raise, which leaves this frame without returning through
+/// it.
 ///
 /// The `SyntaxError` reads `line N: message`, the wording mruby's own
 /// compiler produces, so a Ruby caller cannot tell whether the source

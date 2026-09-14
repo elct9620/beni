@@ -13,10 +13,11 @@ use crate::{Error, Mrb, Value};
 /// a raw binding raised inside it, the pending exception cleared.
 ///
 /// Wrap a raw `mrb_*` call that can raise; typed operations already hand
-/// their raise back as an `Err`. A raise skips the destructors of the
-/// frames it crosses, so the code making the raw call keeps nothing to
-/// drop alive in the body when it raises. There is no panic boundary: a
-/// panic in `body` aborts the process.
+/// their raise back as an `Err`. A raise leaves the body without returning
+/// through it and may skip its destructors, so the code making the raw
+/// call keeps nothing that could need dropping alive in the body when it
+/// raises. There is no panic boundary: a panic in `body` aborts the
+/// process.
 pub fn protect<F>(mrb: &Mrb, body: F) -> Result<Value, Error>
 where
     F: FnOnce(&Mrb) -> Value,
