@@ -7,8 +7,25 @@ on:
 
   pull_request:
 
+  workflow_dispatch:
+    inputs:
+      rust_backtrace:
+        description: 'RUST_BACKTRACE for every Rust binary the run executes'
+        required: false
+        default: full
+        type: choice
+        options:
+          - '0'
+          - '1'
+          - full
+
 permissions:
   contents: read
+
+# Backtraces stay off unless a manual run asks for them. The fallback is
+# spelled out because an empty RUST_BACKTRACE already turns them on.
+env:
+  RUST_BACKTRACE: ${{ inputs.rust_backtrace || '0' }}
 
 jobs:
   # Fast lane: fixture-based unit tests + RuboCop + Steep. No network,
