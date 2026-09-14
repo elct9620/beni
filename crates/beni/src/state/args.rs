@@ -486,7 +486,7 @@ pub mod format {
             // The bucket may be a Hash allocated by this read, so it
             // leaves the protect frame as its result, which the frame
             // keeps rooted past its arena restore.
-            let bucket = mrb.protect(|mrb| {
+            mrb.protect(|mrb| {
                 let mut out = sys::mrb_value::zeroed();
                 let mut kwargs = capture_all_kwargs(&mut out);
                 // SAFETY: as `O::read`; the `":"` format reads the
@@ -501,10 +501,9 @@ pub mod format {
                         &mut kwargs as *mut sys::mrb_kwargs,
                     );
                 }
-                Value::from_raw(out)
-            })?;
-            // SAFETY: capture-all guarantees the bucket is a Hash value.
-            Ok(unsafe { crate::Hash::from_value_unchecked(bucket) })
+                // SAFETY: capture-all guarantees the bucket is a Hash value.
+                unsafe { crate::Hash::from_value_unchecked(Value::from_raw(out)) }
+            })
         }
     }
 

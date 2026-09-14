@@ -170,25 +170,6 @@ where
     .map(|_| ())
 }
 
-/// Run `f` inside `Mrb::protect`, boxing the class/module pointer it
-/// produces as a `Value` to ride through the protect frame and
-/// unboxing it on the way out — the shared plumbing behind every
-/// definition and lookup that yields a handle. An mruby raise inside
-/// `f` surfaces as `Err(Error::Exception)`.
-pub(crate) fn protect_class_ptr<F>(mrb: &Mrb, f: F) -> Result<*mut sys::RClass, Error>
-where
-    F: FnOnce(&Mrb) -> *mut sys::RClass,
-{
-    mrb.protect(|mrb| {
-        let raw = f(mrb);
-        // SAFETY: `raw` was just produced against the live VM by the
-        // closure's definition/lookup call.
-        Value::from_raw(unsafe { sys::mrb_obj_value(raw as *mut core::ffi::c_void) })
-    })
-    // SAFETY: the Ok value boxes the pointer produced above.
-    .map(|v| unsafe { v.as_class_ptr() })
-}
-
 /// Resolve a class definition whose `name` the namespace `outer` itself
 /// already binds, as Ruby's `class` keyword resolves a reopened class: the
 /// bound ordinary class when `superclass` is its superclass, the
@@ -471,15 +452,14 @@ pub trait Module: private::ClassLike {
         if let Some(bound) = bound_class(mrb, self.raw(), sym, superclass) {
             return bound;
         }
-        protect_class_ptr(mrb, |mrb| {
+        mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and `superclass` originate from the same VM;
             // `sym` was interned against the same VM.
-            unsafe {
+            RClass::from_raw(unsafe {
                 sys::mrb_define_class_under_id(mrb.as_ptr(), self.raw(), sym, superclass.as_raw())
-            }
+            })
         })
-        .map(RClass::from_raw)
     }
 
     /// Define (or fetch) the nested exception class `self::name`
@@ -504,11 +484,12 @@ pub trait Module: private::ClassLike {
     /// constant that is not a module.
     fn define_module<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
         let sym = name.into_sym(mrb)?;
-        protect_class_ptr(mrb, |mrb| {
+        mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
-            unsafe { sys::mrb_define_module_under_id(mrb.as_ptr(), self.raw(), sym) }
+            RModule::from_raw(unsafe {
+                sys::mrb_define_module_under_id(mrb.as_ptr(), self.raw(), sym)
+            })
         })
-        .map(RModule::from_raw)
     }
 
     /// `mrb_class_get_under_id(mrb, self, name)` — fetch the nested
@@ -519,11 +500,10 @@ pub trait Module: private::ClassLike {
     /// contract.
     fn class_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RClass, Error> {
         let sym = name.into_sym(mrb)?;
-        protect_class_ptr(mrb, |mrb| {
+        mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
-            unsafe { sys::mrb_class_get_under_id(mrb.as_ptr(), self.raw(), sym) }
+            RClass::from_raw(unsafe { sys::mrb_class_get_under_id(mrb.as_ptr(), self.raw(), sym) })
         })
-        .map(RClass::from_raw)
     }
 
     /// `mrb_module_get_under_id(mrb, self, name)` — fetch the nested
@@ -534,11 +514,12 @@ pub trait Module: private::ClassLike {
     /// contract.
     fn module_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
         let sym = name.into_sym(mrb)?;
-        protect_class_ptr(mrb, |mrb| {
+        mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
-            unsafe { sys::mrb_module_get_under_id(mrb.as_ptr(), self.raw(), sym) }
+            RModule::from_raw(unsafe {
+                sys::mrb_module_get_under_id(mrb.as_ptr(), self.raw(), sym)
+            })
         })
-        .map(RModule::from_raw)
     }
 
     /// `mrb_class_defined_under_id(mrb, self, name)` — TRUE when a

@@ -276,12 +276,12 @@ impl Array {
             // `sep` is nil or a String-tagged value from the same VM.
             // `mrb_ary_join` dispatches each element's `to_s`, which may
             // raise — caught by `protect` into `Err`.
-            Value::from_raw(unsafe {
+            let v = Value::from_raw(unsafe {
                 sys::mrb_ary_join(mrb.as_ptr(), self.0.as_raw(), sep.as_raw())
-            })
+            });
+            // SAFETY: `mrb_ary_join` returns a String-tagged value.
+            unsafe { RString::from_value_unchecked(v) }
         })
-        // SAFETY: `mrb_ary_join` returns a String-tagged value.
-        .map(|v| unsafe { RString::from_value_unchecked(v) })
     }
 
     /// `mrb_ary_dup(mrb, self)` — a shallow copy, Ruby's `Array#dup`. It

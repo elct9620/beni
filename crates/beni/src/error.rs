@@ -56,7 +56,7 @@ impl Error {
     #[inline]
     pub fn argnum(mrb: &Mrb, given: i64, min: i32, max: i32) -> Self {
         let argc = given.min(sys::mrb_int::MAX as i64) as sys::mrb_int;
-        match mrb.protect(|mrb| {
+        match mrb.protect(|mrb| -> Value {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `mrb_argnum_error` raises `ArgumentError`, caught by
             // `protect` and surfaced as the `Err` below.

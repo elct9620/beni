@@ -33,12 +33,11 @@ impl Mrb {
     #[inline]
     pub fn define_module<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
         let sym = name.into_sym(self)?;
-        crate::class::protect_class_ptr(self, |mrb| {
+        self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `sym` was interned against the same VM.
-            unsafe { sys::mrb_define_module_id(mrb.as_ptr(), sym) }
+            RModule::from_raw(unsafe { sys::mrb_define_module_id(mrb.as_ptr(), sym) })
         })
-        .map(RModule::from_raw)
     }
 
     /// `mrb_define_class_id(mrb, name, super_)` — define (or fetch) a
@@ -55,12 +54,13 @@ impl Mrb {
         {
             return bound;
         }
-        crate::class::protect_class_ptr(self, |mrb| {
+        self.protect(|mrb| {
             // SAFETY: as `define_module`; `super_` was produced by
             // the same VM.
-            unsafe { sys::mrb_define_class_id(mrb.as_ptr(), sym, super_.as_raw()) }
+            RClass::from_raw(unsafe {
+                sys::mrb_define_class_id(mrb.as_ptr(), sym, super_.as_raw())
+            })
         })
-        .map(RClass::from_raw)
     }
 
     /// Define (or fetch) the top-level exception class named `name`
@@ -87,12 +87,11 @@ impl Mrb {
     /// `Class` itself — so the creation is fallible by contract.
     #[inline]
     pub fn class_new(&self, super_: RClass) -> Result<RClass, Error> {
-        crate::class::protect_class_ptr(self, |mrb| {
+        self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `super_` was produced by the same VM.
-            unsafe { sys::mrb_class_new(mrb.as_ptr(), super_.as_raw()) }
+            RClass::from_raw(unsafe { sys::mrb_class_new(mrb.as_ptr(), super_.as_raw()) })
         })
-        .map(RClass::from_raw)
     }
 
     /// `mrb_module_new(mrb)` — create an anonymous module, bound to no
@@ -113,11 +112,10 @@ impl Mrb {
     #[inline]
     pub fn class_get<K: IntoSym>(&self, name: K) -> Result<RClass, Error> {
         let sym = name.into_sym(self)?;
-        crate::class::protect_class_ptr(self, |mrb| {
+        self.protect(|mrb| {
             // SAFETY: as `define_module`.
-            unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) }
+            RClass::from_raw(unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) })
         })
-        .map(RClass::from_raw)
     }
 
     /// `mrb_class_defined_id(mrb, name)` — TRUE when a class or module
@@ -150,13 +148,13 @@ impl Mrb {
     #[inline]
     pub fn exc_get<K: IntoSym>(&self, name: K) -> Result<ExceptionClass, Error> {
         let sym = name.into_sym(self)?;
-        crate::class::protect_class_ptr(self, |mrb| {
+        self.protect(|mrb| {
             // SAFETY: as `define_module`.
-            unsafe { sys::mrb_exc_get_id(mrb.as_ptr(), sym) }
+            let class = unsafe { sys::mrb_exc_get_id(mrb.as_ptr(), sym) };
+            // `mrb_exc_get_id` returns only a class whose ancestry reaches
+            // `Exception`, which is what makes it an exception class.
+            ExceptionClass::from_raw_unchecked(class)
         })
-        // `mrb_exc_get_id` returns only a class whose ancestry reaches
-        // `Exception`, which is what makes it an exception class.
-        .map(ExceptionClass::from_raw_unchecked)
     }
 
     /// `mrb_module_get_id(mrb, name)` — fetch the top-level module
@@ -167,11 +165,10 @@ impl Mrb {
     #[inline]
     pub fn module_get<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
         let sym = name.into_sym(self)?;
-        crate::class::protect_class_ptr(self, |mrb| {
+        self.protect(|mrb| {
             // SAFETY: as `define_module`.
-            unsafe { sys::mrb_module_get_id(mrb.as_ptr(), sym) }
+            RModule::from_raw(unsafe { sys::mrb_module_get_id(mrb.as_ptr(), sym) })
         })
-        .map(RModule::from_raw)
     }
 
     /// `mrb_define_global_const(mrb, name, val)` — bind a top-level

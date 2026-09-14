@@ -196,12 +196,12 @@ impl Mrb {
             // `mrb_range_new` compares the bounds and raises
             // `ArgumentError` on an incomparable pair — caught by
             // `protect` into `Err`.
-            Value::from_raw(unsafe {
+            let v = Value::from_raw(unsafe {
                 sys::mrb_range_new(mrb.as_ptr(), begin.as_raw(), end.as_raw(), exclusive)
-            })
+            });
+            // SAFETY: `mrb_range_new` returns a Range-tagged value when it
+            // does not raise.
+            unsafe { Range::from_value_unchecked(v) }
         })
-        // SAFETY: an `Ok` result came from `mrb_range_new`, which
-        // returns a Range-tagged value on success.
-        .map(|v| unsafe { Range::from_value_unchecked(v) })
     }
 }

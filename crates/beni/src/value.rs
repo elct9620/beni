@@ -276,13 +276,13 @@ impl Value {
             // alive inside the protect frame. `mrb_integer_to_str` raises
             // `ArgumentError` on a base outside 2 through 36 — caught by
             // `protect` into `Err` — and otherwise returns a String value.
-            Value::from_raw(unsafe {
+            let v = Value::from_raw(unsafe {
                 sys::mrb_integer_to_str(mrb.as_ptr(), self.0, base as sys::mrb_int)
-            })
+            });
+            // SAFETY: a successful `mrb_integer_to_str` returns a
+            // String-tagged value, so the unchecked wrap accepts it.
+            unsafe { RString::from_value_unchecked(v) }
         })
-        // SAFETY: a successful `mrb_integer_to_str` returns a
-        // String-tagged value, so the unchecked wrap accepts it.
-        .map(|v| unsafe { RString::from_value_unchecked(v) })
     }
 
     /// Convert this Float value to the Integer value it truncates toward
@@ -396,12 +396,12 @@ impl Value {
             // raises `TypeError` on a non-String tag — caught by
             // `protect` into `Err` — and otherwise returns `self`
             // unchanged.
-            Value(unsafe { sys::mrb_ensure_string_type(mrb.as_ptr(), self.0) })
+            let v = Value(unsafe { sys::mrb_ensure_string_type(mrb.as_ptr(), self.0) });
+            // SAFETY: a value returned without a raise passed `mrb_string_p` inside
+            // `mrb_ensure_string_type`, so it carries the String tag the
+            // unchecked wrap requires.
+            unsafe { RString::from_value_unchecked(v) }
         })
-        // SAFETY: an `Ok` result passed `mrb_string_p` inside
-        // `mrb_ensure_string_type`, so it carries the String tag the
-        // unchecked wrap requires.
-        .map(|v| unsafe { RString::from_value_unchecked(v) })
     }
 
     /// Coerce `self` to a typed `Array` handle by its Array tag,
@@ -423,12 +423,12 @@ impl Value {
             // raises `TypeError` on a non-Array tag — caught by
             // `protect` into `Err` — and otherwise returns `self`
             // unchanged.
-            Value(unsafe { sys::mrb_ensure_array_type(mrb.as_ptr(), self.0) })
+            let v = Value(unsafe { sys::mrb_ensure_array_type(mrb.as_ptr(), self.0) });
+            // SAFETY: a value returned without a raise passed `mrb_array_p` inside
+            // `mrb_ensure_array_type`, so it carries the Array tag the
+            // unchecked wrap requires.
+            unsafe { crate::Array::from_value_unchecked(v) }
         })
-        // SAFETY: an `Ok` result passed `mrb_array_p` inside
-        // `mrb_ensure_array_type`, so it carries the Array tag the
-        // unchecked wrap requires.
-        .map(|v| unsafe { crate::Array::from_value_unchecked(v) })
     }
 
     /// Spread `self` into a new typed `Array`, Ruby's `*` splat coercion:
@@ -450,11 +450,11 @@ impl Value {
             // `to_a` for a non-array — a raise inside it, or a non-array
             // non-`nil` return, long-jumps a `TypeError` caught by
             // `protect` into `Err` — and otherwise returns an array.
-            Value(unsafe { sys::mrb_ary_splat(mrb.as_ptr(), self.0) })
+            let v = Value(unsafe { sys::mrb_ary_splat(mrb.as_ptr(), self.0) });
+            // SAFETY: `mrb_ary_splat` always returns an Array-tagged value
+            // when it returns, the tag the unchecked wrap requires.
+            unsafe { crate::Array::from_value_unchecked(v) }
         })
-        // SAFETY: `mrb_ary_splat` always returns an Array-tagged value
-        // on the `Ok` path, the tag the unchecked wrap requires.
-        .map(|v| unsafe { crate::Array::from_value_unchecked(v) })
     }
 
     /// Coerce `self` to a typed `Hash` handle by its Hash tag,
@@ -476,12 +476,12 @@ impl Value {
             // raises `TypeError` on a non-Hash tag — caught by
             // `protect` into `Err` — and otherwise returns `self`
             // unchanged.
-            Value(unsafe { sys::mrb_ensure_hash_type(mrb.as_ptr(), self.0) })
+            let v = Value(unsafe { sys::mrb_ensure_hash_type(mrb.as_ptr(), self.0) });
+            // SAFETY: a value returned without a raise passed `mrb_hash_p` inside
+            // `mrb_ensure_hash_type`, so it carries the Hash tag the
+            // unchecked wrap requires.
+            unsafe { crate::Hash::from_value_unchecked(v) }
         })
-        // SAFETY: an `Ok` result passed `mrb_hash_p` inside
-        // `mrb_ensure_hash_type`, so it carries the Hash tag the
-        // unchecked wrap requires.
-        .map(|v| unsafe { crate::Hash::from_value_unchecked(v) })
     }
 
     /// Coerce `self` by numeric type to an Integer `Value`, staying in
@@ -539,10 +539,10 @@ impl Value {
     /// `mrb_obj_to_sym`.
     #[inline]
     pub fn to_sym(self, mrb: &Mrb) -> Result<crate::Symbol, Error> {
-        mrb.protect_sym(|mrb| {
+        mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM.
-            unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) }
+            crate::Symbol::from_sym(unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) })
         })
     }
 
@@ -1359,11 +1359,11 @@ impl Value {
             // `TypeError` for an immediate that has no singleton class —
             // caught by `protect` into `Err` — and otherwise returns a
             // class-tagged value.
-            Value::from_raw(unsafe { sys::mrb_singleton_class(mrb.as_ptr(), self.0) })
+            let v = Value::from_raw(unsafe { sys::mrb_singleton_class(mrb.as_ptr(), self.0) });
+            // SAFETY: a value returned without a raise is the class-tagged value
+            // `mrb_singleton_class` returns, so the pointer recovery accepts it.
+            RClass::from_raw(unsafe { v.as_class_ptr() })
         })
-        // SAFETY: an `Ok` result is the class-tagged value
-        // `mrb_singleton_class` returns, so the pointer recovery accepts it.
-        .map(|v| RClass::from_raw(unsafe { v.as_class_ptr() }))
     }
 
     /// `mrb_obj_is_kind_of(mrb, self, class)` — whether `self` is an
