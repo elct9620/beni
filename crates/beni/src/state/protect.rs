@@ -138,7 +138,7 @@ impl Mrb {
         }
 
         let mut error: sys::mrb_bool = false;
-        // SAFETY: `self` is alive; `trampoline::<F>` upholds the
+        // SAFETY: `self` is alive; `trampoline::<F, T>` upholds the
         // `mrb_protect_error_func` ABI; `userdata` points to `slot` on
         // this stack frame, which outlives the call. bindgen wraps
         // function-typedef parameters in `Option<…>`, so the trampoline
