@@ -103,7 +103,23 @@ impl Mrb {
     {
         let mut slot: Option<F> = Some(body);
 
+        // MSVC's long-jump runs the cleanups of the frames it crosses, and a
+        // cleanup in an `extern "C"` frame aborts, so this frame holds no
+        // value that might need dropping and the body runs one frame up.
         unsafe extern "C" fn trampoline<F, T>(
+            mrb: *mut sys::mrb_state,
+            userdata: *mut core::ffi::c_void,
+        ) -> sys::mrb_value
+        where
+            F: FnOnce(&Mrb) -> T,
+            T: ReprValue,
+        {
+            // SAFETY: forwarded from `mrb_protect_error`, which passes the
+            // state and userdata this call handed it.
+            unsafe { run_body::<F, T>(mrb, userdata) }
+        }
+
+        unsafe fn run_body<F, T>(
             mrb: *mut sys::mrb_state,
             userdata: *mut core::ffi::c_void,
         ) -> sys::mrb_value
