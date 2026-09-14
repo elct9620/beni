@@ -447,7 +447,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_str_equal` | fn | ✅ | ✅ | `RString::eq` — total byte equality of two strings (length check then memcmp); dispatches nothing and never raises |
 | `mrb_str_index` | fn | ✅ | ✅ | `RString::index` — byte index of the first substring match at or after an offset, or None when absent; never raises |
 | `mrb_str_index_lit` | macro | ❌ | ✅ | `RString::index` — the literal macro `mrb_str_index_lit(mrb, str, lit, off)` is `mrb_str_index` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
-| `mrb_str_intern` | fn | ✅ | ✅ | `RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns directly and never raises. Distinct from `mrb_obj_to_sym` → `Value::to_sym`, which coerces an arbitrary value and can raise, and from `Symbol::new`, which interns Rust bytes |
+| `mrb_str_intern` | fn | ✅ | ✅ | `RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns them as `Mrb::intern_str` does, surfacing an `Err` for bytes too long to be a symbol. Distinct from `mrb_obj_to_sym` → `Value::to_sym`, which coerces an arbitrary value, and from `Symbol::new`, which interns Rust bytes |
 | `mrb_str_modify` | fn | ✅ | ❌ |  |
 | `mrb_str_modify_keep_ascii` | fn | ✅ | ❌ |  |
 | `mrb_str_new_capa` | fn | ✅ | ✅ | `Mrb::str_new_capa` |
