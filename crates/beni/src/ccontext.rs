@@ -49,8 +49,11 @@ impl<'mrb> Ccontext<'mrb> {
     /// Allocate a fresh compile context and stamp it with `filename`.
     /// Returns `None` when `mrb_ccontext_new` returns NULL.
     ///
-    /// `mrb_ccontext_filename` interns the bytes, so the `&CStr`
-    /// borrow only has to outlive this call.
+    /// `mrb_ccontext_filename` copies the bytes, so the `&CStr` borrow
+    /// only has to outlive this call. Each load interns the copy as the
+    /// symbol it stamps, so a filename of `UINT16_MAX` bytes or more is
+    /// accepted here and fails every load and compile under the context
+    /// with mruby's `ArgumentError`.
     pub fn new(mrb: &'mrb Mrb, filename: &core::ffi::CStr) -> Option<Self> {
         let cxt = Self::unnamed(mrb)?;
         // SAFETY: `mrb` is live; `cxt.raw` came from the matching
@@ -94,11 +97,11 @@ impl<'mrb> Ccontext<'mrb> {
     /// NUL-terminated.
     ///
     /// Source that does not parse comes back `Err(Error::Syntax)`
-    /// carrying the compiler's first recorded diagnostic; a codegen
-    /// failure or a raise while the program runs comes back
-    /// `Err(Error::Exception)` with the pending exception cleared from
-    /// the handle. Only the exception answers a backtrace — a program
-    /// that never compiled never ran.
+    /// carrying the compiler's first recorded diagnostic; a filename too
+    /// long to be a symbol, a codegen failure, or a raise while the
+    /// program runs comes back `Err(Error::Exception)` with the pending
+    /// exception cleared from the handle. Only the exception answers a
+    /// backtrace — a program that never compiled never ran.
     pub fn load_nstring(&self, source: &[u8]) -> Result<Value, Error> {
         let parser = self.parse(source)?;
         let raw = self.raw;
@@ -121,8 +124,9 @@ impl<'mrb> Ccontext<'mrb> {
     ///
     /// The failures are the ones a load answers, for the same reasons:
     /// source that does not parse comes back `Err(Error::Syntax)`
-    /// carrying the compiler's first recorded diagnostic, and a codegen
-    /// failure comes back `Err(Error::Exception)`. The context's
+    /// carrying the compiler's first recorded diagnostic, and a filename
+    /// too long to be a symbol or a codegen failure comes back
+    /// `Err(Error::Exception)`. The context's
     /// warnings are recorded either way.
     ///
     /// `Proc::call` runs the program at the interpreter's top level. It
@@ -162,7 +166,8 @@ impl<'mrb> Ccontext<'mrb> {
     /// Parse `source` under this context, recording the warnings it
     /// produced and handing back the parser for the caller to spend.
     /// Source that does not parse is released here and reported as the
-    /// compiler's first recorded diagnostic.
+    /// compiler's first recorded diagnostic, unless the parse failed on a
+    /// raise the parser caught, which is reported as that exception.
     fn parse(&self, source: &[u8]) -> Result<*mut sys::mrb_parser_state, Error> {
         // SAFETY: `self.mrb` is live by the borrow; `self.raw` was
         // produced by `mrb_ccontext_new` in `Self::new` and is owned
@@ -192,6 +197,10 @@ impl<'mrb> Ccontext<'mrb> {
             // SAFETY: as above; the buffer belongs to the live parser
             // and nothing mutates it between the parse and this read.
             let message = unsafe { ParseMessage::first_recorded(&(*parser).error_buffer) };
+            // The parser's own jump target catches a raise inside it —
+            // interning a filename too long to be a symbol — and leaves
+            // the exception pending; that exception is the failure.
+            let raised = self.mrb.outcome(Value::nil());
             // The failing parser is beni's to release. Handing it to
             // `mrb_load_exec` instead would have it format slot 0
             // unconditionally, which is not always a slot the compiler
@@ -199,6 +208,7 @@ impl<'mrb> Ccontext<'mrb> {
             //
             // SAFETY: `parser` is live and this is its only release.
             unsafe { sys::mrb_parser_free(parser) };
+            raised?;
             return Err(Error::Syntax(message));
         }
 

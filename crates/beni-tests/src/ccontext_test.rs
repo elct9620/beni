@@ -276,3 +276,48 @@ fn load_nstring_inside_a_registered_method_hands_the_raise_back_as_err() {
         .message(&mrb)
         .contains("from the nested context"));
 }
+
+fn filename_of(len: usize) -> std::ffi::CString {
+    std::ffi::CString::new(vec![b'a'; len]).expect("the filename holds no NUL")
+}
+
+#[test]
+fn a_filename_too_long_to_be_a_symbol_fails_each_load_with_argument_error() {
+    let mrb = open_mrb();
+    let argument_error = mrb
+        .exc_get(c"ArgumentError")
+        .expect("ArgumentError is built in");
+    let name = filename_of(u16::MAX as usize);
+    let cxt = Ccontext::new(&mrb, &name).expect("creating the context accepts any filename");
+
+    let attempts: [(&str, Option<Error>); 3] = [
+        ("a load", cxt.load_nstring(b"1 + 1").err()),
+        (
+            "a load of source that does not parse",
+            cxt.load_nstring(b"1 +").err(),
+        ),
+        ("a compile", cxt.compile(b"1 + 1").err()),
+    ];
+
+    for (what, err) in attempts {
+        let err = err.unwrap_or_else(|| panic!("{what} must fail"));
+        assert!(
+            err.is_kind_of(&mrb, argument_error),
+            "{what} must carry the ArgumentError, got {err}"
+        );
+    }
+    assert!(mrb.pending_exc().is_nil());
+}
+
+#[test]
+fn a_filename_one_byte_short_of_the_limit_loads() {
+    let mrb = open_mrb();
+    let name = filename_of(u16::MAX as usize - 1);
+    let cxt = Ccontext::new(&mrb, &name).expect("creating the context must succeed");
+
+    let got = cxt
+        .load_nstring(b"1 + 1")
+        .expect("the longest filename a symbol holds must load");
+
+    assert_eq!(i32::from_value(got), Some(2));
+}
