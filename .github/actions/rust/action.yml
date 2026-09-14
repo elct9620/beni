@@ -37,6 +37,13 @@ runs:
         components: ${{ inputs.components }}
         targets: ${{ inputs.targets }}
 
+    # A job re-run with debug logging also backtraces every Rust binary it
+    # runs, so a panic or an abort names the frame it came from.
+    - name: Turn on Rust backtraces for a debug run
+      if: runner.debug == '1'
+      shell: bash
+      run: echo "RUST_BACKTRACE=full" >> "$GITHUB_ENV"
+
     - name: Cache cargo
       if: inputs.cache == 'true'
       uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
