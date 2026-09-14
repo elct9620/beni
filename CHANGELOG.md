@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.16.0](https://github.com/elct9620/beni/compare/v0.15.0...v0.16.0) (2026-09-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** `Mrb::intern_cstr`, `Mrb::intern_str`, and `Mrb::intern_static` return `Result<sys::mrb_sym, Error>`; `Mrb::intern`, `Symbol::new`, and `RString::intern` return `Result<Symbol, Error>`; and `IntoSym::into_sym` returns `Result<sys::mrb_sym, Error>`, so an implementation of `IntoSym` outside the crate changes its signature to match.
+* **beni:** `Mrb::define_global_const` returns `Result<(), Error>` instead of `()`.
+* **beni:** `Mrb::protect`, `Mrb::rescue`, and `Mrb::ensure` are gone. Wrap a raising raw call in `beni::sys::protect(&mrb, |mrb| ...)` instead; a panic inside that body aborts rather than returning `Err(Error::Panic)`. Rescue by matching on the `Err`, and run cleanup as the code after the operation.
+* **beni:** `Mrb::argv` returns `Vec<Value>` instead of `&[Value]`; a body that needs the zero-copy view calls the unsafe
+* **beni:** `Mrb::get_args` and `Format::read` return `Result<F::Output, Error>`, `Mrb::arg1` returns `Result<Value, Error>`, and `format::Str` reads as `Vec<u8>` rather than a borrowed slice. A method body adds `?` to each read; a custom `Format` implementation returns its output wrapped in `Ok`.
+
+### Features
+
+* **beni:** carry one slot of user data on the interpreter ([bffada5](https://github.com/elct9620/beni/commit/bffada5c386c3ae4f8adfe2207dccf1a417b7dad))
+* **beni:** catch a C callback's panic with beni::sys::catch_unwind ([673d051](https://github.com/elct9620/beni/commit/673d051820c7aee07ee7b373dc6535c76369a5dd))
+* **beni:** catch a raw binding's raise in beni::sys, without a panic boundary ([fe43ca1](https://github.com/elct9620/beni/commit/fe43ca12401d02a6148dbf6e0eefa9a3c57fc04a))
+* **beni:** hand the argument-array read back as a copy ([6fb83dd](https://github.com/elct9620/beni/commit/6fb83ddf82131b4f13f2d000480766c759b6926d))
+* **beni:** let a method parameter take any value, an i64, or nil ([a9f8588](https://github.com/elct9620/beni/commit/a9f8588b335a0696c68c0a69e24e5814dbbe0e8d))
+* **beni:** let a value answer is_a? and instance_of? for a module ([04ada92](https://github.com/elct9620/beni/commit/04ada92c6ea221384b5fd26d6260e7dc729ecb1e))
+* **beni:** let an argument read hand its failure back to the body ([0a9aebd](https://github.com/elct9620/beni/commit/0a9aebd7384eb54d8727f30787e75e8aa18d3ace))
+* **beni:** let an Err answer is_a? for the exception it carries ([2b1509c](https://github.com/elct9620/beni/commit/2b1509cd0040bdbc1c42008ce47742cc85fd2d0a))
+
+
+### Bug Fixes
+
+* **beni:** hand a frozen Object's refusal back from define_global_const ([58d3261](https://github.com/elct9620/beni/commit/58d3261f960f03665605349ea5df9814c91e66de))
+* **beni:** hand an over-long name's intern failure back as an Err ([851e908](https://github.com/elct9620/beni/commit/851e90815ecf8dfcfce32f988df4e3115db5c323))
+* **beni:** keep a load's raise inside the method that ran it ([d938db5](https://github.com/elct9620/beni/commit/d938db5196e77d88779f75523773950f784bc913))
+* **beni:** let a raise under protect reach its jump target on MSVC ([ae026be](https://github.com/elct9620/beni/commit/ae026bebe43cf6f1260fb6c5c94912bd10a1a0a8))
+* **beni:** miss a name too long to intern instead of raising from intern_check ([88cac10](https://github.com/elct9620/beni/commit/88cac10b52625f458e7b3b501d002a9024b0144f))
+* **beni:** read a typed method's arguments without jumping its panic boundary ([5401ba2](https://github.com/elct9620/beni/commit/5401ba2f9195b8c0b0ce158927cc34fa863826e9))
+* **beni:** surface the raise a compile context's parser catches ([5bd19a1](https://github.com/elct9620/beni/commit/5bd19a11ddb3fefe1592f3144b6ceb945e45881e))
+
 ## [0.15.0](https://github.com/elct9620/beni/compare/v0.14.1...v0.15.0) (2026-09-13)
 
 
