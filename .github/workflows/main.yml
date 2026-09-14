@@ -227,7 +227,10 @@ jobs:
   # from — so this is the lane that proves the read against a real one.
   # Only host-target scenarios run: wasi-sdk vendors no tarball for a
   # Windows build platform, so a scenario declaring a wasi target is
-  # refused here by design.
+  # refused here by design. The rust_consumer leg then runs the crates'
+  # own suite against the archive it staged: MSVC implements longjmp as a
+  # forced unwind, so only a run here exercises a raise crossing the
+  # crates' frames.
   windows:
     runs-on: windows-latest
     name: Windows ${{ matrix.scenario }} (MSVC)
@@ -266,3 +269,14 @@ jobs:
         run: |
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do call "%%i\VC\Auxiliary\Build\vcvars64.bat"
           rake scenario:setup beni:build scenario:verify
+      # The scenario staged an upstream-default archive, so this is the
+      # default-ABI leg `rake rust:test:default` runs elsewhere, under the
+      # same vcvars environment the build needed.
+      - name: Run the crates' suite against the staged archive
+        if: matrix.rust
+        shell: cmd
+        env:
+          BENI_VENDOR_DIR: ${{ github.workspace }}\test\scenarios\rust_consumer\vendor
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do call "%%i\VC\Auxiliary\Build\vcvars64.bat"
+          cargo test -p beni -p beni-tests
