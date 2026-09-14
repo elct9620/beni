@@ -87,7 +87,11 @@ fn funcall_accepts_a_symbol_key_identical_to_the_name() {
         .funcall(&mrb, c"to_s", &[])
         .expect("the name key must dispatch");
     let by_sym = recv
-        .funcall(&mrb, Symbol::new(&mrb, c"to_s"), &[])
+        .funcall(
+            &mrb,
+            Symbol::new(&mrb, c"to_s").expect("the name interns"),
+            &[],
+        )
         .expect("the symbol key must dispatch");
     assert_eq!(by_name.to_string(&mrb), by_sym.to_string(&mrb));
     assert_eq!(by_sym.to_string(&mrb), "42");
@@ -723,7 +727,7 @@ fn obj_dup_copies_state_into_an_independent_object() {
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     let dup = orig.obj_dup(&mrb).expect("dup does not raise");
-    let x = mrb.intern_cstr(c"@x");
+    let x = mrb.intern_cstr(c"@x").expect("the name interns");
     // The dup carries the copied ivar...
     assert_eq!(i32::from_value(dup.iv_get(&mrb, x)), Some(1));
     // ...and is a distinct object: mutating it leaves the original.
@@ -737,7 +741,7 @@ fn obj_dup_copies_state_into_an_independent_object() {
 fn iv_set_surfaces_frozen_and_non_object_receivers_as_err() {
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"iv_set_test.rb").expect("allocating the context must succeed");
-    let x = mrb.intern_cstr(c"@x");
+    let x = mrb.intern_cstr(c"@x").expect("the name interns");
     let one = 1i32.into_value(&mrb);
 
     // A frozen receiver rejects the assignment — surfaced as Err
@@ -770,7 +774,7 @@ fn const_get_reads_a_constant_and_surfaces_an_absent_one_as_err() {
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A defined constant reads back its value.
-    let foo = mrb.intern_cstr(c"FOO");
+    let foo = mrb.intern_cstr(c"FOO").expect("the name interns");
     assert_eq!(
         i32::from_value(module.const_get(&mrb, foo).expect("FOO is defined")),
         Some(7)
@@ -778,7 +782,7 @@ fn const_get_reads_a_constant_and_surfaces_an_absent_one_as_err() {
 
     // An absent constant raises NameError — surfaced as Err instead
     // of unwinding across the call.
-    let missing = mrb.intern_cstr(c"BENI_MISSING");
+    let missing = mrb.intern_cstr(c"BENI_MISSING").expect("the name interns");
     assert!(matches!(
         module.const_get(&mrb, missing),
         Err(Error::Exception(_))
@@ -796,7 +800,7 @@ fn cv_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A defined class variable reads back its value.
-    let count = mrb.intern_cstr(c"@@count");
+    let count = mrb.intern_cstr(c"@@count").expect("the name interns");
     assert_eq!(
         i32::from_value(class.cv_get(&mrb, count).expect("@@count is defined")),
         Some(3)
@@ -804,7 +808,9 @@ fn cv_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
 
     // An absent class variable raises NameError — surfaced as Err
     // instead of unwinding across the call.
-    let missing = mrb.intern_cstr(c"@@beni_missing");
+    let missing = mrb
+        .intern_cstr(c"@@beni_missing")
+        .expect("the name interns");
     assert!(matches!(
         class.cv_get(&mrb, missing),
         Err(Error::Exception(_))
@@ -823,7 +829,7 @@ fn const_set_assigns_a_constant_and_surfaces_a_non_module_receiver_as_err() {
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A fresh constant assigned on a module reads back its value.
-    let bar = mrb.intern_cstr(c"BAR");
+    let bar = mrb.intern_cstr(c"BAR").expect("the name interns");
     module
         .const_set(&mrb, bar, 9i32.into_value(&mrb))
         .expect("assigning a constant on a module must succeed");
@@ -852,7 +858,7 @@ fn const_remove_removes_a_constant_and_surfaces_a_non_module_receiver_as_err() {
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // Removing a defined constant succeeds and clears its presence.
-    let gone = mrb.intern_cstr(c"GONE");
+    let gone = mrb.intern_cstr(c"GONE").expect("the name interns");
     assert!(module.const_defined(&mrb, gone), "GONE is defined");
     module
         .const_remove(&mrb, gone)
@@ -889,8 +895,8 @@ fn const_defined_at_answers_only_for_the_receivers_own_constant() {
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
-    let owned = mrb.intern_cstr(c"OWNED");
-    let absent = mrb.intern_cstr(c"ABSENT");
+    let owned = mrb.intern_cstr(c"OWNED").expect("the name interns");
+    let absent = mrb.intern_cstr(c"ABSENT").expect("the name interns");
 
     // A constant living only on the parent walks into reach for the
     // ancestry-walking test but stays invisible to the direct test.
@@ -927,7 +933,7 @@ fn cv_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
     // A class variable assigned on a class reads back its value.
-    let total = mrb.intern_cstr(c"@@total");
+    let total = mrb.intern_cstr(c"@@total").expect("the name interns");
     class
         .cv_set(&mrb, total, 5i32.into_value(&mrb))
         .expect("assigning a class variable on a class must succeed");
@@ -965,8 +971,8 @@ fn cv_defined_tests_class_variable_presence_walking_the_ancestry() {
     // A class variable defined on an ancestor is present on the
     // child; an absent one is not — the predicate is total, raising
     // for neither.
-    let inherited = mrb.intern_cstr(c"@@inherited");
-    let missing = mrb.intern_cstr(c"@@missing");
+    let inherited = mrb.intern_cstr(c"@@inherited").expect("the name interns");
+    let missing = mrb.intern_cstr(c"@@missing").expect("the name interns");
     assert!(child.cv_defined(&mrb, inherited));
     assert!(!child.cv_defined(&mrb, missing));
 }
@@ -983,7 +989,7 @@ fn assert_type_error(mrb: &Mrb, err: Error) {
 #[test]
 fn cv_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
     let mrb = open_mrb();
-    let sym = mrb.intern_cstr(c"@@x");
+    let sym = mrb.intern_cstr(c"@@x").expect("the name interns");
 
     // nil, an immediate, and a plain object all sit outside the
     // class-or-module family the accessors dereference into: the
@@ -1014,7 +1020,7 @@ fn cv_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
 #[test]
 fn const_presence_answers_false_for_a_receiver_that_is_not_a_class_or_module() {
     let mrb = open_mrb();
-    let sym = mrb.intern_cstr(c"X");
+    let sym = mrb.intern_cstr(c"X").expect("the name interns");
 
     // Both presence tests are total predicates: a receiver outside
     // the class-or-module family answers false instead of walking
@@ -1043,7 +1049,9 @@ fn cv_accessors_accept_a_singleton_class_receiver() {
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
-    let sym = mrb.intern_cstr(c"@@through_sclass");
+    let sym = mrb
+        .intern_cstr(c"@@through_sclass")
+        .expect("the name interns");
     sclass
         .cv_set(&mrb, sym, Value::from_int(&mrb, 7))
         .expect("a singleton-class receiver must accept the write");
@@ -1066,8 +1074,8 @@ fn iv_defined_tests_instance_variable_presence() {
 
     // A set instance variable is present; an unset one is not — the
     // predicate is total, raising for neither.
-    let x = mrb.intern_cstr(c"@x");
-    let y = mrb.intern_cstr(c"@y");
+    let x = mrb.intern_cstr(c"@x").expect("the name interns");
+    let y = mrb.intern_cstr(c"@y").expect("the name interns");
     assert!(obj.iv_defined(&mrb, x));
     assert!(!obj.iv_defined(&mrb, y));
 }
@@ -1085,7 +1093,7 @@ fn iv_remove_yields_the_former_value_and_clears_presence() {
 
     // Removing a set variable hands back its former value and leaves
     // the variable undefined.
-    let x = mrb.intern_cstr(c"@x");
+    let x = mrb.intern_cstr(c"@x").expect("the name interns");
     let removed = obj.iv_remove(&mrb, x).expect("removal does not raise");
     assert_eq!(removed.and_then(i32::from_value), Some(1));
     assert!(!obj.iv_defined(&mrb, x));
@@ -1104,13 +1112,13 @@ fn iv_remove_distinguishes_absent_from_a_removed_nil() {
 
     // An absent variable yields None — distinct from a variable that
     // held nil, which yields Some(nil).
-    let y = mrb.intern_cstr(c"@y");
+    let y = mrb.intern_cstr(c"@y").expect("the name interns");
     assert!(obj
         .iv_remove(&mrb, y)
         .expect("absent removal does not raise")
         .is_none());
 
-    let x = mrb.intern_cstr(c"@x");
+    let x = mrb.intern_cstr(c"@x").expect("the name interns");
     let removed = obj.iv_remove(&mrb, x).expect("removal does not raise");
     assert!(removed.is_some_and(Value::is_nil));
 
@@ -1134,7 +1142,7 @@ fn iv_remove_surfaces_a_frozen_holder_as_err() {
         .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o.freeze; o")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
-    let x = mrb.intern_cstr(c"@x");
+    let x = mrb.intern_cstr(c"@x").expect("the name interns");
     assert!(matches!(
         frozen.iv_remove(&mrb, x),
         Err(Error::Exception(_))
@@ -1182,7 +1190,9 @@ fn as_break_views_a_real_escaping_break() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb.intern_cstr(c"$beni_break_recv");
+    let slot = mrb
+        .intern_cstr(c"$beni_break_recv")
+        .expect("the name interns");
     mrb.gv_set(slot, recv);
 
     // The block is captured via `&` so it stays non-orphan: `break
@@ -1635,12 +1645,24 @@ fn each_iv_visits_every_set_instance_variable() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
-    obj.iv_set(&mrb, mrb.intern_cstr(c"@a"), 1i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(&mrb, mrb.intern_cstr(c"@b"), 2i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(&mrb, mrb.intern_cstr(c"@c"), 3i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
+    obj.iv_set(
+        &mrb,
+        mrb.intern_cstr(c"@a").expect("the name interns"),
+        1i32.into_value(&mrb),
+    )
+    .expect("iv_set on a fresh object does not raise");
+    obj.iv_set(
+        &mrb,
+        mrb.intern_cstr(c"@b").expect("the name interns"),
+        2i32.into_value(&mrb),
+    )
+    .expect("iv_set on a fresh object does not raise");
+    obj.iv_set(
+        &mrb,
+        mrb.intern_cstr(c"@c").expect("the name interns"),
+        3i32.into_value(&mrb),
+    )
+    .expect("iv_set on a fresh object does not raise");
 
     let mut seen = Vec::new();
     obj.each_iv(&mrb, |name: Symbol, val| {
@@ -1687,12 +1709,24 @@ fn each_iv_stops_early_on_stop() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
-    obj.iv_set(&mrb, mrb.intern_cstr(c"@a"), 1i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(&mrb, mrb.intern_cstr(c"@b"), 2i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(&mrb, mrb.intern_cstr(c"@c"), 3i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
+    obj.iv_set(
+        &mrb,
+        mrb.intern_cstr(c"@a").expect("the name interns"),
+        1i32.into_value(&mrb),
+    )
+    .expect("iv_set on a fresh object does not raise");
+    obj.iv_set(
+        &mrb,
+        mrb.intern_cstr(c"@b").expect("the name interns"),
+        2i32.into_value(&mrb),
+    )
+    .expect("iv_set on a fresh object does not raise");
+    obj.iv_set(
+        &mrb,
+        mrb.intern_cstr(c"@c").expect("the name interns"),
+        3i32.into_value(&mrb),
+    )
+    .expect("iv_set on a fresh object does not raise");
 
     // Stopping at the first variable leaves the rest unvisited.
     let mut count = 0;
@@ -1714,9 +1748,9 @@ fn each_iv_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
-    let a = mrb.intern_cstr(c"@a");
-    let b = mrb.intern_cstr(c"@b");
-    let added = mrb.intern_cstr(c"@added");
+    let a = mrb.intern_cstr(c"@a").expect("the name interns");
+    let b = mrb.intern_cstr(c"@b").expect("the name interns");
+    let added = mrb.intern_cstr(c"@added").expect("the name interns");
     obj.iv_set(&mrb, a, 1i32.into_value(&mrb))
         .expect("iv_set on a fresh object does not raise");
     obj.iv_set(&mrb, b, 2i32.into_value(&mrb))
@@ -1754,8 +1788,8 @@ fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
-    let a = mrb.intern_cstr(c"@a");
-    let b = mrb.intern_cstr(c"@b");
+    let a = mrb.intern_cstr(c"@a").expect("the name interns");
+    let b = mrb.intern_cstr(c"@b").expect("the name interns");
 
     // Release the strings' creation-time arena slots so the
     // receiver's iv table is their only reference going into the
@@ -1798,10 +1832,18 @@ fn each_iv_resurfaces_a_closure_panic_on_the_rust_side() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
-    obj.iv_set(&mrb, mrb.intern_cstr(c"@a"), 1i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(&mrb, mrb.intern_cstr(c"@b"), 2i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
+    obj.iv_set(
+        &mrb,
+        mrb.intern_cstr(c"@a").expect("the name interns"),
+        1i32.into_value(&mrb),
+    )
+    .expect("iv_set on a fresh object does not raise");
+    obj.iv_set(
+        &mrb,
+        mrb.intern_cstr(c"@b").expect("the name interns"),
+        2i32.into_value(&mrb),
+    )
+    .expect("iv_set on a fresh object does not raise");
 
     // A panic in the closure ends the iteration and propagates on the
     // Rust side — the closure runs against the collected snapshot, so
@@ -1826,7 +1868,7 @@ fn each_iv_resurfaces_a_closure_panic_on_the_rust_side() {
 
     // The VM survives the caught panic.
     assert_eq!(
-        i32::from_value(obj.iv_get(&mrb, mrb.intern_cstr(c"@b"))),
+        i32::from_value(obj.iv_get(&mrb, mrb.intern_cstr(c"@b").expect("the name interns"))),
         Some(2)
     );
 }

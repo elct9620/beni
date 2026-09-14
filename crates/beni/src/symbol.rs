@@ -12,7 +12,7 @@
 //! `Symbol` downcast lives on `FromValue`, the `Symbol` → `Value`
 //! boxing on `IntoValue`, alongside the other conversions.
 
-use crate::{Mrb, Value};
+use crate::{Error, Mrb, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Symbol`. `#[repr(transparent)]` over
@@ -54,10 +54,11 @@ impl Symbol {
     }
 
     /// Intern `name` and symbolize it. Counterpart to magnus's
-    /// `Symbol::new`; equivalent to symbolizing `mrb.intern_cstr(name)`.
+    /// `Symbol::new`; equivalent to symbolizing `mrb.intern_cstr(name)`,
+    /// so a name too long to be a symbol surfaces as `Err`.
     #[inline]
-    pub fn new(mrb: &Mrb, name: &core::ffi::CStr) -> Self {
-        Self::from_sym(mrb.intern_cstr(name))
+    pub fn new(mrb: &Mrb, name: &core::ffi::CStr) -> Result<Self, Error> {
+        mrb.intern_cstr(name).map(Self::from_sym)
     }
 
     /// Symbolize an already-interned id via mruby's boxing-agnostic
@@ -142,24 +143,28 @@ impl Symbol {
 /// mirror of `magnus`'s `IntoId`. A name interns to its symbol; an
 /// already-interned `Symbol` is reused without re-interning. The typed
 /// define/get surface accepts any `IntoSym`, routing every key through
-/// mruby's `_id`-suffixed C variant.
+/// mruby's `_id`-suffixed C variant, and hands a key that cannot
+/// resolve back as its own `Err` before it acts.
 pub trait IntoSym {
-    /// Resolve this key to its interned `mrb_sym` against `mrb`.
-    fn into_sym(self, mrb: &Mrb) -> sys::mrb_sym;
+    /// Resolve this key to its interned `mrb_sym` against `mrb`, or the
+    /// `Err` its intern surfaced.
+    fn into_sym(self, mrb: &Mrb) -> Result<sys::mrb_sym, Error>;
 }
 
 impl IntoSym for &core::ffi::CStr {
-    /// A name key interns through `Mrb::intern_cstr`.
+    /// A name key interns through `Mrb::intern_cstr`, so a name too
+    /// long to be a symbol surfaces as `Err`.
     #[inline]
-    fn into_sym(self, mrb: &Mrb) -> sys::mrb_sym {
+    fn into_sym(self, mrb: &Mrb) -> Result<sys::mrb_sym, Error> {
         mrb.intern_cstr(self)
     }
 }
 
 impl IntoSym for Symbol {
-    /// An already-interned `Symbol` reuses its id with no re-intern.
+    /// An already-interned `Symbol` reuses its id with no re-intern, so
+    /// it always resolves.
     #[inline]
-    fn into_sym(self, _mrb: &Mrb) -> sys::mrb_sym {
-        self.to_sym()
+    fn into_sym(self, _mrb: &Mrb) -> Result<sys::mrb_sym, Error> {
+        Ok(self.to_sym())
     }
 }

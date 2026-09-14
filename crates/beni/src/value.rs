@@ -532,24 +532,18 @@ impl Value {
     /// id, a String value interns its contents, and any other value
     /// surfaces an `Err`. It runs no user Ruby — it dispatches no
     /// `to_sym` — so the `TypeError` mruby raises for a value that is
-    /// neither a symbol nor a string is caught by exception protection into the
-    /// returned `Err`. Unlike `Symbol::new`, which interns Rust bytes,
+    /// neither a symbol nor a string, and the `ArgumentError` for a string
+    /// too long to be a symbol, are caught by exception protection into
+    /// the returned `Err`. Unlike `Symbol::new`, which interns Rust bytes,
     /// this coerces an existing mruby value. Mirrors mruby's
     /// `mrb_obj_to_sym`.
     #[inline]
     pub fn to_sym(self, mrb: &Mrb) -> Result<crate::Symbol, Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_sym(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
-            // originates from the same VM. `mrb_obj_to_sym` raises
-            // `TypeError` for a value that is neither a symbol nor a
-            // string — caught by `protect` into `Err` — and otherwise
-            // returns the interned id.
-            let sym = unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) };
-            crate::Symbol::from_sym(sym).as_value()
+            // originates from the same VM.
+            unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) }
         })
-        // SAFETY: an `Ok` result came from `Symbol::from_sym`, so it
-        // carries the Symbol tag the unchecked wrap requires.
-        .map(|v| unsafe { crate::Symbol::from_value_unchecked(v) })
     }
 
     /// `obj.dup` — a shallow copy of `self`: its instance variables are
@@ -727,7 +721,7 @@ impl Value {
         name: K,
         args: &[Value],
     ) -> Result<Value, Error> {
-        let sym = name.into_sym(mrb);
+        let sym = name.into_sym(mrb)?;
         self.funcall_argv(mrb, sym, args)
     }
 
@@ -784,7 +778,7 @@ impl Value {
         args: &[Value],
         block: crate::Proc,
     ) -> Result<Value, Error> {
-        let sym = name.into_sym(mrb);
+        let sym = name.into_sym(mrb)?;
         let block_raw = block.as_raw();
         mrb.protect(|mrb| {
             // `Value` is `#[repr(transparent)]` over `mrb_value`, so the

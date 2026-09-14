@@ -218,16 +218,36 @@ fn eq_tests_byte_equality() {
 }
 
 #[test]
+fn intern_surfaces_bytes_too_long_to_be_a_symbol_as_argument_error() {
+    let mrb = open_mrb();
+    let argument_error = mrb
+        .exc_get(c"ArgumentError")
+        .expect("ArgumentError is built in");
+
+    let Err(err) = mrb.str_new(&vec![b'a'; u16::MAX as usize]).intern(&mrb) else {
+        panic!("interning the string must refuse it");
+    };
+
+    assert!(err.is_kind_of(&mrb, argument_error));
+}
+
+#[test]
 fn intern_names_the_symbol_for_the_receiver_bytes() {
     let mrb = open_mrb();
 
     // The interned symbol names the string's own bytes.
-    let sym = mrb.str_new(b"flags").intern(&mrb);
+    let sym = mrb
+        .str_new(b"flags")
+        .intern(&mrb)
+        .expect("the name interns");
     assert_eq!(sym.name(&mrb).as_deref(), Some("flags"));
 
     // Its id equals interning the same name directly — a wrong tag or
     // boxing in the unchecked wrap would diverge here.
-    assert_eq!(sym.to_sym(), mrb.intern_cstr(c"flags"));
+    assert_eq!(
+        sym.to_sym(),
+        mrb.intern_cstr(c"flags").expect("the name interns")
+    );
 }
 
 #[test]

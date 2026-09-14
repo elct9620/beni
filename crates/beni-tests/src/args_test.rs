@@ -32,11 +32,13 @@ fn io_first(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 /// fails the assertion instead of passing.
 fn nrest_after_sym(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (sym, rest) = mrb.get_args::<NRest>()?;
-    Ok(if sym == mrb.intern_cstr(c"tag") {
-        Value::from_int(mrb, rest.len() as beni::sys::mrb_int)
-    } else {
-        Value::from_int(mrb, -1)
-    })
+    Ok(
+        if sym == mrb.intern_cstr(c"tag").expect("the name interns") {
+            Value::from_int(mrb, rest.len() as beni::sys::mrb_int)
+        } else {
+            Value::from_int(mrb, -1)
+        },
+    )
 }
 
 // The `"*"` count out-param is written by mruby through `mrb_int*`
@@ -123,7 +125,9 @@ fn nrest_format_splits_the_leading_symbol() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb.intern_cstr(c"$beni_nrest_recv");
+    let slot = mrb
+        .intern_cstr(c"$beni_nrest_recv")
+        .expect("the name interns");
     mrb.gv_set(slot, recv);
 
     let cxt =
@@ -227,7 +231,9 @@ fn rest_block_format_splits_rest_from_block() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb.intern_cstr(c"$beni_rest_block_recv");
+    let slot = mrb
+        .intern_cstr(c"$beni_rest_block_recv")
+        .expect("the name interns");
     mrb.gv_set(slot, recv);
 
     let cxt = Ccontext::new(&mrb, c"rest_block_test.rb")
@@ -404,7 +410,9 @@ fn block_given_reports_whether_a_block_was_passed() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb.intern_cstr(c"$beni_block_recv");
+    let slot = mrb
+        .intern_cstr(c"$beni_block_recv")
+        .expect("the name interns");
     mrb.gv_set(slot, recv);
 
     // A block is supplied from Ruby — the typed surface has no
@@ -508,7 +516,7 @@ fn kw_size(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 /// fails the assertion instead of passing.
 fn nrest_kwblock_encode(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (sym, rest, kw, block) = mrb.get_args::<NRestKwBlock>()?;
-    if sym != mrb.intern_cstr(c"tag") {
+    if sym != mrb.intern_cstr(c"tag").expect("the name interns") {
         return Ok(Value::from_int(mrb, -1));
     }
     let block_bit = if block.is_nil() { 0 } else { 1 };
@@ -530,7 +538,7 @@ fn kw_format_captures_keywords_and_empty_is_a_hash() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb.intern_cstr(c"$beni_kw_recv");
+    let slot = mrb.intern_cstr(c"$beni_kw_recv").expect("the name interns");
     mrb.gv_set(slot, recv);
 
     let cxt =
@@ -572,7 +580,9 @@ fn nrest_kwblock_separates_positionals_keywords_and_block() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb.intern_cstr(c"$beni_kwblock_recv");
+    let slot = mrb
+        .intern_cstr(c"$beni_kwblock_recv")
+        .expect("the name interns");
     mrb.gv_set(slot, recv);
 
     let cxt = Ccontext::new(&mrb, c"kwblock_test.rb")
@@ -765,7 +775,7 @@ fn nrest_rest_slice_survives_vm_reentry() {
         )
         .expect("registering the bridge must succeed");
     let args = [
-        mrb.intern(b"tag").as_value(),
+        mrb.intern(b"tag").expect("the name interns").as_value(),
         mrb.str_new(b"al").as_value(),
         mrb.str_new(b"pha").as_value(),
     ];

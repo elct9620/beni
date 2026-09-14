@@ -164,7 +164,7 @@ fn compile_yields_a_program_that_has_not_run_yet() {
         .compile(b"$ran = true; 7")
         .expect("plain source must compile");
 
-    let ran = mrb.intern_cstr(c"$ran");
+    let ran = mrb.intern_cstr(c"$ran").expect("the name interns");
     assert!(
         mrb.gv_get(ran).is_nil(),
         "compiling must not run what it compiled"
@@ -208,7 +208,7 @@ fn compile_leaves_the_context_running_its_next_load() {
 
     assert_eq!(i32::from_value(got), Some(3));
     assert_eq!(
-        i32::from_value(mrb.gv_get(mrb.intern_cstr(c"$after"))),
+        i32::from_value(mrb.gv_get(mrb.intern_cstr(c"$after").expect("the name interns"))),
         Some(3),
         "stopping before the run is settled per call, never kept on the context"
     );

@@ -93,7 +93,8 @@ fn module_new_takes_its_name_from_the_constant_it_is_assigned_to() {
         .to_value(&mrb)
         .const_set(
             &mrb,
-            mrb.intern_cstr(c"BeniBoundModule"),
+            mrb.intern_cstr(c"BeniBoundModule")
+                .expect("the name interns"),
             module.to_value(&mrb),
         )
         .expect("assigning the module to a constant must succeed");
@@ -114,7 +115,7 @@ fn module_get_fetches_a_defined_module() {
         .expect("fetching by name must reach the defined module");
     assert_eq!(by_name.name(&mrb), "BeniModGet");
     let by_sym = mrb
-        .module_get(beni::Symbol::new(&mrb, c"BeniModGet"))
+        .module_get(beni::Symbol::new(&mrb, c"BeniModGet").expect("the name interns"))
         .expect("fetching by Symbol key must reach the defined module");
     assert_eq!(by_sym.name(&mrb), "BeniModGet");
 }
@@ -145,7 +146,7 @@ fn class_defined_answers_a_total_bool_for_top_level_names() {
     mrb.define_class(c"BeniDefined", mrb.object_class())
         .expect("defining the class must succeed");
     assert!(mrb.class_defined(c"BeniDefined"));
-    assert!(mrb.class_defined(beni::Symbol::new(&mrb, c"BeniDefined")));
+    assert!(mrb.class_defined(beni::Symbol::new(&mrb, c"BeniDefined").expect("the name interns")));
 
     // An undefined name reads `false` instead of raising — the
     // predicate is total.
@@ -164,7 +165,7 @@ fn exc_get_fetches_a_builtin_exception_class() {
         .expect("RuntimeError must resolve to its exception class");
     assert_eq!(by_name.name(&mrb), "RuntimeError");
     let by_sym = mrb
-        .exc_get(beni::Symbol::new(&mrb, c"ArgumentError"))
+        .exc_get(beni::Symbol::new(&mrb, c"ArgumentError").expect("the name interns"))
         .expect("a Symbol key must reach the exception class");
     assert_eq!(by_sym.name(&mrb), "ArgumentError");
 }
@@ -398,7 +399,9 @@ fn define_class_refuses_a_superclass_mismatch_as_a_type_error() {
 fn gv_get_reads_nil_for_unset_global() {
     let mrb = open_mrb();
 
-    let sym = mrb.intern_cstr(c"$beni_gv_unset");
+    let sym = mrb
+        .intern_cstr(c"$beni_gv_unset")
+        .expect("the name interns");
 
     assert!(mrb.gv_get(sym).is_nil());
 }
@@ -406,7 +409,7 @@ fn gv_get_reads_nil_for_unset_global() {
 #[test]
 fn gv_get_observes_reassignment() {
     let mrb = open_mrb();
-    let sym = mrb.intern_cstr(c"$beni_gv");
+    let sym = mrb.intern_cstr(c"$beni_gv").expect("the name interns");
 
     // Globals are read at call time: each assignment must be
     // visible to the next read, the contract redirection-style
@@ -421,7 +424,9 @@ fn gv_get_observes_reassignment() {
 #[test]
 fn gv_remove_clears_a_global_back_to_nil() {
     let mrb = open_mrb();
-    let sym = mrb.intern_cstr(c"$beni_gv_removed");
+    let sym = mrb
+        .intern_cstr(c"$beni_gv_removed")
+        .expect("the name interns");
 
     // A set global reads its value, then removing it reads nil —
     // the same as one never set.

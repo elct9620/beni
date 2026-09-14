@@ -4,27 +4,37 @@
 //! arbitrary bytes via an `mrb_value` String) into an `mrb_sym`, or
 //! read the C-string name back from a symbol id.
 
-use crate::{Mrb, Symbol, Value};
+use crate::{Error, Mrb, Symbol, Value};
 use beni_sys as sys;
 
 impl Mrb {
     /// `mrb_intern_cstr(mrb, s)` — intern a NUL-terminated C string
-    /// as a Symbol id.
+    /// as a Symbol id. A name of `UINT16_MAX` bytes or more is too long
+    /// to be a symbol and surfaces as `Err` carrying mruby's
+    /// `ArgumentError`, as for every creating intern.
     #[inline]
-    pub fn intern_cstr(&self, s: &core::ffi::CStr) -> sys::mrb_sym {
-        // SAFETY: `self` is alive; `s.as_ptr()` is NUL-terminated by
-        // the `&CStr` contract.
-        unsafe { sys::mrb_intern_cstr(self.as_ptr(), s.as_ptr()) }
+    pub fn intern_cstr(&self, s: &core::ffi::CStr) -> Result<sys::mrb_sym, Error> {
+        self.protect_sym(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `s.as_ptr()` is NUL-terminated by the `&CStr` contract.
+            unsafe { sys::mrb_intern_cstr(mrb.as_ptr(), s.as_ptr()) }
+        })
+        .map(Symbol::to_sym)
     }
 
     /// `mrb_intern_str(mrb, str)` — intern the bytes of an mruby
     /// String value as a Symbol. Use this when the name arrives as
     /// arbitrary bytes that may not be NUL-safe; otherwise prefer
-    /// `Mrb::intern_cstr`.
+    /// `Mrb::intern_cstr`. Too long a name surfaces as `Err`, as
+    /// `Mrb::intern_cstr` describes.
     #[inline]
-    pub fn intern_str(&self, s: Value) -> sys::mrb_sym {
-        // SAFETY: `self` is alive; `s` originates from the same VM.
-        unsafe { sys::mrb_intern_str(self.as_ptr(), s.as_raw()) }
+    pub fn intern_str(&self, s: Value) -> Result<sys::mrb_sym, Error> {
+        self.protect_sym(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `s`
+            // originates from the same VM.
+            unsafe { sys::mrb_intern_str(mrb.as_ptr(), s.as_raw()) }
+        })
+        .map(Symbol::to_sym)
     }
 
     /// `mrb_intern(mrb, name, len)` — intern a borrowed byte slice as a
@@ -32,19 +42,22 @@ impl Mrb {
     /// it interns the exact bytes the slice spans, so a name that embeds
     /// a NUL or is not NUL-terminated interns whole where `intern_cstr`
     /// would stop at the first NUL. mruby copies the bytes, so the borrow
-    /// need not outlive the call (unlike `intern_static`).
+    /// need not outlive the call (unlike `intern_static`). Too long a
+    /// name surfaces as `Err`, as `Mrb::intern_cstr` describes.
     #[inline]
-    pub fn intern(&self, name: &[u8]) -> Symbol {
-        // SAFETY: `self` is alive; `name` is a valid byte slice and its
-        // length is passed alongside, so the borrow need not be NUL-safe.
-        let sym = unsafe {
-            sys::mrb_intern(
-                self.as_ptr(),
-                name.as_ptr() as *const core::ffi::c_char,
-                name.len(),
-            )
-        };
-        Symbol::from_sym(sym)
+    pub fn intern(&self, name: &[u8]) -> Result<Symbol, Error> {
+        self.protect_sym(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `name` is a
+            // valid byte slice and its length is passed alongside, so the
+            // borrow need not be NUL-safe.
+            unsafe {
+                sys::mrb_intern(
+                    mrb.as_ptr(),
+                    name.as_ptr() as *const core::ffi::c_char,
+                    name.len(),
+                )
+            }
+        })
     }
 
     /// `mrb_intern_static(mrb, name, len)` — intern `name` as a Symbol
@@ -52,18 +65,39 @@ impl Mrb {
     /// / `intern_str`. mruby keeps the borrowed pointer and never frees it,
     /// so the buffer must outlive the VM; the `'static` bound is what makes
     /// this safe. A `b"..."` literal is a `&'static [u8]`, so this also
-    /// serves mruby's `mrb_intern_lit` convenience.
+    /// serves mruby's `mrb_intern_lit` convenience. Too long a name
+    /// surfaces as `Err`, as `Mrb::intern_cstr` describes.
     #[inline]
-    pub fn intern_static(&self, name: &'static [u8]) -> sys::mrb_sym {
-        // SAFETY: `self` is alive; `name` is `'static`, so the borrowed
-        // buffer outlives the VM as mruby's no-free intern requires.
-        unsafe {
-            sys::mrb_intern_static(
-                self.as_ptr(),
-                name.as_ptr() as *const core::ffi::c_char,
-                name.len(),
-            )
-        }
+    pub fn intern_static(&self, name: &'static [u8]) -> Result<sys::mrb_sym, Error> {
+        self.protect_sym(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `name` is
+            // `'static`, so the borrowed buffer outlives the VM as mruby's
+            // no-free intern requires.
+            unsafe {
+                sys::mrb_intern_static(
+                    mrb.as_ptr(),
+                    name.as_ptr() as *const core::ffi::c_char,
+                    name.len(),
+                )
+            }
+        })
+        .map(Symbol::to_sym)
+    }
+
+    /// Run `intern` inside `Mrb::protect`, boxing the symbol id it
+    /// produces as a `Value` to ride through the protect frame and
+    /// unwrapping it as a `Symbol` on the way out — the shared plumbing
+    /// behind every creating intern and the symbol coercion, as
+    /// `protect_class_ptr` is for the class-yielding calls. An mruby
+    /// raise inside `intern` surfaces as `Err(Error::Exception)`.
+    pub(crate) fn protect_sym<F>(&self, intern: F) -> Result<Symbol, Error>
+    where
+        F: FnOnce(&Mrb) -> sys::mrb_sym,
+    {
+        self.protect(|mrb| Symbol::from_sym(intern(mrb)).as_value())
+            // SAFETY: an `Ok` result came from `Symbol::from_sym`, so it
+            // carries the Symbol tag the unchecked wrap requires.
+            .map(|v| unsafe { Symbol::from_value_unchecked(v) })
     }
 
     /// `mrb_intern_check(mrb, name, len)` — the non-creating counterpart

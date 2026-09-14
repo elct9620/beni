@@ -57,7 +57,7 @@ impl Mrb {
     /// it is stored under. The name carries no `$`, so no Ruby program
     /// can reach the table by writing a global variable.
     fn root_table(&self) -> Result<RootTable, Error> {
-        let slot = self.intern_static(TABLE_GLOBAL);
+        let slot = self.intern_static(TABLE_GLOBAL)?;
         if let Some(table) = Array::from_value(self.gv_get(slot)) {
             return Ok(RootTable(table));
         }

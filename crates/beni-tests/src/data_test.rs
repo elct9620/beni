@@ -181,7 +181,9 @@ fn release_hook_drops_the_boxed_value_on_close() {
         let obj = class
             .data_wrap(&mrb, DropProbe, &PROBE_TYPE)
             .expect("wrapping into a marked class must succeed");
-        let slot = mrb.intern_cstr(c"$beni_data_probe");
+        let slot = mrb
+            .intern_cstr(c"$beni_data_probe")
+            .expect("the name interns");
         mrb.gv_set(slot, obj);
     }
     assert_eq!(
@@ -221,7 +223,9 @@ fn release_hook_runs_on_the_thread_the_interpreter_was_carried_to() {
     let obj = class
         .data_wrap(&mrb, ThreadProbe, &THREAD_PROBE_TYPE)
         .expect("wrapping into a marked class must succeed");
-    let slot = mrb.intern_cstr(c"$beni_thread_probe");
+    let slot = mrb
+        .intern_cstr(c"$beni_thread_probe")
+        .expect("the name interns");
     mrb.gv_set(slot, obj);
 
     let carrier = std::thread::spawn(move || {
@@ -277,7 +281,9 @@ fn release_hook_contains_a_panicking_drop_on_close() {
         let obj = class
             .data_wrap(&mrb, PanicOnDrop, &PANIC_TYPE)
             .expect("wrapping into a marked class must succeed");
-        let slot = mrb.intern_cstr(c"$beni_data_panic");
+        let slot = mrb
+            .intern_cstr(c"$beni_data_panic")
+            .expect("the name interns");
         mrb.gv_set(slot, obj);
     }
     // Reaching here proves the panic was contained at the hook: had

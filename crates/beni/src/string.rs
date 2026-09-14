@@ -417,20 +417,12 @@ impl RString {
     /// `mrb_str_intern(mrb, self)` — the typed `Symbol` naming this
     /// string's own bytes, Ruby's `String#intern`, creating the symbol
     /// when it does not yet exist. It interns the receiver's bytes
-    /// directly (`mrb_symbol_value(mrb_intern_str(..))`), dispatching
-    /// nothing and never raising. Distinct from `Value::to_sym`, which
-    /// coerces an arbitrary value and can raise.
+    /// directly, as `Mrb::intern_str` does, dispatching nothing; bytes
+    /// too long to be a symbol surface as `Err`. Distinct from
+    /// `Value::to_sym`, which coerces an arbitrary value.
     #[inline]
-    pub fn intern(self, mrb: &Mrb) -> crate::Symbol {
-        // SAFETY: `self` is String-tagged by the newtype contract and
-        // shares the VM; `mrb_str_intern` reads its bytes and returns a
-        // Symbol-tagged value, so the unchecked wrap is sound.
-        unsafe {
-            crate::Symbol::from_value_unchecked(Value::from_raw(sys::mrb_str_intern(
-                mrb.as_ptr(),
-                self.0.as_raw(),
-            )))
-        }
+    pub fn intern(self, mrb: &Mrb) -> Result<crate::Symbol, crate::Error> {
+        mrb.intern_str(self.0).map(crate::Symbol::from_sym)
     }
 
     /// `mrb_string_cstr(mrb, self)` — the bytes as an owned, NUL-terminated

@@ -282,7 +282,11 @@ fn is_kind_of_answers_false_for_a_break_object() {
         .define_method(&mrb, c"run", beni::method!(break_is_an_exception, -1))
         .expect("registering the probe method must succeed");
     let recv = class.obj_new(&mrb, &[]).expect("the receiver constructs");
-    mrb.gv_set(mrb.intern_cstr(c"$beni_break_kind_recv"), recv);
+    mrb.gv_set(
+        mrb.intern_cstr(c"$beni_break_kind_recv")
+            .expect("the name interns"),
+        recv,
+    );
 
     let cxt = Ccontext::new(&mrb, c"break_kind_test.rb").expect("allocating the compile context");
     let got = cxt

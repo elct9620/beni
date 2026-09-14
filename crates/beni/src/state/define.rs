@@ -32,7 +32,7 @@ impl Mrb {
     /// same-named constant that is not a module.
     #[inline]
     pub fn define_module<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(self);
+        let sym = name.into_sym(self)?;
         crate::class::protect_class_ptr(self, |mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `sym` was interned against the same VM.
@@ -49,7 +49,7 @@ impl Mrb {
     /// anything else bound there.
     #[inline]
     pub fn define_class<K: IntoSym>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
-        let sym = name.into_sym(self);
+        let sym = name.into_sym(self)?;
         if let Some(bound) =
             crate::class::bound_class(self, self.object_class().as_raw(), sym, super_)
         {
@@ -112,7 +112,7 @@ impl Mrb {
     /// so the lookup is fallible by contract.
     #[inline]
     pub fn class_get<K: IntoSym>(&self, name: K) -> Result<RClass, Error> {
-        let sym = name.into_sym(self);
+        let sym = name.into_sym(self)?;
         crate::class::protect_class_ptr(self, |mrb| {
             // SAFETY: as `define_module`.
             unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) }
@@ -125,10 +125,14 @@ impl Mrb {
     /// symbol-or-name key (`IntoSym`), routed through the `_id` form
     /// like `class_get`. A total predicate: an undefined name reads
     /// `false` rather than raising, so it is the precondition test
-    /// before a fetching lookup that would raise on a missing name.
+    /// before a fetching lookup that would raise on a missing name. A
+    /// name too long to intern can never be bound, so it reads `false`
+    /// too.
     #[inline]
     pub fn class_defined<K: IntoSym>(&self, name: K) -> bool {
-        let sym = name.into_sym(self);
+        let Ok(sym) = name.into_sym(self) else {
+            return false;
+        };
         // SAFETY: `self` is alive; `sym` was interned against the
         // same VM. `mrb_class_defined_id` is a constant-existence
         // lookup that does not raise.
@@ -145,7 +149,7 @@ impl Mrb {
     /// for raising from registered code.
     #[inline]
     pub fn exc_get<K: IntoSym>(&self, name: K) -> Result<ExceptionClass, Error> {
-        let sym = name.into_sym(self);
+        let sym = name.into_sym(self)?;
         crate::class::protect_class_ptr(self, |mrb| {
             // SAFETY: as `define_module`.
             unsafe { sys::mrb_exc_get_id(mrb.as_ptr(), sym) }
@@ -162,7 +166,7 @@ impl Mrb {
     /// documents both), so the lookup is fallible by contract.
     #[inline]
     pub fn module_get<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(self);
+        let sym = name.into_sym(self)?;
         crate::class::protect_class_ptr(self, |mrb| {
             // SAFETY: as `define_module`.
             unsafe { sys::mrb_module_get_id(mrb.as_ptr(), sym) }
