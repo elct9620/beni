@@ -126,13 +126,7 @@ impl Error {
     /// no class to walk.
     pub fn is_kind_of<T: Module>(&self, mrb: &Mrb, class: T) -> bool {
         match self {
-            // SAFETY: `mrb` is alive and `exc` shares the VM; `class` is a
-            // typed class or module handle, so the class-kind check
-            // `mrb_obj_is_kind_of` raises on never fires, and the walk
-            // itself only reads the class chain.
-            Error::Exception(exc) => unsafe {
-                sys::mrb_obj_is_kind_of(mrb.as_ptr(), exc.as_raw(), class.raw())
-            },
+            Error::Exception(exc) => exc.is_kind_of(mrb, class),
             Error::Syntax(_) | Error::Panic(_) => false,
         }
     }
