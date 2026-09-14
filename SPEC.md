@@ -421,7 +421,8 @@ another for byte equality (Ruby's `String#==`) and orders against another by byt
 content (Ruby's `String#<=>`) — total reads that dispatch nothing and never
 raise. It also interns its own bytes into the typed `Symbol` they name, creating
 that symbol when it does not yet exist (Ruby's `String#intern`), dispatching
-nothing and never raising. It also concatenates with another string
+nothing; like every creating intern, it surfaces an `Err` for bytes too long to
+name a symbol. It also concatenates with another string
 into a new string (Ruby's `String#+`), anchored on mruby's own `mrb_str_plus`:
 the result is a freshly allocated string holding both operands' bytes, and
 neither operand is mutated — the non-mutating counterpart of the in-place append,
@@ -452,15 +453,19 @@ requirement the intern enforces), since mruby keeps the pointer and never frees
 it. This intern anchors on mruby's own `mrb_intern_static`, with `mrb_intern_lit`
 the convenience that borrows a string literal.
 
-Those interns all create the symbol when none exists yet. A name also checks for
+Those interns all create the symbol when none exists yet, and dispatch nothing.
+Each surfaces an `Err` carrying the `ArgumentError` mruby raises for a name of
+`UINT16_MAX` bytes or more — a name too long to be a symbol — and interns every
+shorter name. A name also checks for
 an already-interned `Symbol` without creating one: the bytes resolve to the
 symbol they name when mruby has interned it before, and to nothing when no such
 symbol exists. The check dispatches nothing and never raises.
 
 Where those interns take Rust bytes, an existing mruby value also coerces into a
-typed `Symbol`: a symbol value yields its own id, a string value interns its
-contents, and any other value surfaces an `Err` — the `TypeError` mruby raises
-for a value that is neither a symbol nor a string. The coercion dispatches no
+typed `Symbol`: a symbol value yields its own id; a string value interns its
+contents, surfacing the creating interns' `Err` when they are too long to be a
+symbol; any other value surfaces an `Err` — the `TypeError` mruby raises for a
+value that is neither a symbol nor a string. The coercion dispatches no
 user Ruby; it follows the raise/return contract like the other converting
 operations.
 
@@ -554,6 +559,7 @@ raise/return contract:
 | Dispatches Ruby — a method call, `==` / `eql?`, a `<=>` comparison, an object `dup` / `clone` or string coercion, a splat coercion to an array running a non-array's `to_a`, an array join rendering each element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the receiver is not a class or module or the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` (a `<=>` comparison yields nothing when the two values are incomparable) |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the receiver is not a class or module, or the name resolves to no class variable | `Result` |
 | Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
+| Interns a name, creating its symbol — a C-string, byte-slice, String-value, or static-buffer intern, or a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (an `ArgumentError`) | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
 | Marks a class so its instances carry Rust data | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`) | `Result` |
 | Wraps a Rust value as a data carrier — allocating a fresh instance of a marked class to carry it | the class cannot carry a data carrier — it was never marked — so the allocation raises a `TypeError`; the unwrapped Rust value is reclaimed rather than leaked | `Result` |
@@ -668,7 +674,10 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   a namespace, and method dispatch on a value — accepts the
   name as a symbol-or-name key, mirroring `magnus`'s `IntoId`: a string key
   interns to a symbol, an
-  already-interned `Symbol` key is reused without re-interning. A consumer
+  already-interned `Symbol` key is reused without re-interning. A string key too
+  long to intern makes the operation surface the intern's `Err` as its own
+  without acting — except the predicate testing whether a class or module is
+  defined, which answers `false` for it. A consumer
   holding a `Symbol` reaches the definition or lookup without a redundant
   intern; the result is identical to passing the equivalent name, since both
   resolve to the same interned symbol. A method alias keys both the new and the
@@ -693,9 +702,10 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   whether a class or module is defined under a given name — top-level on the
   `Mrb` handle and within a namespace through the `Module` trait, both
   symbol-or-name keyed. Unlike the fetching lookups, the predicate never raises:
-  a name bound in that scope answers `true`, an unbound one `false` rather than
-  surfacing an `Err`. It is the precondition test a consumer runs before a
-  fetching lookup that would otherwise raise on a missing name.
+  a name bound in that scope answers `true`, an unbound one — a name too long to
+  intern among them — `false` rather than surfacing an `Err`. It is the
+  precondition test a consumer runs before a fetching lookup that would
+  otherwise raise on a missing name.
 - A class handle resolves to its real class — its singleton-class and
   include-class links skipped — yielding the first user-facing class in the
   chain. A handle that is already a real class returns itself; the resolution
@@ -1137,6 +1147,7 @@ The `compiler` capability feature carries everything in this section.
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable read or assignment to a receiver that is not a class or module — assignment also to a frozen one, or a constant fetch, assignment, or removal to a receiver that is not a class or module — assignment and removal also to a frozen one | surfaced as a Rust `Err`, never unwinds across FFI |
 | A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
+| A name of `UINT16_MAX` bytes or more given to a creating intern, to a string's coercion to a symbol, or as a symbol-or-name key | surfaced as a Rust `Err` carrying the `ArgumentError`, never unwinds across FFI; the predicate testing whether a class or module is defined answers `false` instead |
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
