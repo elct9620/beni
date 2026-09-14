@@ -42,7 +42,7 @@
 
 use beni_sys as sys;
 
-use crate::{Error, Mrb, RClass};
+use crate::{Error, Module, Mrb, RClass};
 use crate::{FromValue, RString};
 
 /// Compile-time NUL-terminated C-string literal pointer.
@@ -1373,25 +1373,27 @@ impl Value {
     }
 
     /// `mrb_obj_is_kind_of(mrb, self, class)` — whether `self` is an
-    /// instance of `class` or any of its subclasses, Ruby's `is_a?`. A
-    /// pure ancestry walk that dispatches nothing, so it never raises.
+    /// instance of `class`, a class or module, walking the ancestry as
+    /// Ruby's `is_a?` does; magnus's `Value::is_kind_of`. A pure ancestry
+    /// walk that dispatches nothing, so it never raises.
     #[inline]
-    pub fn is_kind_of(self, mrb: &Mrb, class: RClass) -> bool {
+    pub fn is_kind_of<T: Module>(self, mrb: &Mrb, class: T) -> bool {
         // SAFETY: `mrb` is alive; `self` and `class` share the VM.
-        // `mrb_obj_is_kind_of` only walks the class hierarchy.
-        unsafe { sys::mrb_obj_is_kind_of(mrb.as_ptr(), self.0, class.as_raw()) }
+        // `class` is a typed class or module handle, so the class-kind
+        // check `mrb_obj_is_kind_of` raises on never fires, and the walk
+        // itself only reads the class chain.
+        unsafe { sys::mrb_obj_is_kind_of(mrb.as_ptr(), self.0, class.raw()) }
     }
 
     /// `mrb_obj_is_instance_of(mrb, self, class)` — whether `self` is a
-    /// direct instance of `class`, Ruby's `instance_of?`. A pure class
+    /// direct instance of `class`, Ruby's `instance_of?`: only the class
+    /// `self` belongs to matches, so a module never does. A pure class
     /// compare that dispatches nothing, so it never raises.
     #[inline]
-    pub fn is_instance_of(self, mrb: &Mrb, class: RClass) -> bool {
+    pub fn is_instance_of<T: Module>(self, mrb: &Mrb, class: T) -> bool {
         // SAFETY: as `is_kind_of`; `mrb_obj_is_instance_of` only reads
         // the receiver's class.
-        unsafe {
-            sys::mrb_obj_is_instance_of(mrb.as_ptr(), self.0, class.as_raw() as *const sys::RClass)
-        }
+        unsafe { sys::mrb_obj_is_instance_of(mrb.as_ptr(), self.0, class.raw()) }
     }
 
     /// `mrb_obj_freeze(mrb, self)` — freeze `self` in place and return

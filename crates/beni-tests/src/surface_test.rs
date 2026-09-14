@@ -314,8 +314,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::into_raw;
     let _ = Value::is_exception;
     let _ = Value::is_false;
-    let _ = Value::is_instance_of;
-    let _ = Value::is_kind_of;
+    let _ = Value::is_instance_of::<RClass>;
+    let _ = Value::is_kind_of::<RClass>;
     let _ = Value::is_module;
     let _ = Value::is_range;
     let _ = Value::is_true;

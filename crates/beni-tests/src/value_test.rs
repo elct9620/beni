@@ -1221,6 +1221,47 @@ fn class_and_kind_predicates_read_the_hierarchy() {
 }
 
 #[test]
+fn kind_predicates_take_a_module_through_the_ancestry() {
+    let mrb = open_mrb();
+    let tagged = mrb
+        .load_string(
+            b"module BeniKindTag; end; module BeniKindUnrelated; end
+              class BeniKindTagged; include BeniKindTag; end
+              BeniKindTagged.new",
+        )
+        .expect("the fixture loads");
+    let tag = mrb
+        .module_get(c"BeniKindTag")
+        .expect("the module is defined");
+    let unrelated = mrb
+        .module_get(c"BeniKindUnrelated")
+        .expect("the module is defined");
+
+    // A module the class includes sits in the ancestry is_a? walks;
+    // instance_of? matches only the class the value belongs to, which
+    // a module never is.
+    assert!(tagged.is_kind_of(&mrb, tag));
+    assert!(!tagged.is_kind_of(&mrb, unrelated));
+    assert!(!tagged.is_instance_of(&mrb, tag));
+}
+
+#[test]
+fn kind_predicates_take_an_exception_class_handle() {
+    let mrb = open_mrb();
+    let argument_error = mrb
+        .exc_get(c"ArgumentError")
+        .expect("ArgumentError is built in");
+    let standard_error = mrb
+        .exc_get(c"StandardError")
+        .expect("StandardError is built in");
+    let exc = argument_error.exc_new(&mrb, "boom");
+
+    assert!(exc.is_kind_of(&mrb, standard_error));
+    assert!(exc.is_instance_of(&mrb, argument_error));
+    assert!(!exc.is_instance_of(&mrb, standard_error));
+}
+
+#[test]
 fn singleton_class_reads_a_stable_eigenclass_and_rejects_immediates() {
     let mrb = open_mrb();
     let s = mrb.str_new(b"hi").as_value();
