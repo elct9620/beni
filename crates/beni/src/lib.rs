@@ -111,3 +111,10 @@ pub use value::{Break, Value};
 /// alias to `sys::mrb_func_t` happens once, inside the registration
 /// plumbing the `Module` / `Object` traits share.
 pub type mrb_func_t = unsafe extern "C" fn(mrb: *mut sys::mrb_state, self_: Value) -> Value;
+
+/// The build script's integer-width read, reachable here because a build
+/// script is outside `cargo test`'s reach.
+#[cfg(test)]
+mod width {
+    include!("../build/width.rs");
+}
