@@ -244,6 +244,11 @@ Selection, checksums, and cross-compile activation:
   was built under its compiler's default, which binding generation's own
   toolchain need not share, so it parses under a standard that keeps the
   form rather than under that toolchain's default.
+- The crate publishes the configured integer width to the crates that
+  depend on it directly as the integer-width metadata, read from the
+  bindings the build uses — the discovered archive's own, or the
+  documentation bindings in a documentation build. Bindings that declare
+  no integer width fail the build.
 - A documentation build reads the documentation bindings and links
   nothing, so the whole typed surface renders where no archive can be
   staged. It serves host cargo targets only, and it is the one build
@@ -285,12 +290,23 @@ definition. Two typed conversions cross the Rust/Ruby boundary:
 
 | Conversion | Direction | Rule |
 |---|---|---|
-| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`i32` / `f64` / `bool`) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` — yields the value naming that same object, raising nothing and running no Ruby |
+| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`f64`, `bool`, or a Rust integer the integer row admits) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` — yields the value naming that same object, raising nothing and running no Ruby |
+| `IntoValue` for a Rust integer | Rust integer → Integer `Value` | a Rust integer type converts only where every value it holds fits the configured integer width, so the conversion stays total: `i8` / `i16` / `i32` / `u8` / `u16` under every width, `u32` / `i64` under a 64-bit width, `isize` where the cargo target's pointer width is no wider than the configured integer width; every other integer type — `u64`, `usize`, `i128`, `u128`, and a `u32` / `i64` / `isize` the width does not fit — has no conversion and fails to compile |
 | `FromValue` → `Value` | `Value` → `Value` | identity — the value itself; total, never rejects |
 | `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag, subclass instances included for strings and containers — a class handle converts on the class or the singleton-class tag, a module handle on the module tag, an exception-class handle on the class tag when that class is an exception class; any other value rejects |
 | `FromValue` → `bool` | `Value` → `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true`; total, never rejects |
-| `FromValue` → `i32` / `i64` / `f64` | `Value` → Rust number | converts an Integer that fits the configured integer width to an integer and a Float to `f64`, never across the two; `i64` holds every such Integer, while `i32` rejects one outside its own range; any other value rejects, an arbitrary-width Integer beyond the configured width included |
+| `FromValue` → `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64` / `isize` / `usize` / `f64` | `Value` → Rust number | converts an Integer that fits the configured integer width to an integer and a Float to `f64`, never across the two; an integer target takes the Integer when its value lies within the target's own range and rejects it otherwise — `i64` holds every such Integer, and an unsigned target rejects every negative one; any other value rejects, an arbitrary-width Integer beyond the configured width included; every target listed converts under every configured width |
 | `FromValue` → `Option<T>` | `Value` → `Option<T>` | `nil` to `None`; any other value converts by `T`'s rule to `Some`, rejecting what `T` rejects |
+
+Integer quantities cross the typed surface as Rust's own integer types, never as
+the configured-width integer the raw bindings declare, so a signature reads the
+same under every configured integer width. An index or offset mruby counts back
+from the end when it is negative is signed; every other count, length, or offset
+— one mruby never computes with as a negative value, whether it rejects a
+negative one or cannot be handed one — is `usize`; and an integer mruby produces
+— an Integer's value, a parsed integer, an object identifier — is `i64`, which
+holds every configured width. The crate takes the configured integer width from
+the integer-width metadata alone.
 
 A value also converts to an `RString` handle by the same String type tag, but
 surfacing the mismatch as an `Err` rather than rejecting to `None`: it succeeds
@@ -500,7 +516,8 @@ Given a collection length, a Range computes the normalized slice it covers of a
 collection that long — the primitive behind slicing a collection by a Range, the
 way Ruby's `Array#[range]` / `String#[range]` resolve a Range index. The result
 is one of three outcomes the caller distinguishes: an in-range slice carrying a
-begin offset and a selected length; out-of-range, when the begin offset falls
+begin offset and a selected length, both non-negative — an end that falls before
+the begin selects a length of zero; out-of-range, when the begin offset falls
 before the collection start; or a mismatch, when the receiver is not a Range. A
 negative begin or end counts back from the collection length, and a missing begin
 or end stands in for the collection's first or last index. The begin offset and
@@ -1148,6 +1165,8 @@ The `compiler` capability feature carries everything in this section.
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails |
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root |
 | The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has |
+| Bindings a `beni-sys` build uses that declare no integer width | `beni-sys` build fails and names the bindings it read |
+| A `beni` build that receives no integer-width metadata | `beni` build fails and names the metadata it expected |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | An exception raised by a raw binding inside a `sys::protect` body | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle; never unwinds past the caller |
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable read or assignment to a receiver that is not a class or module — assignment also to a frozen one, or a constant fetch, assignment, or removal to a receiver that is not a class or module — assignment and removal also to a frozen one | surfaced as a Rust `Err`, never unwinds across FFI |
@@ -1204,6 +1223,8 @@ The `compiler` capability feature carries everything in this section.
 | staged path | `mruby/build/<name>/lib/` under the vendor tree, holding one target's archive and compile-flags sidecar |
 | wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — beni's wasm32-wasip1 cross-compile settings, staged whenever `wasi-sdk` is selected and activated by a build config via `conf.toolchain :wasi` |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of the archive's file name, the compiler that built it, the flags that compiler was given, and the libraries it needs linked |
+| configured integer width | the bit width of mruby's integer the bindings a build uses declare — 32 or 64; mruby settles it from the archive's flags and the target, and the documentation bindings carry the 64-bit width of the upstream default configuration |
+| integer-width metadata | the `links` metadata key `defines_mrb_int64` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_DEFINES_MRB_INT64` — `true` for a 64-bit configured integer width, `false` for a 32-bit one |
 | supported mruby floor | mruby 4.0 — the oldest release the crates build against; an archive states its own version in the header tree staged beside it |
 | documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable and builds on one platform, `x86_64-unknown-linux-gnu` |
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
