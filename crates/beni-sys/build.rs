@@ -4,7 +4,7 @@
 // Purpose
 // -------
 // When archive discovery locates an archive for the active cargo
-// target, this build script does four things:
+// target, this build script does five things:
 //
 //   1. Runs bindgen against `src/wrapper.h` to emit the mruby C API
 //      FFI surface into `$OUT_DIR/bindings.rs`. The static-fn
@@ -24,6 +24,10 @@
 //      library the sidecar names.
 //   4. Leaves the bindings at `$OUT_DIR/bindings.rs`, the one path
 //      `src/lib.rs` includes them from.
+//   5. Publishes the integer width those bindings declare as `links`
+//      metadata, so a direct dependent offers only the integer
+//      conversions that width can hold. A documentation build publishes
+//      the width of the documentation bindings it stages instead.
 //
 // Archive discovery
 // -----------------
@@ -98,6 +102,7 @@ use std::path::{Path, PathBuf};
 include!("build/sidecar.rs");
 include!("build/target.rs");
 include!("build/version.rs");
+include!("build/width.rs");
 
 /// Non-empty value of the env var named `key`, treating unset and
 /// empty as the same "not provided" state.
@@ -207,6 +212,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build/sidecar.rs");
     println!("cargo:rerun-if-changed=build/target.rs");
     println!("cargo:rerun-if-changed=build/version.rs");
+    println!("cargo:rerun-if-changed=build/width.rs");
     println!("cargo:rerun-if-changed=src/wrapper.h");
     println!("cargo:rerun-if-env-changed=DOCS_RS");
     println!("cargo:rerun-if-changed=src/bindings_docs.rs");
@@ -220,6 +226,7 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     if env::var_os("DOCS_RS").is_some() {
         stage_documentation_bindings(&manifest_dir, &out_dir);
+        println!("{}", integer_width_directive(&out_dir.join("bindings.rs")));
         return;
     }
 
@@ -270,6 +277,7 @@ fn main() {
         &static_wrappers_c,
     );
     compile_trampolines(&include_root, &compiler, &compile_flags, &static_wrappers_c);
+    println!("{}", integer_width_directive(&bindings_rs));
 
     // The archive sits where discovery found it; every other library
     // its sidecar names comes from the toolchain that built it, which

@@ -49,7 +49,8 @@ readme = "README.md"
 keywords = ["mruby", "ruby", "ffi", "bindings"]
 categories = ["external-ffi-bindings"]
 # Names the native library this crate links, so cargo refuses a graph
-# where two packages would link libmruby.
+# where two packages would link libmruby; it also names the metadata
+# this crate publishes, which dependents read as `DEP_MRUBY_*`.
 links = "mruby"
 # The package carries the documentation bindings, which git does not:
 # naming what to package is what lets a generated file in, since the
