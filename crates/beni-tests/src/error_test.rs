@@ -66,6 +66,18 @@ fn argnum_renders_the_range_form_for_distinct_bounds() {
 }
 
 #[test]
+fn argnum_saturates_a_count_wider_than_the_configured_width() {
+    let mrb = open_mrb();
+
+    let message = Error::argnum(&mrb, usize::MAX, 2, 2).message(&mrb);
+
+    assert!(
+        message.contains(&format!("given {}", beni::sys::mrb_int::MAX)),
+        "unexpected message: {message}"
+    );
+}
+
+#[test]
 fn backtrace_reads_the_frames_a_raise_under_a_context_carries() {
     use beni::Ccontext;
 

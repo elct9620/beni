@@ -54,8 +54,8 @@ impl Error {
     /// `sys::mrb_int::MAX` (the archive's configured integer width), like
     /// `Mrb::str_new`; real argument counts stay far below that.
     #[inline]
-    pub fn argnum(mrb: &Mrb, given: i64, min: i32, max: i32) -> Self {
-        let argc = given.min(sys::mrb_int::MAX as i64) as sys::mrb_int;
+    pub fn argnum(mrb: &Mrb, given: usize, min: i32, max: i32) -> Self {
+        let argc = sys::mrb_int::try_from(given).unwrap_or(sys::mrb_int::MAX);
         match mrb.protect(|mrb| -> Value {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `mrb_argnum_error` raises `ArgumentError`, caught by
