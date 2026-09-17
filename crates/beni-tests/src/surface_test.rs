@@ -50,7 +50,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::nil;
     let _ = Value::true_;
     let _ = Value::false_;
-    let _ = Value::from_int;
     let _ = Value::from_float;
     let _ = Value::obj_as_string;
     let _ = Value::any_to_s;

@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::Error;
+use beni::{Error, IntoValue};
 
 #[test]
 fn push_and_entry_roundtrip_through_a_live_array() {
@@ -13,6 +13,19 @@ fn push_and_entry_roundtrip_through_a_live_array() {
 
     assert_eq!(ary.entry(0).to_string(&mrb), "first");
     assert_eq!(ary.entry(-1).to_string(&mrb), "second");
+}
+
+#[test]
+fn raw_entry_reads_nil_past_the_configured_width() {
+    let mrb = open_mrb();
+    let ary = mrb.ary_new();
+    ary.push(&mrb, 1i32.into_value(&mrb))
+        .expect("push to a fresh array succeeds");
+
+    // SAFETY: `ary` is an Array, so its value is Array-tagged.
+    let past = unsafe { ary.as_value().ary_entry(isize::MAX) };
+
+    assert!(past.is_nil());
 }
 
 #[test]
@@ -167,15 +180,15 @@ fn clear_empties_and_dup_copies_independently() {
 fn replace_swaps_the_whole_contents_in_place() {
     let mrb = open_mrb();
     let ary = mrb.ary_new();
-    ary.push(&mrb, beni::Value::from_int(&mrb, 1))
+    ary.push(&mrb, 1i32.into_value(&mrb))
         .expect("push succeeds");
-    ary.push(&mrb, beni::Value::from_int(&mrb, 2))
+    ary.push(&mrb, 2i32.into_value(&mrb))
         .expect("push succeeds");
 
     let other = mrb.ary_new();
     for n in [3, 4, 5] {
         other
-            .push(&mrb, beni::Value::from_int(&mrb, n))
+            .push(&mrb, i32::into_value(n, &mrb))
             .expect("push succeeds");
     }
 
@@ -213,7 +226,7 @@ fn splice_inserts_replaces_and_deletes_in_place() {
     let mrb = open_mrb();
     let ary = mrb.ary_new();
     for n in [1, 2, 3] {
-        ary.push(&mrb, beni::Value::from_int(&mrb, n))
+        ary.push(&mrb, i32::into_value(n, &mrb))
             .expect("push succeeds");
     }
 
@@ -221,7 +234,7 @@ fn splice_inserts_replaces_and_deletes_in_place() {
     // removing any: [1,2,3] -> [1,10,11,2,3].
     let ins = mrb.ary_new();
     for n in [10, 11] {
-        ins.push(&mrb, beni::Value::from_int(&mrb, n))
+        ins.push(&mrb, i32::into_value(n, &mrb))
             .expect("push succeeds");
     }
     ary.splice(&mrb, 1, 0, ins.as_value())
@@ -232,7 +245,7 @@ fn splice_inserts_replaces_and_deletes_in_place() {
 
     // A non-array replacement is inserted as the single element it is,
     // replacing the run in place: [1,10,11,2,3] -> [1,10,99,2,3].
-    ary.splice(&mrb, 2, 1, beni::Value::from_int(&mrb, 99))
+    ary.splice(&mrb, 2, 1, 99i32.into_value(&mrb))
         .expect("an in-place single-element replace succeeds");
     assert_eq!(ary.len(), 5);
     assert_eq!(ary.entry(2).to_string(&mrb), "99");
@@ -260,7 +273,7 @@ fn splice_surfaces_raising_edges_as_err() {
 
     let mrb = open_mrb();
     let ary = mrb.ary_new();
-    ary.push(&mrb, beni::Value::from_int(&mrb, 1))
+    ary.push(&mrb, 1i32.into_value(&mrb))
         .expect("push succeeds");
 
     // A head reaching past the beginning raises IndexError.
@@ -300,11 +313,11 @@ fn splice_surfaces_raising_edges_as_err() {
 fn join_renders_elements_with_a_separator() {
     let mrb = open_mrb();
     let ary = mrb.ary_new();
-    ary.push(&mrb, beni::Value::from_int(&mrb, 1))
+    ary.push(&mrb, 1i32.into_value(&mrb))
         .expect("push succeeds");
-    ary.push(&mrb, beni::Value::from_int(&mrb, 2))
+    ary.push(&mrb, 2i32.into_value(&mrb))
         .expect("push succeeds");
-    ary.push(&mrb, beni::Value::from_int(&mrb, 3))
+    ary.push(&mrb, 3i32.into_value(&mrb))
         .expect("push succeeds");
 
     // Each element's to_s runs and the separator sits between adjacent
@@ -410,7 +423,7 @@ fn entries_walks_elements_first_to_last() {
     let mrb = open_mrb();
     let ary = mrb.ary_new();
     for n in [1, 2, 3] {
-        ary.push(&mrb, beni::Value::from_int(&mrb, n))
+        ary.push(&mrb, i32::into_value(n, &mrb))
             .expect("push succeeds");
     }
 
@@ -426,7 +439,7 @@ fn entries_snapshots_the_length_so_a_shrink_reads_nil_past_the_new_end() {
     let mrb = open_mrb();
     let ary = mrb.ary_new();
     for n in [1, 2, 3] {
-        ary.push(&mrb, beni::Value::from_int(&mrb, n))
+        ary.push(&mrb, i32::into_value(n, &mrb))
             .expect("push succeeds");
     }
 
@@ -462,7 +475,7 @@ fn entries_snapshots_the_length_so_a_shrink_reads_nil_past_the_new_end() {
 fn entries_does_not_visit_elements_appended_after_the_walk_begins() {
     let mrb = open_mrb();
     let ary = mrb.ary_new();
-    ary.push(&mrb, beni::Value::from_int(&mrb, 1))
+    ary.push(&mrb, 1i32.into_value(&mrb))
         .expect("push succeeds");
 
     // The walk fixes its length at 1 when it begins. Growing the array
@@ -477,7 +490,7 @@ fn entries_does_not_visit_elements_appended_after_the_walk_begins() {
     );
 
     for n in [2, 3] {
-        ary.push(&mrb, beni::Value::from_int(&mrb, n))
+        ary.push(&mrb, i32::into_value(n, &mrb))
             .expect("push succeeds");
     }
     assert_eq!(ary.len(), 3);
@@ -490,7 +503,7 @@ fn entries_reads_a_slot_changed_mid_walk_as_its_current_value() {
     let mrb = open_mrb();
     let ary = mrb.ary_new();
     for n in [1, 2, 3] {
-        ary.push(&mrb, beni::Value::from_int(&mrb, n))
+        ary.push(&mrb, i32::into_value(n, &mrb))
             .expect("push succeeds");
     }
 

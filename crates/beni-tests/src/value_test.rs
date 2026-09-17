@@ -9,12 +9,12 @@ fn report_break(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (_sym, _rest, block_val) = mrb.get_args::<format::NRestBlock>()?;
     let block = Proc::from_value(block_val).expect("the captured block is a Proc");
     Ok(match block.call(mrb, &[]) {
-        Ok(_) => Value::from_int(mrb, -1),
+        Ok(_) => (-1i32).into_value(mrb),
         Err(Error::Exception(exc)) => match exc.as_break() {
             Some(brk) => brk.value(),
-            None => Value::from_int(mrb, -2),
+            None => (-2i32).into_value(mrb),
         },
-        Err(_) => Value::from_int(mrb, -3),
+        Err(_) => (-3i32).into_value(mrb),
     })
 }
 
@@ -997,7 +997,7 @@ fn cv_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
     // test stays a total predicate answering false.
     let receivers = [
         Value::nil(),
-        Value::from_int(&mrb, 5),
+        5i32.into_value(&mrb),
         mrb.str_new(b"not a module").as_value(),
     ];
     for receiver in receivers {
@@ -1027,7 +1027,7 @@ fn const_presence_answers_false_for_a_receiver_that_is_not_a_class_or_module() {
     // an unchecked dereference.
     let receivers = [
         Value::nil(),
-        Value::from_int(&mrb, 5),
+        5i32.into_value(&mrb),
         mrb.str_new(b"not a module").as_value(),
     ];
     for receiver in receivers {
@@ -1053,7 +1053,7 @@ fn cv_accessors_accept_a_singleton_class_receiver() {
         .intern_cstr(c"@@through_sclass")
         .expect("the name interns");
     sclass
-        .cv_set(&mrb, sym, Value::from_int(&mrb, 7))
+        .cv_set(&mrb, sym, 7i32.into_value(&mrb))
         .expect("a singleton-class receiver must accept the write");
     let got = sclass
         .cv_get(&mrb, sym)
@@ -1301,7 +1301,7 @@ fn singleton_class_reads_a_stable_eigenclass_and_rejects_immediates() {
 
     // Every other immediate has no singleton class: the TypeError
     // mruby raises surfaces as Err.
-    match Value::from_int(&mrb, 1).singleton_class(&mrb) {
+    match 1i32.into_value(&mrb).singleton_class(&mrb) {
         Err(Error::Exception(exc)) => {
             assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
         }
@@ -1382,7 +1382,7 @@ fn as_float_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
 fn int_to_str_renders_in_base_ten_and_other_radixes() {
     let mrb = open_mrb();
 
-    let n = Value::from_int(&mrb, 12345);
+    let n = 12345i32.into_value(&mrb);
     // Base 10 is the plain decimal rendering.
     assert_eq!(
         n.int_to_str(&mrb, 10).expect("base 10 renders").to_bytes(),
@@ -1403,11 +1403,12 @@ fn int_to_str_surfaces_an_invalid_radix_as_err() {
     // A radix outside 2 through 36 raises ArgumentError, caught into
     // Err rather than long-jumping; the VM stays usable afterward.
     assert!(matches!(
-        Value::from_int(&mrb, 12345).int_to_str(&mrb, 1),
+        12345i32.into_value(&mrb).int_to_str(&mrb, 1),
         Err(Error::Exception(_))
     ));
     assert_eq!(
-        Value::from_int(&mrb, 42)
+        42i32
+            .into_value(&mrb)
             .int_to_str(&mrb, 10)
             .expect("the VM survives the protected raise")
             .to_bytes(),
@@ -1475,7 +1476,7 @@ fn float_to_int_rejects_a_non_float_receiver() {
     // mrb_float_to_integer guards its receiver on the Float tag: an
     // Integer is rejected with TypeError, not passed through.
     assert!(matches!(
-        Value::from_int(&mrb, 7).float_to_int(&mrb),
+        7i32.into_value(&mrb).float_to_int(&mrb),
         Err(Error::Exception(_))
     ));
 }
@@ -1485,7 +1486,8 @@ fn ensure_int_coerces_by_numeric_type_or_raises() {
     let mrb = open_mrb();
 
     // An Integer coerces unchanged, staying an Integer value.
-    let same = Value::from_int(&mrb, 5)
+    let same = 5i32
+        .into_value(&mrb)
         .ensure_int(&mrb)
         .expect("an Integer coerces without raising");
     assert!(same.is_integer());
@@ -1528,7 +1530,8 @@ fn ensure_float_coerces_by_numeric_type_or_raises() {
     assert_eq!(f64::from_value(same), Some(2.5));
 
     // An Integer widens to a Float — the cross-numeric case.
-    let widened = Value::from_int(&mrb, 7)
+    let widened = 7i32
+        .into_value(&mrb)
         .ensure_float(&mrb)
         .expect("an Integer widens to a Float");
     assert!(widened.is_float());
@@ -1549,17 +1552,20 @@ fn arithmetic_computes_on_integers_and_floats() {
     let mrb = open_mrb();
 
     // Integer operands yield an Integer result, like Ruby's 2 + 3 == 5.
-    let sum = Value::from_int(&mrb, 2)
-        .add(&mrb, Value::from_int(&mrb, 3))
+    let sum = 2i32
+        .into_value(&mrb)
+        .add(&mrb, 3i32.into_value(&mrb))
         .expect("2 + 3 computes");
     assert_eq!(i32::from_value(sum), Some(5));
     // Subtraction and multiplication follow the same Integer path.
-    let diff = Value::from_int(&mrb, 10)
-        .sub(&mrb, Value::from_int(&mrb, 4))
+    let diff = 10i32
+        .into_value(&mrb)
+        .sub(&mrb, 4i32.into_value(&mrb))
         .expect("10 - 4 computes");
     assert_eq!(i32::from_value(diff), Some(6));
-    let product = Value::from_int(&mrb, 6)
-        .mul(&mrb, Value::from_int(&mrb, 7))
+    let product = 6i32
+        .into_value(&mrb)
+        .mul(&mrb, 7i32.into_value(&mrb))
         .expect("6 * 7 computes");
     assert_eq!(i32::from_value(product), Some(42));
 }
@@ -1571,13 +1577,14 @@ fn arithmetic_widens_a_mixed_operand_to_float() {
     // A float operand widens the result to a Float, like Ruby's
     // 2 + 3.5 == 5.5; f64::from_value reads only the Float tag, so a Some
     // confirms the result is a Float, not an Integer.
-    let sum = Value::from_int(&mrb, 2)
+    let sum = 2i32
+        .into_value(&mrb)
         .add(&mrb, Value::from_float(&mrb, 3.5))
         .expect("2 + 3.5 computes");
     assert_eq!(f64::from_value(sum), Some(5.5));
     // The float receiver path widens the same way.
     let product = Value::from_float(&mrb, 1.5)
-        .mul(&mrb, Value::from_int(&mrb, 4))
+        .mul(&mrb, 4i32.into_value(&mrb))
         .expect("1.5 * 4 computes");
     assert_eq!(f64::from_value(product), Some(6.0));
 }
@@ -1589,19 +1596,19 @@ fn arithmetic_rejects_a_non_numeric_operand() {
     // mrb_num_add dispatches on the numeric tag: a non-numeric right
     // operand raises TypeError, caught into Err rather than long-jumping.
     assert!(matches!(
-        Value::from_int(&mrb, 1).add(&mrb, Value::nil()),
+        1i32.into_value(&mrb).add(&mrb, Value::nil()),
         Err(Error::Exception(_))
     ));
     // A non-numeric receiver is rejected the same way.
     assert!(matches!(
-        Value::nil().add(&mrb, Value::from_int(&mrb, 1)),
+        Value::nil().add(&mrb, 1i32.into_value(&mrb)),
         Err(Error::Exception(_))
     ));
     // The VM stays usable after the protected raise.
     assert_eq!(
         i32::from_value(
-            Value::from_int(&mrb, 1)
-                .add(&mrb, Value::from_int(&mrb, 1))
+            1i32.into_value(&mrb)
+                .add(&mrb, 1i32.into_value(&mrb))
                 .expect("the VM survives the protected raise")
         ),
         Some(2)
@@ -1618,8 +1625,8 @@ fn arithmetic_surfaces_integer_overflow_as_err() {
     // RangeError, caught into Err; a bigint config promotes the result to
     // a BigInt and returns it. The bound is read from beni::sys::mrb_int so the
     // overflow is forced at any width.
-    let max = Value::from_int(&mrb, beni::sys::mrb_int::MAX);
-    match max.add(&mrb, Value::from_int(&mrb, 1)) {
+    let max = beni::sys::mrb_int::MAX.into_value(&mrb);
+    match max.add(&mrb, 1i32.into_value(&mrb)) {
         Err(Error::Exception(exc)) => {
             // The fixed-width lane stays strict: the surfaced exception is
             // exactly the RangeError the SPEC mandates for that config.
@@ -1693,7 +1700,7 @@ fn each_iv_visits_nothing_for_a_receiver_without_instance_variables() {
     // An immediate cannot hold instance variables, so the guarded
     // foreach returns without ever calling back.
     let mut count = 0;
-    Value::from_int(&mrb, 42).each_iv(&mrb, |_, _| {
+    42i32.into_value(&mrb).each_iv(&mrb, |_, _| {
         count += 1;
         ForEach::Continue
     });

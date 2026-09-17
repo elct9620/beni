@@ -244,7 +244,7 @@ fn value_converts_as_itself() {
 
     for value in [
         Value::nil(),
-        Value::from_int(&mrb, 7),
+        7i32.into_value(&mrb),
         mrb.str_new(b"s").as_value(),
     ] {
         let got = Value::from_value(value).expect("a value never rejects");
@@ -255,13 +255,13 @@ fn value_converts_as_itself() {
 #[test]
 fn i64_holds_every_integer_the_configured_width_carries() {
     let mrb = open_mrb();
-    let widest = Value::from_int(&mrb, beni::sys::mrb_int::MAX);
+    let widest = beni::sys::mrb_int::MAX.into_value(&mrb);
 
     assert_eq!(
         i64::from_value(widest).map(|n| n.to_string()),
         Some(beni::sys::mrb_int::MAX.to_string())
     );
-    assert_eq!(i64::from_value(Value::from_int(&mrb, -3)), Some(-3));
+    assert_eq!(i64::from_value((-3i32).into_value(&mrb)), Some(-3));
     assert_eq!(
         i64::from_value(1.5f64.into_value(&mrb)),
         None,
@@ -309,7 +309,7 @@ fn an_unsigned_target_rejects_every_negative_integer() {
 #[test]
 fn the_widest_integer_reaches_every_target_wide_enough_for_it() {
     let mrb = open_mrb();
-    let widest = Value::from_int(&mrb, beni::sys::mrb_int::MAX);
+    let widest = beni::sys::mrb_int::MAX.into_value(&mrb);
     let expected = Some(beni::sys::mrb_int::MAX.to_string());
 
     assert_eq!(u64::from_value(widest).map(|n| n.to_string()), expected);
@@ -341,7 +341,7 @@ fn option_reads_nil_as_none_and_defers_the_rest_to_its_inner_type() {
         Some(Some(_))
     ));
     assert!(
-        Option::<RString>::from_value(Value::from_int(&mrb, 1)).is_none(),
+        Option::<RString>::from_value(1i32.into_value(&mrb)).is_none(),
         "what the inner type rejects stays rejected"
     );
     assert_eq!(

@@ -5,7 +5,7 @@
 //! `IntoValue` mirrors magnus's `IntoValue` (Rust → value, infallible
 //! boxing), `FromValue` mirrors magnus's `TryConvert` (value → Rust,
 //! fallible downcast). Both sit ON TOP of the unsafe tag primitives in
-//! `value.rs` (`Value::from_int` / `is_integer` + `unbox_integer` / …):
+//! `value.rs` (`mrb_int_value` / `is_integer` + `unbox_integer` / …):
 //! those primitives are the C-bind floor, these traits are the safe
 //! typed seam consumers call.
 //!
@@ -226,7 +226,7 @@ impl<T: FromValue> FromValue for Option<T> {
 /// The integer an Integer-tagged `value` carries, or `None` for any
 /// other tag.
 #[inline]
-fn integer(value: Value) -> Option<sys::mrb_int> {
+fn integer(value: Value) -> Option<i64> {
     // SAFETY: the unbox precondition (MRB_TT_INTEGER tagging) is
     // established by the `is_integer` guard it runs behind.
     value.is_integer().then(|| unsafe { value.unbox_integer() })
@@ -237,37 +237,18 @@ macro_rules! from_value_in_range {
         impl FromValue for $int {
             #[inline]
             fn from_value(value: Value) -> Option<Self> {
-                integer(value).and_then(|raw| <$int>::try_from(raw).ok())
+                integer(value).and_then(|n| <$int>::try_from(n).ok())
             }
         }
     )*};
 }
 
-from_value_in_range!(i8, i16, u8, u16, u32, u64, isize, usize);
-#[cfg(mrb_int64)]
-from_value_in_range!(i32);
+from_value_in_range!(i8, i16, i32, u8, u16, u32, u64, isize, usize);
 
-#[cfg(not(mrb_int64))]
-impl FromValue for i32 {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        integer(value)
-    }
-}
-
-#[cfg(mrb_int64)]
 impl FromValue for i64 {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         integer(value)
-    }
-}
-
-#[cfg(not(mrb_int64))]
-impl FromValue for i64 {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        integer(value).map(i64::from)
     }
 }
 

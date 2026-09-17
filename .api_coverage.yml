@@ -215,7 +215,7 @@ typed:
   mrb_include_module: Module::include_module
   mrb_incremental_gc: "`Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive)"
   mrb_inspect: Value::inspect
-  mrb_int_value: Value::from_int
+  mrb_int_value: "`IntoValue` for a Rust integer — boxes every integer type the configured integer width holds, so the configured-width integer never reaches a signature (see convert extension)"
   mrb_integer_to_str: "`Value::int_to_str` — render an Integer value to an RString in a radix (Ruby's Integer#to_s(base)); guards the Integer tag (TypeError) and raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys`"
   mrb_intern: "`Mrb::intern` — the general byte-taking creating intern: interns the exact bytes a borrowed slice spans (length-based, so a name embedding a NUL or not NUL-terminated interns whole), creating the Symbol when absent where `mrb_intern_check` only tests"
   mrb_intern_check: "`Mrb::intern_check` — the non-creating presence test over name bytes, `Some` Symbol when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to"

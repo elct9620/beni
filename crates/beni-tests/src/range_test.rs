@@ -147,31 +147,22 @@ fn beg_len_truncates_an_over_long_end() {
 }
 
 #[test]
-fn beg_len_saturates_a_length_past_the_mrb_int_width() {
-    // A length past `mrb_int` is only representable when the host `i64`
-    // is wider than `mrb_int`, i.e. a 32-bit `mrb_int`. Under a 64-bit
-    // `mrb_int` no `i64` exceeds its range, so the saturation premise is
-    // vacuous and the case is skipped rather than asserted on a width it
-    // cannot reach.
-    if core::mem::size_of::<beni::sys::mrb_int>() != 4 {
-        return;
-    }
-
+fn beg_len_saturates_a_length_past_the_configured_width() {
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"range_test.rb").expect("allocating the context");
 
-    // A length wider than `mrb_int` saturates up to the widest
-    // representable extent, so truncating `2..7` still selects offsets
-    // 2 through 7. A wrapping cast would land on a negative length, and
-    // truncation against it would report the begin as out of range.
-    let huge = i64::from(i32::MAX) + 1;
+    // A length wider than the configured integer width saturates up to
+    // the widest representable extent, so truncating `2..7` still selects
+    // offsets 2 through 7. A wrapping cast would land on a negative
+    // length, and truncation against it would report the begin as out of
+    // range.
     let r = Range::from_value(
         cxt.load_nstring(b"(2..7)")
             .expect("the test source must compile and run"),
     )
     .expect("a Range literal");
     assert_eq!(
-        r.beg_len(&mrb, huge, true)
+        r.beg_len(&mrb, usize::MAX, true)
             .expect("an integer range never raises"),
         RangeBegLen::Ok { beg: 2, len: 6 }
     );

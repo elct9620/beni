@@ -1,13 +1,13 @@
 use crate::support::open_mrb;
 use beni::format::{Io, Kw, NRest, NRestKwBlock, Rest, RestBlock, Str, S};
-use beni::{Error, Mrb, Value};
+use beni::{Error, IntoValue, Mrb, Value};
 
 /// Registered through `beni::method!(rest_count, -1)`: reads the rest
 /// array via the `"*"` format and returns its length as an mruby
 /// Integer.
 fn rest_count(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let args = mrb.get_args::<Rest>()?;
-    Ok(Value::from_int(mrb, args.len() as beni::sys::mrb_int))
+    Ok((args.len() as i32).into_value(mrb))
 }
 
 /// Registered through `beni::method!(io_first, -1)`: reads the leading
@@ -19,9 +19,11 @@ fn io_first(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     use beni::FromValue;
     let (n, val) = mrb.get_args::<Io>()?;
     Ok(if i32::from_value(val) == Some(99) {
-        Value::from_int(mrb, n)
+        i32::try_from(n)
+            .expect("the tests pass a small integer")
+            .into_value(mrb)
     } else {
-        Value::from_int(mrb, -1)
+        (-1i32).into_value(mrb)
     })
 }
 
@@ -34,9 +36,9 @@ fn nrest_after_sym(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (sym, rest) = mrb.get_args::<NRest>()?;
     Ok(
         if sym == mrb.intern_cstr(c"tag").expect("the name interns") {
-            Value::from_int(mrb, rest.len() as beni::sys::mrb_int)
+            (rest.len() as i32).into_value(mrb)
         } else {
-            Value::from_int(mrb, -1)
+            (-1i32).into_value(mrb)
         },
     )
 }
@@ -63,9 +65,9 @@ fn rest_format_reads_the_argc_mruby_writes() {
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
     let args = [
-        Value::from_int(&mrb, 1),
-        Value::from_int(&mrb, 2),
-        Value::from_int(&mrb, 3),
+        1i32.into_value(&mrb),
+        2i32.into_value(&mrb),
+        3i32.into_value(&mrb),
     ];
     let count = receiver
         .funcall(&mrb, c"rest_count", &args)
@@ -95,7 +97,7 @@ fn io_format_reads_the_int_mruby_writes() {
     let receiver = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let args = [Value::from_int(&mrb, 7), Value::from_int(&mrb, 99)];
+    let args = [7i32.into_value(&mrb), 99i32.into_value(&mrb)];
     let got = receiver
         .funcall(&mrb, c"io_first", &args)
         .expect("the bridge must not raise");
@@ -165,9 +167,9 @@ fn str_echo(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 fn rest_block_report(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (rest, block) = mrb.get_args::<RestBlock>()?;
     Ok(if block.is_nil() {
-        Value::from_int(mrb, -1)
+        (-1i32).into_value(mrb)
     } else {
-        Value::from_int(mrb, rest.len() as beni::sys::mrb_int)
+        (rest.len() as i32).into_value(mrb)
     })
 }
 
@@ -275,7 +277,7 @@ fn block_report(mrb: &Mrb, _self: Value) -> Value {
 /// Registered through `beni::method!(argc_report, -1)`: returns the
 /// argument count read via `Mrb::argc` as an mruby Integer.
 fn argc_report(mrb: &Mrb, _self: Value) -> Value {
-    Value::from_int(mrb, mrb.argc())
+    (mrb.argc() as i32).into_value(mrb)
 }
 
 /// Registered through `beni::method!(argv_sum, -1)`: reads the whole
@@ -291,7 +293,7 @@ fn argv_sum(mrb: &Mrb, _self: Value) -> Value {
         .iter()
         .map(|v| beni::sys::mrb_int::from(i32::from_value(*v).unwrap_or(0)))
         .sum();
-    Value::from_int(mrb, sum)
+    sum.into_value(mrb)
 }
 
 #[test]
@@ -308,7 +310,7 @@ fn arg1_reads_the_single_argument() {
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
-        .funcall(&mrb, c"arg1_echo", &[Value::from_int(&mrb, 42)])
+        .funcall(&mrb, c"arg1_echo", &[42i32.into_value(&mrb)])
         .expect("the single-argument read must not raise");
     assert_eq!(i32::from_value(got), Some(42));
 }
@@ -328,7 +330,7 @@ fn arg1_raises_argument_error_on_wrong_count() {
         .expect("the receiver constructs without raising");
     // Two positionals: `mrb_get_arg1` raises ArgumentError rather
     // than returning the first — the strict-count contract.
-    let args = [Value::from_int(&mrb, 1), Value::from_int(&mrb, 2)];
+    let args = [1i32.into_value(&mrb), 2i32.into_value(&mrb)];
     let err = receiver
         .funcall(&mrb, c"arg1_echo", &args)
         .expect_err("a non-single argument count must surface as Err");
@@ -352,9 +354,9 @@ fn argc_reads_the_argument_count() {
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
     let args = [
-        Value::from_int(&mrb, 1),
-        Value::from_int(&mrb, 2),
-        Value::from_int(&mrb, 3),
+        1i32.into_value(&mrb),
+        2i32.into_value(&mrb),
+        3i32.into_value(&mrb),
     ];
     let got = receiver
         .funcall(&mrb, c"argc_report", &args)
@@ -379,9 +381,9 @@ fn argv_reads_the_whole_argument_array() {
     // Several arguments: the body reads every slot and sums them, so
     // a short or misread slice would not total 60.
     let args = [
-        Value::from_int(&mrb, 10),
-        Value::from_int(&mrb, 20),
-        Value::from_int(&mrb, 30),
+        10i32.into_value(&mrb),
+        20i32.into_value(&mrb),
+        30i32.into_value(&mrb),
     ];
     let got = receiver
         .funcall(&mrb, c"argv_sum", &args)
@@ -505,7 +507,7 @@ fn rest_borrowed_slice_survives_vm_reentry() {
 /// so a clean `0` proves the empty case is an empty Hash, not nil.
 fn kw_size(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let kw = mrb.get_args::<Kw>()?;
-    Ok(Value::from_int(mrb, kw.len(mrb) as beni::sys::mrb_int))
+    Ok((kw.len(mrb) as i32).into_value(mrb))
 }
 
 /// Registered through `beni::method!(nrest_kwblock_encode, -1)`: reads the
@@ -517,12 +519,12 @@ fn kw_size(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 fn nrest_kwblock_encode(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (sym, rest, kw, block) = mrb.get_args::<NRestKwBlock>()?;
     if sym != mrb.intern_cstr(c"tag").expect("the name interns") {
-        return Ok(Value::from_int(mrb, -1));
+        return Ok((-1i32).into_value(mrb));
     }
     let block_bit = if block.is_nil() { 0 } else { 1 };
     let code =
         rest.len() as beni::sys::mrb_int * 100 + kw.len(mrb) as beni::sys::mrb_int * 10 + block_bit;
-    Ok(Value::from_int(mrb, code))
+    Ok(code.into_value(mrb))
 }
 
 #[test]
@@ -664,7 +666,7 @@ fn a_call_that_does_not_fit_the_read_surfaces_to_the_body_as_err() {
 
     let mrb = open_mrb();
     let object = mrb.object_class();
-    let one = Value::from_int(&mrb, 1);
+    let one = 1i32.into_value(&mrb);
     let text = mrb.str_new(b"x").as_value();
     let cases: [(&core::ffi::CStr, beni::MethodDef, Vec<Value>, &str); 9] = [
         (

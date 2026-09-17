@@ -123,7 +123,7 @@ impl Immediates {
 ///
 /// Construct via `Value::from_raw` (at FFI boundaries),
 /// `Value::nil` / `Value::true_` / `Value::false_` (immediates),
-/// or `Value::from_int` / `Value::from_float` (numeric factories).
+/// `IntoValue` (a Rust integer, bool, or handle), or `Value::from_float`.
 /// Round-trip back to the raw type via `Value::as_raw` /
 /// `Value::into_raw` when calling raw FFI that has not yet been
 /// migrated.
@@ -226,11 +226,11 @@ impl Value {
     /// `mrb_int_value(mrb, n)` — construct an mruby Integer from `n`,
     /// via mruby's own boxing-agnostic `MRB_INLINE` constructor
     /// (reached through bindgen's static-fn trampoline, compiled with
-    /// the same defines as the linked archive). `sys::mrb_int` follows
-    /// the archive's configured width — 64-bit under mruby's 64-bit
-    /// platform default, 32-bit under `MRB_INT32` or on wasm32.
+    /// the same defines as the linked archive). Consumers box a Rust
+    /// integer through `IntoValue`, which offers only the integers the
+    /// configured width holds.
     #[inline]
-    pub fn from_int(mrb: &Mrb, n: sys::mrb_int) -> Self {
+    pub(crate) fn from_int(mrb: &Mrb, n: sys::mrb_int) -> Self {
         // SAFETY: `mrb` is alive by the `&Mrb` borrow.
         Self(unsafe { sys::mrb_int_value(mrb.as_ptr(), n) })
     }
@@ -977,7 +977,8 @@ impl Value {
 
     /// Direct `mrb_integer(v)` unbox via mruby's own
     /// `mrb_integer_func` helper (a `MRB_INLINE` reached through
-    /// bindgen's static-fn trampoline).
+    /// bindgen's static-fn trampoline), as an `i64`, which holds every
+    /// configured integer width.
     ///
     /// # Safety
     ///
@@ -985,9 +986,9 @@ impl Value {
     /// `Value::is_integer`; calling on a non-Integer is undefined
     /// behaviour per mruby's macro contract.
     #[inline]
-    pub unsafe fn unbox_integer(self) -> sys::mrb_int {
+    pub unsafe fn unbox_integer(self) -> i64 {
         // SAFETY: forwarded from caller.
-        unsafe { sys::mrb_integer_func(self.0) }
+        widen(unsafe { sys::mrb_integer_func(self.0) })
     }
 
     /// Direct `mrb_float(v)` unbox via the `mrb_float_func`
@@ -1007,8 +1008,9 @@ impl Value {
     }
 
     /// `mrb_ary_entry(self, idx)` — read the element at `idx` from
-    /// `self` (which must be an Array `Value`). No bounds checking;
-    /// caller must keep `idx` within `0..self.length`.
+    /// `self` (which must be an Array `Value`), a negative `idx`
+    /// counting from the tail. An `idx` outside the array, the
+    /// configured integer width included, reads `nil`.
     ///
     /// # Safety
     ///
@@ -1016,7 +1018,10 @@ impl Value {
     /// returns `mrb_nil_value` rather than reading past the buffer;
     /// passing a non-Array yields an undefined `Value`.
     #[inline]
-    pub unsafe fn ary_entry(self, idx: sys::mrb_int) -> Value {
+    pub unsafe fn ary_entry(self, idx: isize) -> Value {
+        let Ok(idx) = sys::mrb_int::try_from(idx) else {
+            return Value::nil();
+        };
         // SAFETY: forwarded from caller.
         Value(unsafe { sys::mrb_ary_entry(self.0, idx) })
     }
@@ -1437,10 +1442,10 @@ impl Value {
     /// word alone, so it takes no `Mrb`, dispatches nothing, and never
     /// raises.
     #[inline]
-    pub fn object_id(self) -> sys::mrb_int {
+    pub fn object_id(self) -> i64 {
         // SAFETY: `mrb_obj_id` reads only `self`'s boxed word for its
         // identity and does not touch `mrb_state`.
-        unsafe { sys::mrb_obj_id(self.0) }
+        widen(unsafe { sys::mrb_obj_id(self.0) })
     }
 
     /// `mrb_equal(mrb, self, other)` — Ruby `==` equality. May run a
@@ -1492,7 +1497,7 @@ impl Value {
     #[inline]
     pub fn cmp(self, mrb: &Mrb, other: Value) -> Result<Option<core::cmp::Ordering>, Error> {
         // `mrb_cmp` reserves -2 to flag two incomparable values.
-        const INCOMPARABLE: sys::mrb_int = -2;
+        const INCOMPARABLE: i64 = -2;
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // and `other` share the VM. `mrb_cmp` may dispatch `<=>`
@@ -1530,10 +1535,10 @@ impl Value {
     /// the protect frame and `unbox_integer` after — `mrb_int_value` is
     /// the boxing-agnostic constructor (heap bigint when the value
     /// exceeds the inline range) and `mrb_integer` reads either form
-    /// back, so the round-trip is lossless across the full `mrb_int`
-    /// range.
+    /// back, so the round-trip is lossless across the configured
+    /// integer width, which an `i64` holds.
     #[inline]
-    pub fn as_int(self, mrb: &Mrb) -> Result<sys::mrb_int, Error> {
+    pub fn as_int(self, mrb: &Mrb) -> Result<i64, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_as_int` raises
@@ -1595,6 +1600,22 @@ impl Break {
         // gate that is this newtype's only constructor.
         Value::from_raw(unsafe { sys::mrb_break_value_func(self.0.as_raw()) })
     }
+}
+
+/// An integer mruby produced, as the `i64` the typed surface hands out;
+/// lossless under every configured integer width.
+#[cfg(mrb_int64)]
+#[inline]
+pub(crate) fn widen(n: sys::mrb_int) -> i64 {
+    n
+}
+
+/// An integer mruby produced, as the `i64` the typed surface hands out;
+/// lossless under every configured integer width.
+#[cfg(not(mrb_int64))]
+#[inline]
+pub(crate) fn widen(n: sys::mrb_int) -> i64 {
+    i64::from(n)
 }
 
 #[cfg(test)]

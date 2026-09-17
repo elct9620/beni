@@ -24,9 +24,9 @@ pub enum RangeBegLen {
     /// `len` is the selected length.
     Ok {
         /// Normalized begin offset into the collection.
-        beg: sys::mrb_int,
+        beg: usize,
         /// Selected length from `beg`.
-        len: sys::mrb_int,
+        len: usize,
     },
     /// The begin offset falls outside the collection (before its start,
     /// or — when truncating — past its end). Carries no offsets.
@@ -121,7 +121,7 @@ impl Range {
     /// `Err` rather than long-jumping. Mirrors magnus's `Range::beg_len`,
     /// which collapses the two non-`Ok` outcomes into one `Err`.
     #[inline]
-    pub fn beg_len(self, mrb: &Mrb, len: i64, trunc: bool) -> Result<RangeBegLen, Error> {
+    pub fn beg_len(self, mrb: &Mrb, len: usize, trunc: bool) -> Result<RangeBegLen, Error> {
         use core::cell::Cell;
 
         // The outcome and out-params live on this frame so the protected
@@ -131,10 +131,10 @@ impl Range {
         let begp: Cell<sys::mrb_int> = Cell::new(0);
         let lenp: Cell<sys::mrb_int> = Cell::new(0);
 
-        // A length wider than the archive's `mrb_int` names no
-        // reachable extent; saturate it up (length is non-negative) so
-        // the clamp sees "as large as representable" rather than a
-        // wrapped value landing on a wrong span.
+        // A length wider than the configured integer width names no
+        // reachable extent; saturate it up so the clamp sees "as large
+        // as representable" rather than a wrapped value landing on a
+        // wrong span.
         let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
 
         mrb.protect(|mrb| {
@@ -162,9 +162,11 @@ impl Range {
         })?;
 
         Ok(match outcome.get() {
+            // mruby normalizes an in-range slice to a non-negative begin
+            // and length.
             sys::MRB_RANGE_OK => RangeBegLen::Ok {
-                beg: begp.get(),
-                len: lenp.get(),
+                beg: begp.get() as usize,
+                len: lenp.get() as usize,
             },
             sys::MRB_RANGE_OUT => RangeBegLen::Out,
             _ => RangeBegLen::TypeMismatch,

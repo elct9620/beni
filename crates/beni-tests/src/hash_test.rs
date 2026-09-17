@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::IntoValue;
 
 #[test]
 fn set_and_get_roundtrip_with_nil_for_an_absent_key() {
@@ -323,15 +324,15 @@ fn update_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn each_visits_every_pair_in_insertion_order() {
-    use beni::{ForEach, Value};
+    use beni::ForEach;
 
     let mrb = open_mrb();
     let hash = mrb.hash_new();
-    hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
+    hash.set(&mrb, mrb.str_new(b"a").as_value(), 1i32.into_value(&mrb))
         .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"b").as_value(), Value::from_int(&mrb, 2))
+    hash.set(&mrb, mrb.str_new(b"b").as_value(), 2i32.into_value(&mrb))
         .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"c").as_value(), Value::from_int(&mrb, 3))
+    hash.set(&mrb, mrb.str_new(b"c").as_value(), 3i32.into_value(&mrb))
         .expect("set succeeds");
 
     let mut seen = Vec::new();
@@ -353,15 +354,15 @@ fn each_visits_every_pair_in_insertion_order() {
 
 #[test]
 fn each_stops_early_on_stop() {
-    use beni::{ForEach, Value};
+    use beni::ForEach;
 
     let mrb = open_mrb();
     let hash = mrb.hash_new();
-    hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
+    hash.set(&mrb, mrb.str_new(b"a").as_value(), 1i32.into_value(&mrb))
         .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"b").as_value(), Value::from_int(&mrb, 2))
+    hash.set(&mrb, mrb.str_new(b"b").as_value(), 2i32.into_value(&mrb))
         .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"c").as_value(), Value::from_int(&mrb, 3))
+    hash.set(&mrb, mrb.str_new(b"c").as_value(), 3i32.into_value(&mrb))
         .expect("set succeeds");
 
     // Stopping at the first pair leaves the rest unvisited.
@@ -377,13 +378,13 @@ fn each_stops_early_on_stop() {
 
 #[test]
 fn each_surfaces_an_in_walk_modification_as_err() {
-    use beni::{Error, ForEach, Value};
+    use beni::{Error, ForEach};
 
     let mrb = open_mrb();
     let hash = mrb.hash_new();
-    hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
+    hash.set(&mrb, mrb.str_new(b"a").as_value(), 1i32.into_value(&mrb))
         .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"b").as_value(), Value::from_int(&mrb, 2))
+    hash.set(&mrb, mrb.str_new(b"b").as_value(), 2i32.into_value(&mrb))
         .expect("set succeeds");
 
     // A closure that re-enters the VM to clear the hash it is walking
@@ -402,20 +403,18 @@ fn each_surfaces_an_in_walk_modification_as_err() {
     // operation runs without crashing.
     let other = mrb.hash_new();
     other
-        .set(&mrb, mrb.str_new(b"x").as_value(), Value::from_int(&mrb, 9))
+        .set(&mrb, mrb.str_new(b"x").as_value(), 9i32.into_value(&mrb))
         .expect("the VM is usable after the protected raise");
     assert_eq!(other.len(&mrb), 1);
 }
 
 #[test]
 fn each_resurfaces_a_closure_panic_on_the_rust_side() {
-    use beni::Value;
-
     let mrb = open_mrb();
     let hash = mrb.hash_new();
-    hash.set(&mrb, mrb.str_new(b"a").as_value(), Value::from_int(&mrb, 1))
+    hash.set(&mrb, mrb.str_new(b"a").as_value(), 1i32.into_value(&mrb))
         .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"b").as_value(), Value::from_int(&mrb, 2))
+    hash.set(&mrb, mrb.str_new(b"b").as_value(), 2i32.into_value(&mrb))
         .expect("set succeeds");
 
     // A panic in the closure is caught at the FFI boundary, stops the

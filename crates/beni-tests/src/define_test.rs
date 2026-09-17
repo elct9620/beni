@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{FromValue, Module, Mrb, Value};
+use beni::{FromValue, IntoValue, Module, Mrb, Value};
 
 fn answer_seven(_mrb: &Mrb, _self: Value) -> i32 {
     7
@@ -272,7 +272,7 @@ fn define_error_fetches_a_same_named_class_and_rejects_a_conflict() {
     );
 
     mrb.object_class()
-        .define_const(&mrb, c"BeniNotAClass", Value::from_int(&mrb, 1))
+        .define_const(&mrb, c"BeniNotAClass", 1i32.into_value(&mrb))
         .expect("binding the constant must succeed");
     assert!(
         mrb.define_error(c"BeniNotAClass", standard_error).is_err(),
@@ -414,10 +414,10 @@ fn gv_get_observes_reassignment() {
     // Globals are read at call time: each assignment must be
     // visible to the next read, the contract redirection-style
     // consumers (`$stdout = $stderr`) rely on.
-    mrb.gv_set(sym, Value::from_int(&mrb, 1));
+    mrb.gv_set(sym, 1i32.into_value(&mrb));
     assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(1));
 
-    mrb.gv_set(sym, Value::from_int(&mrb, 2));
+    mrb.gv_set(sym, 2i32.into_value(&mrb));
     assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(2));
 }
 
@@ -430,7 +430,7 @@ fn gv_remove_clears_a_global_back_to_nil() {
 
     // A set global reads its value, then removing it reads nil —
     // the same as one never set.
-    mrb.gv_set(sym, Value::from_int(&mrb, 7));
+    mrb.gv_set(sym, 7i32.into_value(&mrb));
     assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(7));
 
     mrb.gv_remove(sym);
@@ -445,7 +445,7 @@ fn gv_remove_clears_a_global_back_to_nil() {
 fn define_global_const_binds_a_top_level_constant() {
     let mrb = open_mrb();
 
-    mrb.define_global_const(c"BENI_GLOBAL_ANSWER", Value::from_int(&mrb, 42))
+    mrb.define_global_const(c"BENI_GLOBAL_ANSWER", 42i32.into_value(&mrb))
         .expect("binding a top-level constant must succeed");
 
     let got = mrb

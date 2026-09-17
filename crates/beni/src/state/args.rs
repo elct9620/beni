@@ -160,10 +160,10 @@ impl Mrb {
     /// Read the number of arguments passed to the call frame, splat
     /// arguments counted as their expanded length. Does not raise.
     #[inline]
-    pub fn argc(&self) -> sys::mrb_int {
+    pub fn argc(&self) -> usize {
         // SAFETY: `self` is alive by the `&self` borrow; the read is
-        // total — it never raises.
-        unsafe { sys::mrb_get_argc(self.as_ptr()) }
+        // total — it never raises. mruby counts arguments from zero.
+        (unsafe { sys::mrb_get_argc(self.as_ptr()) }) as usize
     }
 
     /// Read the call frame's positional arguments as a copy of their
@@ -354,14 +354,14 @@ pub mod format {
     /// `mrb_get_args(mrb, "io", &n, &val)` — read an integer followed
     /// by an object. The `"i"` specifier writes an `mrb_int`, so the
     /// out-param is typed `sys::mrb_int` (not `c_int`) to match mruby's
-    /// own width contract, whatever width the linked archive was
-    /// configured with.
+    /// own width contract; the integer comes back as the `i64` that
+    /// holds every configured width.
     pub struct Io;
     impl Format for Io {
-        type Output<'a> = (sys::mrb_int, Value);
+        type Output<'a> = (i64, Value);
         const FMT: &'static core::ffi::CStr = c"io";
 
-        fn read(mrb: &Mrb) -> Result<(sys::mrb_int, Value), Error> {
+        fn read(mrb: &Mrb) -> Result<(i64, Value), Error> {
             let mut n: sys::mrb_int = 0;
             let mut raw = sys::mrb_value::zeroed();
             read_frame(mrb, |mrb| {
@@ -375,7 +375,7 @@ pub mod format {
                     );
                 }
             })?;
-            Ok((n, Value::from_raw(raw)))
+            Ok((crate::value::widen(n), Value::from_raw(raw)))
         }
     }
 

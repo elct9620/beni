@@ -492,7 +492,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_iclass_p` | macro | ❌ | 🚫 | declined: tests for the include-class tag, which no value a typed caller holds carries — mruby keeps include classes internal, filtering them out of `ObjectSpace` (`vendor/mruby/mrbgems/mruby-objectspace/src/mruby_objectspace.c:131-135`) and answering the included module in their place from `Module#ancestors` (`vendor/mruby/src/class.c:2245-2246`) |
 | `mrb_immediate_p` | macro | ❌ | ❌ |  |
 | `mrb_int_read` | fn | ✅ | ❌ |  |
-| `mrb_int_value` | fn | ✅ | ✅ | `Value::from_int` |
+| `mrb_int_value` | fn | ✅ | ✅ | `IntoValue` for a Rust integer — boxes every integer type the configured integer width holds, so the configured-width integer never reaches a signature (see convert extension) |
 | `mrb_integer_p` | macro | ❌ | ✅ | `Value::is_integer` — true for any Integer; the immediate-only `mrb_fixnum_p`, which diverges from this under word boxing, is intentionally not graduated |
 | `mrb_istruct_p` | macro | ❌ | ❌ |  |
 | `mrb_module_p` | macro | ❌ | ✅ | `Value::is_module`, via the value tag |

@@ -461,7 +461,7 @@ impl RString {
     /// as `Err` rather than long-jumping. A negative `base` is not an error:
     /// `-n` aliases the radix `n` with prefix detection disabled.
     #[inline]
-    pub fn to_i(self, mrb: &Mrb, base: i32) -> Result<sys::mrb_int, Error> {
+    pub fn to_i(self, mrb: &Mrb, base: i32) -> Result<i64, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `self` is String-tagged by the newtype contract;
             // `mrb` is alive inside the protect frame. `mrb_str_to_integer`
@@ -490,7 +490,7 @@ impl RString {
     /// long-jumping. A negative `base` is not an error: `-n` aliases the radix
     /// `n` with prefix detection disabled.
     #[inline]
-    pub fn to_inum(self, mrb: &Mrb, base: i32) -> Result<sys::mrb_int, Error> {
+    pub fn to_inum(self, mrb: &Mrb, base: i32) -> Result<i64, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `self` is String-tagged by the newtype contract;
             // `mrb` is alive inside the protect frame. `mrb_str_to_integer`

@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Ccontext, Error, FromValue, RString};
+use beni::{Ccontext, Error, FromValue, IntoValue, RString};
 
 #[test]
 fn cat_appends_bytes_in_place() {
@@ -272,7 +272,7 @@ fn concat_coerces_a_non_string_argument_in_place() {
 
     // A non-string argument is coerced before appending: an Integer
     // renders to its decimal text.
-    s.concat(&mrb, beni::Value::from_int(&mrb, 42))
+    s.concat(&mrb, 42i32.into_value(&mrb))
         .expect("appending a coerced integer succeeds");
     assert_eq!(s.to_bytes(), b"foobar42".to_vec());
 }

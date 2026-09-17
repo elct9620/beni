@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Error, FromValue, IntoSym, Module, Mrb, Object, RClass, Value};
+use beni::{Error, FromValue, IntoSym, IntoValue, Module, Mrb, Object, RClass, Value};
 
 /// Registration target answering a fixed Integer for the trait
 /// tests below.
@@ -35,7 +35,7 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
         .define_const(
             &mrb,
             beni::Symbol::new(&mrb, c"ANSWER").expect("the name interns"),
-            Value::from_int(&mrb, 7),
+            7i32.into_value(&mrb),
         )
         .expect("binding a constant under a Symbol key must succeed");
 
@@ -552,7 +552,7 @@ fn define_const_binds_a_constant_readable_from_ruby() {
         .expect("defining the host module must succeed");
 
     module
-        .define_const(&mrb, c"ANSWER", Value::from_int(&mrb, 42))
+        .define_const(&mrb, c"ANSWER", 42i32.into_value(&mrb))
         .expect("binding the constant must succeed");
 
     // The constant must resolve from plain Ruby source — the

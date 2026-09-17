@@ -66,7 +66,7 @@ fn typed_method_roundtrips_scalars() {
     let receiver = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let args = [Value::from_int(&mrb, 1), Value::from_int(&mrb, 2)];
+    let args = [1i32.into_value(&mrb), 2i32.into_value(&mrb)];
     let got = receiver
         .funcall(&mrb, c"add", &args)
         .expect("the call must not raise");
@@ -89,11 +89,11 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
     // `FromValue` conversion runs — both too few and too many
     // positionals reach the caller as `ArgumentError`.
     for wrong in [
-        vec![Value::from_int(&mrb, 1)],
+        vec![1i32.into_value(&mrb)],
         vec![
-            Value::from_int(&mrb, 1),
-            Value::from_int(&mrb, 2),
-            Value::from_int(&mrb, 3),
+            1i32.into_value(&mrb),
+            2i32.into_value(&mrb),
+            3i32.into_value(&mrb),
         ],
     ] {
         let err = receiver
@@ -111,7 +111,7 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
         .funcall(
             &mrb,
             c"add",
-            &[Value::from_int(&mrb, 1), Value::from_int(&mrb, 2)],
+            &[1i32.into_value(&mrb), 2i32.into_value(&mrb)],
         )
         .expect("the VM survives the count error and the next call runs");
     assert_eq!(i32::from_value(got), Some(3));
@@ -131,7 +131,7 @@ fn from_value_failure_raises_before_body_runs() {
     let receiver = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let args = [Value::from_float(&mrb, 1.5), Value::from_int(&mrb, 2)];
+    let args = [Value::from_float(&mrb, 1.5), 2i32.into_value(&mrb)];
     let err = receiver
         .funcall(&mrb, c"add", &args)
         .expect_err("the conversion failure must surface as a raise");
@@ -161,7 +161,7 @@ fn optional_argument_defaults_to_none_when_omitted() {
     // Omitting the optional argument binds `None`: the body sees
     // the default base of 0.
     let omitted = receiver
-        .funcall(&mrb, c"add", &[Value::from_int(&mrb, 7)])
+        .funcall(&mrb, c"add", &[7i32.into_value(&mrb)])
         .expect("the call with the optional omitted must not raise");
     assert_eq!(i32::from_value(omitted), Some(7));
 
@@ -170,7 +170,7 @@ fn optional_argument_defaults_to_none_when_omitted() {
         .funcall(
             &mrb,
             c"add",
-            &[Value::from_int(&mrb, 7), Value::from_int(&mrb, 5)],
+            &[7i32.into_value(&mrb), 5i32.into_value(&mrb)],
         )
         .expect("the call with the optional supplied must not raise");
     assert_eq!(i32::from_value(supplied), Some(12));
@@ -194,7 +194,7 @@ fn all_optional_method_reads_its_lone_slot() {
     assert_eq!(i32::from_value(omitted), Some(-1));
 
     let supplied = receiver
-        .funcall(&mrb, c"v", &[Value::from_int(&mrb, 42)])
+        .funcall(&mrb, c"v", &[42i32.into_value(&mrb)])
         .expect("the call with the optional supplied must not raise");
     assert_eq!(i32::from_value(supplied), Some(42));
 }
@@ -217,7 +217,7 @@ fn supplied_optional_failing_from_value_raises() {
         .funcall(
             &mrb,
             c"add",
-            &[Value::from_int(&mrb, 1), Value::from_float(&mrb, 1.5)],
+            &[1i32.into_value(&mrb), Value::from_float(&mrb, 1.5)],
         )
         .expect_err("the supplied optional's conversion failure must raise");
     assert!(
@@ -264,7 +264,7 @@ fn block_accepting_method_binds_none_without_a_block() {
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
-        .funcall(&mrb, c"apply", &[Value::from_int(&mrb, 7)])
+        .funcall(&mrb, c"apply", &[7i32.into_value(&mrb)])
         .expect("the call without a block must not raise");
     assert_eq!(i32::from_value(got), Some(7));
 }
@@ -437,7 +437,7 @@ fn nilable_parameters_bind_none_for_nil_and_the_value_otherwise() {
             &[
                 message,
                 mrb.str_new(b"a.rb").as_value(),
-                Value::from_int(&mrb, 42),
+                42i32.into_value(&mrb),
             ],
         )
         .expect("the inner type is accepted for a nilable parameter");
@@ -461,7 +461,7 @@ fn a_nilable_parameter_still_rejects_what_its_inner_type_rejects() {
             c"error",
             &[
                 mrb.str_new(b"boom").as_value(),
-                Value::from_int(&mrb, 1),
+                1i32.into_value(&mrb),
                 Value::nil(),
             ],
         )
@@ -513,7 +513,7 @@ fn a_nilable_optional_tells_omission_from_an_explicit_nil() {
         "an explicit nil binds Some(None)"
     );
     assert_eq!(
-        call(&[Value::from_int(&mrb, 5)]),
+        call(&[5i32.into_value(&mrb)]),
         Some(2),
         "an Integer binds Some(Some(_))"
     );
@@ -545,7 +545,7 @@ fn optional_arity_raises_argument_error_outside_its_range() {
         .define_method(&mrb, c"add", beni::method!(opt_add, 1, 1))
         .expect("registering the typed method must succeed");
     let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
-    let one = Value::from_int(&mrb, 1);
+    let one = 1i32.into_value(&mrb);
 
     assert_each_raises_argument_error(&mrb, receiver, c"add", &[vec![], vec![one, one, one]]);
 }
@@ -558,7 +558,7 @@ fn block_accepting_arity_raises_argument_error_on_wrong_count() {
         .define_method(&mrb, c"apply", beni::method!(apply_block, 1, &))
         .expect("registering the typed method must succeed");
     let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
-    let one = Value::from_int(&mrb, 1);
+    let one = 1i32.into_value(&mrb);
 
     assert_each_raises_argument_error(&mrb, receiver, c"apply", &[vec![], vec![one, one]]);
 }
