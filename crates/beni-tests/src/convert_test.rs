@@ -258,8 +258,8 @@ fn i64_holds_every_integer_the_configured_width_carries() {
     let widest = Value::from_int(&mrb, beni::sys::mrb_int::MAX);
 
     assert_eq!(
-        i64::from_value(widest),
-        Some(i64::from(beni::sys::mrb_int::MAX))
+        i64::from_value(widest).map(|n| n.to_string()),
+        Some(beni::sys::mrb_int::MAX.to_string())
     );
     assert_eq!(i64::from_value(Value::from_int(&mrb, -3)), Some(-3));
     assert_eq!(
@@ -310,20 +310,11 @@ fn an_unsigned_target_rejects_every_negative_integer() {
 fn the_widest_integer_reaches_every_target_wide_enough_for_it() {
     let mrb = open_mrb();
     let widest = Value::from_int(&mrb, beni::sys::mrb_int::MAX);
-    let expected = i64::from(beni::sys::mrb_int::MAX);
+    let expected = Some(beni::sys::mrb_int::MAX.to_string());
 
-    assert_eq!(
-        u64::from_value(widest).map(i64::try_from),
-        Some(Ok(expected))
-    );
-    assert_eq!(
-        isize::from_value(widest).map(i64::try_from),
-        Some(Ok(expected))
-    );
-    assert_eq!(
-        usize::from_value(widest).map(i64::try_from),
-        Some(Ok(expected))
-    );
+    assert_eq!(u64::from_value(widest).map(|n| n.to_string()), expected);
+    assert_eq!(isize::from_value(widest).map(|n| n.to_string()), expected);
+    assert_eq!(usize::from_value(widest).map(|n| n.to_string()), expected);
 }
 
 #[test]

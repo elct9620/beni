@@ -164,7 +164,7 @@ fn beg_len_saturates_a_length_past_the_mrb_int_width() {
     // representable extent, so truncating `2..7` still selects offsets
     // 2 through 7. A wrapping cast would land on a negative length, and
     // truncation against it would report the begin as out of range.
-    let huge = i64::from(beni::sys::mrb_int::MAX) + 1;
+    let huge = i64::from(i32::MAX) + 1;
     let r = Range::from_value(
         cxt.load_nstring(b"(2..7)")
             .expect("the test source must compile and run"),
