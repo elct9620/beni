@@ -271,6 +271,73 @@ fn i64_holds_every_integer_the_configured_width_carries() {
 }
 
 #[test]
+fn integers_every_width_holds_round_trip_at_their_bounds() {
+    let mrb = open_mrb();
+
+    assert_eq!(i8::from_value(i8::MIN.into_value(&mrb)), Some(i8::MIN));
+    assert_eq!(i16::from_value(i16::MIN.into_value(&mrb)), Some(i16::MIN));
+    assert_eq!(i32::from_value(i32::MIN.into_value(&mrb)), Some(i32::MIN));
+    assert_eq!(u8::from_value(u8::MAX.into_value(&mrb)), Some(u8::MAX));
+    assert_eq!(u16::from_value(u16::MAX.into_value(&mrb)), Some(u16::MAX));
+}
+
+#[test]
+fn an_integer_target_takes_only_what_its_own_range_holds() {
+    let mrb = open_mrb();
+    let int = |n: i32| n.into_value(&mrb);
+
+    assert_eq!(u8::from_value(int(256)), None);
+    assert_eq!(i8::from_value(int(-129)), None);
+    assert_eq!(u16::from_value(int(65_536)), None);
+    assert_eq!(i16::from_value(int(-32_769)), None);
+    assert_eq!(u32::from_value(int(i32::MAX)), Some(i32::MAX as u32));
+    assert_eq!(isize::from_value(int(-1)), Some(-1));
+}
+
+#[test]
+fn an_unsigned_target_rejects_every_negative_integer() {
+    let mrb = open_mrb();
+    let negative = (-1i32).into_value(&mrb);
+
+    assert_eq!(u8::from_value(negative), None);
+    assert_eq!(u16::from_value(negative), None);
+    assert_eq!(u32::from_value(negative), None);
+    assert_eq!(u64::from_value(negative), None);
+    assert_eq!(usize::from_value(negative), None);
+}
+
+#[test]
+fn the_widest_integer_reaches_every_target_wide_enough_for_it() {
+    let mrb = open_mrb();
+    let widest = Value::from_int(&mrb, beni::sys::mrb_int::MAX);
+    let expected = i64::from(beni::sys::mrb_int::MAX);
+
+    assert_eq!(
+        u64::from_value(widest).map(i64::try_from),
+        Some(Ok(expected))
+    );
+    assert_eq!(
+        isize::from_value(widest).map(i64::try_from),
+        Some(Ok(expected))
+    );
+    assert_eq!(
+        usize::from_value(widest).map(i64::try_from),
+        Some(Ok(expected))
+    );
+}
+
+#[test]
+fn an_integer_target_rejects_every_value_that_is_not_an_integer() {
+    let mrb = open_mrb();
+    let float = 2.0f64.into_value(&mrb);
+
+    assert_eq!(u8::from_value(float), None);
+    assert_eq!(u64::from_value(float), None);
+    assert_eq!(isize::from_value(Value::nil()), None);
+    assert_eq!(usize::from_value(mrb.str_new(b"1").as_value()), None);
+}
+
+#[test]
 fn option_reads_nil_as_none_and_defers_the_rest_to_its_inner_type() {
     let mrb = open_mrb();
 

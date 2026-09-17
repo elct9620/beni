@@ -9,9 +9,9 @@
 //! those primitives are the C-bind floor, these traits are the safe
 //! typed seam consumers call.
 //!
-//! Scope covers `Value` itself, the scalar leaf types (`i32` / `i64` /
-//! `f64` / `bool`), an owned `String` or byte vector, the typed handles
-//! (`RString` / `Array` / `Hash` / `RClass` / `RModule` /
+//! Scope covers `Value` itself, the scalar leaf types (the Rust
+//! integers, `f64`, `bool`), an owned `String` or byte vector, the
+//! typed handles (`RString` / `Array` / `Hash` / `RClass` / `RModule` /
 //! `ExceptionClass` / `Proc` / `Symbol` / `Range`), and an `Option` of
 //! any of them that reads `nil` as `None`: every handle converts into
 //! the value naming its object, and back through a checked downcast
@@ -20,18 +20,61 @@
 //! rather than borrowing VM storage.
 
 use crate::{
-    Array, ExceptionClass, Hash, Mrb, Proc, RClass, RModule, RString, Range, Symbol, Value,
+    sys, Array, ExceptionClass, Hash, Mrb, Proc, RClass, RModule, RString, Range, Symbol, Value,
 };
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
 /// magnus's `IntoValue`; the call shape is `n.into_value(mrb)`.
+///
+/// A Rust integer converts only where every value it holds fits the
+/// archive's configured integer width: `i8` / `i16` / `i32` / `u8` /
+/// `u16` under every width, `u32` / `i64` under a 64-bit width, and
+/// `isize` wherever the target's pointer width fits the configured one.
+/// Rendered documentation shows the 64-bit set.
+///
+/// ```
+/// fn converts<T: beni::IntoValue>() {}
+/// converts::<i8>();
+/// converts::<i16>();
+/// converts::<i32>();
+/// converts::<u8>();
+/// converts::<u16>();
+/// #[cfg(mrb_int64)]
+/// {
+///     converts::<u32>();
+///     converts::<i64>();
+///     converts::<isize>();
+/// }
+/// ```
+///
+/// A 32-bit width does not hold every `i64`:
+///
+/// ```compile_fail
+/// fn converts<T: beni::IntoValue>() {}
+/// #[cfg(mrb_int64)]
+/// compile_error!("a 64-bit width holds every i64");
+/// converts::<i64>();
+/// ```
+///
+/// No width holds every `u64` or `usize`:
+///
+/// ```compile_fail
+/// fn converts<T: beni::IntoValue>() {}
+/// converts::<u64>();
+/// ```
+///
+/// ```compile_fail
+/// fn converts<T: beni::IntoValue>() {}
+/// converts::<usize>();
+/// ```
 pub trait IntoValue {
     fn into_value(self, mrb: &Mrb) -> Value;
 }
 
 /// Downcast an mruby `Value` to a Rust type, returning `None` when
-/// the value is not tagged as the target type. Safe: the tag check is
+/// the value is not tagged as the target type or, for a Rust integer,
+/// carries an Integer outside the target's own range. Safe: the tag check is
 /// folded in, so callers no longer pair a predicate with an `unsafe`
 /// unbox. Mirrors magnus's `TryConvert`; named `FromValue` here for the
 /// `T::from_value(v)` call shape.
@@ -49,15 +92,28 @@ impl IntoValue for Value {
     }
 }
 
-impl IntoValue for i32 {
-    // `sys::mrb_int` follows the archive's config: the conversion is
-    // a lossless widening under 64-bit width and an identity under
-    // `MRB_INT32` — clippy only sees the latter when checking against
-    // a 32-bit-pinned archive, hence the targeted allow.
-    #[allow(clippy::useless_conversion)]
+macro_rules! into_value_widening {
+    ($($int:ty),* $(,)?) => {$(
+        impl IntoValue for $int {
+            #[inline]
+            fn into_value(self, mrb: &Mrb) -> Value {
+                Value::from_int(mrb, sys::mrb_int::from(self))
+            }
+        }
+    )*};
+}
+
+into_value_widening!(i8, i16, i32, u8, u16);
+#[cfg(mrb_int64)]
+into_value_widening!(u32, i64);
+
+#[cfg(any(mrb_int64, not(target_pointer_width = "64")))]
+impl IntoValue for isize {
     #[inline]
     fn into_value(self, mrb: &Mrb) -> Value {
-        Value::from_int(mrb, self.into())
+        // The cfg admits only a pointer width the configured integer
+        // width holds, so the cast never truncates.
+        Value::from_int(mrb, self as sys::mrb_int)
     }
 }
 
@@ -167,37 +223,51 @@ impl<T: FromValue> FromValue for Option<T> {
     }
 }
 
+/// The integer an Integer-tagged `value` carries, or `None` for any
+/// other tag.
+#[inline]
+fn integer(value: Value) -> Option<sys::mrb_int> {
+    // SAFETY: the unbox precondition (MRB_TT_INTEGER tagging) is
+    // established by the `is_integer` guard it runs behind.
+    value.is_integer().then(|| unsafe { value.unbox_integer() })
+}
+
+macro_rules! from_value_in_range {
+    ($($int:ty),* $(,)?) => {$(
+        impl FromValue for $int {
+            #[inline]
+            fn from_value(value: Value) -> Option<Self> {
+                integer(value).and_then(|raw| <$int>::try_from(raw).ok())
+            }
+        }
+    )*};
+}
+
+from_value_in_range!(i8, i16, u8, u16, u32, u64, isize, usize);
+#[cfg(mrb_int64)]
+from_value_in_range!(i32);
+
+#[cfg(not(mrb_int64))]
 impl FromValue for i32 {
-    // Mirror of the `IntoValue for i32` allow: `try_from` is a real
-    // range check under 64-bit `sys::mrb_int` and an infallible
-    // identity under `MRB_INT32`.
-    #[allow(clippy::useless_conversion)]
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
-        if !value.is_integer() {
-            return None;
-        }
-        // SAFETY: the unbox precondition (MRB_TT_INTEGER tagging) is
-        // established by the `is_integer` guard immediately above.
-        let raw = unsafe { value.unbox_integer() };
-        // `sys::mrb_int` follows the archive's configured width; when
-        // it is 64-bit (mruby's 64-bit platform default) an
-        // out-of-i32-range integer is not representable — downcast
-        // failure, same contract as a type-tag mismatch.
-        Self::try_from(raw).ok()
+        integer(value)
     }
 }
 
+#[cfg(mrb_int64)]
 impl FromValue for i64 {
-    // `sys::mrb_int` is at most 64 bits under every config, so an
-    // Integer-tagged value always fits and only the tag rejects.
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the unbox precondition (MRB_TT_INTEGER tagging) is
-        // established by the `is_integer` guard immediately before it.
-        value
-            .is_integer()
-            .then(|| i64::from(unsafe { value.unbox_integer() }))
+        integer(value)
+    }
+}
+
+#[cfg(not(mrb_int64))]
+impl FromValue for i64 {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        integer(value).map(i64::from)
     }
 }
 
