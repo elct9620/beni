@@ -127,7 +127,7 @@ typed:
   mrb_class_name: "`Module::name` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form"
   mrb_class_new: "`Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant"
   mrb_class_path: "`Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous"
-  mrb_class_ptr: Value::as_class_ptr
+  mrb_class_ptr: "`RClass::from_value`, `RModule::from_value`, `ExceptionClass::from_value` — the checked downcast is the typed unbox of a class value; the pointer itself stays the raw binding's to read, as magnus leaves the class struct"
   mrb_close: Mrb::drop
   mrb_const_defined: "`Value::const_defined` — the constant presence test walking the ancestry; contrast `mrb_const_defined_at`/`Value::const_defined_at`, the direct own-table-only form"
   mrb_const_defined_at: "`Value::const_defined_at` — the direct constant presence test, true only for the receiver's own constant; contrast `mrb_const_defined`/`Value::const_defined`, which walks the ancestry"
@@ -299,7 +299,7 @@ typed:
   mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — returns an owned `Vec<u8>`, not a borrow: an inline (short) symbol's name unpacks into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). The true length carries out of band so an embedded NUL is preserved unescaped"
   mrb_sym_dump: "`Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), returned as an owned `String`, not a borrow: it draws on the same shared `mrb->symbuf` scratch an inline name unpacks into and the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). Never raises"
   mrb_sym_str: "`Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises"
-  mrb_symbol_value: "`sys::FromRawId::from_raw` — the `unsafe` crossing of a raw interned id back into its typed `Symbol`, mirroring magnus's `rb_sys::FromRawId`; the crate's own interns reach the same boxing without it"
+  mrb_symbol_value: "`Symbol::from` an `Id`, `IntoValue for Id` — boxing the interned id into its symbol value, magnus's `From<Id> for Symbol`"
   mrb_test: Value::to_bool
   mrb_top_run: Mrb::load_bytecode
   mrb_top_self: Mrb::load_bytecode
@@ -406,9 +406,9 @@ extensions:
     beside the raw bindings as magnus's `rb_sys` traits are. A value handle
     answers its raw form through its own `as_raw`, which a `ReprValue`
     equivalent would one day unify the way magnus's `AsRawValue` does. A class
-    pointer has no crossing trait — a class is a value in CRuby, so magnus
-    offers only the checked downcast — and crosses through `RClass::from_raw`
-    / `RModule::from_raw`, `unsafe` under the same rule.
+    pointer has no crossing of its own, as in magnus: a class handle's raw
+    form is its value, and a raw pointer crosses boxed as a value through the
+    checked downcast.
   sys::catch_unwind: >-
     Panic boundary for a Rust closure handed to mruby as a C callback,
     magnus's `rb_sys::catch_unwind`: runs the closure under

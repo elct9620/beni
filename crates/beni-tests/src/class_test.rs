@@ -1,4 +1,4 @@
-use crate::support::open_mrb;
+use crate::support::{open_mrb, same_object};
 use beni::{Error, FromValue, IntoId, IntoValue, Module, Mrb, Object, RClass, Value};
 
 /// Registration target answering a fixed Integer for the trait
@@ -239,7 +239,7 @@ fn module_get_fetches_a_nested_module_by_either_key() {
         )
         .expect("fetching the nested module by Symbol key must succeed");
     assert_eq!(by_name.name(&mrb), "BeniModNs::Inner");
-    assert_eq!(by_name.as_raw(), by_sym.as_raw());
+    assert!(same_object(&mrb, by_name, by_sym));
 }
 
 #[test]
@@ -865,13 +865,13 @@ fn real_returns_a_real_class_handle_unchanged() {
     // `real` returns the same class — same pointer, same name.
     let object = mrb.object_class();
     let resolved = object.real();
-    assert_eq!(resolved.as_raw(), object.as_raw());
+    assert!(same_object(&mrb, resolved, object));
     assert_eq!(resolved.name(&mrb), "Object");
 
     let runtime_error = mrb
         .class_get(c"RuntimeError")
         .expect("RuntimeError is present in every VM");
-    assert_eq!(runtime_error.real().as_raw(), runtime_error.as_raw());
+    assert!(same_object(&mrb, runtime_error.real(), runtime_error));
     assert_eq!(runtime_error.real().name(&mrb), "RuntimeError");
 }
 
@@ -933,7 +933,7 @@ fn real_resolves_a_singleton_class_to_its_attached_object_class() {
     // the `#<Class:...>` form — but `real` walks past it to a named
     // user-facing class.
     let resolved = sclass.real();
-    assert_ne!(resolved.as_raw(), sclass.as_raw());
+    assert!(!same_object(&mrb, resolved, sclass));
     let name = resolved.name(&mrb);
     assert!(
         !name.starts_with("#<"),

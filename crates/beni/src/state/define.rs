@@ -50,7 +50,7 @@ impl Mrb {
     pub fn define_class<K: IntoId>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
         let sym = name.into_id(self)?;
         if let Some(bound) =
-            crate::class::bound_class(self, self.object_class().as_raw(), sym, super_)
+            crate::class::bound_class(self, self.object_class().as_internal(), sym, super_)
         {
             return bound;
         }
@@ -58,7 +58,7 @@ impl Mrb {
             // SAFETY: as `define_module`; `super_` was produced by
             // the same VM.
             RClass::from_raw_unchecked(unsafe {
-                sys::mrb_define_class_id(mrb.as_ptr(), sym.to_raw(), super_.as_raw())
+                sys::mrb_define_class_id(mrb.as_ptr(), sym.to_raw(), super_.as_internal())
             })
         })
     }
@@ -77,7 +77,7 @@ impl Mrb {
         // A class defined or fetched under an exception-class superclass
         // descends from it, so it is an exception class too.
         self.define_class(name, superclass.as_r_class())
-            .map(|class| ExceptionClass::from_raw_unchecked(class.as_raw()))
+            .map(|class| ExceptionClass::from_raw_unchecked(class.as_internal()))
     }
 
     /// `mrb_class_new(mrb, super_)` — create an anonymous class
@@ -90,7 +90,9 @@ impl Mrb {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `super_` was produced by the same VM.
-            RClass::from_raw_unchecked(unsafe { sys::mrb_class_new(mrb.as_ptr(), super_.as_raw()) })
+            RClass::from_raw_unchecked(unsafe {
+                sys::mrb_class_new(mrb.as_ptr(), super_.as_internal())
+            })
         })
     }
 

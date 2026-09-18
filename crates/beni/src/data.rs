@@ -96,7 +96,7 @@ impl RClass {
     /// `TypeError` and stays unmarked, so mruby never reads a carrier as
     /// that layout.
     pub fn set_instance_data_tt(self, mrb: &Mrb) -> Result<(), Error> {
-        let tt = crate::class::instance_tt(self.as_raw());
+        let tt = crate::class::instance_tt(self.as_internal());
         if tt != sys::MRB_TT_OBJECT && tt != sys::MRB_TT_CDATA {
             return Err(Error::Exception(crate::method::core_exception(
                 mrb,
@@ -106,7 +106,7 @@ impl RClass {
         }
         // SAFETY: `self` originates from the live VM borrowed as `mrb`;
         // the shim only rewrites the class's instance-tt flag bits.
-        unsafe { sys::mrb_set_instance_tt_func(self.as_raw(), sys::MRB_TT_CDATA) };
+        unsafe { sys::mrb_set_instance_tt_func(self.as_internal(), sys::MRB_TT_CDATA) };
         Ok(())
     }
 
@@ -162,7 +162,7 @@ impl RClass {
             // which raises a `TypeError` when `self` was never marked
             // to carry a data carrier — caught by `protect`.
             let rdata = unsafe {
-                sys::mrb_data_object_alloc(mrb.as_ptr(), self.as_raw(), ptr, ty.as_raw())
+                sys::mrb_data_object_alloc(mrb.as_ptr(), self.as_internal(), ptr, ty.as_raw())
             };
             // SAFETY: `rdata` is a live object pointer just allocated
             // against this VM; `mrb_obj_value` reifies it.

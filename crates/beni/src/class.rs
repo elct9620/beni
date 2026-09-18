@@ -5,11 +5,11 @@
 //!
 //! ## Why newtypes
 //!
-//! Same rationale as `Value`: the raw `*mut RClass` pointer crosses
-//! the crate boundary, and consumers historically had to pass it
-//! around untyped — easy to leak, easy to confuse with other opaque
-//! pointers, and impossible to attach inherent methods to from a
-//! sibling crate. mruby represents classes and modules with the same
+//! Same rationale as `Value`: mruby names a class by a raw
+//! `*mut RClass`, easy to confuse with other opaque pointers and
+//! impossible to attach inherent methods to from a sibling crate. A
+//! consumer reaches that pointer only through the class value, as
+//! magnus leaves the class struct. mruby represents classes and modules with the same
 //! C `struct RClass`; the Rust newtypes keep "this handle is a class" /
 //! "this handle is a module" / "this class allocates exceptions"
 //! distinct at the type level while sharing the registration surface
@@ -37,8 +37,8 @@ use beni_sys as sys;
 /// `*mut RClass` so the C ABI is preserved.
 ///
 /// Construct via `Mrb::define_class` / `Mrb::class_get` (top level),
-/// the `Module` trait's `define_class` / `class_get` (nested), or
-/// `RClass::from_raw` at FFI boundaries.
+/// the `Module` trait's `define_class` / `class_get` (nested), or the
+/// checked `FromValue` downcast of a class value.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
 pub struct RClass(pub(crate) *mut sys::RClass);
@@ -48,8 +48,8 @@ pub struct RClass(pub(crate) *mut sys::RClass);
 /// classes; the newtype keeps the distinction at the Rust type level.
 ///
 /// Construct via `Mrb::define_module` (top level), the `Module`
-/// trait's `define_module` (nested), or `RModule::from_raw` at FFI
-/// boundaries.
+/// trait's `define_module` (nested), or the checked `FromValue`
+/// downcast of a module value.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
 pub struct RModule(pub(crate) *mut sys::RClass);
@@ -205,8 +205,9 @@ pub(crate) fn bound_class(
         let class = RClass::from_raw_unchecked(unsafe { bound.as_class_ptr() });
         // SAFETY: `class` is a live class; its `super` link is either
         // null or another class-family struct `mrb_class_real` walks.
-        let defined_from = RClass::from_raw_unchecked(unsafe { (*class.as_raw()).super_ }).real();
-        if defined_from.as_raw() != superclass.as_raw() {
+        let defined_from =
+            RClass::from_raw_unchecked(unsafe { (*class.as_internal()).super_ }).real();
+        if defined_from.as_internal() != superclass.as_internal() {
             return type_error(format!("superclass mismatch for class {name}"));
         }
         Ok(class)
@@ -230,41 +231,17 @@ pub(crate) fn is_exception_class(class: *mut sys::RClass) -> bool {
 }
 
 impl RClass {
-    /// Wrap a raw `*mut RClass` a bridge received from mruby directly.
-    /// Most call sites get the pointer from the typed definition methods
-    /// instead. A class pointer has no crossing trait of its own the way
-    /// a value and an id do: a class is a value in CRuby, so magnus
-    /// offers only the checked downcast and leaves nothing to mirror.
-    ///
-    /// # Safety
-    ///
-    /// `p` must be a live class of the interpreter it is used against.
-    /// The typed surface dereferences it rather than testing it.
-    #[inline]
-    pub const unsafe fn from_raw(p: *mut sys::RClass) -> Self {
-        Self(p)
-    }
-
-    /// Wrap a class pointer the crate itself produced — the internal
-    /// counterpart of the `unsafe` crossing above.
+    /// Wrap a class pointer the crate itself produced.
     #[inline]
     pub(crate) const fn from_raw_unchecked(p: *mut sys::RClass) -> Self {
         Self(p)
     }
 
-    /// Borrow the inner `*mut RClass` for raw FFI calls. The wrapper
-    /// itself stays usable after the borrow (`RClass: Copy`).
+    /// The class pointer, for the crate's own calls into `beni::sys` — a
+    /// consumer reads it from the class value, as magnus leaves it.
     #[inline]
-    pub const fn as_raw(self) -> *mut sys::RClass {
+    pub(crate) const fn as_internal(self) -> *mut sys::RClass {
         self.0
-    }
-
-    /// TRUE when the underlying pointer is null. Only reachable via
-    /// `RClass::from_raw` on a NULL pointer — the typed lookup paths
-    /// surface missing classes as `Err` instead.
-    #[inline]
-    pub fn is_null(self) -> bool {
-        self.0.is_null()
     }
 
     /// `mrb_class_real(self)` — resolve this handle to its real class,
@@ -274,8 +251,7 @@ impl RClass {
     /// resolution walks the class structure and never raises, so it
     /// needs no exception protection. The normalization a consumer reaches for
     /// after obtaining a handle that may be a singleton class (through
-    /// `Value::singleton_class` or `RClass::from_value`) or an include
-    /// class (through `RClass::from_raw`); the real-class result
+    /// `Value::singleton_class` or `RClass::from_value`); the real-class result
     /// `Value::class` already returns needs no further resolution.
     #[inline]
     pub fn real(self) -> RClass {
@@ -328,28 +304,16 @@ impl RClass {
 }
 
 impl RModule {
-    /// Wrap a raw `*mut RClass` known to be a module. Counterpart of
-    /// `RClass::from_raw` for FFI boundaries.
-    ///
-    /// # Safety
-    ///
-    /// As `RClass::from_raw`, and `p` must name a module.
-    #[inline]
-    pub const unsafe fn from_raw(p: *mut sys::RClass) -> Self {
-        Self(p)
-    }
-
-    /// Wrap a module pointer the crate itself produced — the internal
-    /// counterpart of the `unsafe` crossing above.
+    /// Wrap a module pointer the crate itself produced.
     #[inline]
     pub(crate) const fn from_raw_unchecked(p: *mut sys::RClass) -> Self {
         Self(p)
     }
 
-    /// Borrow the inner `*mut RClass` for raw FFI calls. The wrapper
-    /// itself stays usable after the borrow (`RModule: Copy`).
+    /// The class pointer, for the crate's own calls into `beni::sys` — a
+    /// consumer reads it from the class value, as magnus leaves it.
     #[inline]
-    pub const fn as_raw(self) -> *mut sys::RClass {
+    pub(crate) const fn as_internal(self) -> *mut sys::RClass {
         self.0
     }
 
@@ -371,10 +335,10 @@ impl ExceptionClass {
         Self(p)
     }
 
-    /// Borrow the inner `*mut RClass` for raw FFI calls. The wrapper
-    /// itself stays usable after the borrow (`ExceptionClass: Copy`).
+    /// The class pointer, for the crate's own calls into `beni::sys` — a
+    /// consumer reads it from the class value, as magnus leaves it.
     #[inline]
-    pub const fn as_raw(self) -> *mut sys::RClass {
+    pub(crate) const fn as_internal(self) -> *mut sys::RClass {
         self.0
     }
 
@@ -489,7 +453,7 @@ pub trait Module: private::ClassLike {
                     mrb.as_ptr(),
                     self.raw(),
                     sym.to_raw(),
-                    superclass.as_raw(),
+                    superclass.as_internal(),
                 )
             })
         })
@@ -508,7 +472,7 @@ pub trait Module: private::ClassLike {
         // A class defined or fetched under an exception-class superclass
         // descends from it, so it is an exception class too.
         self.define_class(mrb, name, superclass.as_r_class())
-            .map(|class| ExceptionClass::from_raw_unchecked(class.as_raw()))
+            .map(|class| ExceptionClass::from_raw_unchecked(class.as_internal()))
     }
 
     /// `mrb_define_module_under_id(mrb, self, name)` — define (or
@@ -728,7 +692,7 @@ pub trait Module: private::ClassLike {
             // and `module` originate from the same VM. `mrb_include_module`
             // checks frozen state and rejects a cyclic include, raising
             // FrozenError or ArgumentError — caught by `protect`.
-            unsafe { sys::mrb_include_module(mrb.as_ptr(), self.raw(), module.as_raw()) };
+            unsafe { sys::mrb_include_module(mrb.as_ptr(), self.raw(), module.as_internal()) };
             Value::nil()
         })
         .map(|_| ())
@@ -745,7 +709,7 @@ pub trait Module: private::ClassLike {
             // and `module` originate from the same VM. `mrb_prepend_module`
             // checks frozen state and rejects a cyclic prepend, raising
             // FrozenError or ArgumentError — caught by `protect`.
-            unsafe { sys::mrb_prepend_module(mrb.as_ptr(), self.raw(), module.as_raw()) };
+            unsafe { sys::mrb_prepend_module(mrb.as_ptr(), self.raw(), module.as_internal()) };
             Value::nil()
         })
         .map(|_| ())

@@ -1,4 +1,4 @@
-use crate::support::open_mrb;
+use crate::support::{open_mrb, same_object};
 use beni::{Array, ExceptionClass, FromValue, Hash, IntoValue, RClass, RModule, RString, Value};
 
 // Boxes through mruby's generic `mrb_int_value` / `mrb_float_value`
@@ -178,11 +178,11 @@ fn every_class_family_handle_round_trips_through_its_value() {
     for handle in [class, singleton] {
         let back = RClass::from_value(handle.into_value(&mrb))
             .expect("a class handle's value converts back");
-        assert_eq!(back.as_raw(), handle.as_raw());
+        assert!(same_object(&mrb, back, handle));
     }
     let back = RModule::from_value(module.into_value(&mrb))
         .expect("a module handle's value converts back");
-    assert_eq!(back.as_raw(), module.as_raw());
+    assert!(same_object(&mrb, back, module));
 
     // A module is never a class, nor a class a module.
     assert!(RClass::from_value(module.into_value(&mrb)).is_none());
@@ -234,8 +234,8 @@ fn exception_class_round_trips_and_names_the_same_class() {
 
     let back = ExceptionClass::from_value(runtime_error.into_value(&mrb))
         .expect("an exception class handle's value converts back");
-    assert_eq!(back.as_raw(), runtime_error.as_raw());
-    assert_eq!(runtime_error.as_r_class().as_raw(), runtime_error.as_raw());
+    assert!(same_object(&mrb, back, runtime_error));
+    assert!(same_object(&mrb, runtime_error.as_r_class(), runtime_error));
 }
 
 #[test]

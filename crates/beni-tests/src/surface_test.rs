@@ -56,7 +56,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::obj_clone;
     let _ = Value::classname;
     let _ = Value::to_string;
-    let _ = Value::as_class_ptr;
     let _ = Value::funcall::<&core::ffi::CStr>;
     let _ = Value::is_nil;
     let _ = Value::is_integer;
@@ -86,14 +85,10 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RClass::real;
     let _ = RClass::to_value;
     let _ = RClass::obj_new;
-    let _ = RClass::is_null;
     let _ = RClass::set_instance_data_tt;
     let _ = RClass::data_wrap::<i32>;
     let _ = DataType::<i32>::new;
-    let _ = RModule::from_raw;
-    let _ = RModule::as_raw;
     let _ = RModule::to_value;
-    let _ = ExceptionClass::as_raw;
     let _ = ExceptionClass::as_r_class;
     let _ = ExceptionClass::to_value;
     let _ = ExceptionClass::raise;
@@ -268,8 +263,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::set_user_data::<u8>;
     let _ = Mrb::user_data::<u8>;
     let _ = Mrb::take_user_data::<u8>;
-    let _ = RClass::as_raw;
-    let _ = RClass::from_raw;
     let _ = RString::cat_cstr;
     let _ = RString::cmp;
     let _ = RString::concat;

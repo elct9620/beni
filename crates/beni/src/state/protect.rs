@@ -66,7 +66,7 @@ macro_rules! class_backed_repr {
             fn as_value(self) -> Value {
                 // SAFETY: `mrb_obj_value` only boxes the pointer.
                 Value::from_raw_unchecked(unsafe {
-                    sys::mrb_obj_value(self.as_raw() as *mut core::ffi::c_void)
+                    sys::mrb_obj_value(self.as_internal() as *mut core::ffi::c_void)
                 })
             }
 
@@ -80,8 +80,8 @@ macro_rules! class_backed_repr {
 }
 
 class_backed_repr!(
-    RClass => RClass::from_raw,
-    RModule => RModule::from_raw,
+    RClass => RClass::from_raw_unchecked,
+    RModule => RModule::from_raw_unchecked,
     ExceptionClass => ExceptionClass::from_raw_unchecked
 );
 

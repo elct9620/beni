@@ -1,4 +1,4 @@
-use crate::support::open_mrb;
+use crate::support::{open_mrb, same_object};
 use beni::{FromValue, IntoValue, Module, Mrb, Value};
 
 fn answer_seven(_mrb: &Mrb, _self: Value) -> i32 {
@@ -264,7 +264,7 @@ fn define_error_fetches_a_same_named_class_and_rejects_a_conflict() {
     let again = mrb
         .define_error(c"BeniTwiceError", standard_error)
         .expect("the same superclass must fetch the existing class");
-    assert_eq!(again.as_raw(), first.as_raw());
+    assert!(same_object(&mrb, again, first));
 
     assert!(
         mrb.define_error(c"BeniTwiceError", runtime_error).is_err(),
@@ -305,7 +305,7 @@ fn define_class_fetches_a_prepended_class_as_itself() {
     let fetched = mrb
         .define_class(c"BeniPrepended", mrb.object_class())
         .expect("the same superclass must fetch the bound class");
-    assert_eq!(fetched.as_raw(), before.as_raw());
+    assert!(same_object(&mrb, fetched, before));
     assert!(fetched.to_value(&mrb).is_class());
 
     let ns = mrb
@@ -343,7 +343,7 @@ fn define_error_on_a_prepended_exception_class_builds_its_exceptions() {
     let bound = mrb
         .exc_get(c"BeniPrependedError")
         .expect("the bound class is an exception class");
-    assert_eq!(fetched.as_raw(), bound.as_raw());
+    assert!(same_object(&mrb, fetched, bound));
 
     let err = beni::Error::new(&mrb, fetched, "boom");
     assert_eq!(err.message(&mrb), "boom");

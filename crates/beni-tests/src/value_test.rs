@@ -1,4 +1,4 @@
-use crate::support::open_mrb;
+use crate::support::{open_mrb, same_object};
 use beni::state::args::format;
 use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, Symbol, Value};
 
@@ -1279,23 +1279,23 @@ fn singleton_class_reads_a_stable_eigenclass_and_rejects_immediates() {
     let sclass = s
         .singleton_class(&mrb)
         .expect("a string has a singleton class");
-    assert_ne!(sclass.as_raw(), s.class(&mrb).as_raw());
+    assert!(!same_object(&mrb, sclass, s.class(&mrb)));
 
     // Re-reading the same object yields the same singleton class.
     let again = s
         .singleton_class(&mrb)
         .expect("a string has a singleton class");
-    assert_eq!(sclass.as_raw(), again.as_raw());
+    assert!(same_object(&mrb, sclass, again));
 
     // nil yields its predefined class, which acts as its singleton
     // class, so the read succeeds.
-    assert_eq!(
+    assert!(same_object(
+        &mrb,
         Value::nil()
             .singleton_class(&mrb)
-            .expect("nil has a singleton class")
-            .as_raw(),
-        Value::nil().class(&mrb).as_raw()
-    );
+            .expect("nil has a singleton class"),
+        Value::nil().class(&mrb)
+    ));
 
     // Every other immediate has no singleton class: the TypeError
     // mruby raises surfaces as Err.

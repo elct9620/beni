@@ -705,7 +705,7 @@ impl Value {
     /// `self` must carry `MRB_TT_CLASS`, `MRB_TT_SCLASS`, or
     /// `MRB_TT_MODULE`.
     #[inline]
-    pub unsafe fn as_class_ptr(self) -> *mut sys::RClass {
+    pub(crate) unsafe fn as_class_ptr(self) -> *mut sys::RClass {
         // SAFETY: forwarded from caller.
         unsafe { sys::mrb_class_ptr_func(self.0) }
     }
@@ -870,7 +870,7 @@ impl Value {
     /// TRUE when `self` carries `MRB_TT_CLASS` — the class tag only;
     /// modules (`MRB_TT_MODULE`) and singleton classes
     /// (`MRB_TT_SCLASS`) carry their own tags. See `Value::is_integer`.
-    /// Pair with `Value::as_class_ptr` for the direct-unbox path.
+    /// Pair with `RClass::from_value` for the typed handle.
     #[inline]
     pub fn is_class(self) -> bool {
         // SAFETY: as `is_integer`.
