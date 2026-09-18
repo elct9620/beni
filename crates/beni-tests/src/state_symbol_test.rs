@@ -43,10 +43,7 @@ fn intern_interns_a_byte_slice_by_length_creating_the_symbol() {
     // path — proving it's the same interned symbol.
     let sym = mrb.intern(b"beni_sym").expect("the name interns");
     assert_eq!(sym.name(&mrb).as_deref(), Some("beni_sym"));
-    assert_eq!(
-        sym.to_sym(),
-        mrb.intern_cstr(c"beni_sym").expect("the name interns")
-    );
+    assert_eq!(sym, mrb.intern_cstr(c"beni_sym").expect("the name interns"));
 
     // It's length-based, not NUL-terminated: a slice carrying trailing
     // bytes past where a C string would stop interns those bytes too,
@@ -111,9 +108,9 @@ fn intern_check_finds_an_interned_name_and_misses_an_uninterned_one() {
     assert!(mrb.intern_check(b"beni_unseen").is_none());
 
     // Once the name is interned, the check finds it and reports the
-    // same id the creating intern produced.
-    let id = mrb.intern_cstr(c"beni_seen").expect("the name interns");
-    assert_eq!(mrb.intern_check(b"beni_seen").map(Symbol::to_sym), Some(id));
+    // same symbol the creating intern produced.
+    let seen = mrb.intern_cstr(c"beni_seen").expect("the name interns");
+    assert_eq!(mrb.intern_check(b"beni_seen"), Some(seen));
 }
 
 #[test]
@@ -268,4 +265,24 @@ fn a_method_body_hands_an_over_long_intern_to_ruby_as_a_rescuable_argument_error
         .expect("the rescue answers without raising");
 
     assert_eq!(i32::from_value(rescued), Some(1));
+}
+
+#[test]
+fn symbols_compare_and_hash_by_the_name_they_carry() {
+    let mrb = open_mrb();
+
+    // Interning is canonical, so the route a symbol arrives by never
+    // shows in the comparison: the same bytes are the same symbol
+    // whichever intern produced them, and different bytes are not.
+    let via_cstr = mrb.intern_cstr(c"beni_eq").expect("the name interns");
+    let via_bytes = mrb.intern(b"beni_eq").expect("the name interns");
+    let other = mrb.intern(b"beni_eq_other").expect("the name interns");
+    assert_eq!(via_cstr, via_bytes);
+    assert_ne!(via_cstr, other);
+
+    // Equal symbols hash alike, which is what lets one key a map.
+    let mut seen = std::collections::HashMap::new();
+    seen.insert(via_cstr, 1);
+    assert_eq!(seen.get(&via_bytes), Some(&1));
+    assert_eq!(seen.get(&other), None);
 }

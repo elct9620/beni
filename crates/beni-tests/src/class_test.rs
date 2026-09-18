@@ -776,7 +776,7 @@ fn remove_method_strips_a_method_defined_on_the_handle() {
         .expect("registering the method must succeed");
 
     // The method responds before removal.
-    let answer = c"answer".into_sym(&mrb).expect("the name interns").to_sym();
+    let answer = c"answer".into_sym(&mrb).expect("the name interns");
     let receiver = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
@@ -1112,6 +1112,6 @@ fn a_rust_string_key_names_its_bytes_past_an_embedded_nul() {
     let whole = mrb.intern(b"BENI\0TAIL").expect("the whole name interns");
     let prefix = mrb.intern(b"BENI").expect("the prefix interns");
     let namespace = object.to_value(&mrb);
-    assert!(namespace.const_defined_at(&mrb, whole.to_sym()));
-    assert!(!namespace.const_defined_at(&mrb, prefix.to_sym()));
+    assert!(namespace.const_defined_at(&mrb, whole));
+    assert!(!namespace.const_defined_at(&mrb, prefix));
 }

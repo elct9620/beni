@@ -7,12 +7,9 @@ fn name_sym_and_rebuild_roundtrip() {
     let sym = Symbol::new(&mrb, c"flags").expect("the name interns");
 
     assert_eq!(sym.name(&mrb).as_deref(), Some("flags"));
-    // The unboxed id must equal interning the same name — a wrong
-    // boxing shift in the unbox shim would diverge here.
-    assert_eq!(
-        sym.to_sym(),
-        mrb.intern_cstr(c"flags").expect("the name interns")
-    );
+    // It must equal interning the same name — a wrong boxing shift in
+    // the unbox shim would diverge here.
+    assert_eq!(sym, mrb.intern_cstr(c"flags").expect("the name interns"));
     // Re-boxing the id yields an equal symbol.
     assert_eq!(
         Symbol::from_sym(sym.to_sym()).name(&mrb).as_deref(),
@@ -31,18 +28,16 @@ fn name_bytes_and_dump_read_the_symbol_name() {
 
     // An embedded NUL: `name` escapes it to the dump form, only
     // `name_bytes` returns the raw bytes.
-    let nul = Symbol::from_sym(
-        mrb.intern_str(mrb.str_new(b"a\0b").as_value())
-            .expect("the name interns"),
-    );
+    let nul = mrb
+        .intern_str(mrb.str_new(b"a\0b").as_value())
+        .expect("the name interns");
     assert_eq!(nul.name(&mrb).as_deref(), Some("\"a\\x00b\""));
     assert_eq!(nul.name_bytes(&mrb).as_deref(), Some(&b"a\0b"[..]));
 
     // A name needing escaping dumps quoted.
-    let spaced = Symbol::from_sym(
-        mrb.intern_str(mrb.str_new(b"a b").as_value())
-            .expect("the name interns"),
-    );
+    let spaced = mrb
+        .intern_str(mrb.str_new(b"a b").as_value())
+        .expect("the name interns");
     assert_eq!(spaced.dump(&mrb).as_deref(), Some("\"a b\""));
 }
 
@@ -102,10 +97,7 @@ fn to_sym_coerces_symbol_string_and_rejects_others() {
         .as_value()
         .to_sym(&mrb)
         .expect("a string value coerces");
-    assert_eq!(
-        from_str.to_sym(),
-        mrb.intern_cstr(c"key").expect("the name interns")
-    );
+    assert_eq!(from_str, mrb.intern_cstr(c"key").expect("the name interns"));
 
     // A value that is neither a symbol nor a string rejects.
     assert!(42i32.into_value(&mrb).to_sym(&mrb).is_err());

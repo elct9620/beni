@@ -26,6 +26,33 @@ use beni_sys as sys;
 #[derive(Copy, Clone)]
 pub struct Symbol(Value);
 
+/// Interning is canonical, so two symbols are equal exactly when they
+/// name the same bytes. The id is what carries that, not the boxed
+/// value, whose layout varies with the archive's boxing mode.
+impl PartialEq for Symbol {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.to_sym() == other.to_sym()
+    }
+}
+
+impl Eq for Symbol {}
+
+impl core::hash::Hash for Symbol {
+    #[inline]
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.to_sym().hash(state);
+    }
+}
+
+/// The interned id, which is what distinguishes one symbol from another.
+/// The name needs a live `Mrb` to read, so it is out of reach here.
+impl core::fmt::Debug for Symbol {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("Symbol").field(&self.to_sym()).finish()
+    }
+}
+
 impl Symbol {
     /// Wrap a `Value` the caller has already determined to be
     /// Symbol-tagged.
@@ -54,11 +81,11 @@ impl Symbol {
     }
 
     /// Intern `name` and symbolize it. Counterpart to magnus's
-    /// `Symbol::new`; equivalent to symbolizing `mrb.intern_cstr(name)`,
-    /// so a name too long to be a symbol surfaces as `Err`.
+    /// `Symbol::new`; the C-string intern `Mrb::intern_cstr` under
+    /// another name, so a name too long to be a symbol surfaces as `Err`.
     #[inline]
     pub fn new(mrb: &Mrb, name: &core::ffi::CStr) -> Result<Self, Error> {
-        mrb.intern_cstr(name).map(Self::from_sym)
+        mrb.intern_cstr(name)
     }
 
     /// Symbolize an already-interned id via mruby's boxing-agnostic
@@ -85,8 +112,8 @@ impl Symbol {
         unsafe { sys::mrb_symbol_func(self.0.as_raw()) }
     }
 
-    /// The symbol's name as an owned `String`, via `to_sym` +
-    /// `Mrb::sym_name`. `None` when mruby yields a NULL name. A name
+    /// The symbol's name as an owned `String`, via `Mrb::sym_name`.
+    /// `None` when mruby yields a NULL name. A name
     /// carrying an embedded NUL comes back escaped to its quoted dump form;
     /// `name_bytes` reads the raw bytes — also the path for any non-UTF-8
     /// name, which mruby's escaping keeps unreachable here. A short name
@@ -94,10 +121,10 @@ impl Symbol {
     /// so the name is copied out rather than borrowed.
     #[inline]
     pub fn name(self, mrb: &Mrb) -> Option<String> {
-        mrb.sym_name(self.to_sym())
+        mrb.sym_name(self)
     }
 
-    /// The symbol's raw name bytes as an owned `Vec<u8>`, via `to_sym` +
+    /// The symbol's raw name bytes as an owned `Vec<u8>`, via
     /// `Mrb::sym_name_len` — an embedded NUL preserved unescaped, where
     /// `name` returns the quoted dump form. `None` when mruby yields a NULL
     /// name. A short name unpacks into a per-read scratch buffer the next
@@ -105,11 +132,11 @@ impl Symbol {
     /// borrowed.
     #[inline]
     pub fn name_bytes(self, mrb: &Mrb) -> Option<Vec<u8>> {
-        mrb.sym_name_len(self.to_sym())
+        mrb.sym_name_len(self)
     }
 
-    /// The symbol's dump form as an owned `String`, via `to_sym` +
-    /// `Mrb::sym_dump` — the bare name for a plain identifier, otherwise the
+    /// The symbol's dump form as an owned `String`, via `Mrb::sym_dump`
+    /// — the bare name for a plain identifier, otherwise the
     /// quoted and escaped form (Ruby's `Symbol#inspect` without the leading
     /// colon). `None` when mruby yields a NULL name. Reads without
     /// dispatching and never raises. A short name unpacks into a per-read
@@ -117,7 +144,7 @@ impl Symbol {
     /// copied out rather than borrowed.
     #[inline]
     pub fn dump(self, mrb: &Mrb) -> Option<String> {
-        mrb.sym_dump(self.to_sym())
+        mrb.sym_dump(self)
     }
 
     /// The symbol's name reified as an mruby String, via `mrb_sym_str`

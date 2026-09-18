@@ -1190,10 +1190,8 @@ fn as_break_views_a_real_escaping_break() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb
-        .intern_cstr(c"$beni_break_recv")
+    mrb.gv_set(c"$beni_break_recv", recv)
         .expect("the name interns");
-    mrb.gv_set(slot, recv);
 
     // The block is captured via `&` so it stays non-orphan: `break
     // 88` surfaces as an RBreak the yielder catches, and `as_break`

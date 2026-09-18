@@ -22,7 +22,7 @@
 //! `crate::RClass` / `crate::RModule`. Global variable access is a
 //! plain table operation that cannot raise.
 
-use crate::{Error, ExceptionClass, IntoSym, Mrb, RClass, RModule, Value};
+use crate::{Error, ExceptionClass, IntoSym, Mrb, RClass, RModule, Symbol, Value};
 use beni_sys as sys;
 
 impl Mrb {
@@ -48,7 +48,7 @@ impl Mrb {
     /// anything else bound there.
     #[inline]
     pub fn define_class<K: IntoSym>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
-        let sym = name.into_sym(self)?.to_sym();
+        let sym = name.into_sym(self)?;
         if let Some(bound) =
             crate::class::bound_class(self, self.object_class().as_raw(), sym, super_)
         {
@@ -58,7 +58,7 @@ impl Mrb {
             // SAFETY: as `define_module`; `super_` was produced by
             // the same VM.
             RClass::from_raw(unsafe {
-                sys::mrb_define_class_id(mrb.as_ptr(), sym, super_.as_raw())
+                sys::mrb_define_class_id(mrb.as_ptr(), sym.to_sym(), super_.as_raw())
             })
         })
     }
@@ -187,31 +187,42 @@ impl Mrb {
         .map(|_| ())
     }
 
-    /// `mrb_gv_set(mrb, sym, val)` — assign a global variable.
+    /// `mrb_gv_set(mrb, sym, val)` — assign the global variable named
+    /// by a symbol-or-name key (`IntoSym`). The assignment itself never
+    /// fails; the `Err` it carries is the key's own.
     #[inline]
-    pub fn gv_set(&self, sym: sys::mrb_sym, val: Value) {
+    pub fn gv_set<K: IntoSym>(&self, name: K, val: Value) -> Result<(), Error> {
+        let sym = name.into_sym(self)?.to_sym();
         // SAFETY: `self` is alive; `val` originates from the same VM.
         unsafe { sys::mrb_gv_set(self.as_ptr(), sym, val.as_raw()) };
+        Ok(())
     }
 
-    /// `mrb_gv_get(mrb, sym)` — read a global variable; an unset
-    /// global reads as nil. The read happens at call time, so a
-    /// reassigned global yields its current value.
+    /// `mrb_gv_get(mrb, sym)` — read the global variable named by a
+    /// symbol-or-name key (`IntoSym`); an unset global reads as nil, as
+    /// does a key too long to name a symbol. The read happens at call
+    /// time, so a reassigned global yields its current value.
     #[inline]
-    pub fn gv_get(&self, sym: sys::mrb_sym) -> Value {
-        // SAFETY: `self` is alive; `sym` was interned against the
-        // same VM (caller contract).
+    pub fn gv_get<K: IntoSym>(&self, name: K) -> Value {
+        let Ok(sym) = name.into_sym(self).map(Symbol::to_sym) else {
+            return Value::nil();
+        };
+        // SAFETY: `self` is alive; `sym` was interned against it.
         Value::from_raw(unsafe { sys::mrb_gv_get(self.as_ptr(), sym) })
     }
 
-    /// `mrb_gv_remove(mrb, sym)` — remove a global variable. Removing
-    /// an unset global is a no-op; neither case raises. The global
-    /// reads as nil afterwards, the same as one never set.
+    /// `mrb_gv_remove(mrb, sym)` — remove the global variable named by a
+    /// symbol-or-name key (`IntoSym`). Removing an unset global is a
+    /// no-op, as is a key too long to name a symbol; neither case
+    /// raises. The global reads as nil afterwards, the same as one never
+    /// set.
     #[inline]
-    pub fn gv_remove(&self, sym: sys::mrb_sym) {
-        // SAFETY: `self` is alive; `sym` was interned against the
-        // same VM (caller contract). `mrb_gv_remove` deletes the
-        // entry and does not raise.
+    pub fn gv_remove<K: IntoSym>(&self, name: K) {
+        let Ok(sym) = name.into_sym(self).map(Symbol::to_sym) else {
+            return;
+        };
+        // SAFETY: `self` is alive; `sym` was interned against it.
+        // `mrb_gv_remove` deletes the entry and does not raise.
         unsafe { sys::mrb_gv_remove(self.as_ptr(), sym) };
     }
 }

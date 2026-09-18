@@ -47,10 +47,8 @@ fn gc_triggers_keep_a_reachable_value_valid() {
 
     // Anchor one survivor through a global so it stays reachable
     // across collection; pile up unreachable garbage around it.
-    mrb.gv_set(
-        mrb.intern_static(b"$survivor").expect("the name interns"),
-        mrb.str_new(b"survivor").as_value(),
-    );
+    mrb.gv_set(c"$survivor", mrb.str_new(b"survivor").as_value())
+        .expect("the name interns");
     for _ in 0..64 {
         let _ = mrb.str_new(b"garbage");
     }
@@ -60,7 +58,7 @@ fn gc_triggers_keep_a_reachable_value_valid() {
     mrb.incremental_gc();
 
     // The reachable survivor is still a valid String afterwards.
-    let kept = mrb.gv_get(mrb.intern_static(b"$survivor").expect("the name interns"));
+    let kept = mrb.gv_get(c"$survivor");
     let kept = RString::from_value(kept).expect("the survivor is String-tagged");
     assert_eq!(kept.to_bytes(), b"survivor");
 }

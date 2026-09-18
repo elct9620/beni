@@ -35,7 +35,7 @@ fn io_first(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 fn nrest_after_sym(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (sym, rest) = mrb.get_args::<NRest>()?;
     Ok(
-        if sym == mrb.intern_cstr(c"tag").expect("the name interns") {
+        if sym == mrb.intern_cstr(c"tag").expect("the name interns").to_sym() {
             (rest.len() as i32).into_value(mrb)
         } else {
             (-1i32).into_value(mrb)
@@ -127,10 +127,8 @@ fn nrest_format_splits_the_leading_symbol() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb
-        .intern_cstr(c"$beni_nrest_recv")
+    mrb.gv_set(c"$beni_nrest_recv", recv)
         .expect("the name interns");
-    mrb.gv_set(slot, recv);
 
     let cxt =
         Ccontext::new(&mrb, c"nrest_test.rb").expect("allocating the compile context must succeed");
@@ -233,10 +231,8 @@ fn rest_block_format_splits_rest_from_block() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb
-        .intern_cstr(c"$beni_rest_block_recv")
+    mrb.gv_set(c"$beni_rest_block_recv", recv)
         .expect("the name interns");
-    mrb.gv_set(slot, recv);
 
     let cxt = Ccontext::new(&mrb, c"rest_block_test.rb")
         .expect("allocating the compile context must succeed");
@@ -412,10 +408,8 @@ fn block_given_reports_whether_a_block_was_passed() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb
-        .intern_cstr(c"$beni_block_recv")
+    mrb.gv_set(c"$beni_block_recv", recv)
         .expect("the name interns");
-    mrb.gv_set(slot, recv);
 
     // A block is supplied from Ruby — the typed surface has no
     // block-value constructor — so the call is driven through a
@@ -518,7 +512,7 @@ fn kw_size(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 /// fails the assertion instead of passing.
 fn nrest_kwblock_encode(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (sym, rest, kw, block) = mrb.get_args::<NRestKwBlock>()?;
-    if sym != mrb.intern_cstr(c"tag").expect("the name interns") {
+    if sym != mrb.intern_cstr(c"tag").expect("the name interns").to_sym() {
         return Ok((-1i32).into_value(mrb));
     }
     let block_bit = if block.is_nil() { 0 } else { 1 };
@@ -540,8 +534,8 @@ fn kw_format_captures_keywords_and_empty_is_a_hash() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb.intern_cstr(c"$beni_kw_recv").expect("the name interns");
-    mrb.gv_set(slot, recv);
+    mrb.gv_set(c"$beni_kw_recv", recv)
+        .expect("the name interns");
 
     let cxt =
         Ccontext::new(&mrb, c"kw_test.rb").expect("allocating the compile context must succeed");
@@ -582,10 +576,8 @@ fn nrest_kwblock_separates_positionals_keywords_and_block() {
     let recv = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let slot = mrb
-        .intern_cstr(c"$beni_kwblock_recv")
+    mrb.gv_set(c"$beni_kwblock_recv", recv)
         .expect("the name interns");
-    mrb.gv_set(slot, recv);
 
     let cxt = Ccontext::new(&mrb, c"kwblock_test.rb")
         .expect("allocating the compile context must succeed");

@@ -179,7 +179,7 @@ where
 pub(crate) fn bound_class(
     mrb: &Mrb,
     outer: *mut sys::RClass,
-    name: sys::mrb_sym,
+    name: crate::Symbol,
     superclass: RClass,
 ) -> Option<Result<RClass, Error>> {
     // SAFETY: `outer` names a live class or module of this VM;
@@ -189,7 +189,7 @@ pub(crate) fn bound_class(
         return None;
     }
     Some(outer.const_get(mrb, name).and_then(|bound| {
-        let name = crate::Symbol::from_sym(name).name(mrb).unwrap_or_default();
+        let name = name.name(mrb).unwrap_or_default();
         let type_error = |message: String| {
             Err(Error::Exception(crate::method::core_exception(
                 mrb,
@@ -448,7 +448,7 @@ pub trait Module: private::ClassLike {
         name: K,
         superclass: RClass,
     ) -> Result<RClass, Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+        let sym = name.into_sym(mrb)?;
         if let Some(bound) = bound_class(mrb, self.raw(), sym, superclass) {
             return bound;
         }
@@ -457,7 +457,12 @@ pub trait Module: private::ClassLike {
             // `self` and `superclass` originate from the same VM;
             // `sym` was interned against the same VM.
             RClass::from_raw(unsafe {
-                sys::mrb_define_class_under_id(mrb.as_ptr(), self.raw(), sym, superclass.as_raw())
+                sys::mrb_define_class_under_id(
+                    mrb.as_ptr(),
+                    self.raw(),
+                    sym.to_sym(),
+                    superclass.as_raw(),
+                )
             })
         })
     }

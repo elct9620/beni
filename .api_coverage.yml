@@ -93,7 +93,7 @@ typed:
   mrb_assoc_new: Mrb::assoc_new
   mrb_as_float: "`Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast"
   mrb_as_int: "`Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast"
-  mrb_attr_get: "`Value::iv_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `iv_get` already takes a raw `mrb_sym`, so it yields an identical value for every key a typed caller can form and no separate item is needed"
+  mrb_attr_get: "`Value::iv_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `iv_get` takes the same symbol-or-name key with the same absence of validation, so it yields an identical value for every key a typed caller can form and no separate item is needed"
   mrb_block_given_p: "`Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises"
   mrb_break_p: Value::as_break
   mrb_class_new_instance: "`RClass::obj_new` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed"
@@ -183,7 +183,7 @@ typed:
   mrb_float_to_integer: "`Value::float_to_int` — convert a Float value to the Integer value it truncates toward zero (Ruby's Float#to_i / Float#to_int); guards the Float tag (TypeError) and raises RangeError on an infinite or NaN float"
   mrb_float_value: Value::from_float
   mrb_full_gc: "`Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive)"
-  mrb_funcall_argv: "`Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym)"
+  mrb_funcall_argv: "`Value::funcall` — the symbol-or-name key reaches this dispatch whether the caller holds a name or an already-interned `Symbol`"
   mrb_funcall_with_block: "`Value::funcall_with_block` — dispatch passing an explicit typed `Proc` block"
   mrb_gc_add_region: "`Mrb::gc_add_region` — hand the collector a caller-owned buffer to carve into heap pages, answering the page count (zero when it holds none); the `&'static mut [u8]` taken by move encodes both invariants the C API leaves to the caller — the buffer outlives the interpreter, and no caller reaches it again"
   mrb_gc_arena_restore: "`ArenaScope::keep`/`drop` (see ArenaScope extension)"
@@ -385,6 +385,11 @@ extensions:
     operation routes through mruby's `_id`-suffixed C variant with. Binds no
     C symbol of its own — it composes the interns — and is what keeps the
     interned id out of those operations' signatures.
+  Symbol equality: >-
+    A symbol compares, hashes, and renders by its interned id, mirroring
+    magnus's `Id`. mruby publishes no C comparison to bind — interning is
+    canonical, so the ids are the comparison — and the id is what carries it
+    rather than the boxed value, whose layout varies with the boxing mode.
   ExceptionClass: >-
     Typed handle on an exception class, magnus's `ExceptionClass`: only it
     builds or raises an exception, so `mrb_exc_new` / `mrb_exc_new_str` never
@@ -442,8 +447,8 @@ get_args_formats:
   "!": { status: covered, via: "read + FromValue<Option<T>> — nil reads as None, any other value by T's rule" }
   "+": { status: covered, via: "read + Value::check_frozen" }
 subsumed:
-  mrb_funcall: "`Value::funcall`, `Value::funcall_argv` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"
-  mrb_funcall_id: "`Value::funcall`, `Value::funcall_argv` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"
+  mrb_funcall: "`Value::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"
+  mrb_funcall_id: "`Value::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"
   mrb_yield: "`Proc::call` — the one-argument form of `mrb_yield_argv` (`vendor/mruby/src/vm.c:1328` passes `1, &arg` to the same `yield_with_attr`); a Rust slice of one carries it"
   mrb_load_irep_buf: "`Mrb::load_bytecode` — the read-and-run form, whose body is `load_irep(mrb, mrb_proc_read_irep_buf(mrb, buf, bufsize), NULL)` and nothing else (`vendor/mruby/src/load.c:783-798`); the typed load drives the read and the run itself so it can name which structural check a blob failed, where the one-call form reports every one of them as `irep load error`, and it answers the same `ScriptError` for the same condition"
   mrb_load_nstring: "`Mrb::load_string` — the context-free form, whose body is `mrb_load_nstring_cxt(mrb, s, len, NULL)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7868-7871`); the typed load borrows an unnamed context in the NULL's place so the compiler's diagnostics are captured rather than printed, which is all a fresh context changes for one load; carried by the `compiler` capability feature"

@@ -57,8 +57,8 @@ impl Mrb {
     /// it is stored under. The name carries no `$`, so no Ruby program
     /// can reach the table by writing a global variable.
     fn root_table(&self) -> Result<RootTable, Error> {
-        let slot = self.intern_static(TABLE_GLOBAL)?;
-        if let Some(table) = Array::from_value(self.gv_get(slot)) {
+        let name = self.intern_static(TABLE_GLOBAL)?;
+        if let Some(table) = Array::from_value(self.gv_get(name)) {
             return Ok(RootTable(table));
         }
 
@@ -66,7 +66,7 @@ impl Mrb {
         // Index 0 is the free-list head rather than a root, so a slot
         // index is never zero and zero can mean "no free slot".
         table.push(self, Value::from_int(self, 0))?;
-        self.gv_set(slot, table.as_value());
+        self.gv_set(name, table.as_value())?;
         Ok(RootTable(table))
     }
 }

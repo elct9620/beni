@@ -399,46 +399,41 @@ fn define_class_refuses_a_superclass_mismatch_as_a_type_error() {
 fn gv_get_reads_nil_for_unset_global() {
     let mrb = open_mrb();
 
-    let sym = mrb
-        .intern_cstr(c"$beni_gv_unset")
-        .expect("the name interns");
-
-    assert!(mrb.gv_get(sym).is_nil());
+    assert!(mrb.gv_get(c"$beni_gv_unset").is_nil());
 }
 
 #[test]
 fn gv_get_observes_reassignment() {
     let mrb = open_mrb();
-    let sym = mrb.intern_cstr(c"$beni_gv").expect("the name interns");
 
     // Globals are read at call time: each assignment must be
     // visible to the next read, the contract redirection-style
     // consumers (`$stdout = $stderr`) rely on.
-    mrb.gv_set(sym, 1i32.into_value(&mrb));
-    assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(1));
+    mrb.gv_set(c"$beni_gv", 1i32.into_value(&mrb))
+        .expect("the name interns");
+    assert_eq!(i32::from_value(mrb.gv_get(c"$beni_gv")), Some(1));
 
-    mrb.gv_set(sym, 2i32.into_value(&mrb));
-    assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(2));
+    mrb.gv_set(c"$beni_gv", 2i32.into_value(&mrb))
+        .expect("the name interns");
+    assert_eq!(i32::from_value(mrb.gv_get(c"$beni_gv")), Some(2));
 }
 
 #[test]
 fn gv_remove_clears_a_global_back_to_nil() {
     let mrb = open_mrb();
-    let sym = mrb
-        .intern_cstr(c"$beni_gv_removed")
-        .expect("the name interns");
 
     // A set global reads its value, then removing it reads nil —
     // the same as one never set.
-    mrb.gv_set(sym, 7i32.into_value(&mrb));
-    assert_eq!(i32::from_value(mrb.gv_get(sym)), Some(7));
+    mrb.gv_set(c"$beni_gv_removed", 7i32.into_value(&mrb))
+        .expect("the name interns");
+    assert_eq!(i32::from_value(mrb.gv_get(c"$beni_gv_removed")), Some(7));
 
-    mrb.gv_remove(sym);
-    assert!(mrb.gv_get(sym).is_nil());
+    mrb.gv_remove(c"$beni_gv_removed");
+    assert!(mrb.gv_get(c"$beni_gv_removed").is_nil());
 
     // Removing an unset global is a no-op, not a raise.
-    mrb.gv_remove(sym);
-    assert!(mrb.gv_get(sym).is_nil());
+    mrb.gv_remove(c"$beni_gv_removed");
+    assert!(mrb.gv_get(c"$beni_gv_removed").is_nil());
 }
 
 #[test]
@@ -470,4 +465,24 @@ fn define_global_const_surfaces_a_frozen_object_as_err() {
         mrb.pending_exc().is_nil(),
         "the caught exception must not stay pending"
     );
+}
+
+#[test]
+fn a_global_answers_its_absent_value_for_a_key_too_long_to_intern() {
+    let mrb = open_mrb();
+    let name =
+        std::ffi::CString::new(vec![b'a'; u16::MAX as usize]).expect("the name holds no NUL");
+
+    // The key names no symbol, so the read answers nil and the removal
+    // does nothing, while the assignment — which has an `Err` to carry
+    // it in — surfaces the intern's own.
+    assert!(mrb.gv_get(name.as_c_str()).is_nil());
+    mrb.gv_remove(name.as_c_str());
+    let err = mrb
+        .gv_set(name.as_c_str(), Value::nil())
+        .expect_err("the assignment must refuse the name");
+    let argument_error = mrb
+        .exc_get(c"ArgumentError")
+        .expect("ArgumentError is built in");
+    assert!(err.is_kind_of(&mrb, argument_error));
 }

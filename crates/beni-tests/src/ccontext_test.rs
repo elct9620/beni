@@ -208,7 +208,7 @@ fn compile_leaves_the_context_running_its_next_load() {
 
     assert_eq!(i32::from_value(got), Some(3));
     assert_eq!(
-        i32::from_value(mrb.gv_get(mrb.intern_cstr(c"$after").expect("the name interns"))),
+        i32::from_value(mrb.gv_get(c"$after")),
         Some(3),
         "stopping before the run is settled per call, never kept on the context"
     );

@@ -1,25 +1,24 @@
 //! Symbol intern + lookup on `Mrb`.
 //!
-//! Inherent methods that turn a name (NUL-terminated `&CStr` or
-//! arbitrary bytes via an `mrb_value` String) into an `mrb_sym`, or
-//! read the C-string name back from a symbol id.
+//! Inherent methods that turn a name — a NUL-terminated `&CStr`, a
+//! borrowed byte slice, or an `mrb_value` String — into a typed
+//! `Symbol`, and read a symbol's name back out.
 
 use crate::{Error, Mrb, Symbol, Value};
 use beni_sys as sys;
 
 impl Mrb {
     /// `mrb_intern_cstr(mrb, s)` — intern a NUL-terminated C string
-    /// as a Symbol id. A name of `UINT16_MAX` bytes or more is too long
+    /// as a Symbol. A name of `UINT16_MAX` bytes or more is too long
     /// to be a symbol and surfaces as `Err` carrying mruby's
     /// `ArgumentError`, as for every creating intern.
     #[inline]
-    pub fn intern_cstr(&self, s: &core::ffi::CStr) -> Result<sys::mrb_sym, Error> {
+    pub fn intern_cstr(&self, s: &core::ffi::CStr) -> Result<Symbol, Error> {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `s.as_ptr()` is NUL-terminated by the `&CStr` contract.
             Symbol::from_sym(unsafe { sys::mrb_intern_cstr(mrb.as_ptr(), s.as_ptr()) })
         })
-        .map(Symbol::to_sym)
     }
 
     /// `mrb_intern_str(mrb, str)` — intern the bytes of an mruby
@@ -28,13 +27,12 @@ impl Mrb {
     /// `Mrb::intern_cstr`. Too long a name surfaces as `Err`, as
     /// `Mrb::intern_cstr` describes.
     #[inline]
-    pub fn intern_str(&self, s: Value) -> Result<sys::mrb_sym, Error> {
+    pub fn intern_str(&self, s: Value) -> Result<Symbol, Error> {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `s`
             // originates from the same VM.
             Symbol::from_sym(unsafe { sys::mrb_intern_str(mrb.as_ptr(), s.as_raw()) })
         })
-        .map(Symbol::to_sym)
     }
 
     /// `mrb_intern(mrb, name, len)` — intern a borrowed byte slice as a
@@ -68,7 +66,7 @@ impl Mrb {
     /// serves mruby's `mrb_intern_lit` convenience. Too long a name
     /// surfaces as `Err`, as `Mrb::intern_cstr` describes.
     #[inline]
-    pub fn intern_static(&self, name: &'static [u8]) -> Result<sys::mrb_sym, Error> {
+    pub fn intern_static(&self, name: &'static [u8]) -> Result<Symbol, Error> {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `name` is
             // `'static`, so the borrowed buffer outlives the VM as mruby's
@@ -81,7 +79,6 @@ impl Mrb {
                 )
             })
         })
-        .map(Symbol::to_sym)
     }
 
     /// `mrb_intern_check(mrb, name, len)` — the non-creating counterpart
@@ -122,9 +119,9 @@ impl Mrb {
     /// a non-UTF-8 name is defensive — reach for `Mrb::sym_name_len` to
     /// read raw bytes.
     #[inline]
-    pub fn sym_name(&self, sym: sys::mrb_sym) -> Option<String> {
+    pub fn sym_name(&self, sym: Symbol) -> Option<String> {
         // SAFETY: `self` is alive.
-        let ptr = unsafe { sys::mrb_sym_name(self.as_ptr(), sym) };
+        let ptr = unsafe { sys::mrb_sym_name(self.as_ptr(), sym.to_sym()) };
         if ptr.is_null() {
             return None;
         }
@@ -147,10 +144,10 @@ impl Mrb {
     /// a per-read scratch buffer the next name read overwrites, so the
     /// bytes are copied out before this returns rather than borrowed.
     #[inline]
-    pub fn sym_name_len(&self, sym: sys::mrb_sym) -> Option<Vec<u8>> {
+    pub fn sym_name_len(&self, sym: Symbol) -> Option<Vec<u8>> {
         let mut len: sys::mrb_int = 0;
         // SAFETY: `self` is alive; `&mut len` is a valid out-pointer.
-        let ptr = unsafe { sys::mrb_sym_name_len(self.as_ptr(), sym, &mut len) };
+        let ptr = unsafe { sys::mrb_sym_name_len(self.as_ptr(), sym.to_sym(), &mut len) };
         if ptr.is_null() {
             return None;
         }
@@ -171,9 +168,9 @@ impl Mrb {
     /// borrowed. The dump form is always ASCII, so the empty-string
     /// fallback on a non-UTF-8 name is defensive and unreachable.
     #[inline]
-    pub fn sym_dump(&self, sym: sys::mrb_sym) -> Option<String> {
+    pub fn sym_dump(&self, sym: Symbol) -> Option<String> {
         // SAFETY: `self` is alive.
-        let ptr = unsafe { sys::mrb_sym_dump(self.as_ptr(), sym) };
+        let ptr = unsafe { sys::mrb_sym_dump(self.as_ptr(), sym.to_sym()) };
         if ptr.is_null() {
             return None;
         }
