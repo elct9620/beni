@@ -293,7 +293,7 @@ definition. Two typed conversions cross the Rust/Ruby boundary:
 
 | Conversion | Direction | Rule |
 |---|---|---|
-| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`bool`, or a Rust integer or float the rows below admit) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` — yields the value naming that same object, raising nothing and running no Ruby |
+| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`bool`, or a Rust integer or float the rows below admit) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` — yields the value naming that same object, and an `Id` boxes into the symbol value it names, raising nothing and running no Ruby |
 | `IntoValue` for a Rust integer | Rust integer → Integer `Value` | a Rust integer type converts only where every value it holds fits the configured integer width, so the conversion stays total: `i8` / `i16` / `i32` / `u8` / `u16` under every width, `u32` / `i64` under a 64-bit width, `isize` where the cargo target's pointer width is no wider than the configured integer width; every other integer type — `u64`, `usize`, `i128`, `u128`, and a `u32` / `i64` / `isize` the width does not fit — has no conversion and fails to compile |
 | `IntoValue` for a Rust float | Rust float → Float `Value` | a Rust float type converts only where every value it holds fits the configured float width, so the conversion stays total: `f32` under every width, `f64` under a 64-bit width; an `f64` under a 32-bit width has no conversion and fails to compile |
 | `FromValue` → `Value` | `Value` → `Value` | identity — the value itself; total, never rejects |
@@ -466,15 +466,18 @@ nothing, and an empty substring is found at the offset itself.
 
 #### Symbols
 
-A name crosses the typed surface as the typed `Symbol`, so a signature taking or
-yielding one reads the same whatever the raw bindings call the interned id. A
-name interns into a `Symbol`, and an already-interned id reifies back into one;
-the symbol reads its interned id back out. Those two — the reification and the
-read — are where the id itself crosses, the seam a consumer working below the
-typed surface hands an id to `beni::sys` through and takes one back from.
+An interned id crosses the typed surface as the typed `Id`, and a symbol value
+as the typed `Symbol` — `magnus`'s split: `Id` carries the id itself, which is
+not a value, and `Symbol` is the handle on the symbol value that boxes it. Each
+converts into the other safely; the conversion dispatches nothing, never raises,
+and needs no interpreter. A signature taking or yielding a name reads the same
+whatever the raw bindings call the interned id, and `Id` is where the raw id
+itself crosses: a raw id reifies into an `Id`, and an `Id` reads its raw id
+back out — the seam a consumer working below the typed surface hands an id to
+`beni::sys` through and takes one back from.
 
 Reading the id out is safe and reifying one is `unsafe`, like every crossing
-into the typed domain, and what a wrongly reified symbol costs is concrete: the
+into the typed domain, and what a wrongly reified id costs is concrete: the
 name reification below answers an id naming no symbol with a value carrying no
 String, and hands that back as one.
 
@@ -491,18 +494,21 @@ requirement the intern enforces), since mruby keeps the pointer and never frees
 it. This intern anchors on mruby's own `mrb_intern_static`, with `mrb_intern_lit`
 the convenience that borrows a string literal.
 
-Those interns all create the symbol when none exists yet, and dispatch nothing.
+Those interns yield the `Id` the name interns to, as `magnus`'s `intern` does,
+create the symbol when none exists yet, and dispatch nothing.
 Each surfaces an `Err` carrying the `ArgumentError` mruby raises for a name of
 `UINT16_MAX` bytes or more — a name too long to be a symbol — and interns every
 shorter name. A name also checks for
-an already-interned `Symbol` without creating one: the bytes resolve to the
-symbol they name when mruby has interned it before, and to nothing when no such
+an already-interned `Id` without creating one: the bytes resolve to the
+id they name when mruby has interned it before, and to nothing when no such
 symbol exists. The check dispatches nothing and never raises.
 
-A symbol compares and hashes by the id it carries. Interning is canonical, so
-two symbols are equal exactly when they name the same bytes, and a symbol keys a
-Rust-side map by that same id. Both are total, dispatch nothing, and never
-raise — the equality and hashing `magnus`'s `Id` carries.
+An `Id` compares and hashes by the id it is. Interning is canonical, so two ids
+are equal exactly when they name the same bytes, and an `Id` keys a Rust-side
+map. A `Symbol` compares by the id it boxes, against another `Symbol`, and a
+`Symbol` and an `Id` compare against each other the same way; a `Symbol` keys
+no map itself — the equality and hashing `magnus`
+gives the two. All of them are total, dispatch nothing, and never raise.
 
 Where those interns take Rust bytes, an existing mruby value also coerces into a
 typed `Symbol`: a symbol value yields its own id; a string value interns its
@@ -582,9 +588,10 @@ panic, and a break object carry no exception and answer no. Rescuing by class
 is a `match` on that answer and cleanup is the code after the operation, so the
 typed surface carries no `begin`/`rescue` or `begin`/`ensure` combinator.
 
-`beni::sys` carries every raw binding, the `unsafe` conversions that cross a raw
-value or interned id back into its typed form, and two helpers for code working
-below the typed surface:
+`beni::sys` carries every raw binding, the conversions between a typed form and
+its raw one — the safe read of a value or interned id out of it and the
+`unsafe` crossing back in — and two helpers for code working below the typed
+surface:
 
 - `sys::protect` runs a body inside mruby's protected frame and answers its
   value; an exception a raw binding raises there surfaces as an `Err` carrying
@@ -726,18 +733,18 @@ its key can surface.
   the class/module lookups within a namespace; the instance-variable,
   class-variable, constant, and global-variable operations; and method dispatch
   and the `respond_to?` test on a value — accepts the
-  name as a symbol-or-name key, mirroring `magnus`'s `IntoId`: a string key
-  interns to a symbol, an
-  already-interned `Symbol` key is reused without re-interning. A string key
+  name as a symbol-or-name key, mirroring `magnus`'s `IntoId`: every key
+  resolves to the `Id` it names — a string key by interning, an
+  already-interned `Id` or `Symbol` key as the id it already is. A string key
   reaches the intern either as a NUL-terminated C string, which keys on the
   bytes before its first NUL, or as a Rust string, which keys on all of its
   bytes. A key too long to intern names no symbol: an operation that can report
   failure surfaces the intern's `Err` as its own without acting, and a total one
   answers its own absent value — `false` from a predicate, `nil` from a read,
   nothing done by a removal. A consumer
-  holding a `Symbol` reaches the operation without a redundant
+  holding an `Id` or a `Symbol` reaches the operation without a redundant
   intern; the result is identical to passing the equivalent name, since both
-  resolve to the same interned symbol. A method alias keys both the new and the
+  resolve to the same interned id. A method alias keys both the new and the
   original name this way — each accepted as a symbol-or-name key independently.
 - An exception class has a typed handle of its own, `ExceptionClass` —
   mirroring `magnus::ExceptionClass`. Building and raising an exception take
@@ -1095,18 +1102,19 @@ The `compiler` capability feature carries everything in this section.
   where its scope was opened. A rooted value is exempt for as long as its
   root lives, which is what lets a value outlive the frame that made it.
   The type system does not enforce the rule; the consumer upholds it.
-- The typed and raw domains meet asymmetrically. A typed handle answers the
-  raw form it carries — a value, an interned id, a class pointer — and that
-  read is safe: what the caller then does with the raw form is a raw call,
-  already `unsafe` on its own account. Crossing the other way is `unsafe`.
-  Nothing about a raw value, id, or pointer says it came from the
-  interpreter it will be used against, and the typed surface trusts what it
-  is handed rather than re-testing it, so a wrongly crossed one reaches
-  operations that read it as the thing it claims to be. This is `magnus`'s
-  `rb_sys` asymmetry, and the value's and the id's crossings sit beside the
-  raw bindings as they do there. The class pointer's has no counterpart to
-  follow — a class is a value in CRuby, so `magnus` offers only the checked
-  downcast — and stays on the class handle, `unsafe` under the same rule.
+- The typed and raw domains meet asymmetrically. A typed form answers the
+  raw form it carries — a value handle its value, an `Id` its interned id —
+  and that read is safe: what the caller then does with the raw form is a raw
+  call, already `unsafe` on its own account. Crossing the other way is
+  `unsafe`. Nothing about a raw value or id says it came from the interpreter
+  it will be used against, and the typed surface trusts what it is handed
+  rather than re-testing it, so a wrongly crossed one reaches operations that
+  read it as the thing it claims to be. This is `magnus`'s `rb_sys` asymmetry,
+  and both directions sit beside the raw bindings as they do there. A class
+  handle is a value handle like the others, as a class is in `magnus`: its raw
+  form is the value, the class pointer is what a raw binding unboxes from that
+  value, and a raw class pointer reaches the typed domain only boxed as a value
+  and through the checked downcast.
 - An interpreter crosses threads; it is never reached from two at once. One
   thread hands an interpreter to another, and separate threads each hold their
   own, but an interpreter is carried rather than shared: the typed surface
@@ -1114,7 +1122,7 @@ The `compiler` capability feature carries everything in this section.
   to reach one interpreter supplies its own mutual exclusion. A guard that
   borrows the interpreter — an arena scope, a root, a compile context — pins
   both to the thread they were made on for as long as the guard lives. A typed
-  handle crosses as freely as the interpreter does and means something only
+  handle or `Id` crosses as freely as the interpreter does and means something only
   against the interpreter that produced it; the type system does not enforce
   that pairing, the consumer upholds it, as with the GC validity rule above.
 - A capability reaches the safe typed surface only when the wrapper can
@@ -1259,7 +1267,7 @@ The `compiler` capability feature carries everything in this section.
 
 | Term | Meaning |
 |---|---|
-| symbol-or-name key | a name keying an operation, given as a string that interns to a symbol or as an already-interned `Symbol` reused as-is; a string key is a NUL-terminated C string, keyed on the bytes before its first NUL, or a Rust string, keyed on all of its bytes — beni's mirror of `magnus`'s `IntoId` |
+| symbol-or-name key | a name keying an operation, resolved to the `Id` it names: a string interns to it, and an already-interned `Id` or `Symbol` is reused as-is; a string key is a NUL-terminated C string, keyed on the bytes before its first NUL, or a Rust string, keyed on all of its bytes — beni's mirror of `magnus`'s `IntoId` |
 | toolchain | a vendored build dependency (mruby source, wasi-sdk) |
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
