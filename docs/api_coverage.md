@@ -48,13 +48,13 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_check_string_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type` |
 | `mrb_check_type` | fn | ✅ | ✅ | subsumed: the `FromValue` downcasts and the `Value::is_*` tag predicates — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot |
 | `mrb_class_defined` | fn | ✅ | ✅ | `Mrb::class_defined` with a name key — interns and routes through `mrb_class_defined_id` |
-| `mrb_class_defined_id` | fn | ✅ | ✅ | `Mrb::class_defined` with a `Symbol` key (the symbol-or-name key) — a total bool predicate, never raises |
+| `mrb_class_defined_id` | fn | ✅ | ✅ | `Mrb::class_defined` with an `Id` key (the symbol-or-name key) — a total bool predicate, never raises |
 | `mrb_class_defined_under` | fn | ✅ | ✅ | `Module::class_defined` with a name key — interns and routes through `mrb_class_defined_under_id` |
-| `mrb_class_defined_under_id` | fn | ✅ | ✅ | `Module::class_defined` with a `Symbol` key (the symbol-or-name key) — a total bool predicate, never raises |
+| `mrb_class_defined_under_id` | fn | ✅ | ✅ | `Module::class_defined` with an `Id` key (the symbol-or-name key) — a total bool predicate, never raises |
 | `mrb_class_get` | fn | ✅ | ✅ | `Mrb::class_get` with a name key — interns and routes through `mrb_class_get_id` |
-| `mrb_class_get_id` | fn | ✅ | ✅ | `Mrb::class_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) |
+| `mrb_class_get_id` | fn | ✅ | ✅ | `Mrb::class_get` with an `Id` key (the symbol-or-name key, magnus `IntoId`) |
 | `mrb_class_get_under` | fn | ✅ | ✅ | `Module::class_get` with a name key — interns and routes through `mrb_class_get_under_id` |
-| `mrb_class_get_under_id` | fn | ✅ | ✅ | `Module::class_get` with a `Symbol` key (the symbol-or-name key) |
+| `mrb_class_get_under_id` | fn | ✅ | ✅ | `Module::class_get` with an `Id` key (the symbol-or-name key) |
 | `mrb_class_name` | fn | ✅ | ✅ | `Module::name` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form |
 | `mrb_class_new` | fn | ✅ | ✅ | `Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant |
 | `mrb_class_new_instance` | fn | ✅ | ✅ | `RClass::obj_new` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed |
@@ -64,28 +64,28 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_context_run` | macro | ❌ | ❌ |  |
 | `mrb_convert_type` | macro | ❌ | ❌ |  |
 | `mrb_define_alias` | fn | ✅ | ✅ | `Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id` |
-| `mrb_define_alias_id` | fn | ✅ | ✅ | `Module::alias_method` with `Symbol` keys (the symbol-or-name key, both names keyed independently) |
+| `mrb_define_alias_id` | fn | ✅ | ✅ | `Module::alias_method` with `Id` keys (the symbol-or-name key, both names keyed independently) |
 | `mrb_define_class` | fn | ✅ | ✅ | `Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id` |
-| `mrb_define_class_id` | fn | ✅ | ✅ | `Mrb::define_class` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) — the create path; a name already bound is fetched as the bound class itself, as the `class` keyword fetches it, since this call answers a prepended class with its origin include class |
+| `mrb_define_class_id` | fn | ✅ | ✅ | `Mrb::define_class` with an `Id` key (the symbol-or-name key, magnus `IntoId`) — the create path; a name already bound is fetched as the bound class itself, as the `class` keyword fetches it, since this call answers a prepended class with its origin include class |
 | `mrb_define_class_method` | fn | ✅ | ✅ | `Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment) |
-| `mrb_define_class_method_id` | fn | ✅ | ✅ | `Object::define_singleton_method` with a `Symbol` key on a class — a class's singleton method is its class method (magnus alignment) |
+| `mrb_define_class_method_id` | fn | ✅ | ✅ | `Object::define_singleton_method` with an `Id` key on a class — a class's singleton method is its class method (magnus alignment) |
 | `mrb_define_class_under` | fn | ✅ | ✅ | `Module::define_class` with a name key — interns and routes through `mrb_define_class_under_id` |
-| `mrb_define_class_under_id` | fn | ✅ | ✅ | `Module::define_class` with a `Symbol` key (the symbol-or-name key) — the create path; a bound name is fetched as for `mrb_define_class_id` |
+| `mrb_define_class_under_id` | fn | ✅ | ✅ | `Module::define_class` with an `Id` key (the symbol-or-name key) — the create path; a bound name is fetched as for `mrb_define_class_id` |
 | `mrb_define_const` | fn | ✅ | ✅ | `Module::define_const` with a name key — interns and routes through `mrb_define_const_id` |
-| `mrb_define_const_id` | fn | ✅ | ✅ | `Module::define_const` with a `Symbol` key (the symbol-or-name key) |
+| `mrb_define_const_id` | fn | ✅ | ✅ | `Module::define_const` with an `Id` key (the symbol-or-name key) |
 | `mrb_define_global_const` | fn | ✅ | ✅ | `Mrb::define_global_const` |
 | `mrb_define_method` | fn | ✅ | ✅ | `Module::define_method` with a name key — interns and routes through `mrb_define_method_id` |
-| `mrb_define_method_id` | fn | ✅ | ✅ | `Module::define_method` with a `Symbol` key (the symbol-or-name key) |
+| `mrb_define_method_id` | fn | ✅ | ✅ | `Module::define_method` with an `Id` key (the symbol-or-name key) |
 | `mrb_define_module` | fn | ✅ | ✅ | `Mrb::define_module` with a name key — interns and routes through `mrb_define_module_id` |
 | `mrb_define_module_function` | fn | ✅ | ✅ | `Module::define_module_function` with a name key — interns and routes through `mrb_define_module_function_id` |
-| `mrb_define_module_function_id` | fn | ✅ | ✅ | `Module::define_module_function` with a `Symbol` key (the symbol-or-name key) |
-| `mrb_define_module_id` | fn | ✅ | ✅ | `Mrb::define_module` with a `Symbol` key (the symbol-or-name key) |
+| `mrb_define_module_function_id` | fn | ✅ | ✅ | `Module::define_module_function` with an `Id` key (the symbol-or-name key) |
+| `mrb_define_module_id` | fn | ✅ | ✅ | `Mrb::define_module` with an `Id` key (the symbol-or-name key) |
 | `mrb_define_module_under` | fn | ✅ | ✅ | `Module::define_module` with a name key — interns and routes through `mrb_define_module_under_id` |
-| `mrb_define_module_under_id` | fn | ✅ | ✅ | `Module::define_module` with a `Symbol` key (the symbol-or-name key) |
+| `mrb_define_module_under_id` | fn | ✅ | ✅ | `Module::define_module` with an `Id` key (the symbol-or-name key) |
 | `mrb_define_private_method` | fn | ✅ | ✅ | `Module::define_private_method` with a name key — interns and routes through `mrb_define_private_method_id` |
-| `mrb_define_private_method_id` | fn | ✅ | ✅ | `Module::define_private_method` with a `Symbol` key (the symbol-or-name key) |
+| `mrb_define_private_method_id` | fn | ✅ | ✅ | `Module::define_private_method` with an `Id` key (the symbol-or-name key) |
 | `mrb_define_singleton_method` | fn | ✅ | ✅ | `Object::define_singleton_method` with a name key — interns and routes through `mrb_define_singleton_method_id` |
-| `mrb_define_singleton_method_id` | fn | ✅ | ✅ | `Object::define_singleton_method` with a `Symbol` key (the symbol-or-name key) |
+| `mrb_define_singleton_method_id` | fn | ✅ | ✅ | `Object::define_singleton_method` with an `Id` key (the symbol-or-name key) |
 | `mrb_ensure_array_type` | fn | ✅ | ✅ | `Value::ensure_array` — the raising Array-tag coercion to an `Array` handle |
 | `mrb_ensure_float_type` | fn | ✅ | ✅ | `Value::ensure_float` — the raising numeric-tag coercion to a Float `Value` (Float unchanged, Integer widened); distinct from the exact-tag `FromValue` -> float downcast, which coerces nothing |
 | `mrb_ensure_hash_type` | fn | ✅ | ✅ | `Value::ensure_hash` — the raising Hash-tag coercion to a `Hash` handle |
@@ -110,7 +110,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_full_gc` | fn | ✅ | ✅ | `Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive) |
 | `mrb_func_basic_p` | fn | ✅ | ❌ |  |
 | `mrb_funcall` | fn | ✅ | ✅ | subsumed: `Value::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch |
-| `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::funcall` — the symbol-or-name key reaches this dispatch whether the caller holds a name or an already-interned `Symbol` |
+| `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::funcall` — the symbol-or-name key reaches this dispatch whether the caller holds a name or an already-interned `Id` or `Symbol` |
 | `mrb_funcall_id` | fn | ✅ | ✅ | subsumed: `Value::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc` |
 | `mrb_funcall_with_block` | fn | ✅ | ✅ | `Value::funcall_with_block` — dispatch passing an explicit typed `Proc` block |
 | `mrb_garbage_collect` | fn | ✅ | ✅ | subsumed: `Mrb::full_gc` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection |
@@ -132,7 +132,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_inspect` | fn | ✅ | ✅ | `Value::inspect` |
 | `mrb_int` | macro | ✅ | ✅ | defined as `mrb_as_int` |
 | `mrb_intern` | fn | ✅ | ✅ | `Mrb::intern` — the general byte-taking creating intern: interns the exact bytes a borrowed slice spans (length-based, so a name embedding a NUL or not NUL-terminated interns whole), creating the Symbol when absent where `mrb_intern_check` only tests |
-| `mrb_intern_check` | fn | ✅ | ✅ | `Mrb::intern_check` — the non-creating presence test over name bytes, `Some` Symbol when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to |
+| `mrb_intern_check` | fn | ✅ | ✅ | `Mrb::intern_check` — the non-creating presence test over name bytes, `Some` `Id` when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to |
 | `mrb_intern_check_cstr` | fn | ✅ | ✅ | `Mrb::intern_check` — a NUL-terminated name is bytes passed to the check primitive this convenience wrapper forwards to |
 | `mrb_intern_check_str` | fn | ✅ | ✅ | `Mrb::intern_check` — an mruby String value's bytes pass to the check primitive this convenience wrapper forwards to |
 | `mrb_intern_cstr` | fn | ✅ | ✅ | `Mrb::intern_cstr` |
@@ -145,9 +145,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_malloc_simple` | fn | ✅ | 🚫 | declined: VM allocator, the non-raising variant — see `mrb_malloc` |
 | `mrb_method_cache_clear` | fn | ✅ | ❌ |  |
 | `mrb_module_get` | fn | ✅ | ✅ | `Mrb::module_get` with a name key — interns and routes through `mrb_module_get_id` |
-| `mrb_module_get_id` | fn | ✅ | ✅ | `Mrb::module_get` with a `Symbol` key (the symbol-or-name key, magnus `IntoId`) |
+| `mrb_module_get_id` | fn | ✅ | ✅ | `Mrb::module_get` with an `Id` key (the symbol-or-name key, magnus `IntoId`) |
 | `mrb_module_get_under` | fn | ✅ | ✅ | `Module::module_get` with a name key — interns and routes through `mrb_module_get_under_id` |
-| `mrb_module_get_under_id` | fn | ✅ | ✅ | `Module::module_get` with a `Symbol` key (the symbol-or-name key) |
+| `mrb_module_get_under_id` | fn | ✅ | ✅ | `Module::module_get` with an `Id` key (the symbol-or-name key) |
 | `mrb_module_new` | fn | ✅ | ✅ | `Mrb::module_new` — create an anonymous module, bound to no constant |
 | `mrb_name_error` | fn | ✅ | ✅ | subsumed: `RClass::obj_new` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef` |
 | `mrb_notimplement` | fn | ✅ | ❌ |  |
@@ -594,10 +594,10 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `Value::funcall`, `Value::ensure_array`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
 | `ExceptionClass` | Typed handle on an exception class, magnus's `ExceptionClass`: only it builds or raises an exception, so `mrb_exc_new` / `mrb_exc_new_str` never meet a class whose instances are not exceptions. `Mrb::define_error` and `Module::define_error` compose `mrb_define_class_id` / `mrb_define_class_under_id` with an exception-class superclass. Binds no new C symbol. |
 | `GcRoot` | The releasable root: a guard holding one slot of a table the interpreter keeps, released when the guard drops. Binds no new C symbol — it composes the already-graduated array and global-variable primitives — because the C pair it would otherwise wrap cannot carry it: `mrb_gc_unregister` removes by value, so one holder's release would drop every other root over the same value. A slot is the per-root identity mruby's registry lacks, the same role the storage address plays for CRuby's `rb_gc_register_address`. Released slots go on an intrusive free list so a long-running consumer's table stops growing. A refused release leaves the value rooted for the interpreter's remaining lifetime — over-retention, never a value collected while a holder still names it. |
+| `Id` | The interned id as its own typed form, magnus's `Id`, beside the `Symbol` value handle: the two convert with `From`, boxing through `mrb_symbol_value` and unboxing through the `mrb_symbol` shim. It compares and hashes by the id — mruby publishes no C comparison to bind, interning being canonical — and a `Symbol` compares by the id it boxes. |
 | `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
-| `IntoSym` | The symbol-or-name key (magnus's `IntoId`), resolving a `&CStr`, a Rust string, or an already-interned `Symbol` to the `Symbol` every name-keyed operation routes through mruby's `_id`-suffixed C variant with. Binds no C symbol of its own — it composes the interns — and is what keeps the interned id out of those operations' signatures. |
+| `IntoId` | The symbol-or-name key, magnus's `IntoId`: resolves a `&CStr`, a Rust string, an `Id`, or a `Symbol` to the `Id` every name-keyed operation routes through mruby's `_id`-suffixed C variant with. Binds no C symbol of its own — it composes the interns — and is what keeps the raw id out of those operations' signatures. |
 | `ParseMessage` | One compiler diagnostic's line, column, and text, read through accessors. mruby publishes `struct mrb_parser_message` as a parser field rather than through any call, so there is no C API to bind: the typed surface copies the slot out while the parser is alive and hands back an owned value that outlives it. `Ccontext::load_nstring` returns the first recorded error as `Error::Syntax`, and `Ccontext::warnings` answers the load's warnings. |
-| `Symbol equality` | A symbol compares, hashes, and renders by its interned id, mirroring magnus's `Id`. mruby publishes no C comparison to bind — interning is canonical, so the ids are the comparison — and the id is what carries it rather than the boxed value, whose layout varies with the boxing mode. |
 | `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` and `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as arbitrary owned bytes). Which numeric types convert follows the configured integer and float widths: a type converts only where it and the width hold every value of each other. |
-| `sys::FromRawValue / sys::FromRawId` | The `unsafe` crossings of a raw `mrb_value` or interned id back into their typed forms, beside the raw bindings as magnus's `rb_sys::FromRawValue` / `FromRawId` are. The reading direction needs no trait here: each typed handle answers its raw form through its own `as_raw`, which a `ReprValue` equivalent would one day unify the way magnus's `AsRawValue` does. A class pointer has no crossing trait — a class is a value in CRuby, so magnus offers only the checked downcast — and crosses through `RClass::from_raw` / `RModule::from_raw`, `unsafe` under the same rule. |
+| `sys::FromRawValue / sys::FromRawId / sys::AsRawId` | The `unsafe` crossings of a raw `mrb_value` or interned id back into their typed forms, and the safe read of the id back out of an `Id`, beside the raw bindings as magnus's `rb_sys` traits are. A value handle answers its raw form through its own `as_raw`, which a `ReprValue` equivalent would one day unify the way magnus's `AsRawValue` does. A class pointer has no crossing trait — a class is a value in CRuby, so magnus offers only the checked downcast — and crosses through `RClass::from_raw` / `RModule::from_raw`, `unsafe` under the same rule. |
 | `sys::catch_unwind` | Panic boundary for a Rust closure handed to mruby as a C callback, magnus's `rb_sys::catch_unwind`: runs the closure under `std::panic::catch_unwind` and answers `Error::Panic` carrying the payload's message. The registered-method bridge and `Mrb::init_gem` go through it. Binds no C symbol. |

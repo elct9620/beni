@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Error, FromValue, Module, Mrb, Symbol, Value};
+use beni::{Error, FromValue, Id, Module, Mrb, Symbol, Value};
 use std::ffi::CString;
 
 /// The shortest name mruby refuses to make a symbol: `UINT16_MAX` bytes.
@@ -38,11 +38,11 @@ fn intern_str_yields_the_same_id_as_intern_cstr() {
 fn intern_interns_a_byte_slice_by_length_creating_the_symbol() {
     let mrb = open_mrb();
 
-    // A runtime byte slice interns to a Symbol whose name round-trips,
+    // A runtime byte slice interns to an id whose name round-trips,
     // and whose id equals interning the same name through the C-string
     // path — proving it's the same interned symbol.
     let sym = mrb.intern(b"beni_sym").expect("the name interns");
-    assert_eq!(sym.name(&mrb).as_deref(), Some("beni_sym"));
+    assert_eq!(mrb.sym_name(sym).as_deref(), Some("beni_sym"));
     assert_eq!(sym, mrb.intern_cstr(c"beni_sym").expect("the name interns"));
 
     // It's length-based, not NUL-terminated: a slice carrying trailing
@@ -51,22 +51,18 @@ fn intern_interns_a_byte_slice_by_length_creating_the_symbol() {
     let exact = b"abc";
     let padded = b"abc\0xyz";
     assert_eq!(
-        mrb.intern(&exact[..])
-            .expect("the name interns")
-            .name_bytes(&mrb)
+        mrb.sym_name_len(mrb.intern(&exact[..]).expect("the name interns"))
             .as_deref(),
         Some(&b"abc"[..])
     );
     assert_eq!(
-        mrb.intern(&padded[..])
-            .expect("the name interns")
-            .name_bytes(&mrb)
+        mrb.sym_name_len(mrb.intern(&padded[..]).expect("the name interns"))
             .as_deref(),
         Some(&b"abc\0xyz"[..])
     );
     assert_ne!(
-        mrb.intern(&exact[..]).expect("the name interns").to_sym(),
-        mrb.intern(&padded[..]).expect("the name interns").to_sym()
+        mrb.intern(&exact[..]).expect("the name interns"),
+        mrb.intern(&padded[..]).expect("the name interns")
     );
 }
 
@@ -232,7 +228,7 @@ fn creating_interns_intern_the_longest_name_a_symbol_holds() {
         .intern(&longest)
         .expect("a name one byte short of the limit interns");
 
-    assert_eq!(sym.name_bytes(&mrb).map(|b| b.len()), Some(TOO_LONG - 1));
+    assert_eq!(mrb.sym_name_len(sym).map(|b| b.len()), Some(TOO_LONG - 1));
 }
 
 /// A method body that interns a name too long to be a symbol and hands
@@ -268,19 +264,19 @@ fn a_method_body_hands_an_over_long_intern_to_ruby_as_a_rescuable_argument_error
 }
 
 #[test]
-fn symbols_compare_and_hash_by_the_name_they_carry() {
+fn ids_compare_and_hash_by_the_name_they_carry() {
     let mrb = open_mrb();
 
-    // Interning is canonical, so the route a symbol arrives by never
-    // shows in the comparison: the same bytes are the same symbol
-    // whichever intern produced them, and different bytes are not.
+    // Interning is canonical, so the route an id arrives by never shows
+    // in the comparison: the same bytes are the same id whichever intern
+    // produced them, and different bytes are not.
     let via_cstr = mrb.intern_cstr(c"beni_eq").expect("the name interns");
     let via_bytes = mrb.intern(b"beni_eq").expect("the name interns");
     let other = mrb.intern(b"beni_eq_other").expect("the name interns");
     assert_eq!(via_cstr, via_bytes);
     assert_ne!(via_cstr, other);
 
-    // Equal symbols hash alike, which is what lets one key a map.
+    // Equal ids hash alike, which is what lets one key a map.
     let mut seen = std::collections::HashMap::new();
     seen.insert(via_cstr, 1);
     assert_eq!(seen.get(&via_bytes), Some(&1));
@@ -288,16 +284,16 @@ fn symbols_compare_and_hash_by_the_name_they_carry() {
 }
 
 #[test]
-fn a_raw_id_crosses_back_into_the_symbol_it_names() {
+fn a_raw_id_crosses_back_into_the_id_it_names() {
     let mrb = open_mrb();
 
     // The seam an id leaves the typed surface through and returns by:
     // the read is safe, the crossing back is the caller's to establish.
     let interned = mrb.intern(b"beni_seam").expect("the name interns");
-    let id = interned.to_sym();
-    // SAFETY: `id` came from a symbol `mrb` interned.
-    let crossed = unsafe { <Symbol as beni::sys::FromRawId>::from_raw(id) };
+    let raw = beni::sys::AsRawId::as_raw(interned);
+    // SAFETY: `raw` came from an id `mrb` interned.
+    let crossed = unsafe { <Id as beni::sys::FromRawId>::from_raw(raw) };
 
     assert_eq!(crossed, interned);
-    assert_eq!(crossed.name(&mrb).as_deref(), Some("beni_seam"));
+    assert_eq!(mrb.sym_name(crossed).as_deref(), Some("beni_seam"));
 }

@@ -545,7 +545,9 @@ impl Value {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM.
-            crate::Symbol::from_sym_unchecked(unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) })
+            crate::Symbol::from(crate::Id::from_raw_unchecked(unsafe {
+                sys::mrb_obj_to_sym(mrb.as_ptr(), self.0)
+            }))
         })
     }
 
@@ -710,7 +712,7 @@ impl Value {
 
     /// `mrb_funcall_argv(mrb, self, sym, argc, argv)` — invoke
     /// `self.<method>(args...)`, naming the method by a symbol-or-name
-    /// key (`IntoSym`). The method runs arbitrary Ruby, so the call runs
+    /// key (`IntoId`). The method runs arbitrary Ruby, so the call runs
     /// under exception protection: a normal return is the `Ok` value, any
     /// raise is `Err` rather than a long-jump across FFI. Mirrors
     /// magnus's `funcall`.
@@ -720,13 +722,13 @@ impl Value {
     /// argv exactly — the pointer cast on the way through is a no-op
     /// at codegen level.
     #[inline]
-    pub fn funcall<K: crate::IntoSym>(
+    pub fn funcall<K: crate::IntoId>(
         self,
         mrb: &Mrb,
         name: K,
         args: &[Value],
     ) -> Result<Value, Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             let argv = args.as_ptr() as *const sys::mrb_value;
             // SAFETY: `mrb` is alive inside the protect frame; `self`
@@ -755,14 +757,14 @@ impl Value {
     /// catches into `Err` rather than long-jumping across FFI. Mirrors
     /// magnus's `funcall_with_block`.
     #[inline]
-    pub fn funcall_with_block<K: crate::IntoSym>(
+    pub fn funcall_with_block<K: crate::IntoId>(
         self,
         mrb: &Mrb,
         name: K,
         args: &[Value],
         block: crate::Proc,
     ) -> Result<Value, Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+        let sym = name.into_id(mrb)?.to_raw();
         let block_raw = block.as_raw();
         mrb.protect(|mrb| {
             // `Value` is `#[repr(transparent)]` over `mrb_value`, so the
@@ -1032,8 +1034,8 @@ impl Value {
     /// `sym` on `self` to `val`. Surfaces an `Err` when `self` is
     /// frozen or cannot hold instance variables.
     #[inline]
-    pub fn iv_set<K: crate::IntoSym>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    pub fn iv_set<K: crate::IntoId>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and `val` originate from the same VM.
@@ -1049,8 +1051,8 @@ impl Value {
     /// `mrb_iv_get(mrb, self, sym)` — return instance variable `sym`
     /// from `self`, or `nil` when unset.
     #[inline]
-    pub fn iv_get<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> Value {
-        let Ok(sym) = name.into_sym(mrb).map(crate::Symbol::to_sym) else {
+    pub fn iv_get<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Value {
+        let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return Value::nil();
         };
         // SAFETY: as `iv_set`.
@@ -1063,8 +1065,8 @@ impl Value {
     /// analogue of the raw-`RObject*` `mrb_obj_iv_defined`, which stays
     /// in `sys`.
     #[inline]
-    pub fn iv_defined<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> bool {
-        let Ok(sym) = name.into_sym(mrb).map(crate::Symbol::to_sym) else {
+    pub fn iv_defined<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
+        let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
         // SAFETY: as `iv_set`.
@@ -1078,8 +1080,8 @@ impl Value {
     /// while holding `nil`. Surfaces an `Err` only when a frozen `self`
     /// can hold instance variables.
     #[inline]
-    pub fn iv_remove<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> Result<Option<Value>, Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    pub fn iv_remove<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Result<Option<Value>, Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM. `mrb_iv_remove`
@@ -1141,7 +1143,7 @@ impl Value {
                 unsafe { &mut *(data as *mut Vec<(crate::Symbol, Value)>) };
             unsafe { sys::mrb_gc_protect(mrb, val) };
             pairs.push((
-                crate::Symbol::from_sym_unchecked(name),
+                crate::Symbol::from(crate::Id::from_raw_unchecked(name)),
                 Value::from_raw_unchecked(val),
             ));
             0
@@ -1194,11 +1196,11 @@ impl Value {
     /// is defined on `self` (the module or class value), walking the
     /// ancestry. Answers false when `self` is not a class or module.
     #[inline]
-    pub fn const_defined<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> bool {
+    pub fn const_defined<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
         if !self.is_class_or_module() {
             return false;
         }
-        let Ok(sym) = name.into_sym(mrb).map(crate::Symbol::to_sym) else {
+        let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
         // SAFETY: as `iv_set`, with the class-or-module receiver
@@ -1212,11 +1214,11 @@ impl Value {
     /// ancestor; contrast `const_defined`, which walks the ancestry.
     /// Answers false when `self` is not a class or module.
     #[inline]
-    pub fn const_defined_at<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> bool {
+    pub fn const_defined_at<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
         if !self.is_class_or_module() {
             return false;
         }
-        let Ok(sym) = name.into_sym(mrb).map(crate::Symbol::to_sym) else {
+        let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
         // SAFETY: as `iv_set`, with the class-or-module receiver
@@ -1229,8 +1231,8 @@ impl Value {
     /// `sym` from `self`. Surfaces an `Err` when `sym` resolves to no
     /// constant or its `const_missing` hook raises.
     #[inline]
-    pub fn const_get<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> Result<Value, Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    pub fn const_get<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Result<Value, Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM. `mrb_const_get`
@@ -1247,8 +1249,8 @@ impl Value {
     /// when the `const_added` hook raises. The value-level write
     /// complementing `const_get`.
     #[inline]
-    pub fn const_set<K: crate::IntoSym>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    pub fn const_set<K: crate::IntoId>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and `val` originate from the same VM.
@@ -1267,8 +1269,8 @@ impl Value {
     /// An absent constant is a no-op; surfaces an `Err` when `self` is
     /// not a class or module, or when it is frozen.
     #[inline]
-    pub fn const_remove<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    pub fn const_remove<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM. `mrb_const_remove`
@@ -1286,11 +1288,11 @@ impl Value {
     /// Surfaces an `Err` when `self` is not a class or module, or when
     /// `sym` resolves to no class variable.
     #[inline]
-    pub fn cv_get<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> Result<Value, Error> {
+    pub fn cv_get<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Result<Value, Error> {
         if !self.is_class_or_module() {
             return Err(self.not_class_or_module_error(mrb));
         }
-        let sym = name.into_sym(mrb)?.to_sym();
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM. `mrb_cv_get`
@@ -1306,11 +1308,11 @@ impl Value {
     /// value-level write complementing `cv_get`; `mrb_mod_cv_set` (the
     /// raw-`RClass*` form) stays in `sys`.
     #[inline]
-    pub fn cv_set<K: crate::IntoSym>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
+    pub fn cv_set<K: crate::IntoId>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
         if !self.is_class_or_module() {
             return Err(self.not_class_or_module_error(mrb));
         }
-        let sym = name.into_sym(mrb)?.to_sym();
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and `val` originate from the same VM.
@@ -1328,11 +1330,11 @@ impl Value {
     /// value-level analogue of the raw-`RClass*` `mrb_mod_cv_defined`,
     /// which stays in `sys`.
     #[inline]
-    pub fn cv_defined<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> bool {
+    pub fn cv_defined<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
         if !self.is_class_or_module() {
             return false;
         }
-        let Ok(sym) = name.into_sym(mrb).map(crate::Symbol::to_sym) else {
+        let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
         // SAFETY: as `iv_set`, with the class-or-module receiver
@@ -1344,8 +1346,8 @@ impl Value {
     /// `mrb_respond_to(mrb, self, mid)` — TRUE when `self` answers to
     /// the method named by `mid`.
     #[inline]
-    pub fn respond_to<K: crate::IntoSym>(self, mrb: &Mrb, name: K) -> bool {
-        let Ok(mid) = name.into_sym(mrb).map(crate::Symbol::to_sym) else {
+    pub fn respond_to<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
+        let Ok(mid) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
         // SAFETY: as `iv_set`.
@@ -1697,5 +1699,7 @@ mod tests {
         crosses::<crate::Range>();
         crosses::<crate::RString>();
         crosses::<crate::Symbol>();
+        // `Id` holds the integer id itself, which crosses on its own.
+        crosses::<crate::Id>();
     }
 }

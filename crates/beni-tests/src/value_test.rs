@@ -80,8 +80,8 @@ fn funcall_accepts_a_symbol_key_identical_to_the_name() {
     let mrb = open_mrb();
 
     // An interned `Symbol` key reaches the same dispatch as the
-    // equivalent name, proving the `IntoSym` generalization routes
-    // both through the same interned symbol.
+    // equivalent name, proving the `IntoId` generalization routes
+    // both through the same interned id.
     let recv = 42i32.into_value(&mrb);
     let by_name = recv
         .funcall(&mrb, c"to_s", &[])

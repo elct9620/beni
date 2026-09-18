@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{FromValue, IntoValue, Symbol};
+use beni::{FromValue, Id, IntoValue, Symbol};
 
 #[test]
 fn name_sym_and_rebuild_roundtrip() {
@@ -10,9 +10,9 @@ fn name_sym_and_rebuild_roundtrip() {
     // It must equal interning the same name — a wrong boxing shift in
     // the unbox shim would diverge here.
     assert_eq!(sym, mrb.intern_cstr(c"flags").expect("the name interns"));
-    // Re-boxing the id yields an equal symbol.
-    // SAFETY: the id came from `sym`, which `mrb` interned.
-    let reboxed = unsafe { <Symbol as beni::sys::FromRawId>::from_raw(sym.to_sym()) };
+    // Unboxing to the id and boxing it again yields an equal symbol.
+    let reboxed = Symbol::from(Id::from(sym));
+    assert_eq!(reboxed, sym);
     assert_eq!(reboxed.name(&mrb).as_deref(), Some("flags"));
 }
 
@@ -27,16 +27,18 @@ fn name_bytes_and_dump_read_the_symbol_name() {
 
     // An embedded NUL: `name` escapes it to the dump form, only
     // `name_bytes` returns the raw bytes.
-    let nul = mrb
-        .intern_str(mrb.str_new(b"a\0b").as_value())
-        .expect("the name interns");
+    let nul = Symbol::from(
+        mrb.intern_str(mrb.str_new(b"a\0b").as_value())
+            .expect("the name interns"),
+    );
     assert_eq!(nul.name(&mrb).as_deref(), Some("\"a\\x00b\""));
     assert_eq!(nul.name_bytes(&mrb).as_deref(), Some(&b"a\0b"[..]));
 
     // A name needing escaping dumps quoted.
-    let spaced = mrb
-        .intern_str(mrb.str_new(b"a b").as_value())
-        .expect("the name interns");
+    let spaced = Symbol::from(
+        mrb.intern_str(mrb.str_new(b"a b").as_value())
+            .expect("the name interns"),
+    );
     assert_eq!(spaced.dump(&mrb).as_deref(), Some("\"a b\""));
 }
 
@@ -87,7 +89,7 @@ fn to_sym_coerces_symbol_string_and_rejects_others() {
     // A symbol value coerces to the same symbol.
     let sym = Symbol::new(&mrb, c"key").expect("the name interns");
     let from_sym = sym.as_value().to_sym(&mrb).expect("a symbol value coerces");
-    assert_eq!(from_sym.to_sym(), sym.to_sym());
+    assert_eq!(from_sym, sym);
 
     // A string value interns to the symbol of its contents — the id
     // matches interning the same name directly.
@@ -134,4 +136,42 @@ fn a_name_too_long_to_be_a_symbol_surfaces_as_argument_error() {
     for err in [via_new, via_coercion] {
         assert!(err.is_kind_of(&mrb, argument_error));
     }
+}
+
+#[test]
+fn a_symbol_and_its_id_convert_and_compare_across_the_split() {
+    let mrb = open_mrb();
+    let id = mrb.intern(b"beni_split").expect("the name interns");
+    let other = mrb.intern(b"beni_split_other").expect("the name interns");
+
+    // A symbol value reached from Ruby compares with the id interned
+    // from Rust, in either direction, and against another symbol.
+    let sym = Symbol::from_value(
+        mrb.load_string(b":beni_split")
+            .expect("the literal evaluates"),
+    )
+    .expect("a symbol literal is a Symbol");
+    assert_eq!(sym, id);
+    assert_eq!(id, sym);
+    assert_ne!(sym, other);
+    assert_eq!(sym, Symbol::from(id));
+
+    // The id boxes into that same symbol value.
+    let boxed = Symbol::from_value(id.into_value(&mrb)).expect("an id boxes into a Symbol");
+    assert_eq!(boxed, sym);
+}
+
+#[test]
+fn an_id_keys_a_named_operation_like_its_name() {
+    let mrb = open_mrb();
+    let receiver = mrb.str_new(b"beni").as_value();
+    let id = mrb.intern(b"upcase").expect("the name interns");
+
+    let by_id = receiver.funcall(&mrb, id, &[]).expect("the call runs");
+    let by_name = receiver
+        .funcall(&mrb, "upcase", &[])
+        .expect("the call runs");
+
+    assert_eq!(String::from_value(by_id), Some("BENI".to_owned()));
+    assert_eq!(String::from_value(by_id), String::from_value(by_name));
 }

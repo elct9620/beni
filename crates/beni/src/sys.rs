@@ -63,25 +63,37 @@ impl FromRawValue for Value {
     }
 }
 
-/// Cross a raw interned id back into its typed symbol — magnus's
-/// `rb_sys::FromRawId`, answering beni's `Symbol`, which carries the id
-/// magnus keeps in a separate `Id` type.
+/// Read the raw interned id out of an `Id` — magnus's `rb_sys::AsRawId`.
+pub trait AsRawId: Copy {
+    /// The raw id this `Id` carries.
+    fn as_raw(self) -> mrb_sym;
+}
+
+impl AsRawId for crate::Id {
+    #[inline]
+    fn as_raw(self) -> mrb_sym {
+        self.to_raw()
+    }
+}
+
+/// Cross a raw interned id back into its typed `Id` — magnus's
+/// `rb_sys::FromRawId`.
 pub trait FromRawId {
-    /// Symbolize `id`.
+    /// Wrap `id` as the typed `Id`.
     ///
     /// # Safety
     ///
-    /// `id` must be one the interpreter the symbol is used against
+    /// `id` must be one the interpreter the `Id` is used against
     /// interned. An id naming no symbol reifies its name as a value
     /// carrying no String, which the typed surface hands back as one.
     unsafe fn from_raw(id: mrb_sym) -> Self;
 }
 
-impl FromRawId for crate::Symbol {
+impl FromRawId for crate::Id {
     #[inline]
     unsafe fn from_raw(id: mrb_sym) -> Self {
-        // As `FromRawValue`: the boxing cannot fail, and the id's
+        // As `FromRawValue`: the wrap cannot fail, and the id's
         // provenance is the caller's.
-        crate::Symbol::from_sym_unchecked(id)
+        crate::Id::from_raw_unchecked(id)
     }
 }

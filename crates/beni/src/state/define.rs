@@ -22,17 +22,17 @@
 //! `crate::RClass` / `crate::RModule`. Global variable access is a
 //! plain table operation that cannot raise.
 
-use crate::{Error, ExceptionClass, IntoSym, Mrb, RClass, RModule, Symbol, Value};
+use crate::{Error, ExceptionClass, IntoId, Mrb, RClass, RModule, Value};
 use beni_sys as sys;
 
 impl Mrb {
     /// `mrb_define_module_id(mrb, name)` — return the module named
     /// `name`, defining it at top level if not already present. The
-    /// name is a symbol-or-name key (`IntoSym`). mruby rejects a
+    /// name is a symbol-or-name key (`IntoId`). mruby rejects a
     /// same-named constant that is not a module.
     #[inline]
-    pub fn define_module<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(self)?.to_sym();
+    pub fn define_module<K: IntoId>(&self, name: K) -> Result<RModule, Error> {
+        let sym = name.into_id(self)?.to_raw();
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `sym` was interned against the same VM.
@@ -42,13 +42,13 @@ impl Mrb {
 
     /// `mrb_define_class_id(mrb, name, super_)` — define (or fetch) a
     /// top-level class named `name` inheriting from `super_`. The name is
-    /// a symbol-or-name key (`IntoSym`). A name already bound at the top
+    /// a symbol-or-name key (`IntoId`). A name already bound at the top
     /// level yields that ordinary class itself when `super_` is its
     /// superclass, prepended modules and all, and a `TypeError` for
     /// anything else bound there.
     #[inline]
-    pub fn define_class<K: IntoSym>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
-        let sym = name.into_sym(self)?;
+    pub fn define_class<K: IntoId>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
+        let sym = name.into_id(self)?;
         if let Some(bound) =
             crate::class::bound_class(self, self.object_class().as_raw(), sym, super_)
         {
@@ -58,7 +58,7 @@ impl Mrb {
             // SAFETY: as `define_module`; `super_` was produced by
             // the same VM.
             RClass::from_raw_unchecked(unsafe {
-                sys::mrb_define_class_id(mrb.as_ptr(), sym.to_sym(), super_.as_raw())
+                sys::mrb_define_class_id(mrb.as_ptr(), sym.to_raw(), super_.as_raw())
             })
         })
     }
@@ -66,10 +66,10 @@ impl Mrb {
     /// Define (or fetch) the top-level exception class named `name`
     /// descending from `superclass`, yielding it as an `ExceptionClass`.
     /// Mirrors magnus's `define_error`. The name is a symbol-or-name key
-    /// (`IntoSym`), and a name already bound resolves as
+    /// (`IntoId`), and a name already bound resolves as
     /// `Mrb::define_class` resolves it.
     #[inline]
-    pub fn define_error<K: IntoSym>(
+    pub fn define_error<K: IntoId>(
         &self,
         name: K,
         superclass: ExceptionClass,
@@ -105,13 +105,13 @@ impl Mrb {
     }
 
     /// `mrb_class_get_id(mrb, name)` — fetch the top-level class named
-    /// `name`. The name is a symbol-or-name key (`IntoSym`). mruby
+    /// `name`. The name is a symbol-or-name key (`IntoId`). mruby
     /// raises `NameError` when the constant is missing and `TypeError`
     /// when it is not a class (vendored `src/class.c` documents both),
     /// so the lookup is fallible by contract.
     #[inline]
-    pub fn class_get<K: IntoSym>(&self, name: K) -> Result<RClass, Error> {
-        let sym = name.into_sym(self)?.to_sym();
+    pub fn class_get<K: IntoId>(&self, name: K) -> Result<RClass, Error> {
+        let sym = name.into_id(self)?.to_raw();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
             RClass::from_raw_unchecked(unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) })
@@ -120,34 +120,34 @@ impl Mrb {
 
     /// `mrb_class_defined_id(mrb, name)` — TRUE when a class or module
     /// is defined under `name` at top level. The name is a
-    /// symbol-or-name key (`IntoSym`), routed through the `_id` form
+    /// symbol-or-name key (`IntoId`), routed through the `_id` form
     /// like `class_get`. A total predicate: an undefined name reads
     /// `false` rather than raising, so it is the precondition test
     /// before a fetching lookup that would raise on a missing name. A
     /// name too long to intern can never be bound, so it reads `false`
     /// too.
     #[inline]
-    pub fn class_defined<K: IntoSym>(&self, name: K) -> bool {
-        let Ok(sym) = name.into_sym(self) else {
+    pub fn class_defined<K: IntoId>(&self, name: K) -> bool {
+        let Ok(sym) = name.into_id(self) else {
             return false;
         };
         // SAFETY: `self` is alive; `sym` was interned against the
         // same VM. `mrb_class_defined_id` is a constant-existence
         // lookup that does not raise.
-        unsafe { sys::mrb_class_defined_id(self.as_ptr(), sym.to_sym()) }
+        unsafe { sys::mrb_class_defined_id(self.as_ptr(), sym.to_raw()) }
     }
 
     /// `mrb_exc_get_id(mrb, name)` — fetch the built-in exception
     /// class named `name` as an `ExceptionClass`. The name is a
-    /// symbol-or-name key (`IntoSym`). mruby raises when the constant is
+    /// symbol-or-name key (`IntoId`). mruby raises when the constant is
     /// missing, is not a class, or is a class that is not `Exception` or
     /// a class descending from it (vendored `src/class.c`), so the lookup
     /// is fallible by contract. This is the typed path to a built-in
     /// exception class — `RuntimeError`, `ArgumentError`, `TypeError` —
     /// for raising from registered code.
     #[inline]
-    pub fn exc_get<K: IntoSym>(&self, name: K) -> Result<ExceptionClass, Error> {
-        let sym = name.into_sym(self)?.to_sym();
+    pub fn exc_get<K: IntoId>(&self, name: K) -> Result<ExceptionClass, Error> {
+        let sym = name.into_id(self)?.to_raw();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
             let class = unsafe { sys::mrb_exc_get_id(mrb.as_ptr(), sym) };
@@ -158,13 +158,13 @@ impl Mrb {
     }
 
     /// `mrb_module_get_id(mrb, name)` — fetch the top-level module
-    /// named `name`. The name is a symbol-or-name key (`IntoSym`).
+    /// named `name`. The name is a symbol-or-name key (`IntoId`).
     /// mruby raises `NameError` when the constant is missing and
     /// `TypeError` when it is not a module (vendored `src/class.c`
     /// documents both), so the lookup is fallible by contract.
     #[inline]
-    pub fn module_get<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(self)?.to_sym();
+    pub fn module_get<K: IntoId>(&self, name: K) -> Result<RModule, Error> {
+        let sym = name.into_id(self)?.to_raw();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
             RModule::from_raw_unchecked(unsafe { sys::mrb_module_get_id(mrb.as_ptr(), sym) })
@@ -188,23 +188,23 @@ impl Mrb {
     }
 
     /// `mrb_gv_set(mrb, sym, val)` — assign the global variable named
-    /// by a symbol-or-name key (`IntoSym`). The assignment itself never
+    /// by a symbol-or-name key (`IntoId`). The assignment itself never
     /// fails; the `Err` it carries is the key's own.
     #[inline]
-    pub fn gv_set<K: IntoSym>(&self, name: K, val: Value) -> Result<(), Error> {
-        let sym = name.into_sym(self)?.to_sym();
+    pub fn gv_set<K: IntoId>(&self, name: K, val: Value) -> Result<(), Error> {
+        let sym = name.into_id(self)?.to_raw();
         // SAFETY: `self` is alive; `val` originates from the same VM.
         unsafe { sys::mrb_gv_set(self.as_ptr(), sym, val.as_raw()) };
         Ok(())
     }
 
     /// `mrb_gv_get(mrb, sym)` — read the global variable named by a
-    /// symbol-or-name key (`IntoSym`); an unset global reads as nil, as
+    /// symbol-or-name key (`IntoId`); an unset global reads as nil, as
     /// does a key too long to name a symbol. The read happens at call
     /// time, so a reassigned global yields its current value.
     #[inline]
-    pub fn gv_get<K: IntoSym>(&self, name: K) -> Value {
-        let Ok(sym) = name.into_sym(self).map(Symbol::to_sym) else {
+    pub fn gv_get<K: IntoId>(&self, name: K) -> Value {
+        let Ok(sym) = name.into_id(self).map(crate::Id::to_raw) else {
             return Value::nil();
         };
         // SAFETY: `self` is alive; `sym` was interned against it.
@@ -212,13 +212,13 @@ impl Mrb {
     }
 
     /// `mrb_gv_remove(mrb, sym)` — remove the global variable named by a
-    /// symbol-or-name key (`IntoSym`). Removing an unset global is a
+    /// symbol-or-name key (`IntoId`). Removing an unset global is a
     /// no-op, as is a key too long to name a symbol; neither case
     /// raises. The global reads as nil afterwards, the same as one never
     /// set.
     #[inline]
-    pub fn gv_remove<K: IntoSym>(&self, name: K) {
-        let Ok(sym) = name.into_sym(self).map(Symbol::to_sym) else {
+    pub fn gv_remove<K: IntoId>(&self, name: K) {
+        let Ok(sym) = name.into_id(self).map(crate::Id::to_raw) else {
             return;
         };
         // SAFETY: `self` is alive; `sym` was interned against it.

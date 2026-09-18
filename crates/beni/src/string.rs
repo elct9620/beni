@@ -418,7 +418,7 @@ impl RString {
     /// `Value::to_sym`, which coerces an arbitrary value.
     #[inline]
     pub fn intern(self, mrb: &Mrb) -> Result<crate::Symbol, crate::Error> {
-        mrb.intern_str(self.0)
+        mrb.intern_str(self.0).map(crate::Symbol::from)
     }
 
     /// `mrb_string_cstr(mrb, self)` — the bytes as an owned, NUL-terminated

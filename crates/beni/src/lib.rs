@@ -24,7 +24,7 @@
 //!                                      handles + traits)
 //!                      array / hash   (typed factories on top of Value)
 //!                      string / range (RString / Range newtypes)
-//!                      symbol / proc  (Symbol / Proc newtypes)
+//!                      symbol / proc  (Id, Symbol / Proc newtypes)
 //!                      data           (DataType<T> + CDATA wrap / get)
 //!                      ccontext       (Ccontext RAII)
 //!                      error / parse  (Error + ParseMessage — the shapes
@@ -97,7 +97,7 @@ pub use parse::ParseMessage;
 pub use proc::{DumpOptions, Proc};
 pub use range::{Range, RangeBegLen};
 pub use string::RString;
-pub use symbol::{IntoSym, Symbol};
+pub use symbol::{Id, IntoId, Symbol};
 pub use value::cstr_ptr;
 pub use value::{Break, Value};
 

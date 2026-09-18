@@ -30,7 +30,7 @@
 //! surfaces as `Err(Error::Exception)` instead of long-jumping across
 //! Rust frames.
 
-use crate::{Error, IntoSym, MethodDef, Mrb, RString, Value};
+use crate::{Error, IntoId, MethodDef, Mrb, RString, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby class. `#[repr(transparent)]` over
@@ -179,7 +179,7 @@ where
 pub(crate) fn bound_class(
     mrb: &Mrb,
     outer: *mut sys::RClass,
-    name: crate::Symbol,
+    name: crate::Id,
     superclass: RClass,
 ) -> Option<Result<RClass, Error>> {
     // SAFETY: `outer` names a live class or module of this VM;
@@ -190,7 +190,7 @@ pub(crate) fn bound_class(
         return None;
     }
     Some(outer.const_get(mrb, name).and_then(|bound| {
-        let name = name.name(mrb).unwrap_or_default();
+        let name = crate::Symbol::from(name).name(mrb).unwrap_or_default();
         let type_error = |message: String| {
             Err(Error::Exception(crate::method::core_exception(
                 mrb,
@@ -466,17 +466,17 @@ impl ExceptionClass {
 pub trait Module: private::ClassLike {
     /// `mrb_define_class_under_id(mrb, self, name, superclass)` —
     /// define (or fetch) the nested class `self::name` inheriting from
-    /// `superclass`. The name is a symbol-or-name key (`IntoSym`). A
+    /// `superclass`. The name is a symbol-or-name key (`IntoId`). A
     /// name `self` already binds yields that ordinary class itself when
     /// `superclass` is its superclass, prepended modules and all, and a
     /// `TypeError` for anything else bound there.
-    fn define_class<K: IntoSym>(
+    fn define_class<K: IntoId>(
         self,
         mrb: &Mrb,
         name: K,
         superclass: RClass,
     ) -> Result<RClass, Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_id(mrb)?;
         if let Some(bound) = bound_class(mrb, self.raw(), sym, superclass) {
             return bound;
         }
@@ -488,7 +488,7 @@ pub trait Module: private::ClassLike {
                 sys::mrb_define_class_under_id(
                     mrb.as_ptr(),
                     self.raw(),
-                    sym.to_sym(),
+                    sym.to_raw(),
                     superclass.as_raw(),
                 )
             })
@@ -499,7 +499,7 @@ pub trait Module: private::ClassLike {
     /// descending from `superclass`, yielding it as an `ExceptionClass`.
     /// Mirrors magnus's `Module::define_error`; rejected as
     /// `Module::define_class` is.
-    fn define_error<K: IntoSym>(
+    fn define_error<K: IntoId>(
         self,
         mrb: &Mrb,
         name: K,
@@ -513,10 +513,10 @@ pub trait Module: private::ClassLike {
 
     /// `mrb_define_module_under_id(mrb, self, name)` — define (or
     /// fetch) the nested module `self::name`. The name is a
-    /// symbol-or-name key (`IntoSym`). mruby rejects a same-named
+    /// symbol-or-name key (`IntoId`). mruby rejects a same-named
     /// constant that is not a module.
-    fn define_module<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    fn define_module<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
             RModule::from_raw_unchecked(unsafe {
@@ -527,12 +527,12 @@ pub trait Module: private::ClassLike {
 
     /// `mrb_class_get_under_id(mrb, self, name)` — fetch the nested
     /// class `self::name`. The name is a symbol-or-name key
-    /// (`IntoSym`). mruby raises `NameError` when the constant is
+    /// (`IntoId`). mruby raises `NameError` when the constant is
     /// missing and `TypeError` when it is not a class (vendored
     /// `src/class.c` documents both), so the lookup is fallible by
     /// contract.
-    fn class_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RClass, Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    fn class_get<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<RClass, Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
             RClass::from_raw_unchecked(unsafe {
@@ -543,12 +543,12 @@ pub trait Module: private::ClassLike {
 
     /// `mrb_module_get_under_id(mrb, self, name)` — fetch the nested
     /// module `self::name`. The name is a symbol-or-name key
-    /// (`IntoSym`). mruby raises `NameError` when the constant is
+    /// (`IntoId`). mruby raises `NameError` when the constant is
     /// missing and `TypeError` when it is not a module (vendored
     /// `src/class.c` documents both), so the lookup is fallible by
     /// contract.
-    fn module_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    fn module_get<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
             RModule::from_raw_unchecked(unsafe {
@@ -559,30 +559,30 @@ pub trait Module: private::ClassLike {
 
     /// `mrb_class_defined_under_id(mrb, self, name)` — TRUE when a
     /// class or module is defined under `self::name`. The name is a
-    /// symbol-or-name key (`IntoSym`), routed through the `_id` form
+    /// symbol-or-name key (`IntoId`), routed through the `_id` form
     /// like `class_get`. A total predicate: an undefined name reads
     /// `false` rather than raising, so it is the precondition test
     /// before a namespaced fetching lookup that would raise on a
     /// missing name. A name too long to intern can never be bound, so
     /// it reads `false` too.
-    fn class_defined<K: IntoSym>(self, mrb: &Mrb, name: K) -> bool {
-        let Ok(sym) = name.into_sym(mrb) else {
+    fn class_defined<K: IntoId>(self, mrb: &Mrb, name: K) -> bool {
+        let Ok(sym) = name.into_id(mrb) else {
             return false;
         };
         // SAFETY: `mrb` is alive; `self` originates from the same
         // VM; `sym` was interned against it. `mrb_class_defined_under_id`
         // is a constant-existence lookup that does not raise.
-        unsafe { sys::mrb_class_defined_under_id(mrb.as_ptr(), self.raw(), sym.to_sym()) }
+        unsafe { sys::mrb_class_defined_under_id(mrb.as_ptr(), self.raw(), sym.to_raw()) }
     }
 
     /// `mrb_define_method_id(mrb, self, name, func, aspec)` — register
     /// an instance method from a `method!`-wrapped Rust function. The
-    /// name is a symbol-or-name key (`IntoSym`). The aspec is derived
+    /// name is a symbol-or-name key (`IntoId`). The aspec is derived
     /// from the wrapper's arity (`-1` = any arguments, `0..` = that
     /// many required positionals). mruby rejects registration on a
     /// frozen receiver.
-    fn define_method<K: IntoSym>(self, mrb: &Mrb, name: K, method: MethodDef) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    fn define_method<K: IntoId>(self, mrb: &Mrb, name: K, method: MethodDef) -> Result<(), Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         protect_register(mrb, method, |mrb, raw, aspec| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` was produced by the same VM; `sym` was
@@ -594,15 +594,15 @@ pub trait Module: private::ClassLike {
     /// `mrb_define_private_method_id(mrb, self, name, func, aspec)` —
     /// like `define_method`, with private visibility: Ruby-level
     /// dispatch with an explicit receiver raises `NoMethodError`. The
-    /// name is a symbol-or-name key (`IntoSym`). The aspec derivation
+    /// name is a symbol-or-name key (`IntoId`). The aspec derivation
     /// and rejection contract match `define_method`.
-    fn define_private_method<K: IntoSym>(
+    fn define_private_method<K: IntoId>(
         self,
         mrb: &Mrb,
         name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+        let sym = name.into_id(mrb)?.to_raw();
         protect_register(mrb, method, |mrb, raw, aspec| {
             // SAFETY: as `define_method` — same signature, same
             // contract.
@@ -615,15 +615,15 @@ pub trait Module: private::ClassLike {
     /// instance method, for a class that mixes the module in, and a
     /// singleton method on the module object, the way Ruby's
     /// `module_function` exposes `Math.sqrt`. The name is a
-    /// symbol-or-name key (`IntoSym`). The aspec derivation and
+    /// symbol-or-name key (`IntoId`). The aspec derivation and
     /// rejection contract match `define_method`.
-    fn define_module_function<K: IntoSym>(
+    fn define_module_function<K: IntoId>(
         self,
         mrb: &Mrb,
         name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+        let sym = name.into_id(mrb)?.to_raw();
         protect_register(mrb, method, |mrb, raw, aspec| {
             // SAFETY: as `define_method` — same signature, same
             // contract.
@@ -635,12 +635,12 @@ pub trait Module: private::ClassLike {
 
     /// `mrb_define_const_id(mrb, self, name, val)` — bind the constant
     /// `name` to `val` on this class or module. The name is a
-    /// symbol-or-name key (`IntoSym`). Runs inside exception protection, so a
+    /// symbol-or-name key (`IntoId`). Runs inside exception protection, so a
     /// frozen-receiver rejection surfaces as `Err(Error::Exception)`
     /// rather than long-jumping — the same contract as the definition
     /// methods above.
-    fn define_const<K: IntoSym>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    fn define_const<K: IntoId>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and `val` originate from the same VM; `sym`
@@ -654,14 +654,14 @@ pub trait Module: private::ClassLike {
     /// `mrb_define_alias_id(mrb, self, new, old)` — bind `new` as a
     /// second name for the existing method `old` on this class or module,
     /// so a core method can be preserved before it is overridden. Both
-    /// names are symbol-or-name keys (`IntoSym`), each interned to its
+    /// names are symbol-or-name keys (`IntoId`), each interned to its
     /// symbol before the `_id` alias call. Runs inside exception protection, so
     /// aliasing a method that does not exist surfaces as
     /// `Err(Error::Exception)` (mruby's `NameError`) rather than
     /// long-jumping — the same contract as the definition methods above.
-    fn alias_method<N: IntoSym, O: IntoSym>(self, mrb: &Mrb, new: N, old: O) -> Result<(), Error> {
-        let new = new.into_sym(mrb)?.to_sym();
-        let old = old.into_sym(mrb)?.to_sym();
+    fn alias_method<N: IntoId, O: IntoId>(self, mrb: &Mrb, new: N, old: O) -> Result<(), Error> {
+        let new = new.into_id(mrb)?.to_raw();
+        let old = old.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `new` and `old`
@@ -677,14 +677,14 @@ pub trait Module: private::ClassLike {
     /// `mrb_undef_method_id(mrb, self, name)` — undefine a method on
     /// this class or module, Ruby's `Module#undef_method`: the name is
     /// marked as not defined on the handle even when an ancestor defines
-    /// it. The name is a symbol-or-name key (`IntoSym`); both forms
-    /// resolve to the same interned symbol and route through the raising
+    /// it. The name is a symbol-or-name key (`IntoId`); both forms
+    /// resolve to the same interned id and route through the raising
     /// `_id` C function, so undefining a name absent from the handle and
     /// its ancestors surfaces as `Err(Error::Exception)` (mruby's
     /// `NameError`) rather than long-jumping — the same contract as the
     /// definition methods above.
-    fn undef_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    fn undef_method<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `sym` was interned
@@ -701,12 +701,12 @@ pub trait Module: private::ClassLike {
     /// definition is deleted from the handle, so the name reverts to any
     /// ancestor's method — distinct from `undef_method`, which masks
     /// ancestor lookups rather than stripping the definition. The name is a
-    /// symbol-or-name key (`IntoSym`). Removing a name not defined directly
+    /// symbol-or-name key (`IntoId`). Removing a name not defined directly
     /// on the handle raises `NameError`; under exception protection it surfaces as
     /// `Err(Error::Exception)` rather than long-jumping — the same contract
     /// as the definition methods above.
-    fn remove_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    fn remove_method<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `sym` was interned
@@ -806,17 +806,17 @@ pub trait Object: private::ClassLike {
     /// `mrb_define_singleton_method_id(mrb, self, name, func, aspec)` —
     /// register a singleton-class method on this handle from a
     /// `method!`-wrapped Rust function. The name is a symbol-or-name
-    /// key (`IntoSym`). The receiver is treated as `RObject *` so the
+    /// key (`IntoId`). The receiver is treated as `RObject *` so the
     /// singleton-class shim attaches to the metaclass (matching mruby's
     /// own contract). A class or module always carries a singleton class,
     /// so the registration installs the method on its metaclass.
-    fn define_singleton_method<K: IntoSym>(
+    fn define_singleton_method<K: IntoId>(
         self,
         mrb: &Mrb,
         name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+        let sym = name.into_id(mrb)?.to_raw();
         protect_register(mrb, method, |mrb, raw, aspec| {
             // SAFETY: as `Module::define_method`; the `RClass *` →
             // `RObject *` cast mirrors mruby's own
@@ -838,11 +838,11 @@ pub trait Object: private::ClassLike {
     /// singleton method on this handle: the class-method counterpart of
     /// `Module::undef_method`'s instance form, since a class's singleton
     /// method is its class method. The name is a symbol-or-name
-    /// key (`IntoSym`), routed through the raising `_id` C function, so
+    /// key (`IntoId`), routed through the raising `_id` C function, so
     /// undefining a singleton name absent from the handle surfaces as
     /// `Err(Error::Exception)` (mruby's `NameError`).
-    fn undef_singleton_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?.to_sym();
+    fn undef_singleton_method<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
+        let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `sym` was interned

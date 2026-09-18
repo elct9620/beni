@@ -35,7 +35,7 @@ fn io_first(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 fn nrest_after_sym(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (sym, rest) = mrb.get_args::<NRest>()?;
     Ok(
-        if sym == mrb.intern_cstr(c"tag").expect("the name interns").to_sym() {
+        if sym == mrb.intern_cstr(c"tag").expect("the name interns") {
             (rest.len() as i32).into_value(mrb)
         } else {
             (-1i32).into_value(mrb)
@@ -512,7 +512,7 @@ fn kw_size(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 /// fails the assertion instead of passing.
 fn nrest_kwblock_encode(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let (sym, rest, kw, block) = mrb.get_args::<NRestKwBlock>()?;
-    if sym != mrb.intern_cstr(c"tag").expect("the name interns").to_sym() {
+    if sym != mrb.intern_cstr(c"tag").expect("the name interns") {
         return Ok((-1i32).into_value(mrb));
     }
     let block_bit = if block.is_nil() { 0 } else { 1 };
@@ -769,7 +769,9 @@ fn nrest_rest_slice_survives_vm_reentry() {
         )
         .expect("registering the bridge must succeed");
     let args = [
-        mrb.intern(b"tag").expect("the name interns").as_value(),
+        mrb.intern(b"tag")
+            .expect("the name interns")
+            .into_value(&mrb),
         mrb.str_new(b"al").as_value(),
         mrb.str_new(b"pha").as_value(),
     ];

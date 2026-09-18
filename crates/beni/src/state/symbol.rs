@@ -1,64 +1,71 @@
 //! Symbol intern + lookup on `Mrb`.
 //!
 //! Inherent methods that turn a name — a NUL-terminated `&CStr`, a
-//! borrowed byte slice, or an `mrb_value` String — into a typed
-//! `Symbol`, and read a symbol's name back out.
+//! borrowed byte slice, or an `mrb_value` String — into the `Id` it
+//! interns to, and read an id's name back out.
 
-use crate::{Error, Mrb, Symbol, Value};
+use crate::{Error, Id, Mrb, Symbol, Value};
 use beni_sys as sys;
 
 impl Mrb {
     /// `mrb_intern_cstr(mrb, s)` — intern a NUL-terminated C string
-    /// as a Symbol. A name of `UINT16_MAX` bytes or more is too long
+    /// as an `Id`. A name of `UINT16_MAX` bytes or more is too long
     /// to be a symbol and surfaces as `Err` carrying mruby's
     /// `ArgumentError`, as for every creating intern.
     #[inline]
-    pub fn intern_cstr(&self, s: &core::ffi::CStr) -> Result<Symbol, Error> {
+    pub fn intern_cstr(&self, s: &core::ffi::CStr) -> Result<Id, Error> {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `s.as_ptr()` is NUL-terminated by the `&CStr` contract.
-            Symbol::from_sym_unchecked(unsafe { sys::mrb_intern_cstr(mrb.as_ptr(), s.as_ptr()) })
+            Symbol::from(Id::from_raw_unchecked(unsafe {
+                sys::mrb_intern_cstr(mrb.as_ptr(), s.as_ptr())
+            }))
         })
+        .map(Id::from)
     }
 
     /// `mrb_intern_str(mrb, str)` — intern the bytes of an mruby
-    /// String value as a Symbol. Use this when the name arrives as
+    /// String value as an `Id`. Use this when the name arrives as
     /// arbitrary bytes that may not be NUL-safe; otherwise prefer
     /// `Mrb::intern_cstr`. Too long a name surfaces as `Err`, as
     /// `Mrb::intern_cstr` describes.
     #[inline]
-    pub fn intern_str(&self, s: Value) -> Result<Symbol, Error> {
+    pub fn intern_str(&self, s: Value) -> Result<Id, Error> {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `s`
             // originates from the same VM.
-            Symbol::from_sym_unchecked(unsafe { sys::mrb_intern_str(mrb.as_ptr(), s.as_raw()) })
+            Symbol::from(Id::from_raw_unchecked(unsafe {
+                sys::mrb_intern_str(mrb.as_ptr(), s.as_raw())
+            }))
         })
+        .map(Id::from)
     }
 
-    /// `mrb_intern(mrb, name, len)` — intern a borrowed byte slice as a
-    /// Symbol, creating it when absent. The general byte-taking intern:
+    /// `mrb_intern(mrb, name, len)` — intern a borrowed byte slice as an
+    /// `Id`, creating it when absent. The general byte-taking intern:
     /// it interns the exact bytes the slice spans, so a name that embeds
     /// a NUL or is not NUL-terminated interns whole where `intern_cstr`
     /// would stop at the first NUL. mruby copies the bytes, so the borrow
     /// need not outlive the call (unlike `intern_static`). Too long a
     /// name surfaces as `Err`, as `Mrb::intern_cstr` describes.
     #[inline]
-    pub fn intern(&self, name: &[u8]) -> Result<Symbol, Error> {
+    pub fn intern(&self, name: &[u8]) -> Result<Id, Error> {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `name` is a
             // valid byte slice and its length is passed alongside, so the
             // borrow need not be NUL-safe.
-            Symbol::from_sym_unchecked(unsafe {
+            Symbol::from(Id::from_raw_unchecked(unsafe {
                 sys::mrb_intern(
                     mrb.as_ptr(),
                     name.as_ptr() as *const core::ffi::c_char,
                     name.len(),
                 )
-            })
+            }))
         })
+        .map(Id::from)
     }
 
-    /// `mrb_intern_static(mrb, name, len)` — intern `name` as a Symbol
+    /// `mrb_intern_static(mrb, name, len)` — intern `name` as an `Id`
     /// without copying its bytes, the no-copy counterpart of `intern_cstr`
     /// / `intern_str`. mruby keeps the borrowed pointer and never frees it,
     /// so the buffer must outlive the VM; the `'static` bound is what makes
@@ -66,23 +73,24 @@ impl Mrb {
     /// serves mruby's `mrb_intern_lit` convenience. Too long a name
     /// surfaces as `Err`, as `Mrb::intern_cstr` describes.
     #[inline]
-    pub fn intern_static(&self, name: &'static [u8]) -> Result<Symbol, Error> {
+    pub fn intern_static(&self, name: &'static [u8]) -> Result<Id, Error> {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `name` is
             // `'static`, so the borrowed buffer outlives the VM as mruby's
             // no-free intern requires.
-            Symbol::from_sym_unchecked(unsafe {
+            Symbol::from(Id::from_raw_unchecked(unsafe {
                 sys::mrb_intern_static(
                     mrb.as_ptr(),
                     name.as_ptr() as *const core::ffi::c_char,
                     name.len(),
                 )
-            })
+            }))
         })
+        .map(Id::from)
     }
 
     /// `mrb_intern_check(mrb, name, len)` — the non-creating counterpart
-    /// of the interns: `Some` Symbol when `name`'s bytes are already
+    /// of the interns: `Some` id when `name`'s bytes are already
     /// interned, `None` when no such symbol exists. A presence test that
     /// dispatches nothing and never raises, leaving the symbol table
     /// untouched. mruby reserves id 0 for "not interned", so a zero result
@@ -90,7 +98,7 @@ impl Mrb {
     /// `mrb_intern_check_cstr` (NUL-terminated) and `mrb_intern_check_str`
     /// (an mruby String value) both forward to.
     #[inline]
-    pub fn intern_check(&self, name: &[u8]) -> Option<Symbol> {
+    pub fn intern_check(&self, name: &[u8]) -> Option<Id> {
         // mruby raises for a name of `UINT16_MAX` bytes or more
         // (`sym_validate_len`) and so never interns one.
         if name.len() >= u16::MAX as usize {
@@ -105,7 +113,7 @@ impl Mrb {
                 name.len(),
             )
         };
-        (sym != 0).then(|| Symbol::from_sym_unchecked(sym))
+        (sym != 0).then(|| Id::from_raw_unchecked(sym))
     }
 
     /// `mrb_sym_name(mrb, sym)` — return the name of `sym` as an owned
@@ -119,9 +127,9 @@ impl Mrb {
     /// a non-UTF-8 name is defensive — reach for `Mrb::sym_name_len` to
     /// read raw bytes.
     #[inline]
-    pub fn sym_name(&self, sym: Symbol) -> Option<String> {
+    pub fn sym_name(&self, sym: Id) -> Option<String> {
         // SAFETY: `self` is alive.
-        let ptr = unsafe { sys::mrb_sym_name(self.as_ptr(), sym.to_sym()) };
+        let ptr = unsafe { sys::mrb_sym_name(self.as_ptr(), sym.to_raw()) };
         if ptr.is_null() {
             return None;
         }
@@ -144,10 +152,10 @@ impl Mrb {
     /// a per-read scratch buffer the next name read overwrites, so the
     /// bytes are copied out before this returns rather than borrowed.
     #[inline]
-    pub fn sym_name_len(&self, sym: Symbol) -> Option<Vec<u8>> {
+    pub fn sym_name_len(&self, sym: Id) -> Option<Vec<u8>> {
         let mut len: sys::mrb_int = 0;
         // SAFETY: `self` is alive; `&mut len` is a valid out-pointer.
-        let ptr = unsafe { sys::mrb_sym_name_len(self.as_ptr(), sym.to_sym(), &mut len) };
+        let ptr = unsafe { sys::mrb_sym_name_len(self.as_ptr(), sym.to_raw(), &mut len) };
         if ptr.is_null() {
             return None;
         }
@@ -168,9 +176,9 @@ impl Mrb {
     /// borrowed. The dump form is always ASCII, so the empty-string
     /// fallback on a non-UTF-8 name is defensive and unreachable.
     #[inline]
-    pub fn sym_dump(&self, sym: Symbol) -> Option<String> {
+    pub fn sym_dump(&self, sym: Id) -> Option<String> {
         // SAFETY: `self` is alive.
-        let ptr = unsafe { sys::mrb_sym_dump(self.as_ptr(), sym.to_sym()) };
+        let ptr = unsafe { sys::mrb_sym_dump(self.as_ptr(), sym.to_raw()) };
         if ptr.is_null() {
             return None;
         }

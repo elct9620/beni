@@ -1,47 +1,101 @@
-//! Typed `Symbol` newtype around a Symbol-tagged `Value` — beni's
-//! mirror of magnus's `Symbol`.
+//! The interned id and the symbol value that boxes it — beni's mirror of
+//! magnus's `Id` and `Symbol`.
 //!
-//! `Symbol` is `#[repr(transparent)]` over `Value` (which is itself
-//! `#[repr(transparent)]` over `mrb_value`). The two share their
-//! in-memory layout — `Symbol` is exactly an `mrb_value` known to carry
-//! an mruby Symbol.
-//!
-//! Construct from a name (`Symbol::new`, which interns) or from an
-//! already-interned id (`Symbol::from_sym`); read the interned id back
-//! with `to_sym` and the name with `name`. The checked `Value` →
-//! `Symbol` downcast lives on `FromValue`, the `Symbol` → `Value`
-//! boxing on `IntoValue`, alongside the other conversions.
+//! `Id` carries the `mrb_sym` itself, which is not a value; `Symbol` is
+//! `#[repr(transparent)]` over `Value`, an `mrb_value` known to carry an
+//! mruby Symbol. The two convert into each other with `From`, boxing or
+//! unboxing without touching an interpreter. Names intern to an `Id`;
+//! `Symbol::new` interns and boxes in one step. The checked `Value` →
+//! `Symbol` downcast lives on `FromValue`, the boxing on `IntoValue`,
+//! alongside the other conversions.
 
 use crate::{Error, Mrb, Value};
 use beni_sys as sys;
 
+/// An interned symbol id — magnus's `Id`. Compares and hashes by the id,
+/// which interning makes canonical, so two ids are equal exactly when
+/// they name the same bytes.
+///
+/// Construct by interning a name (`Mrb::intern` and its siblings), from
+/// a `Symbol`, or across the raw seam through `sys::FromRawId`.
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Id(sys::mrb_sym);
+
+impl Id {
+    /// Wrap an id this VM just produced. The public crossing is
+    /// `sys::FromRawId::from_raw`, which is `unsafe` for the
+    /// establishing.
+    #[inline]
+    pub(crate) const fn from_raw_unchecked(sym: sys::mrb_sym) -> Self {
+        Self(sym)
+    }
+
+    /// The raw id, for the crate's own calls into `beni::sys`.
+    #[inline]
+    pub(crate) const fn to_raw(self) -> sys::mrb_sym {
+        self.0
+    }
+}
+
 /// Typed handle on an mruby `Symbol`. `#[repr(transparent)]` over
 /// `Value` so the C ABI is preserved.
 ///
-/// Construct via `Symbol::new` (intern a name), `Symbol::from_sym`
-/// (box an interned id), the checked `FromValue` downcast
-/// (`Symbol::from_value`, tag-discriminated), or
-/// `Symbol::from_value_unchecked`.
+/// Construct via `Symbol::new` (intern a name), `Symbol::from` an `Id`,
+/// the checked `FromValue` downcast (`Symbol::from_value`,
+/// tag-discriminated), or `Symbol::from_value_unchecked`.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Symbol(Value);
 
-/// Interning is canonical, so two symbols are equal exactly when they
-/// name the same bytes. The id is what carries that, not the boxed
-/// value, whose layout varies with the archive's boxing mode.
+impl From<Id> for Symbol {
+    /// Box the id through mruby's boxing-agnostic `mrb_symbol_value`
+    /// constructor (an `MRB_INLINE` reached through bindgen's static-fn
+    /// trampoline), touching no `mrb_state`.
+    #[inline]
+    fn from(id: Id) -> Self {
+        // SAFETY: `mrb_symbol_value` boxes a sym id and touches no
+        // mrb_state; the value is meaningful in the VM the id belongs to.
+        Self(Value::from_raw_unchecked(unsafe {
+            sys::mrb_symbol_value(id.0)
+        }))
+    }
+}
+
+impl From<Symbol> for Id {
+    /// Unbox through the `mrb_symbol_func` shim — the `mrb_symbol` macro
+    /// expanded inside the C compiler so the unbox matches the boxing
+    /// config the linked archive was built with.
+    #[inline]
+    fn from(sym: Symbol) -> Self {
+        // SAFETY: `sym.0` is Symbol-tagged by the newtype's construction
+        // contract; `mrb_symbol` reads only the value payload.
+        Self(unsafe { sys::mrb_symbol_func(sym.0.as_raw()) })
+    }
+}
+
+/// Compared by the id rather than the boxed value, whose layout varies
+/// with the archive's boxing mode.
 impl PartialEq for Symbol {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.to_sym() == other.to_sym()
+        Id::from(*self) == Id::from(*other)
     }
 }
 
 impl Eq for Symbol {}
 
-impl core::hash::Hash for Symbol {
+impl PartialEq<Id> for Symbol {
     #[inline]
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.to_sym().hash(state);
+    fn eq(&self, other: &Id) -> bool {
+        Id::from(*self) == *other
+    }
+}
+
+impl PartialEq<Symbol> for Id {
+    #[inline]
+    fn eq(&self, other: &Symbol) -> bool {
+        *self == Id::from(*other)
     }
 }
 
@@ -49,7 +103,7 @@ impl core::hash::Hash for Symbol {
 /// The name needs a live `Mrb` to read, so it is out of reach here.
 impl core::fmt::Debug for Symbol {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("Symbol").field(&self.to_sym()).finish()
+        f.debug_tuple("Symbol").field(&Id::from(*self)).finish()
     }
 }
 
@@ -85,35 +139,7 @@ impl Symbol {
     /// another name, so a name too long to be a symbol surfaces as `Err`.
     #[inline]
     pub fn new(mrb: &Mrb, name: &core::ffi::CStr) -> Result<Self, Error> {
-        mrb.intern_cstr(name)
-    }
-
-    /// Symbolize an id the caller has established this VM interned, via
-    /// mruby's boxing-agnostic `mrb_symbol_value` constructor (an
-    /// `MRB_INLINE` reached through bindgen's static-fn trampoline).
-    /// Pure boxing — no `mrb_state` touched. The public crossing is
-    /// `sys::FromRawId::from_raw`, which is `unsafe` for the
-    /// establishing.
-    #[inline]
-    pub(crate) fn from_sym_unchecked(sym: sys::mrb_sym) -> Self {
-        // SAFETY: `mrb_symbol_value` boxes a sym id and touches no
-        // mrb_state; the resulting value is meaningful in the VM the
-        // id was interned against, which the caller holds.
-        Self(Value::from_raw_unchecked(unsafe {
-            sys::mrb_symbol_value(sym)
-        }))
-    }
-
-    /// The interned id this symbol carries, via the `mrb_symbol_func`
-    /// shim — the `mrb_symbol` macro expanded inside the C compiler so
-    /// the unbox matches the boxing config the linked archive was built
-    /// with.
-    #[inline]
-    pub fn to_sym(self) -> sys::mrb_sym {
-        // SAFETY: `self.0` is Symbol-tagged by the newtype's
-        // construction contract; `mrb_symbol` reads only the value
-        // payload and touches no mrb_state.
-        unsafe { sys::mrb_symbol_func(self.0.as_raw()) }
+        mrb.intern_cstr(name).map(Self::from)
     }
 
     /// The symbol's name as an owned `String`, via `Mrb::sym_name`.
@@ -125,7 +151,7 @@ impl Symbol {
     /// so the name is copied out rather than borrowed.
     #[inline]
     pub fn name(self, mrb: &Mrb) -> Option<String> {
-        mrb.sym_name(self)
+        mrb.sym_name(self.into())
     }
 
     /// The symbol's raw name bytes as an owned `Vec<u8>`, via
@@ -136,7 +162,7 @@ impl Symbol {
     /// borrowed.
     #[inline]
     pub fn name_bytes(self, mrb: &Mrb) -> Option<Vec<u8>> {
-        mrb.sym_name_len(self)
+        mrb.sym_name_len(self.into())
     }
 
     /// The symbol's dump form as an owned `String`, via `Mrb::sym_dump`
@@ -148,7 +174,7 @@ impl Symbol {
     /// copied out rather than borrowed.
     #[inline]
     pub fn dump(self, mrb: &Mrb) -> Option<String> {
-        mrb.sym_dump(self)
+        mrb.sym_dump(self.into())
     }
 
     /// The symbol's name reified as an mruby String, via `mrb_sym_str`
@@ -158,65 +184,72 @@ impl Symbol {
     /// the value without dispatching and never raises.
     #[inline]
     pub fn to_str(self, mrb: &Mrb) -> crate::RString {
-        // SAFETY: `self.to_sym()` is interned against `mrb`, whose
+        // SAFETY: `self`'s id is interned against `mrb`, whose
         // pointer is live. `mrb_sym_str` reads the name and boxes a
         // String value; the result is String-tagged by construction.
         unsafe {
             crate::RString::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_sym_str(
                 mrb.as_ptr(),
-                self.to_sym(),
+                Id::from(self).0,
             )))
         }
     }
 }
 
-/// A name keying an operation — beni's mirror of `magnus`'s `IntoId`. A
-/// string key interns to its symbol; an already-interned `Symbol` is
-/// reused without re-interning. The typed surface accepts any `IntoSym`
-/// wherever an operation is keyed by a name, routing every key through
-/// mruby's `_id`-suffixed C variant, and hands a key that cannot
-/// resolve back as its own `Err` before it acts.
+/// A name keying an operation — beni's mirror of `magnus`'s `IntoId`.
+/// Every key resolves to the `Id` it names: a string key by interning, an
+/// `Id` or `Symbol` as the id it already is. The typed surface accepts
+/// any `IntoId` wherever an operation is keyed by a name, routing every
+/// key through mruby's `_id`-suffixed C variant, and hands a key that
+/// cannot resolve back as its own `Err` before it acts.
 ///
 /// The string keys differ in what an embedded NUL does: a `&CStr` key
 /// names the bytes before its first NUL, a Rust string key names all of
 /// its bytes.
-pub trait IntoSym {
-    /// Resolve this key to its `Symbol` against `mrb`, or the `Err` its
+pub trait IntoId {
+    /// Resolve this key to its `Id` against `mrb`, or the `Err` its
     /// intern surfaced.
-    fn into_sym(self, mrb: &Mrb) -> Result<Symbol, Error>;
+    fn into_id(self, mrb: &Mrb) -> Result<Id, Error>;
 }
 
-impl IntoSym for &core::ffi::CStr {
+impl IntoId for &core::ffi::CStr {
     /// Interns the bytes before the first NUL, so a name too long to be
     /// a symbol surfaces as `Err`.
     #[inline]
-    fn into_sym(self, mrb: &Mrb) -> Result<Symbol, Error> {
-        Symbol::new(mrb, self)
+    fn into_id(self, mrb: &Mrb) -> Result<Id, Error> {
+        mrb.intern_cstr(self)
     }
 }
 
-impl IntoSym for &str {
+impl IntoId for &str {
     /// Interns all of the key's bytes, an embedded NUL included, so a
     /// name too long to be a symbol surfaces as `Err`.
     #[inline]
-    fn into_sym(self, mrb: &Mrb) -> Result<Symbol, Error> {
+    fn into_id(self, mrb: &Mrb) -> Result<Id, Error> {
         mrb.intern(self.as_bytes())
     }
 }
 
-impl IntoSym for String {
+impl IntoId for String {
     /// Interns as the `&str` key does, for a name a caller owns.
     #[inline]
-    fn into_sym(self, mrb: &Mrb) -> Result<Symbol, Error> {
-        self.as_str().into_sym(mrb)
+    fn into_id(self, mrb: &Mrb) -> Result<Id, Error> {
+        self.as_str().into_id(mrb)
     }
 }
 
-impl IntoSym for Symbol {
-    /// An already-interned `Symbol` reuses itself with no re-intern, so
-    /// it always resolves.
+impl IntoId for Id {
+    /// Already interned, so it always resolves.
     #[inline]
-    fn into_sym(self, _mrb: &Mrb) -> Result<Symbol, Error> {
+    fn into_id(self, _mrb: &Mrb) -> Result<Id, Error> {
         Ok(self)
+    }
+}
+
+impl IntoId for Symbol {
+    /// Resolves to the id it boxes, with no re-intern.
+    #[inline]
+    fn into_id(self, _mrb: &Mrb) -> Result<Id, Error> {
+        Ok(self.into())
     }
 }

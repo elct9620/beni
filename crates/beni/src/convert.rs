@@ -193,6 +193,14 @@ impl IntoValue for Symbol {
     }
 }
 
+/// An `Id` boxes into the symbol value it names.
+impl IntoValue for crate::Id {
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        Symbol::from(self).as_value()
+    }
+}
+
 impl IntoValue for RString {
     #[inline]
     fn into_value(self, _mrb: &Mrb) -> Value {

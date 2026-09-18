@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Error, FromValue, IntoSym, IntoValue, Module, Mrb, Object, RClass, Value};
+use beni::{Error, FromValue, IntoId, IntoValue, Module, Mrb, Object, RClass, Value};
 
 /// Registration target answering a fixed Integer for the trait
 /// tests below.
@@ -776,7 +776,7 @@ fn remove_method_strips_a_method_defined_on_the_handle() {
         .expect("registering the method must succeed");
 
     // The method responds before removal.
-    let answer = c"answer".into_sym(&mrb).expect("the name interns");
+    let answer = c"answer".into_id(&mrb).expect("the name interns");
     let receiver = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");

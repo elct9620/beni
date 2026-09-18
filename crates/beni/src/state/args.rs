@@ -269,10 +269,10 @@ pub mod format {
     /// the rest left uncopied (`*!`), then read for real.
     pub struct NRest;
     impl Format for NRest {
-        type Output<'a> = (sys::mrb_sym, &'a [Value]);
+        type Output<'a> = (crate::Id, &'a [Value]);
         const FMT: &'static core::ffi::CStr = c"n*";
 
-        fn read(mrb: &Mrb) -> Result<(sys::mrb_sym, &[Value]), Error> {
+        fn read(mrb: &Mrb) -> Result<(crate::Id, &[Value]), Error> {
             let mut sym: sys::mrb_sym = 0;
             let mut argv: *const sys::mrb_value = core::ptr::null();
             let mut argc: sys::mrb_int = 0;
@@ -299,7 +299,10 @@ pub mod format {
                     &mut argc as *mut sys::mrb_int,
                 );
             }
-            Ok((sym, slice_from_argv(argv, argc)))
+            Ok((
+                crate::Id::from_raw_unchecked(sym),
+                slice_from_argv(argv, argc),
+            ))
         }
     }
 
@@ -313,10 +316,10 @@ pub mod format {
     /// `NRest` is.
     pub struct NRestBlock;
     impl Format for NRestBlock {
-        type Output<'a> = (sys::mrb_sym, &'a [Value], Value);
+        type Output<'a> = (crate::Id, &'a [Value], Value);
         const FMT: &'static core::ffi::CStr = c"n*&";
 
-        fn read(mrb: &Mrb) -> Result<(sys::mrb_sym, &[Value], Value), Error> {
+        fn read(mrb: &Mrb) -> Result<(crate::Id, &[Value], Value), Error> {
             let mut sym: sys::mrb_sym = 0;
             let mut argv: *const sys::mrb_value = core::ptr::null();
             let mut argc: sys::mrb_int = 0;
@@ -348,7 +351,7 @@ pub mod format {
                 );
             }
             Ok((
-                sym,
+                crate::Id::from_raw_unchecked(sym),
                 slice_from_argv(argv, argc),
                 Value::from_raw_unchecked(block_raw),
             ))
@@ -524,10 +527,10 @@ pub mod format {
     /// decodes as nil. Checked, then read, as `NRest` is.
     pub struct NRestKwBlock;
     impl Format for NRestKwBlock {
-        type Output<'a> = (sys::mrb_sym, &'a [Value], crate::Hash, Value);
+        type Output<'a> = (crate::Id, &'a [Value], crate::Hash, Value);
         const FMT: &'static core::ffi::CStr = c"n*:&";
 
-        fn read(mrb: &Mrb) -> Result<(sys::mrb_sym, &[Value], crate::Hash, Value), Error> {
+        fn read(mrb: &Mrb) -> Result<(crate::Id, &[Value], crate::Hash, Value), Error> {
             let mut sym: sys::mrb_sym = 0;
             let mut argv: *const sys::mrb_value = core::ptr::null();
             let mut argc: sys::mrb_int = 0;
@@ -567,7 +570,7 @@ pub mod format {
             // SAFETY: capture-all guarantees `out` is a Hash value.
             let kw = unsafe { crate::Hash::from_value_unchecked(Value::from_raw_unchecked(out)) };
             Ok((
-                sym,
+                crate::Id::from_raw_unchecked(sym),
                 slice_from_argv(argv, argc),
                 kw,
                 Value::from_raw_unchecked(block_raw),
