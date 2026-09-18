@@ -455,8 +455,13 @@ nothing, and an empty substring is found at the offset itself.
 
 #### Symbols
 
-A name interns into a typed `Symbol`, and an already-interned id reifies back
-into one; the symbol reads its interned id back out. The Rust-side name reaches
+A name crosses the typed surface as the typed `Symbol`, so a signature taking or
+yielding one reads the same whatever the raw bindings call the interned id. A
+name interns into a `Symbol`, and an already-interned id reifies back into one;
+the symbol reads its interned id back out. Those two — the reification and the
+read — are where the id itself crosses, the seam a consumer working below the
+typed surface hands an id to `beni::sys` through and takes one back from. The
+Rust-side name reaches
 the intern as a NUL-terminated C string, as a borrowed byte slice carried with its
 own length, or as the bytes of an mruby String value. The length-carrying byte
 slice is the general form — it interns the exact bytes the slice spans, so a name
@@ -648,6 +653,12 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | constant | fetch a named constant from a module or class, assign one in place, test its presence walking the ancestry, test its presence directly on the receiver alone, or remove one; the fetch surfaces an `Err` when the receiver is not a class or module, the name resolves to no constant, or its `const_missing` hook raises, the assignment surfaces an `Err` when the receiver is not a class or module, is frozen, or its `const_added` hook raises; the removal discards the former value, treats an absent constant as a no-op rather than an error, and surfaces an `Err` when the receiver is not a class or module or is frozen; both presence tests are total predicates that never raise and answer false for a receiver that is not a class or module, and the direct test answers true only for the receiver's own constant — never one inherited from an ancestor |
 | `respond_to?` | whether the value answers to a named method; a total predicate |
 
+A global variable belongs to the interpreter rather than to any value, so it
+reads, assigns, and removes on the live `Mrb` handle, symbol-or-name keyed. An
+unset global reads as `nil`, removing one is a no-op, and neither dispatches Ruby
+nor raises; the assignment reports no failure of its own, carrying only the one
+its key can surface.
+
 #### Classes, modules, and methods
 
 - Class and module definition are methods on the live `Mrb` handle:
@@ -686,17 +697,22 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
   class creation surfaces a Rust `Err` when mruby rejects the superclass — a
   non-class, a singleton class, or `Class` itself; anonymous module creation
   always succeeds.
-- Every definition and lookup keyed by a name — class, module, exception class,
-  method, private method, module function, class method, constant, the class/module and
-  built-in exception-class lookups on `Mrb` and the class/module lookups within
-  a namespace, and method dispatch on a value — accepts the
+- Every operation keyed by a name — the definition of a class, module,
+  exception class, method, private method, module function, or class method;
+  the class/module and built-in exception-class lookups on `Mrb` and
+  the class/module lookups within a namespace; the instance-variable,
+  class-variable, constant, and global-variable operations; and method dispatch
+  and the `respond_to?` test on a value — accepts the
   name as a symbol-or-name key, mirroring `magnus`'s `IntoId`: a string key
   interns to a symbol, an
-  already-interned `Symbol` key is reused without re-interning. A string key too
-  long to intern makes the operation surface the intern's `Err` as its own
-  without acting — except the predicate testing whether a class or module is
-  defined, which answers `false` for it. A consumer
-  holding a `Symbol` reaches the definition or lookup without a redundant
+  already-interned `Symbol` key is reused without re-interning. A string key
+  reaches the intern either as a NUL-terminated C string, which keys on the
+  bytes before its first NUL, or as a Rust string, which keys on all of its
+  bytes. A key too long to intern names no symbol: an operation that can report
+  failure surfaces the intern's `Err` as its own without acting, and a total one
+  answers its own absent value — `false` from a predicate, `nil` from a read,
+  nothing done by a removal. A consumer
+  holding a `Symbol` reaches the operation without a redundant
   intern; the result is identical to passing the equivalent name, since both
   resolve to the same interned symbol. A method alias keys both the new and the
   original name this way — each accepted as a symbol-or-name key independently.
@@ -1172,7 +1188,7 @@ The `compiler` capability feature carries everything in this section.
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable assignment or removal to a frozen receiver — assignment also when the receiver cannot hold instance variables, a class-variable read or assignment to a receiver that is not a class or module — assignment also to a frozen one, or a constant fetch, assignment, or removal to a receiver that is not a class or module — assignment and removal also to a frozen one | surfaced as a Rust `Err`, never unwinds across FFI |
 | A Ruby method invoked through a value's dispatch, an object `dup` / `clone` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
-| A name of `UINT16_MAX` bytes or more given to a creating intern, to a string's coercion to a symbol, or as a symbol-or-name key | surfaced as a Rust `Err` carrying the `ArgumentError`, never unwinds across FFI; the predicate testing whether a class or module is defined answers `false` instead |
+| A name of `UINT16_MAX` bytes or more given to a creating intern, to a string's coercion to a symbol, or as a symbol-or-name key | surfaced as a Rust `Err` carrying the `ArgumentError`, never unwinds across FFI; an operation that reports no failure answers instead as it does for a name nothing is bound under — a predicate `false`, a read `nil`, a removal a no-op |
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
@@ -1203,7 +1219,7 @@ The `compiler` capability feature carries everything in this section.
 
 | Term | Meaning |
 |---|---|
-| symbol-or-name key | a definition or lookup name given either as a string, which interns to a symbol, or as an already-interned `Symbol`, reused as-is — beni's mirror of `magnus`'s `IntoId` |
+| symbol-or-name key | a name keying an operation, given as a string that interns to a symbol or as an already-interned `Symbol` reused as-is; a string key is a NUL-terminated C string, keyed on the bytes before its first NUL, or a Rust string, keyed on all of its bytes — beni's mirror of `magnus`'s `IntoId` |
 | toolchain | a vendored build dependency (mruby source, wasi-sdk) |
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
