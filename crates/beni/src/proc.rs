@@ -9,7 +9,7 @@
 //! Mirrors magnus's `block::Proc`: the protected `call` that yields to
 //! the block lives here.
 
-use crate::{Error, Mrb, Value};
+use crate::{sys::AsRawValue, Error, Mrb, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Proc` (a block). `#[repr(transparent)]`
@@ -18,10 +18,10 @@ use beni_sys as sys;
 /// Construct via the checked `FromValue` downcast (`Proc::from_value`,
 /// tag-discriminated) or `Proc::from_value_unchecked` (assert that a
 /// `Value` you already hold is Proc-tagged). Round-trip back to a
-/// generic `Value` via `Proc::as_value` for APIs that take any value.
+/// generic `Value` via `ReprValue::as_value` for APIs that take any value.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Proc(Value);
+pub struct Proc(pub(crate) Value);
 
 impl Proc {
     /// Wrap a `Value` that the caller has already determined to be
@@ -35,19 +35,6 @@ impl Proc {
     #[inline]
     pub unsafe fn from_value_unchecked(v: Value) -> Self {
         Self(v)
-    }
-
-    /// Reify as a generic `Value` for APIs that accept any value.
-    #[inline]
-    pub fn as_value(self) -> Value {
-        self.0
-    }
-
-    /// Borrow the inner `mrb_value` for raw FFI calls that have not
-    /// yet migrated. Same conversion ladder as `Value::as_raw`.
-    #[inline]
-    pub fn as_raw(self) -> sys::mrb_value {
-        self.0.as_raw()
     }
 
     /// Yield to this block with `args` under exception protection.

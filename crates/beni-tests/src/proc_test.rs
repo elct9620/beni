@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 use beni::{Ccontext, DumpOptions, Error, FromValue, IntoValue, Mrb, Proc, Value};
 
 fn proc_from(mrb: &Mrb, src: &[u8]) -> Proc {

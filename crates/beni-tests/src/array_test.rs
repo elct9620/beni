@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 use beni::{Error, IntoValue};
 
 #[test]

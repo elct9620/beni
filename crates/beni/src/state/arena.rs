@@ -13,7 +13,7 @@
 //! created where the scope was opened. The type system does not
 //! enforce the rule; the consumer upholds it.
 
-use crate::{Mrb, Value};
+use crate::{sys::AsRawValue, Mrb, Value};
 use beni_sys as sys;
 
 /// RAII guard over a GC arena region. Dropping it restores the

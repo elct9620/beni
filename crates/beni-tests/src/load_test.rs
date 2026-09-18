@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 use beni::{Ccontext, DumpOptions, Error, FromValue, Module, Mrb, RString, Value};
 
 const HEADER_LEN: usize = core::mem::size_of::<beni::sys::rite_binary_header>();

@@ -39,9 +39,22 @@ where
         .map_err(|payload| Error::Panic(crate::error::panic_message(payload)))
 }
 
+/// Read the raw `mrb_value` out of any typed handle — magnus's
+/// `rb_sys::AsRawValue`, over every `ReprValue`.
+pub trait AsRawValue: Copy {
+    /// The raw value this handle stands for.
+    fn as_raw(self) -> mrb_value;
+}
+
+impl<T: crate::ReprValue> AsRawValue for T {
+    #[inline]
+    fn as_raw(self) -> mrb_value {
+        self.as_value().0
+    }
+}
+
 /// Cross a raw `mrb_value` back into its typed form — magnus's
-/// `rb_sys::FromRawValue`. The reading direction needs no trait: a typed
-/// handle answers its raw form through its own `as_raw`.
+/// `rb_sys::FromRawValue`.
 pub trait FromRawValue {
     /// Wrap `value` as the typed form it carries.
     ///

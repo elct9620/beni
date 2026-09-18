@@ -16,7 +16,7 @@
 //! interpreter holds, so releasing one clears that slot and leaves every
 //! other slot — including another root over the same value — standing.
 
-use crate::{Array, FromValue as _};
+use crate::{sys::AsRawValue, Array, FromValue as _, ReprValue};
 use crate::{Error, Mrb, Value};
 use beni_sys as sys;
 

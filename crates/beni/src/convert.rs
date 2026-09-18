@@ -20,7 +20,8 @@
 //! rather than borrowing VM storage.
 
 use crate::{
-    sys, Array, ExceptionClass, Hash, Mrb, Proc, RClass, RModule, RString, Range, Symbol, Value,
+    sys, Array, ExceptionClass, Hash, Mrb, Proc, RClass, RModule, RString, Range, ReprValue,
+    Symbol, Value,
 };
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
@@ -238,22 +239,22 @@ impl IntoValue for Range {
 
 impl IntoValue for RClass {
     #[inline]
-    fn into_value(self, mrb: &Mrb) -> Value {
-        self.to_value(mrb)
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self.as_value()
     }
 }
 
 impl IntoValue for RModule {
     #[inline]
-    fn into_value(self, mrb: &Mrb) -> Value {
-        self.to_value(mrb)
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self.as_value()
     }
 }
 
 impl IntoValue for ExceptionClass {
     #[inline]
-    fn into_value(self, mrb: &Mrb) -> Value {
-        self.to_value(mrb)
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        self.as_value()
     }
 }
 

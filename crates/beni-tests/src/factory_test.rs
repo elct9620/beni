@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 
 #[test]
 fn str_factories_roundtrip_their_bytes() {

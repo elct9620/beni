@@ -18,7 +18,7 @@
 //! data type, or a non-data value, yields `None` rather than a misread
 //! pointer.
 
-use crate::{Error, Mrb, RClass, Value};
+use crate::{sys::AsRawValue, Error, Mrb, RClass, Value};
 use beni_sys as sys;
 use core::marker::PhantomData;
 
@@ -202,7 +202,7 @@ impl Value {
         // SAFETY: `mrb` is alive; `self` originates from the same
         // VM. `mrb_data_check_get_ptr` returns NULL unless `self`
         // carries exactly `ty`'s data type.
-        let ptr = unsafe { sys::mrb_data_check_get_ptr(mrb.as_ptr(), self.into_raw(), ty.as_raw()) }
+        let ptr = unsafe { sys::mrb_data_check_get_ptr(mrb.as_ptr(), self.as_raw(), ty.as_raw()) }
             as *const T;
         if ptr.is_null() {
             None
@@ -237,7 +237,7 @@ impl Value {
             // as `_mrb`; `ptr` is a freshly leaked `Box<T>` handed to
             // mruby, which releases it via `ty`'s release hook; `ty` is
             // `'static`, so its descriptor outlives the carrier.
-            unsafe { sys::mrb_data_init(self.into_raw(), ptr, ty.as_raw()) };
+            unsafe { sys::mrb_data_init(self.as_raw(), ptr, ty.as_raw()) };
         }
     }
 }

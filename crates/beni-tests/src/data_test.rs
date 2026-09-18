@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 use beni::{DataType, FromValue, IntoValue};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -348,7 +349,7 @@ fn marking_refuses_an_exception_class_so_its_instances_stay_exceptions() {
             .set_instance_data_tt(&mrb)
             .expect_err("an exception class must refuse the mark");
         assert_mark_refused(&mrb, err);
-        let still = <beni::ExceptionClass as beni::FromValue>::from_value(class.to_value(&mrb))
+        let still = <beni::ExceptionClass as beni::FromValue>::from_value(class.as_value())
             .expect("the refused class is still an exception class");
         assert!(still.exc_new(&mrb, "still an exception").is_exception());
     }

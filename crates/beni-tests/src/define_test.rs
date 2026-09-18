@@ -1,4 +1,5 @@
 use crate::support::{open_mrb, same_object};
+use beni::prelude::*;
 use beni::{FromValue, IntoValue, Module, Mrb, Value};
 
 fn answer_seven(_mrb: &Mrb, _self: Value) -> i32 {
@@ -90,12 +91,12 @@ fn module_new_takes_its_name_from_the_constant_it_is_assigned_to() {
     // assignment is what gives it a name.
     let module = mrb.module_new();
     mrb.object_class()
-        .to_value(&mrb)
+        .as_value()
         .const_set(
             &mrb,
             mrb.intern_cstr(c"BeniBoundModule")
                 .expect("the name interns"),
-            module.to_value(&mrb),
+            module.as_value(),
         )
         .expect("assigning the module to a constant must succeed");
 
@@ -306,7 +307,7 @@ fn define_class_fetches_a_prepended_class_as_itself() {
         .define_class(c"BeniPrepended", mrb.object_class())
         .expect("the same superclass must fetch the bound class");
     assert!(same_object(&mrb, fetched, before));
-    assert!(fetched.to_value(&mrb).is_class());
+    assert!(fetched.as_value().is_class());
 
     let ns = mrb
         .module_get(c"BeniPrependNs")
@@ -314,7 +315,7 @@ fn define_class_fetches_a_prepended_class_as_itself() {
     let inner = ns
         .define_class(&mrb, c"Inner", mrb.object_class())
         .expect("the same superclass must fetch the nested class");
-    assert!(inner.to_value(&mrb).is_class());
+    assert!(inner.as_value().is_class());
     let unchanged = mrb
         .load_string(b"BeniPrependNs::Inner.equal?($beni_inner_before)")
         .expect("reading the constant back must succeed");

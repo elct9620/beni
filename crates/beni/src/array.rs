@@ -11,7 +11,7 @@
 //! `entry`) live here. Named-value constructors that magnus places on
 //! the type itself stay there too (`Symbol::new`).
 
-use crate::{Error, Mrb, RString, Value};
+use crate::{sys::AsRawValue, Error, Mrb, RString, ReprValue, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
@@ -21,10 +21,10 @@ use beni_sys as sys;
 /// `FromValue` downcast (`Array::from_value`, tag-discriminated), or
 /// `Array::from_value_unchecked` (assert that a `Value` you
 /// already hold is Array-tagged). Round-trip back to a generic
-/// `Value` via `Array::as_value` for APIs that take any value.
+/// `Value` via `ReprValue::as_value` for APIs that take any value.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Array(Value);
+pub struct Array(pub(crate) Value);
 
 impl Array {
     /// Wrap a `Value` that the caller has already determined to be
@@ -39,20 +39,6 @@ impl Array {
     #[inline]
     pub unsafe fn from_value_unchecked(v: Value) -> Self {
         Self(v)
-    }
-
-    /// Reify as a generic `Value` for APIs that accept any value.
-    #[inline]
-    pub fn as_value(self) -> Value {
-        self.0
-    }
-
-    /// Borrow the inner `mrb_value` for raw FFI calls that have not
-    /// yet migrated. Same conversion ladder as
-    /// `Value::as_raw`.
-    #[inline]
-    pub fn as_raw(self) -> sys::mrb_value {
-        self.0.as_raw()
     }
 
     /// `mrb_ary_push(mrb, self, val)` — append `val`, the way Ruby's

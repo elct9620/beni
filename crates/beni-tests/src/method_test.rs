@@ -1,3 +1,4 @@
+use beni::prelude::*;
 use beni::{Error, FromValue, IntoValue, Mrb, RString, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 

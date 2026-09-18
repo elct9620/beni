@@ -1,4 +1,5 @@
 use crate::support::{open_mrb, same_object};
+use beni::prelude::*;
 use beni::{Array, ExceptionClass, FromValue, Hash, IntoValue, RClass, RModule, RString, Value};
 
 // Boxes through mruby's generic `mrb_int_value` / `mrb_float_value`
@@ -361,4 +362,20 @@ fn an_f32_converts_under_every_configured_float_width() {
     let boxed = 1.5f32.into_value(&mrb);
     assert!(boxed.is_float());
     assert_eq!(f64::from_value(boxed), Some(1.5));
+}
+
+#[test]
+fn a_class_handle_reads_out_as_its_value_and_crosses_back_through_the_downcast() {
+    let mrb = open_mrb();
+    let object = mrb.object_class();
+
+    // The raw form of a class handle is its class value, and that value
+    // is the way back in: crossed as a value, downcast to the handle.
+    let raw = beni::sys::AsRawValue::as_raw(object);
+    // SAFETY: `raw` came from a class `mrb` holds.
+    let value = unsafe { <Value as beni::sys::FromRawValue>::from_raw(raw) };
+    let back = RClass::from_value(value).expect("a class value downcasts to its class");
+
+    assert!(same_object(&mrb, back, object));
+    assert!(value.obj_equal(&mrb, object.as_value()));
 }

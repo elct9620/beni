@@ -7,83 +7,8 @@
 //! behavior. Typed operations run their raising mruby calls here, and so
 //! does the public `beni::sys::protect`.
 
-use crate::{
-    Array, Error, ExceptionClass, Hash, Mrb, RClass, RModule, RString, Range, Symbol, Value,
-};
+use crate::{sys::AsRawValue, Error, Mrb, ReprValue, Value};
 use beni_sys as sys;
-
-/// A typed handle that rides through the protect frame as the `Value` it
-/// boxes and is unwrapped unchecked on the way out — magnus's `ReprValue`,
-/// the carrier its crate-private `protect` is generic over. mruby's
-/// protected body answers only an `mrb_value`, so a body producing a class
-/// pointer or a symbol id hands back the handle that boxes it.
-pub(crate) trait ReprValue: Copy {
-    /// Box `self` as the `Value` it stands for.
-    fn as_value(self) -> Value;
-
-    /// Unwrap `v` as `Self` without checking its tag.
-    ///
-    /// # Safety
-    ///
-    /// `v` must be a value `Self::as_value` produced.
-    unsafe fn from_value_unchecked(v: Value) -> Self;
-}
-
-impl ReprValue for Value {
-    fn as_value(self) -> Value {
-        self
-    }
-
-    unsafe fn from_value_unchecked(v: Value) -> Self {
-        v
-    }
-}
-
-/// The handles that are a tagged `Value` underneath already carry both
-/// directions as inherent methods.
-macro_rules! value_backed_repr {
-    ($($handle:ty),*) => {$(
-        impl ReprValue for $handle {
-            fn as_value(self) -> Value {
-                <$handle>::as_value(self)
-            }
-
-            unsafe fn from_value_unchecked(v: Value) -> Self {
-                // SAFETY: forwarded from the caller.
-                unsafe { <$handle>::from_value_unchecked(v) }
-            }
-        }
-    )*};
-}
-
-value_backed_repr!(Symbol, RString, Array, Hash, Range);
-
-/// The class handles hold the `RClass *` itself, boxed with
-/// `mrb_obj_value` and recovered with the class-pointer unbox.
-macro_rules! class_backed_repr {
-    ($($handle:ty => $from_raw:path),*) => {$(
-        impl ReprValue for $handle {
-            fn as_value(self) -> Value {
-                // SAFETY: `mrb_obj_value` only boxes the pointer.
-                Value::from_raw_unchecked(unsafe {
-                    sys::mrb_obj_value(self.as_internal() as *mut core::ffi::c_void)
-                })
-            }
-
-            unsafe fn from_value_unchecked(v: Value) -> Self {
-                // SAFETY: `v` boxes a class pointer, by the caller's
-                // contract.
-                $from_raw(unsafe { v.as_class_ptr() })
-            }
-        }
-    )*};
-}
-
-class_backed_repr!(
-    RClass => RClass::from_raw_unchecked,
-    RModule => RModule::from_raw_unchecked,
-    ExceptionClass => ExceptionClass::from_raw_unchecked
-);
 
 impl Mrb {
     /// `mrb_protect_error(mrb, body, userdata, &error)` — run `body`
@@ -134,7 +59,7 @@ impl Mrb {
                 unreachable!("Mrb::protect trampoline invoked twice")
             };
             let mrb_ref = unsafe { Mrb::borrow_raw(&mrb) };
-            body(mrb_ref).as_value().into_raw()
+            body(mrb_ref).as_value().as_raw()
         }
 
         let mut error: sys::mrb_bool = false;
@@ -157,7 +82,7 @@ impl Mrb {
         } else {
             // SAFETY: with no raise, `value` is what the trampoline boxed
             // from the body's `T`.
-            Ok(unsafe { T::from_value_unchecked(value) })
+            Ok(unsafe { <T as crate::value::private::ReprValue>::from_value_unchecked(value) })
         }
     }
 }

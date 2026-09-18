@@ -22,7 +22,7 @@
 //! `crate::RClass` / `crate::RModule`. Global variable access is a
 //! plain table operation that cannot raise.
 
-use crate::{Error, ExceptionClass, IntoId, Mrb, RClass, RModule, Value};
+use crate::{sys::AsRawValue, Error, ExceptionClass, IntoId, Mrb, RClass, RModule, Value};
 use beni_sys as sys;
 
 impl Mrb {

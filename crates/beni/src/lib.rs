@@ -69,6 +69,12 @@ pub mod hash;
 pub mod method;
 pub mod parse;
 pub mod proc;
+
+/// The traits whose methods the typed handles are used through, imported
+/// anonymously — magnus's `prelude`: `use beni::prelude::*;`.
+pub mod prelude {
+    pub use crate::{FromValue as _, Module as _, Object as _, ReprValue as _};
+}
 pub mod range;
 pub mod state;
 pub mod string;
@@ -99,7 +105,7 @@ pub use range::{Range, RangeBegLen};
 pub use string::RString;
 pub use symbol::{Id, IntoId, Symbol};
 pub use value::cstr_ptr;
-pub use value::{Break, Value};
+pub use value::{Break, ReprValue, Value};
 
 /// Typed counterpart of `sys::mrb_func_t` using the `Value` newtype
 /// for the receiver and return slots. `Value` is

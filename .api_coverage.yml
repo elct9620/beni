@@ -256,7 +256,7 @@ typed:
   mrb_obj_is_kind_of: "`Value::is_kind_of`, `Error::is_kind_of`"
   mrb_obj_new: RClass::obj_new
   mrb_obj_to_sym: "`Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path"
-  mrb_obj_value: "`RClass::to_value`, `RModule::to_value`, `ExceptionClass::to_value`, `RClass::data_wrap`"
+  mrb_obj_value: "`ReprValue::as_value` on `RClass`, `RModule`, and `ExceptionClass`, `RClass::data_wrap`"
   mrb_open: Mrb::open
   mrb_prepend_module: Module::prepend_module
   mrb_protect_error: sys::protect
@@ -400,15 +400,21 @@ extensions:
     `Module::define_error` compose `mrb_define_class_id` /
     `mrb_define_class_under_id` with an exception-class superclass. Binds no
     new C symbol.
-  sys::FromRawValue / sys::FromRawId / sys::AsRawId: >-
-    The `unsafe` crossings of a raw `mrb_value` or interned id back into
-    their typed forms, and the safe read of the id back out of an `Id`,
-    beside the raw bindings as magnus's `rb_sys` traits are. A value handle
-    answers its raw form through its own `as_raw`, which a `ReprValue`
-    equivalent would one day unify the way magnus's `AsRawValue` does. A class
-    pointer has no crossing of its own, as in magnus: a class handle's raw
-    form is its value, and a raw pointer crosses boxed as a value through the
-    checked downcast.
+  sys::AsRawValue / sys::FromRawValue / sys::AsRawId / sys::FromRawId: >-
+    The raw seam as magnus's `rb_sys` traits carry it, beside the raw
+    bindings: the safe read of a raw `mrb_value` out of any `ReprValue`
+    handle or of the id out of an `Id`, and the `unsafe` crossings back into
+    `Value` and `Id`. A class pointer has no crossing of its own, as in
+    magnus: a class handle's raw form is its value, and a raw pointer crosses
+    boxed as a value through the checked downcast. Binds no C symbol.
+  ReprValue: >-
+    Sealed trait over every typed handle that stands for a value, magnus's
+    `ReprValue`: `as_value` answers that value — a class handle boxing its
+    class through `mrb_obj_value` — and `sys::AsRawValue` reads the raw form
+    out of any of them. Binds no C symbol of its own.
+  prelude: >-
+    magnus's `prelude`: the method-carrying traits (`ReprValue`, `Module`,
+    `Object`, `FromValue`) imported anonymously in one line.
   sys::catch_unwind: >-
     Panic boundary for a Rust closure handed to mruby as a C callback,
     magnus's `rb_sys::catch_unwind`: runs the closure under

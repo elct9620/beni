@@ -1,4 +1,5 @@
 use crate::support::{open_mrb, same_object};
+use beni::prelude::*;
 use beni::state::args::format;
 use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, Symbol, Value};
 

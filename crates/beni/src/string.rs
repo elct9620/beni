@@ -11,7 +11,7 @@
 //! (`str_new`, `str_new_cstr`), per-string ops (`cat`, `as_bytes`,
 //! `to_bytes`) live here.
 
-use crate::{Error, Mrb, Value};
+use crate::{sys::AsRawValue, Error, Mrb, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `String`. `#[repr(transparent)]` over
@@ -21,11 +21,11 @@ use beni_sys as sys;
 /// the checked `FromValue` downcast (`RString::from_value`,
 /// tag-discriminated), or `RString::from_value_unchecked` (assert that
 /// a `Value` you already hold is String-tagged). Round-trip back to a
-/// generic `Value` via `RString::as_value` for APIs that take any
+/// generic `Value` via `ReprValue::as_value` for APIs that take any
 /// value.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct RString(Value);
+pub struct RString(pub(crate) Value);
 
 impl RString {
     /// Wrap a `Value` that the caller has already determined to be
@@ -40,19 +40,6 @@ impl RString {
     #[inline]
     pub unsafe fn from_value_unchecked(v: Value) -> Self {
         Self(v)
-    }
-
-    /// Reify as a generic `Value` for APIs that accept any value.
-    #[inline]
-    pub fn as_value(self) -> Value {
-        self.0
-    }
-
-    /// Borrow the inner `mrb_value` for raw FFI calls that have not yet
-    /// migrated. Same conversion ladder as `Value::as_raw`.
-    #[inline]
-    pub fn as_raw(self) -> sys::mrb_value {
-        self.0.as_raw()
     }
 
     /// `mrb_str_cat(mrb, self, p, len)` — append `bytes` to this string

@@ -37,7 +37,7 @@
 //! because the expansion nests it inside an `extern "C" fn`.
 
 use crate::state::args::read_frame;
-use crate::{Error, FromValue, IntoValue, Mrb, Value};
+use crate::{sys::AsRawValue, Error, FromValue, IntoValue, Mrb, Value};
 use beni_sys as sys;
 
 /// Bridge + arity pair produced by the `method!` macro and
@@ -183,7 +183,7 @@ unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
     // SAFETY: bridge frame — forwarded from the caller.
     // `mrb_exc_raise` is declared as never returning and the binding
     // carries that, so it satisfies the diverging signature.
-    unsafe { sys::mrb_exc_raise(mrb.as_ptr(), exc.into_raw()) }
+    unsafe { sys::mrb_exc_raise(mrb.as_ptr(), exc.as_raw()) }
 }
 
 /// Wrap the conversion + body pipeline in the panic boundary and

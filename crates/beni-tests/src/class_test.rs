@@ -1,4 +1,5 @@
 use crate::support::{open_mrb, same_object};
+use beni::prelude::*;
 use beni::{Error, FromValue, IntoId, IntoValue, Module, Mrb, Object, RClass, Value};
 
 /// Registration target answering a fixed Integer for the trait
@@ -56,7 +57,7 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
     assert_eq!(unsafe { got.unbox_integer() }, 7);
 
     let const_val = fetched
-        .to_value(&mrb)
+        .as_value()
         .const_get(&mrb, mrb.intern_cstr(c"ANSWER").expect("the name interns"))
         .expect("the Symbol-keyed constant must read by name");
     assert_eq!(unsafe { const_val.unbox_integer() }, 7);
@@ -113,7 +114,7 @@ fn symbol_key_registers_private_singleton_and_module_function() {
         .expect("the Symbol-keyed private method must be reachable via funcall");
     assert_eq!(unsafe { private.unbox_integer() }, 7);
     let singleton = class
-        .to_value(&mrb)
+        .as_value()
         .funcall(&mrb, c"klass_answer", &[])
         .expect("the Symbol-keyed singleton method must be callable");
     assert_eq!(unsafe { singleton.unbox_integer() }, 9);
@@ -456,7 +457,7 @@ fn module_and_object_traits_register_methods() {
     class
         .define_singleton_method(&mrb, c"class_answer", beni::method!(answer_nine, 0))
         .expect("registering the singleton method must succeed");
-    let class_value = class.to_value(&mrb);
+    let class_value = class.as_value();
     let got = class_value
         .funcall(&mrb, c"class_answer", &[])
         .expect("the registered class method must not raise");
@@ -832,7 +833,7 @@ fn undef_singleton_method_marks_a_class_method_undefined() {
         .expect("registering the class method must succeed");
 
     // The class method responds before undefinition.
-    let class_value = class.to_value(&mrb);
+    let class_value = class.as_value();
     let got = class_value
         .funcall(&mrb, c"class_answer", &[])
         .expect("the class method must be callable before undefinition");
@@ -1111,7 +1112,7 @@ fn a_rust_string_key_names_its_bytes_past_an_embedded_nul() {
 
     let whole = mrb.intern(b"BENI\0TAIL").expect("the whole name interns");
     let prefix = mrb.intern(b"BENI").expect("the prefix interns");
-    let namespace = object.to_value(&mrb);
+    let namespace = object.as_value();
     assert!(namespace.const_defined_at(&mrb, whole));
     assert!(!namespace.const_defined_at(&mrb, prefix));
 }

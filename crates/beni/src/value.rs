@@ -27,8 +27,8 @@
 //! that layout and the C ABI. This matters at the `mrb_func_t` boundary:
 //! a bridge declared with `Value` parameters and return type
 //! produces the same function signature as one declared with
-//! `mrb_value`. Round-tripping through `Value::from_raw` /
-//! `Value::into_raw` is therefore a no-op at the codegen level.
+//! `mrb_value`. Crossing through `sys::FromRawValue` and reading back
+//! through `sys::AsRawValue` is therefore a no-op at the codegen level.
 //!
 //! ## What lives next to `Value` here
 //!
@@ -42,7 +42,7 @@
 
 use beni_sys as sys;
 
-use crate::{Error, Module, Mrb, RClass};
+use crate::{sys::AsRawValue, Error, Module, Mrb, RClass};
 use crate::{FromValue, RString};
 
 /// Compile-time NUL-terminated C-string literal pointer.
@@ -121,12 +121,10 @@ impl Immediates {
 /// Typed handle on a single mruby value. `#[repr(transparent)]` over
 /// `mrb_value` so the C ABI is preserved.
 ///
-/// Construct via `Value::from_raw` (at FFI boundaries),
+/// Construct via `sys::FromRawValue` (at FFI boundaries),
 /// `Value::nil` / `Value::true_` / `Value::false_` (immediates),
 /// `IntoValue` (a Rust integer, bool, or handle), or `Value::from_float`.
-/// Round-trip back to the raw type via `Value::as_raw` /
-/// `Value::into_raw` when calling raw FFI that has not yet been
-/// migrated.
+/// Read the raw form back out through `sys::AsRawValue` for a raw call.
 ///
 /// ## What is intentionally NOT here
 ///
@@ -164,6 +162,100 @@ impl core::fmt::Debug for Value {
     }
 }
 
+/// A typed handle that stands for a `Value` — magnus's `ReprValue`.
+/// Sealed: the handles this crate defines are the only ones, which is
+/// what lets `sys::AsRawValue` read any of them out and lets the
+/// crate's protected frame hand one back unwrapped.
+pub trait ReprValue: private::ReprValue {
+    /// The `Value` this handle stands for. A class handle boxes its
+    /// class as mruby's `mrb_obj_value` does, touching no interpreter.
+    fn as_value(self) -> Value;
+}
+
+pub(crate) mod private {
+    use crate::Value;
+
+    /// The unchecked unwrap sealing `ReprValue` to this crate.
+    pub trait ReprValue: Copy {
+        /// Unwrap `v` as `Self` without checking its tag.
+        ///
+        /// # Safety
+        ///
+        /// `v` must be a value `Self::as_value` produced.
+        unsafe fn from_value_unchecked(v: Value) -> Self;
+    }
+}
+
+impl ReprValue for Value {
+    #[inline]
+    fn as_value(self) -> Value {
+        self
+    }
+}
+
+impl private::ReprValue for Value {
+    #[inline]
+    unsafe fn from_value_unchecked(v: Value) -> Self {
+        v
+    }
+}
+
+/// The handles that are a tagged `Value` underneath.
+macro_rules! value_backed_repr {
+    ($($handle:ty),*) => {$(
+        impl ReprValue for $handle {
+            #[inline]
+            fn as_value(self) -> Value {
+                self.0
+            }
+        }
+
+        impl private::ReprValue for $handle {
+            #[inline]
+            unsafe fn from_value_unchecked(v: Value) -> Self {
+                // SAFETY: forwarded from the caller.
+                unsafe { <$handle>::from_value_unchecked(v) }
+            }
+        }
+    )*};
+}
+
+value_backed_repr!(
+    crate::Array,
+    crate::Hash,
+    crate::Proc,
+    crate::Range,
+    crate::RString,
+    crate::Symbol
+);
+
+/// The class handles hold the `RClass *` itself, boxed with
+/// `mrb_obj_value` and recovered with the class-pointer unbox.
+macro_rules! class_backed_repr {
+    ($($handle:ty),*) => {$(
+        impl ReprValue for $handle {
+            #[inline]
+            fn as_value(self) -> Value {
+                // SAFETY: `mrb_obj_value` only boxes the pointer.
+                Value::from_raw_unchecked(unsafe {
+                    sys::mrb_obj_value(self.as_internal() as *mut core::ffi::c_void)
+                })
+            }
+        }
+
+        impl private::ReprValue for $handle {
+            #[inline]
+            unsafe fn from_value_unchecked(v: Value) -> Self {
+                // SAFETY: `v` boxes a class pointer, by the caller's
+                // contract.
+                <$handle>::from_raw_unchecked(unsafe { v.as_class_ptr() })
+            }
+        }
+    )*};
+}
+
+class_backed_repr!(crate::RClass, crate::RModule, crate::ExceptionClass);
+
 impl Value {
     /// Wrap a raw `mrb_value` the caller has established this VM
     /// produced. The public crossing is `sys::FromRawValue::from_raw`,
@@ -171,24 +263,6 @@ impl Value {
     #[inline]
     pub(crate) const fn from_raw_unchecked(v: sys::mrb_value) -> Self {
         Self(v)
-    }
-
-    /// Borrow the inner `mrb_value` for raw FFI calls. Use this when
-    /// passing the value through an as-yet-unmigrated `extern "C" fn`
-    /// parameter. The wrapper itself stays usable after the borrow
-    /// (`Value: Copy`).
-    #[inline]
-    pub const fn as_raw(self) -> sys::mrb_value {
-        self.0
-    }
-
-    /// Consume and return the inner `mrb_value`. Identical to
-    /// `Value::as_raw` semantically — `Value: Copy` makes the move
-    /// vs. borrow distinction immaterial — but reads cleaner at the
-    /// final return statement of a bridge function.
-    #[inline]
-    pub const fn into_raw(self) -> sys::mrb_value {
-        self.0
     }
 
     /// All-zero `Value`. Under word boxing this matches

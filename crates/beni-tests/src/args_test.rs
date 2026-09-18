@@ -1,5 +1,6 @@
 use crate::support::open_mrb;
 use beni::format::{Io, Kw, NRest, NRestKwBlock, Rest, RestBlock, Str, S};
+use beni::prelude::*;
 use beni::{Error, IntoValue, Mrb, Value};
 
 /// Registered through `beni::method!(rest_count, -1)`: reads the rest

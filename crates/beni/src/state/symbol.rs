@@ -4,7 +4,7 @@
 //! borrowed byte slice, or an `mrb_value` String — into the `Id` it
 //! interns to, and read an id's name back out.
 
-use crate::{Error, Id, Mrb, Symbol, Value};
+use crate::{sys::AsRawValue, Error, Id, Mrb, Symbol, Value};
 use beni_sys as sys;
 
 impl Mrb {

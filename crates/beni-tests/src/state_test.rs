@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 
 #[test]
 fn open_boots_and_closes_a_live_interpreter() {

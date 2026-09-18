@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_hash.rs`: factories live on `Ruby` /
 //! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
 
-use crate::{Array, Error, Mrb, Value};
+use crate::{sys::AsRawValue, Array, Error, Mrb, Value};
 use beni_sys as sys;
 
 /// Signal a `Hash::each` closure returns to steer the walk. Mirrors
@@ -30,10 +30,10 @@ pub enum ForEach {
 /// `FromValue` downcast (`Hash::from_value`, tag-discriminated), or
 /// `Hash::from_value_unchecked` (assert that a `Value` you
 /// already hold is Hash-tagged). Round-trip back to a generic
-/// `Value` via `Hash::as_value` for APIs that take any value.
+/// `Value` via `ReprValue::as_value` for APIs that take any value.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Hash(Value);
+pub struct Hash(pub(crate) Value);
 
 impl Hash {
     /// Wrap a `Value` that the caller has already determined to be
@@ -47,19 +47,6 @@ impl Hash {
     #[inline]
     pub unsafe fn from_value_unchecked(v: Value) -> Self {
         Self(v)
-    }
-
-    /// Reify as a generic `Value` for APIs that accept any value.
-    #[inline]
-    pub fn as_value(self) -> Value {
-        self.0
-    }
-
-    /// Borrow the inner `mrb_value` for raw FFI calls that have not
-    /// yet migrated.
-    #[inline]
-    pub fn as_raw(self) -> sys::mrb_value {
-        self.0.as_raw()
     }
 
     /// `mrb_hash_set(mrb, self, key, val)` — assign `key => val`.

@@ -58,7 +58,7 @@ pub mod root;
 pub mod symbol;
 pub mod user_data;
 
-use crate::{Error, RClass, Value};
+use crate::{sys::AsRawValue, Error, RClass, Value};
 use beni_sys as sys;
 use core::ptr::NonNull;
 
@@ -248,7 +248,7 @@ impl Mrb {
         // RObject pointer carried by the value; the assignment installs
         // it as the new pending exception, replacing whatever sat in
         // the slot.
-        let obj_ptr = unsafe { sys::mrb_obj_ptr_func(exc.into_raw()) };
+        let obj_ptr = unsafe { sys::mrb_obj_ptr_func(exc.as_raw()) };
         unsafe { (*self.state.as_ptr()).exc = obj_ptr };
     }
 

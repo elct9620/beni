@@ -9,7 +9,7 @@
 //! `Symbol` downcast lives on `FromValue`, the boxing on `IntoValue`,
 //! alongside the other conversions.
 
-use crate::{Error, Mrb, Value};
+use crate::{sys::AsRawValue, Error, Mrb, Value};
 use beni_sys as sys;
 
 /// An interned symbol id — magnus's `Id`. Compares and hashes by the id,
@@ -46,7 +46,7 @@ impl Id {
 /// tag-discriminated), or `Symbol::from_value_unchecked`.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Symbol(Value);
+pub struct Symbol(pub(crate) Value);
 
 impl From<Id> for Symbol {
     /// Box the id through mruby's boxing-agnostic `mrb_symbol_value`
@@ -119,19 +119,6 @@ impl Symbol {
     #[inline]
     pub unsafe fn from_value_unchecked(v: Value) -> Self {
         Self(v)
-    }
-
-    /// Reify as a generic `Value` for APIs that accept any value.
-    #[inline]
-    pub fn as_value(self) -> Value {
-        self.0
-    }
-
-    /// Borrow the inner `mrb_value` for raw FFI calls that have not
-    /// yet migrated.
-    #[inline]
-    pub fn as_raw(self) -> sys::mrb_value {
-        self.0.as_raw()
     }
 
     /// Intern `name` and symbolize it. Counterpart to magnus's

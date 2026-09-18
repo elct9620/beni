@@ -10,7 +10,7 @@
 //! `mrb.ary_push(arr, x)`). `range_new` is the one factory that can
 //! raise — comparing incomparable bounds — so it returns a `Result`.
 
-use crate::{Array, Error, Hash, Mrb, RString, Range, Value};
+use crate::{sys::AsRawValue, Array, Error, Hash, Mrb, RString, Range, Value};
 use beni_sys as sys;
 
 impl Mrb {

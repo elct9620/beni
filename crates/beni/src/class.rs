@@ -30,7 +30,7 @@
 //! surfaces as `Err(Error::Exception)` instead of long-jumping across
 //! Rust frames.
 
-use crate::{Error, IntoId, MethodDef, Mrb, RString, Value};
+use crate::{sys::AsRawValue, Error, IntoId, MethodDef, Mrb, RString, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby class. `#[repr(transparent)]` over
@@ -261,22 +261,6 @@ impl RClass {
         RClass::from_raw_unchecked(unsafe { sys::mrb_class_real(self.0) })
     }
 
-    /// `mrb_obj_value(self)` — the `Value` naming this class, for the
-    /// value-level APIs (constants, dispatch, singleton class) that take
-    /// any value. Raises nothing and runs no Ruby.
-    ///
-    /// Named `to_value`, not `as_value`: `RClass` wraps a `*mut RClass`
-    /// pointer, so the value is boxed through mruby's `mrb_obj_value`
-    /// rather than read out of a field the way the `Value`-newtype
-    /// handles (`Array` / `Symbol` / `Proc`) expose it as `as_value`.
-    #[inline]
-    pub fn to_value(self, _mrb: &Mrb) -> Value {
-        // SAFETY: `self` names a class of this VM — the pairing every
-        // handle method relies on; `mrb_obj_value` only boxes the
-        // pointer.
-        Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
-    }
-
     /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
     /// a new instance of this class, running `initialize` with `args`.
     /// Surfaces an `Err` when `initialize` raises. Mirrors `magnus`'s
@@ -316,15 +300,6 @@ impl RModule {
     pub(crate) const fn as_internal(self) -> *mut sys::RClass {
         self.0
     }
-
-    /// `mrb_obj_value(self)` — the `Value` naming this module; the
-    /// counterpart of `RClass::to_value`. Raises nothing and runs no
-    /// Ruby.
-    #[inline]
-    pub fn to_value(self, _mrb: &Mrb) -> Value {
-        // SAFETY: as `RClass::to_value`.
-        Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
-    }
 }
 
 impl ExceptionClass {
@@ -347,15 +322,6 @@ impl ExceptionClass {
     #[inline]
     pub const fn as_r_class(self) -> RClass {
         RClass(self.0)
-    }
-
-    /// `mrb_obj_value(self)` — the `Value` naming this exception class;
-    /// the counterpart of `RClass::to_value`. Raises nothing and runs no
-    /// Ruby.
-    #[inline]
-    pub fn to_value(self, _mrb: &Mrb) -> Value {
-        // SAFETY: as `RClass::to_value`.
-        Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
     }
 
     /// `mrb_raise(mrb, self, msg)` — raise an exception of this class

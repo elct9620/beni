@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 use beni::{FromValue, Mrb, RString};
 
 /// Current arena index — mruby's save helper only reads it.

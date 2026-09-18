@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_range.rs`: the `range_new` factory lives on
 //! `Mrb`, the begin / end / exclusive-end reads live here.
 
-use crate::{Error, Mrb, Value};
+use crate::{sys::AsRawValue, Error, Mrb, Value};
 use beni_sys as sys;
 
 /// The three-way outcome of `Range::beg_len` — the normalized slice a
@@ -42,10 +42,10 @@ pub enum RangeBegLen {
 /// `FromValue` downcast (`Range::from_value`, tag-discriminated), or
 /// `Range::from_value_unchecked` (assert that a `Value` you already
 /// hold is Range-tagged). Round-trip back to a generic `Value` via
-/// `Range::as_value` for APIs that take any value.
+/// `ReprValue::as_value` for APIs that take any value.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Range(Value);
+pub struct Range(pub(crate) Value);
 
 impl Range {
     /// Wrap a `Value` that the caller has already determined to be
@@ -60,19 +60,6 @@ impl Range {
     #[inline]
     pub unsafe fn from_value_unchecked(v: Value) -> Self {
         Self(v)
-    }
-
-    /// Reify as a generic `Value` for APIs that accept any value.
-    #[inline]
-    pub fn as_value(self) -> Value {
-        self.0
-    }
-
-    /// Borrow the inner `mrb_value` for raw FFI calls that have not yet
-    /// migrated. Same conversion ladder as `Value::as_raw`.
-    #[inline]
-    pub fn as_raw(self) -> sys::mrb_value {
-        self.0.as_raw()
     }
 
     /// `mrb_range_beg(mrb, self)` — the begin value, Ruby's

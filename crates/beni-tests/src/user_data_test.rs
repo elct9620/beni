@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 use beni::{FromValue, Module, Mrb, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
