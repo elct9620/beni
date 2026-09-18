@@ -249,9 +249,9 @@ Selection, checksums, and cross-compile activation:
   integer-width metadata and the float-width metadata, both read from the
   bindings the build uses — the discovered archive's own, or the
   documentation bindings in a documentation build. Bindings that declare
-  no integer width fail the build, as do bindings that declare no float:
-  an archive built without floating point is outside what the crates
-  support.
+  no integer width fail the build, as do bindings of an archive
+  configured outside what the crates support: one built without floating
+  point, or one whose GC arena has a fixed size.
 - A documentation build reads the documentation bindings and links
   nothing, so the whole typed surface renders where no archive can be
   staged. It serves host cargo targets only, and it is the one build
@@ -1220,7 +1220,7 @@ The `compiler` capability feature carries everything in this section.
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails |
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root |
 | The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has |
-| Bindings a `beni-sys` build uses that declare no integer width, or no float | `beni-sys` build fails and names the bindings it read |
+| Bindings a `beni-sys` build uses that declare no integer width, no float, or a fixed-size GC arena | `beni-sys` build fails and names the bindings it read |
 | A `beni` build that receives no integer-width metadata or no float-width metadata | `beni` build fails and names the metadata it expected |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | An exception raised by a raw binding inside a `sys::protect` body | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle; never unwinds past the caller |
