@@ -30,9 +30,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_alloca` | macro | ❌ | 🚫 | declined: VM scratch allocator, a `#define` over `mrb_temp_alloc` — see `mrb_malloc` |
 | `mrb_any_to_s` | fn | ✅ | ✅ | `Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::obj_as_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly |
 | `mrb_argnum_error` | fn | ✅ | ✅ | `Error::argnum` |
-| `mrb_as_float` | macro | ✅ | ✅ | `Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast |
+| `mrb_as_float` | macro | ✅ | ✅ | `Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast. Answers `f64`, which holds every configured float width |
 | `mrb_as_int` | macro | ✅ | ✅ | `Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast |
-| `mrb_attr_get` | fn | ✅ | ✅ | `Value::iv_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `iv_get` already takes a raw `mrb_sym`, so it yields an identical value for every key a typed caller can form and no separate item is needed |
+| `mrb_attr_get` | fn | ✅ | ✅ | `Value::iv_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `iv_get` takes the same symbol-or-name key with the same absence of validation, so it yields an identical value for every key a typed caller can form and no separate item is needed |
 | `mrb_basic_alloc_func` | fn | ✅ | 🚫 | declined: the default allocator `mrb_open_allocf` installs; `Mrb::open` opens with `mrb_open`, so no typed caller reaches it |
 | `mrb_block_given_p` | fn | ✅ | ✅ | `Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises |
 | `mrb_bug` | fn | ✅ | ❌ |  |
@@ -109,9 +109,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_frozen_error` | fn | ✅ | 🚫 | declined: raises what `mrb_check_frozen` checks for, taking the object as `void*` the same way (`vendor/mruby/include/mruby.h:1446`) — see `mrb_check_frozen`; the pointer form cannot express the immediate mruby raises the same `FrozenError` for, which the `mrb_value` form tests before raising (`vendor/mruby/src/error.c:693-699`) |
 | `mrb_full_gc` | fn | ✅ | ✅ | `Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive) |
 | `mrb_func_basic_p` | fn | ✅ | ❌ |  |
-| `mrb_funcall` | fn | ✅ | ✅ | subsumed: `Value::funcall`, `Value::funcall_argv` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch |
-| `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::funcall` (symbol-or-name key), `Value::funcall_argv` (pre-interned sym) |
-| `mrb_funcall_id` | fn | ✅ | ✅ | subsumed: `Value::funcall`, `Value::funcall_argv` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc` |
+| `mrb_funcall` | fn | ✅ | ✅ | subsumed: `Value::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch |
+| `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::funcall` — the symbol-or-name key reaches this dispatch whether the caller holds a name or an already-interned `Symbol` |
+| `mrb_funcall_id` | fn | ✅ | ✅ | subsumed: `Value::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc` |
 | `mrb_funcall_with_block` | fn | ✅ | ✅ | `Value::funcall_with_block` — dispatch passing an explicit typed `Proc` block |
 | `mrb_garbage_collect` | fn | ✅ | ✅ | subsumed: `Mrb::full_gc` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection |
 | `mrb_gc_arena_restore` | macro | ✅ | ✅ | `ArenaScope::keep`/`drop` (see ArenaScope extension) |
@@ -486,7 +486,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_fixnum_value` | fn | ✅ | ❌ |  |
 | `mrb_float_p` | macro | ❌ | ✅ | `Value::is_float`, via the value tag |
 | `mrb_float_read` | fn | ✅ | ❌ |  |
-| `mrb_float_value` | fn | ✅ | ✅ | `Value::from_float` |
+| `mrb_float_value` | fn | ✅ | ✅ | `IntoValue` for a Rust float — the boxing a Rust float reaches the value domain through; which floats it offers follows the configured float width, as the integer conversions follow the integer width |
 | `mrb_free_p` | macro | ❌ | ❌ |  |
 | `mrb_hash_p` | macro | ❌ | ✅ | `Value::is_hash`, via the value tag |
 | `mrb_iclass_p` | macro | ❌ | 🚫 | declined: tests for the include-class tag, which no value a typed caller holds carries — mruby keeps include classes internal, filtering them out of `ObjectSpace` (`vendor/mruby/mrbgems/mruby-objectspace/src/mruby_objectspace.c:131-135`) and answering the included module in their place from `Module#ancestors` (`vendor/mruby/src/class.c:2245-2246`) |
@@ -597,5 +597,6 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
 | `IntoSym` | The symbol-or-name key (magnus's `IntoId`), resolving a `&CStr`, a Rust string, or an already-interned `Symbol` to the `Symbol` every name-keyed operation routes through mruby's `_id`-suffixed C variant with. Binds no C symbol of its own — it composes the interns — and is what keeps the interned id out of those operations' signatures. |
 | `ParseMessage` | One compiler diagnostic's line, column, and text, read through accessors. mruby publishes `struct mrb_parser_message` as a parser field rather than through any call, so there is no C API to bind: the typed surface copies the slot out while the parser is alive and hands back an owned value that outlives it. `Ccontext::load_nstring` returns the first recorded error as `Error::Syntax`, and `Ccontext::warnings` answers the load's warnings. |
-| `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` and `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as arbitrary owned bytes). |
+| `Symbol equality` | A symbol compares, hashes, and renders by its interned id, mirroring magnus's `Id`. mruby publishes no C comparison to bind — interning is canonical, so the ids are the comparison — and the id is what carries it rather than the boxed value, whose layout varies with the boxing mode. |
+| `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` and `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as arbitrary owned bytes). Which numeric types convert follows the configured integer and float widths: a type converts only where it and the width hold every value of each other. |
 | `sys::catch_unwind` | Panic boundary for a Rust closure handed to mruby as a C callback, magnus's `rb_sys::catch_unwind`: runs the closure under `std::panic::catch_unwind` and answers `Error::Panic` carrying the payload's message. The registered-method bridge and `Mrb::init_gem` go through it. Binds no C symbol. |
