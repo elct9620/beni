@@ -66,7 +66,9 @@ const FLOAT_WIDTH_METADATA: &str = "defines_mrb_float32";
 fn declares_mrb_float32(bindings_rs: &std::path::Path) -> bool {
     let no_float = || {
         panic!(
-            "beni-sys: {} declares no `mrb_float`. An archive built without              floating point (MRB_NO_FLOAT) is outside what the crates above              support, since their surface converts floats.",
+            "beni-sys: {} declares no `mrb_float`. An archive built without \
+             floating point (MRB_NO_FLOAT) is outside what the crates above \
+             support, since their surface converts floats.",
             bindings_rs.display()
         )
     };
@@ -87,7 +89,8 @@ fn declares_mrb_float32(bindings_rs: &std::path::Path) -> bool {
         Some("f32") => true,
         Some("f64") => false,
         Some(other) => panic!(
-            "beni-sys: {} declares `mrb_float` as `{other}`, where the crates              above expect `f32` or `f64`.",
+            "beni-sys: {} declares `mrb_float` as `{other}`, where the crates \
+             above expect `f32` or `f64`.",
             bindings_rs.display()
         ),
         None => no_float(),
