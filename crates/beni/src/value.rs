@@ -721,7 +721,7 @@ impl Value {
         name: K,
         args: &[Value],
     ) -> Result<Value, Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         self.funcall_argv(mrb, sym, args)
     }
 
@@ -778,7 +778,7 @@ impl Value {
         args: &[Value],
         block: crate::Proc,
     ) -> Result<Value, Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         let block_raw = block.as_raw();
         mrb.protect(|mrb| {
             // `Value` is `#[repr(transparent)]` over `mrb_value`, so the

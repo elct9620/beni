@@ -448,7 +448,7 @@ pub trait Module: private::ClassLike {
         name: K,
         superclass: RClass,
     ) -> Result<RClass, Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         if let Some(bound) = bound_class(mrb, self.raw(), sym, superclass) {
             return bound;
         }
@@ -483,7 +483,7 @@ pub trait Module: private::ClassLike {
     /// symbol-or-name key (`IntoSym`). mruby rejects a same-named
     /// constant that is not a module.
     fn define_module<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
             RModule::from_raw(unsafe {
@@ -499,7 +499,7 @@ pub trait Module: private::ClassLike {
     /// `src/class.c` documents both), so the lookup is fallible by
     /// contract.
     fn class_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RClass, Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
             RClass::from_raw(unsafe { sys::mrb_class_get_under_id(mrb.as_ptr(), self.raw(), sym) })
@@ -513,7 +513,7 @@ pub trait Module: private::ClassLike {
     /// `src/class.c` documents both), so the lookup is fallible by
     /// contract.
     fn module_get<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
             RModule::from_raw(unsafe {
@@ -537,7 +537,7 @@ pub trait Module: private::ClassLike {
         // SAFETY: `mrb` is alive; `self` originates from the same
         // VM; `sym` was interned against it. `mrb_class_defined_under_id`
         // is a constant-existence lookup that does not raise.
-        unsafe { sys::mrb_class_defined_under_id(mrb.as_ptr(), self.raw(), sym) }
+        unsafe { sys::mrb_class_defined_under_id(mrb.as_ptr(), self.raw(), sym.to_sym()) }
     }
 
     /// `mrb_define_method_id(mrb, self, name, func, aspec)` — register
@@ -547,7 +547,7 @@ pub trait Module: private::ClassLike {
     /// many required positionals). mruby rejects registration on a
     /// frozen receiver.
     fn define_method<K: IntoSym>(self, mrb: &Mrb, name: K, method: MethodDef) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         protect_register(mrb, method, |mrb, raw, aspec| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` was produced by the same VM; `sym` was
@@ -567,7 +567,7 @@ pub trait Module: private::ClassLike {
         name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         protect_register(mrb, method, |mrb, raw, aspec| {
             // SAFETY: as `define_method` — same signature, same
             // contract.
@@ -588,7 +588,7 @@ pub trait Module: private::ClassLike {
         name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         protect_register(mrb, method, |mrb, raw, aspec| {
             // SAFETY: as `define_method` — same signature, same
             // contract.
@@ -605,7 +605,7 @@ pub trait Module: private::ClassLike {
     /// rather than long-jumping — the same contract as the definition
     /// methods above.
     fn define_const<K: IntoSym>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and `val` originate from the same VM; `sym`
@@ -625,8 +625,8 @@ pub trait Module: private::ClassLike {
     /// `Err(Error::Exception)` (mruby's `NameError`) rather than
     /// long-jumping — the same contract as the definition methods above.
     fn alias_method<N: IntoSym, O: IntoSym>(self, mrb: &Mrb, new: N, old: O) -> Result<(), Error> {
-        let new = new.into_sym(mrb)?;
-        let old = old.into_sym(mrb)?;
+        let new = new.into_sym(mrb)?.to_sym();
+        let old = old.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `new` and `old`
@@ -649,7 +649,7 @@ pub trait Module: private::ClassLike {
     /// `NameError`) rather than long-jumping — the same contract as the
     /// definition methods above.
     fn undef_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `sym` was interned
@@ -671,7 +671,7 @@ pub trait Module: private::ClassLike {
     /// `Err(Error::Exception)` rather than long-jumping — the same contract
     /// as the definition methods above.
     fn remove_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `sym` was interned
@@ -780,7 +780,7 @@ pub trait Object: private::ClassLike {
         name: K,
         method: MethodDef,
     ) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         protect_register(mrb, method, |mrb, raw, aspec| {
             // SAFETY: as `Module::define_method`; the `RClass *` →
             // `RObject *` cast mirrors mruby's own
@@ -806,7 +806,7 @@ pub trait Object: private::ClassLike {
     /// undefining a singleton name absent from the handle surfaces as
     /// `Err(Error::Exception)` (mruby's `NameError`).
     fn undef_singleton_method<K: IntoSym>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        let sym = name.into_sym(mrb)?;
+        let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `sym` was interned

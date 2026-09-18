@@ -185,6 +185,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Symbol::to_sym;
     let _ = Symbol::name;
     let _ = <&core::ffi::CStr as IntoSym>::into_sym;
+    let _ = <&str as IntoSym>::into_sym;
+    let _ = <String as IntoSym>::into_sym;
     let _ = <Symbol as IntoSym>::into_sym;
     let _ = ParseMessage::line;
     let _ = ParseMessage::column;

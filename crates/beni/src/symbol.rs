@@ -139,32 +139,53 @@ impl Symbol {
     }
 }
 
-/// A definition or lookup name given as a symbol-or-name key — beni's
-/// mirror of `magnus`'s `IntoId`. A name interns to its symbol; an
-/// already-interned `Symbol` is reused without re-interning. The typed
-/// define/get surface accepts any `IntoSym`, routing every key through
+/// A name keying an operation — beni's mirror of `magnus`'s `IntoId`. A
+/// string key interns to its symbol; an already-interned `Symbol` is
+/// reused without re-interning. The typed surface accepts any `IntoSym`
+/// wherever an operation is keyed by a name, routing every key through
 /// mruby's `_id`-suffixed C variant, and hands a key that cannot
 /// resolve back as its own `Err` before it acts.
+///
+/// The string keys differ in what an embedded NUL does: a `&CStr` key
+/// names the bytes before its first NUL, a Rust string key names all of
+/// its bytes.
 pub trait IntoSym {
-    /// Resolve this key to its interned `mrb_sym` against `mrb`, or the
-    /// `Err` its intern surfaced.
-    fn into_sym(self, mrb: &Mrb) -> Result<sys::mrb_sym, Error>;
+    /// Resolve this key to its `Symbol` against `mrb`, or the `Err` its
+    /// intern surfaced.
+    fn into_sym(self, mrb: &Mrb) -> Result<Symbol, Error>;
 }
 
 impl IntoSym for &core::ffi::CStr {
-    /// A name key interns through `Mrb::intern_cstr`, so a name too
-    /// long to be a symbol surfaces as `Err`.
+    /// Interns the bytes before the first NUL, so a name too long to be
+    /// a symbol surfaces as `Err`.
     #[inline]
-    fn into_sym(self, mrb: &Mrb) -> Result<sys::mrb_sym, Error> {
-        mrb.intern_cstr(self)
+    fn into_sym(self, mrb: &Mrb) -> Result<Symbol, Error> {
+        Symbol::new(mrb, self)
+    }
+}
+
+impl IntoSym for &str {
+    /// Interns all of the key's bytes, an embedded NUL included, so a
+    /// name too long to be a symbol surfaces as `Err`.
+    #[inline]
+    fn into_sym(self, mrb: &Mrb) -> Result<Symbol, Error> {
+        mrb.intern(self.as_bytes())
+    }
+}
+
+impl IntoSym for String {
+    /// Interns as the `&str` key does, for a name a caller owns.
+    #[inline]
+    fn into_sym(self, mrb: &Mrb) -> Result<Symbol, Error> {
+        self.as_str().into_sym(mrb)
     }
 }
 
 impl IntoSym for Symbol {
-    /// An already-interned `Symbol` reuses its id with no re-intern, so
+    /// An already-interned `Symbol` reuses itself with no re-intern, so
     /// it always resolves.
     #[inline]
-    fn into_sym(self, _mrb: &Mrb) -> Result<sys::mrb_sym, Error> {
-        Ok(self.to_sym())
+    fn into_sym(self, _mrb: &Mrb) -> Result<Symbol, Error> {
+        Ok(self)
     }
 }

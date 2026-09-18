@@ -776,7 +776,7 @@ fn remove_method_strips_a_method_defined_on_the_handle() {
         .expect("registering the method must succeed");
 
     // The method responds before removal.
-    let answer = c"answer".into_sym(&mrb).expect("the name interns");
+    let answer = c"answer".into_sym(&mrb).expect("the name interns").to_sym();
     let receiver = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
@@ -1065,4 +1065,53 @@ fn class_defined_answers_false_for_a_name_too_long_to_intern() {
 
     assert!(!mrb.class_defined(name.as_c_str()));
     assert!(!mrb.object_class().class_defined(&mrb, name.as_c_str()));
+}
+
+#[test]
+fn a_rust_string_key_reaches_the_same_definition_as_the_c_string_name() {
+    let mrb = open_mrb();
+    let object = mrb.object_class();
+
+    // A &str key and an owned String key must resolve to the symbol
+    // their bytes name, so a definition made under one is reachable
+    // under the C-string form of the same name.
+    let class = mrb
+        .define_class("BeniStrKeyed", object)
+        .expect("defining the class under a &str key must succeed");
+    class
+        .define_method(&mrb, String::from("answer"), beni::method!(answer_seven, 0))
+        .expect("registering a method under a String key must succeed");
+
+    assert!(mrb.class_defined(c"BeniStrKeyed"));
+    let instance = mrb
+        .class_get(c"BeniStrKeyed")
+        .expect("the class is fetchable by its C-string name")
+        .obj_new(&mrb, &[])
+        .expect("the class instantiates");
+    let answered = instance
+        .funcall(&mrb, c"answer", &[])
+        .expect("the method registered under a String key is callable");
+    assert_eq!(i32::from_value(answered), Some(7));
+}
+
+#[test]
+fn a_rust_string_key_names_its_bytes_past_an_embedded_nul() {
+    let mrb = open_mrb();
+    let object = mrb.object_class();
+
+    // The two string keys differ exactly here: the C-string form stops
+    // at the first NUL, the Rust-string form carries every byte, so the
+    // two name different symbols and the binding reaches only one of
+    // them. The prefix is read through its own symbol rather than an
+    // intern check, which answers for any short name whether or not one
+    // was ever interned.
+    object
+        .define_const(&mrb, "BENI\0TAIL", Value::nil())
+        .expect("binding under a key with an embedded NUL must succeed");
+
+    let whole = mrb.intern(b"BENI\0TAIL").expect("the whole name interns");
+    let prefix = mrb.intern(b"BENI").expect("the prefix interns");
+    let namespace = object.to_value(&mrb);
+    assert!(namespace.const_defined_at(&mrb, whole.to_sym()));
+    assert!(!namespace.const_defined_at(&mrb, prefix.to_sym()));
 }

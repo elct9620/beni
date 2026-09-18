@@ -379,6 +379,12 @@ extensions:
     the value box/unbox primitives, including `FromValue for String` and
     `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as
     arbitrary owned bytes).
+  IntoSym: >-
+    The symbol-or-name key (magnus's `IntoId`), resolving a `&CStr`, a Rust
+    string, or an already-interned `Symbol` to the `Symbol` every name-keyed
+    operation routes through mruby's `_id`-suffixed C variant with. Binds no
+    C symbol of its own — it composes the interns — and is what keeps the
+    interned id out of those operations' signatures.
   ExceptionClass: >-
     Typed handle on an exception class, magnus's `ExceptionClass`: only it
     builds or raises an exception, so `mrb_exc_new` / `mrb_exc_new_str` never

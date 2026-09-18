@@ -32,7 +32,7 @@ impl Mrb {
     /// same-named constant that is not a module.
     #[inline]
     pub fn define_module<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(self)?;
+        let sym = name.into_sym(self)?.to_sym();
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `sym` was interned against the same VM.
@@ -48,7 +48,7 @@ impl Mrb {
     /// anything else bound there.
     #[inline]
     pub fn define_class<K: IntoSym>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
-        let sym = name.into_sym(self)?;
+        let sym = name.into_sym(self)?.to_sym();
         if let Some(bound) =
             crate::class::bound_class(self, self.object_class().as_raw(), sym, super_)
         {
@@ -111,7 +111,7 @@ impl Mrb {
     /// so the lookup is fallible by contract.
     #[inline]
     pub fn class_get<K: IntoSym>(&self, name: K) -> Result<RClass, Error> {
-        let sym = name.into_sym(self)?;
+        let sym = name.into_sym(self)?.to_sym();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
             RClass::from_raw(unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) })
@@ -134,7 +134,7 @@ impl Mrb {
         // SAFETY: `self` is alive; `sym` was interned against the
         // same VM. `mrb_class_defined_id` is a constant-existence
         // lookup that does not raise.
-        unsafe { sys::mrb_class_defined_id(self.as_ptr(), sym) }
+        unsafe { sys::mrb_class_defined_id(self.as_ptr(), sym.to_sym()) }
     }
 
     /// `mrb_exc_get_id(mrb, name)` — fetch the built-in exception
@@ -147,7 +147,7 @@ impl Mrb {
     /// for raising from registered code.
     #[inline]
     pub fn exc_get<K: IntoSym>(&self, name: K) -> Result<ExceptionClass, Error> {
-        let sym = name.into_sym(self)?;
+        let sym = name.into_sym(self)?.to_sym();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
             let class = unsafe { sys::mrb_exc_get_id(mrb.as_ptr(), sym) };
@@ -164,7 +164,7 @@ impl Mrb {
     /// documents both), so the lookup is fallible by contract.
     #[inline]
     pub fn module_get<K: IntoSym>(&self, name: K) -> Result<RModule, Error> {
-        let sym = name.into_sym(self)?;
+        let sym = name.into_sym(self)?.to_sym();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
             RModule::from_raw(unsafe { sys::mrb_module_get_id(mrb.as_ptr(), sym) })
