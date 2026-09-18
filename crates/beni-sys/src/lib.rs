@@ -234,8 +234,8 @@ mod version {
     include!("../build/version.rs");
 }
 
-/// The build script's integer-width read, reachable here for the same
-/// reason as the sidecar parse above.
+/// The build script's configured-width reads, reachable here for the
+/// same reason as the sidecar parse above.
 #[cfg(test)]
 mod width {
     include!("../build/width.rs");

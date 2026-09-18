@@ -226,7 +226,9 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     if env::var_os("DOCS_RS").is_some() {
         stage_documentation_bindings(&manifest_dir, &out_dir);
-        println!("{}", integer_width_directive(&out_dir.join("bindings.rs")));
+        let staged = out_dir.join("bindings.rs");
+        println!("{}", integer_width_directive(&staged));
+        println!("{}", float_width_directive(&staged));
         return;
     }
 
@@ -278,6 +280,7 @@ fn main() {
     );
     compile_trampolines(&include_root, &compiler, &compile_flags, &static_wrappers_c);
     println!("{}", integer_width_directive(&bindings_rs));
+    println!("{}", float_width_directive(&bindings_rs));
 
     // The archive sits where discovery found it; every other library
     // its sidecar names comes from the toolchain that built it, which

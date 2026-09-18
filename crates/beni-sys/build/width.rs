@@ -1,5 +1,5 @@
-// The configured integer width the bindings a build uses declare,
-// published to the crates that depend on this one directly.
+// The configured integer and float widths the bindings a build uses
+// declare, published to the crates that depend on this one directly.
 //
 // A build script is outside `cargo test`'s reach, so the parse lives
 // here and both `build.rs` and the library's test build include it.
@@ -53,9 +53,59 @@ fn integer_width_directive(bindings_rs: &std::path::Path) -> String {
     )
 }
 
+/// The `links` metadata key carrying the configured float width —
+/// `true` for 32 bits, `false` for 64 — which a direct dependent's build
+/// reads as `DEP_MRUBY_DEFINES_MRB_FLOAT32`.
+const FLOAT_WIDTH_METADATA: &str = "defines_mrb_float32";
+
+/// Whether the bindings declare a 32-bit `mrb_float`, read from the type
+/// mruby settles the width into. Bindings that declare no float at all
+/// are an archive built without floating point, which the crates above
+/// do not support: their surface converts floats, so the build stops
+/// here rather than at a missing type deep in the wrapper.
+fn declares_mrb_float32(bindings_rs: &std::path::Path) -> bool {
+    let no_float = || {
+        panic!(
+            "beni-sys: {} declares no `mrb_float`. An archive built without              floating point (MRB_NO_FLOAT) is outside what the crates above              support, since their surface converts floats.",
+            bindings_rs.display()
+        )
+    };
+    let Ok(bindings) = std::fs::read_to_string(bindings_rs) else {
+        no_float()
+    };
+    let width = bindings.lines().find_map(|line| {
+        Some(
+            line.trim_start()
+                .strip_prefix("pub type mrb_float =")?
+                .trim()
+                .strip_suffix(';')?
+                .trim()
+                .to_owned(),
+        )
+    });
+    match width.as_deref() {
+        Some("f32") => true,
+        Some("f64") => false,
+        Some(other) => panic!(
+            "beni-sys: {} declares `mrb_float` as `{other}`, where the crates              above expect `f32` or `f64`.",
+            bindings_rs.display()
+        ),
+        None => no_float(),
+    }
+}
+
+/// The build-script directive publishing the configured float width the
+/// bindings at `bindings_rs` declare as the float-width metadata.
+fn float_width_directive(bindings_rs: &std::path::Path) -> String {
+    format!(
+        "cargo:{FLOAT_WIDTH_METADATA}={}",
+        declares_mrb_float32(bindings_rs)
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::integer_width_directive;
+    use super::{float_width_directive, integer_width_directive};
 
     /// A bindings file with the given body, named after the case so
     /// concurrent tests cannot collide.
@@ -110,5 +160,38 @@ mod tests {
         let path = bindings("absent", "");
         std::fs::remove_file(&path).expect("the bindings are removable");
         integer_width_directive(&path);
+    }
+
+    #[test]
+    fn a_32_bit_float_width_is_read_from_the_bindings() {
+        let path = bindings("f32", "pub type mrb_float = f32;\n");
+        assert_eq!(
+            float_width_directive(&path),
+            "cargo:defines_mrb_float32=true"
+        );
+    }
+
+    #[test]
+    fn a_64_bit_float_width_is_read_from_the_bindings() {
+        let path = bindings("f64", "pub type mrb_float = f64;\n");
+        assert_eq!(
+            float_width_directive(&path),
+            "cargo:defines_mrb_float32=false"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "declares no `mrb_float`")]
+    fn bindings_built_without_floating_point_stop_the_build() {
+        float_width_directive(&bindings(
+            "nofloat",
+            "pub const MRB_INT_BIT: u32 = 64;\npub type mrb_int = i64;\n",
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "expect `f32` or `f64`")]
+    fn a_float_width_the_crates_do_not_carry_stops_the_build() {
+        float_width_directive(&bindings("f128", "pub type mrb_float = f128;\n"));
     }
 }
