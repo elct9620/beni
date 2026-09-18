@@ -357,16 +357,24 @@ fn substr_reads_a_range_and_clamps_out_of_range() {
     let tail = s.substr(&mrb, 7, 100).expect("an over-long len clamps");
     assert_eq!(tail.to_bytes(), b"world!".to_vec());
 
+    // A len beyond every configured width clamps the same way instead
+    // of wrapping to a negative length mruby answers with nil.
+    let rest = s
+        .substr(&mrb, 7, usize::MAX)
+        .expect("an out-of-width len clamps");
+    assert_eq!(rest.to_bytes(), b"world!".to_vec());
+
     // A beg past the end yields None, the way mruby returns nil.
     assert!(s.substr(&mrb, 100, 1).is_none());
 }
 
 #[test]
+#[cfg(target_pointer_width = "64")]
 fn substr_saturates_an_out_of_width_beg_rather_than_wrapping() {
-    // An out-of-width beg is only representable when the host `i64` is
-    // wider than `mrb_int`, i.e. a 32-bit `mrb_int`. Under a 64-bit
-    // `mrb_int` the saturation premise is vacuous and the case is
-    // skipped rather than asserted on a width it cannot reach.
+    // An out-of-width beg is only representable when `isize` is wider
+    // than `mrb_int`, i.e. a 32-bit `mrb_int` on a 64-bit target. Under
+    // a 64-bit `mrb_int` the saturation premise is vacuous and the case
+    // is skipped rather than asserted on a width it cannot reach.
     if core::mem::size_of::<beni::sys::mrb_int>() != 4 {
         return;
     }
@@ -415,11 +423,12 @@ fn index_finds_the_first_match_at_or_after_the_offset() {
 }
 
 #[test]
+#[cfg(target_pointer_width = "64")]
 fn index_saturates_an_out_of_width_offset_rather_than_wrapping() {
-    // An out-of-width offset is only representable when the host `i64`
-    // is wider than `mrb_int`, i.e. a 32-bit `mrb_int`. Under a 64-bit
-    // `mrb_int` the saturation premise is vacuous and the case is
-    // skipped rather than asserted on a width it cannot reach.
+    // An out-of-width offset is only representable when `isize` is
+    // wider than `mrb_int`, i.e. a 32-bit `mrb_int` on a 64-bit target.
+    // Under a 64-bit `mrb_int` the saturation premise is vacuous and the
+    // case is skipped rather than asserted on a width it cannot reach.
     if core::mem::size_of::<beni::sys::mrb_int>() != 4 {
         return;
     }

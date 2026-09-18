@@ -260,6 +260,12 @@ fn splice_inserts_replaces_and_deletes_in_place() {
     assert_eq!(ary.entry(1).to_string(&mrb), "10");
     assert_eq!(ary.entry(2).to_string(&mrb), "3");
 
+    // A len overshooting the tail removes only the run that exists.
+    ary.splice(&mrb, 2, 100, mrb.ary_new().as_value())
+        .expect("an over-long len truncates to the tail");
+    assert_eq!(ary.len(), 2);
+    assert_eq!(ary.entry(1).to_string(&mrb), "10");
+
     // The return value is the receiver itself.
     let returned = ary
         .splice(&mrb, 0, 0, mrb.ary_new().as_value())
@@ -281,16 +287,16 @@ fn splice_surfaces_raising_edges_as_err() {
         ary.splice(&mrb, -5, 0, mrb.ary_new().as_value()),
         Err(Error::Exception(_))
     ));
-    // A negative length raises IndexError.
+    // A head and len that together pass the maximum array size raise.
     assert!(matches!(
-        ary.splice(&mrb, 0, -1, mrb.ary_new().as_value()),
+        ary.splice(&mrb, 0, usize::MAX, mrb.ary_new().as_value()),
         Err(Error::Exception(_))
     ));
     // A head beyond the archive's mrb_int width saturates so mruby's
     // own range check rejects it as out of array, rather than a
     // truncated index hitting the wrong slot.
     assert!(matches!(
-        ary.splice(&mrb, i64::MAX, 0, mrb.ary_new().as_value()),
+        ary.splice(&mrb, isize::MAX, 0, mrb.ary_new().as_value()),
         Err(Error::Exception(_))
     ));
 
@@ -307,6 +313,32 @@ fn splice_surfaces_raising_edges_as_err() {
         frozen.splice(&mrb, 0, 1, mrb.ary_new().as_value()),
         Err(Error::Exception(_))
     ));
+}
+
+#[test]
+#[cfg(target_pointer_width = "64")]
+fn splice_saturates_an_out_of_width_len_rather_than_wrapping() {
+    // An out-of-width len is only representable when `usize` is wider
+    // than `mrb_int`, i.e. a 32-bit `mrb_int` on a 64-bit target. Under
+    // a 64-bit `mrb_int` the saturation premise is vacuous and the case
+    // is skipped rather than asserted on a width it cannot reach.
+    if core::mem::size_of::<beni::sys::mrb_int>() != 4 {
+        return;
+    }
+
+    let mrb = open_mrb();
+    let ary = mrb.ary_new();
+    ary.push(&mrb, 1i32.into_value(&mrb))
+        .expect("push succeeds");
+
+    // A truncating cast would wrap 0x1_0000_0001 to the len 1 and delete
+    // the element. Saturating to the upper bound keeps it past the
+    // maximum array size, so mruby rejects the run and nothing moves.
+    assert!(matches!(
+        ary.splice(&mrb, 0, 0x1_0000_0001, mrb.ary_new().as_value()),
+        Err(Error::Exception(_))
+    ));
+    assert_eq!(ary.len(), 1);
 }
 
 #[test]

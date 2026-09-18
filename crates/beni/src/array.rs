@@ -216,23 +216,21 @@ impl Array {
     /// any other value is inserted as the single element it is — pass an
     /// empty array to delete without inserting. A `head` past the end
     /// grows the array with `nil` to reach it; a negative `head` counts
-    /// from the tail. A frozen receiver, a negative `len`, or a `head`
-    /// past the beginning raises, surfaced here as `Err`. Returns the
-    /// receiver. `head` and `len` saturate to the archive's `mrb_int`
-    /// width, so an out-of-width `head` keeps mruby's range check raising
-    /// rather than a truncated index hitting the wrong slot.
+    /// from the tail, and a `len` overshooting the tail removes only the
+    /// run that exists. A frozen receiver, a `head` past the beginning,
+    /// or a `head` and `len` that together pass the maximum array size
+    /// raise, surfaced here as `Err`. Returns the receiver. `head` and
+    /// `len` saturate to the archive's `mrb_int` width, so an
+    /// out-of-width value keeps mruby's range check raising rather than
+    /// a truncated one hitting the wrong slot.
     #[inline]
-    pub fn splice(self, mrb: &Mrb, head: i64, len: i64, rpl: Value) -> Result<Value, Error> {
+    pub fn splice(self, mrb: &Mrb, head: isize, len: usize, rpl: Value) -> Result<Value, Error> {
         let head = sys::mrb_int::try_from(head).unwrap_or(if head < 0 {
             sys::mrb_int::MIN
         } else {
             sys::mrb_int::MAX
         });
-        let len = sys::mrb_int::try_from(len).unwrap_or(if len < 0 {
-            sys::mrb_int::MIN
-        } else {
-            sys::mrb_int::MAX
-        });
+        let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract;

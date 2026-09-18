@@ -205,9 +205,9 @@ impl RString {
     /// the end and an over-long `len` clamps to the string; a range that
     /// starts past the end yields `None`, matching the `nil` mruby
     /// returns. It allocates a fresh String and dispatches nothing, so it
-    /// never raises. Mirrors magnus's `RString` substring read.
+    /// never raises.
     #[inline]
-    pub fn substr(self, mrb: &Mrb, beg: i64, len: i64) -> Option<RString> {
+    pub fn substr(self, mrb: &Mrb, beg: isize, len: usize) -> Option<RString> {
         // An offset or length outside the archive's `mrb_int` width
         // names no position; saturate it to the nearest bound so the
         // clamp still sees "past the beginning" / "past the end" rather
@@ -217,11 +217,7 @@ impl RString {
         } else {
             sys::mrb_int::MAX
         });
-        let len = sys::mrb_int::try_from(len).unwrap_or(if len < 0 {
-            sys::mrb_int::MIN
-        } else {
-            sys::mrb_int::MAX
-        });
+        let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
         // SAFETY: `self` is String-tagged by the newtype contract;
         // `mrb` is alive; `mrb_str_substr` clamps the range and reads
         // only the byte buffer, returning a fresh String or `nil`.
@@ -246,7 +242,7 @@ impl RString {
     /// dispatches nothing, so it never raises; mruby's -1 maps to `None`.
     /// The byte-index sibling of the character-range `substr` read.
     #[inline]
-    pub fn index(self, mrb: &Mrb, needle: &[u8], offset: i64) -> Option<usize> {
+    pub fn index(self, mrb: &Mrb, needle: &[u8], offset: isize) -> Option<usize> {
         // An offset outside the archive's `mrb_int` width names no
         // position; saturate it to the nearest bound so the scan still
         // sees "past the beginning" / "past the end" rather than a
