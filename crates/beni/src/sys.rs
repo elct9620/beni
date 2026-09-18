@@ -38,3 +38,50 @@ where
     std::panic::catch_unwind(func)
         .map_err(|payload| Error::Panic(crate::error::panic_message(payload)))
 }
+
+/// Cross a raw `mrb_value` back into its typed form — magnus's
+/// `rb_sys::FromRawValue`. The reading direction needs no trait: a typed
+/// handle answers its raw form through its own `as_raw`.
+pub trait FromRawValue {
+    /// Wrap `value` as the typed form it carries.
+    ///
+    /// # Safety
+    ///
+    /// `value` must be one the interpreter it is used against produced.
+    /// The typed surface trusts what it is handed rather than re-testing
+    /// it, so a value from anywhere else reaches operations that read it
+    /// as the thing its tag claims.
+    unsafe fn from_raw(value: mrb_value) -> Self;
+}
+
+impl FromRawValue for Value {
+    #[inline]
+    unsafe fn from_raw(value: mrb_value) -> Self {
+        // The wrap itself cannot fail; what the caller established is
+        // the value's provenance, which nothing here re-tests.
+        Value::from_raw_unchecked(value)
+    }
+}
+
+/// Cross a raw interned id back into its typed symbol — magnus's
+/// `rb_sys::FromRawId`, answering beni's `Symbol`, which carries the id
+/// magnus keeps in a separate `Id` type.
+pub trait FromRawId {
+    /// Symbolize `id`.
+    ///
+    /// # Safety
+    ///
+    /// `id` must be one the interpreter the symbol is used against
+    /// interned. An id naming no symbol reifies its name as a value
+    /// carrying no String, which the typed surface hands back as one.
+    unsafe fn from_raw(id: mrb_sym) -> Self;
+}
+
+impl FromRawId for crate::Symbol {
+    #[inline]
+    unsafe fn from_raw(id: mrb_sym) -> Self {
+        // As `FromRawValue`: the boxing cannot fail, and the id's
+        // provenance is the caller's.
+        crate::Symbol::from_sym_unchecked(id)
+    }
+}

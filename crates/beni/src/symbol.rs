@@ -88,16 +88,20 @@ impl Symbol {
         mrb.intern_cstr(name)
     }
 
-    /// Symbolize an already-interned id via mruby's boxing-agnostic
-    /// `mrb_symbol_value` constructor (an `MRB_INLINE` reached through
-    /// bindgen's static-fn trampoline). Pure boxing — no `mrb_state`
-    /// touched — so the caller keeps the id's originating VM in scope.
+    /// Symbolize an id the caller has established this VM interned, via
+    /// mruby's boxing-agnostic `mrb_symbol_value` constructor (an
+    /// `MRB_INLINE` reached through bindgen's static-fn trampoline).
+    /// Pure boxing — no `mrb_state` touched. The public crossing is
+    /// `sys::FromRawId::from_raw`, which is `unsafe` for the
+    /// establishing.
     #[inline]
-    pub fn from_sym(sym: sys::mrb_sym) -> Self {
+    pub(crate) fn from_sym_unchecked(sym: sys::mrb_sym) -> Self {
         // SAFETY: `mrb_symbol_value` boxes a sym id and touches no
         // mrb_state; the resulting value is meaningful in the VM the
         // id was interned against, which the caller holds.
-        Self(Value::from_raw(unsafe { sys::mrb_symbol_value(sym) }))
+        Self(Value::from_raw_unchecked(unsafe {
+            sys::mrb_symbol_value(sym)
+        }))
     }
 
     /// The interned id this symbol carries, via the `mrb_symbol_func`
@@ -158,7 +162,7 @@ impl Symbol {
         // pointer is live. `mrb_sym_str` reads the name and boxes a
         // String value; the result is String-tagged by construction.
         unsafe {
-            crate::RString::from_value_unchecked(Value::from_raw(sys::mrb_sym_str(
+            crate::RString::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_sym_str(
                 mrb.as_ptr(),
                 self.to_sym(),
             )))

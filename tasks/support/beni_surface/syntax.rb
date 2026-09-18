@@ -6,7 +6,9 @@ module BeniSurface
   # enough and no parse is needed.
   module Syntax
     INHERENT_IMPL = /\Aimpl(?:<[^>]*>)?\s+(?<type>[A-Z]\w*)(?:<[^>]*>)?\s*(?:where[^{]*)?\{/
-    PUB_FN = /\A\s*pub\s+(?:unsafe\s+)?(?:const\s+)?fn\s+(?<name>[a-z_]\w*)/
+    # Rust's modifier order is `const` before `unsafe`, so a
+    # `pub const unsafe fn` only matches when they are read that way.
+    PUB_FN = /\A\s*pub\s+(?:const\s+)?(?:unsafe\s+)?fn\s+(?<name>[a-z_]\w*)/
     FN = /\A\s*fn\s+(?<name>\w+)\s*\(/
     MOD_DECL = /\A\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(?<name>\w+)\s*;/
     INLINE_MOD = /\A\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(?<name>\w+)\s*\{/

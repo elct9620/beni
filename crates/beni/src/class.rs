@@ -184,7 +184,8 @@ pub(crate) fn bound_class(
 ) -> Option<Result<RClass, Error>> {
     // SAFETY: `outer` names a live class or module of this VM;
     // `mrb_obj_value` only boxes the pointer.
-    let outer = Value::from_raw(unsafe { sys::mrb_obj_value(outer as *mut core::ffi::c_void) });
+    let outer =
+        Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(outer as *mut core::ffi::c_void) });
     if !outer.const_defined_at(mrb, name) {
         return None;
     }
@@ -201,10 +202,10 @@ pub(crate) fn bound_class(
             return type_error(format!("{name} is not a class"));
         }
         // SAFETY: the class tag was checked just above.
-        let class = RClass::from_raw(unsafe { bound.as_class_ptr() });
+        let class = RClass::from_raw_unchecked(unsafe { bound.as_class_ptr() });
         // SAFETY: `class` is a live class; its `super` link is either
         // null or another class-family struct `mrb_class_real` walks.
-        let defined_from = RClass::from_raw(unsafe { (*class.as_raw()).super_ }).real();
+        let defined_from = RClass::from_raw_unchecked(unsafe { (*class.as_raw()).super_ }).real();
         if defined_from.as_raw() != superclass.as_raw() {
             return type_error(format!("superclass mismatch for class {name}"));
         }
@@ -229,11 +230,25 @@ pub(crate) fn is_exception_class(class: *mut sys::RClass) -> bool {
 }
 
 impl RClass {
-    /// Wrap a raw `*mut RClass` produced by FFI. Most call sites get
-    /// the pointer from the typed definition methods; `from_raw`
-    /// serves bridges that receive one from mruby directly.
+    /// Wrap a raw `*mut RClass` a bridge received from mruby directly.
+    /// Most call sites get the pointer from the typed definition methods
+    /// instead. A class pointer has no crossing trait of its own the way
+    /// a value and an id do: a class is a value in CRuby, so magnus
+    /// offers only the checked downcast and leaves nothing to mirror.
+    ///
+    /// # Safety
+    ///
+    /// `p` must be a live class of the interpreter it is used against.
+    /// The typed surface dereferences it rather than testing it.
     #[inline]
-    pub const fn from_raw(p: *mut sys::RClass) -> Self {
+    pub const unsafe fn from_raw(p: *mut sys::RClass) -> Self {
+        Self(p)
+    }
+
+    /// Wrap a class pointer the crate itself produced — the internal
+    /// counterpart of the `unsafe` crossing above.
+    #[inline]
+    pub(crate) const fn from_raw_unchecked(p: *mut sys::RClass) -> Self {
         Self(p)
     }
 
@@ -267,7 +282,7 @@ impl RClass {
         // SAFETY: `mrb_class_real` only walks the `super` chain past
         // singleton / include classes; it reads no `mrb_state` and
         // returns a real class pointer for any live class handle.
-        RClass::from_raw(unsafe { sys::mrb_class_real(self.0) })
+        RClass::from_raw_unchecked(unsafe { sys::mrb_class_real(self.0) })
     }
 
     /// `mrb_obj_value(self)` — the `Value` naming this class, for the
@@ -283,7 +298,7 @@ impl RClass {
         // SAFETY: `self` names a class of this VM — the pairing every
         // handle method relies on; `mrb_obj_value` only boxes the
         // pointer.
-        Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
+        Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
     }
 
     /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
@@ -300,7 +315,7 @@ impl RClass {
             // `self` and every `args` entry originate from the same
             // VM. `mrb_obj_new` runs `initialize`, which may raise —
             // caught by `protect`.
-            Value::from_raw(unsafe {
+            Value::from_raw_unchecked(unsafe {
                 sys::mrb_obj_new(
                     mrb.as_ptr(),
                     self.0,
@@ -315,8 +330,19 @@ impl RClass {
 impl RModule {
     /// Wrap a raw `*mut RClass` known to be a module. Counterpart of
     /// `RClass::from_raw` for FFI boundaries.
+    ///
+    /// # Safety
+    ///
+    /// As `RClass::from_raw`, and `p` must name a module.
     #[inline]
-    pub const fn from_raw(p: *mut sys::RClass) -> Self {
+    pub const unsafe fn from_raw(p: *mut sys::RClass) -> Self {
+        Self(p)
+    }
+
+    /// Wrap a module pointer the crate itself produced — the internal
+    /// counterpart of the `unsafe` crossing above.
+    #[inline]
+    pub(crate) const fn from_raw_unchecked(p: *mut sys::RClass) -> Self {
         Self(p)
     }
 
@@ -333,7 +359,7 @@ impl RModule {
     #[inline]
     pub fn to_value(self, _mrb: &Mrb) -> Value {
         // SAFETY: as `RClass::to_value`.
-        Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
+        Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
     }
 }
 
@@ -365,7 +391,7 @@ impl ExceptionClass {
     #[inline]
     pub fn to_value(self, _mrb: &Mrb) -> Value {
         // SAFETY: as `RClass::to_value`.
-        Value::from_raw(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
+        Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(self.0 as *mut core::ffi::c_void) })
     }
 
     /// `mrb_raise(mrb, self, msg)` — raise an exception of this class
@@ -403,7 +429,7 @@ impl ExceptionClass {
         // same VM, so the allocation cannot refuse its instance type;
         // `msg`'s bytes are copied into the new exception object
         // before the call returns.
-        Value::from_raw(unsafe {
+        Value::from_raw_unchecked(unsafe {
             sys::mrb_exc_new(
                 mrb.as_ptr(),
                 self.0,
@@ -427,7 +453,9 @@ impl ExceptionClass {
         // SAFETY: `mrb` is alive; `self` is an exception class and `str`
         // a String-tagged value of the same VM, so neither the
         // allocation nor the string type guard can raise.
-        Value::from_raw(unsafe { sys::mrb_exc_new_str(mrb.as_ptr(), self.0, str.as_raw()) })
+        Value::from_raw_unchecked(unsafe {
+            sys::mrb_exc_new_str(mrb.as_ptr(), self.0, str.as_raw())
+        })
     }
 }
 
@@ -456,7 +484,7 @@ pub trait Module: private::ClassLike {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and `superclass` originate from the same VM;
             // `sym` was interned against the same VM.
-            RClass::from_raw(unsafe {
+            RClass::from_raw_unchecked(unsafe {
                 sys::mrb_define_class_under_id(
                     mrb.as_ptr(),
                     self.raw(),
@@ -491,7 +519,7 @@ pub trait Module: private::ClassLike {
         let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
-            RModule::from_raw(unsafe {
+            RModule::from_raw_unchecked(unsafe {
                 sys::mrb_define_module_under_id(mrb.as_ptr(), self.raw(), sym)
             })
         })
@@ -507,7 +535,9 @@ pub trait Module: private::ClassLike {
         let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
-            RClass::from_raw(unsafe { sys::mrb_class_get_under_id(mrb.as_ptr(), self.raw(), sym) })
+            RClass::from_raw_unchecked(unsafe {
+                sys::mrb_class_get_under_id(mrb.as_ptr(), self.raw(), sym)
+            })
         })
     }
 
@@ -521,7 +551,7 @@ pub trait Module: private::ClassLike {
         let sym = name.into_sym(mrb)?.to_sym();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
-            RModule::from_raw(unsafe {
+            RModule::from_raw_unchecked(unsafe {
                 sys::mrb_module_get_under_id(mrb.as_ptr(), self.raw(), sym)
             })
         })
@@ -756,7 +786,8 @@ pub trait Module: private::ClassLike {
         // from the same VM by the single-VM contract. `mrb_class_path`
         // walks the namespace chain and never raises; it answers nil
         // for an anonymous handle and a String otherwise.
-        let value = Value::from_raw(unsafe { sys::mrb_class_path(mrb.as_ptr(), self.raw()) });
+        let value =
+            Value::from_raw_unchecked(unsafe { sys::mrb_class_path(mrb.as_ptr(), self.raw()) });
         if value.is_nil() {
             return None;
         }

@@ -11,10 +11,9 @@ fn name_sym_and_rebuild_roundtrip() {
     // the unbox shim would diverge here.
     assert_eq!(sym, mrb.intern_cstr(c"flags").expect("the name interns"));
     // Re-boxing the id yields an equal symbol.
-    assert_eq!(
-        Symbol::from_sym(sym.to_sym()).name(&mrb).as_deref(),
-        Some("flags")
-    );
+    // SAFETY: the id came from `sym`, which `mrb` interned.
+    let reboxed = unsafe { <Symbol as beni::sys::FromRawId>::from_raw(sym.to_sym()) };
+    assert_eq!(reboxed.name(&mrb).as_deref(), Some("flags"));
 }
 
 #[test]

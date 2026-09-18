@@ -237,7 +237,7 @@ macro_rules! define_method_trait {
                     }
                 })?;
                 $(
-                    let $arg = $t::from_value(Value::from_raw($arg))
+                    let $arg = $t::from_value(Value::from_raw_unchecked($arg))
                         .ok_or_else(|| arg_type_error::<$t>(mrb))?;
                 )*
                 (self)(mrb, self_ $(, $arg)*).into_method_return(mrb)
@@ -353,7 +353,7 @@ macro_rules! define_method_req_opt_trait {
                     }
                 })?;
                 $(
-                    let $req = $rt::from_value(Value::from_raw($req))
+                    let $req = $rt::from_value(Value::from_raw_unchecked($req))
                         .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
                 )*
                 $(
@@ -362,7 +362,7 @@ macro_rules! define_method_req_opt_trait {
                         None
                     } else {
                         Some(
-                            $ot::from_value(Value::from_raw($opt))
+                            $ot::from_value(Value::from_raw_unchecked($opt))
                                 .ok_or_else(|| arg_type_error::<$ot>(mrb))?,
                         )
                     };
@@ -456,7 +456,7 @@ macro_rules! define_method_req_block_trait {
                     }
                 })?;
                 $(
-                    let $req = $rt::from_value(Value::from_raw($req))
+                    let $req = $rt::from_value(Value::from_raw_unchecked($req))
                         .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
                 )*
                 // SAFETY: `mrb` is alive; `block` is a valid value.
@@ -467,7 +467,7 @@ macro_rules! define_method_req_block_trait {
                     // not nil, so the unchecked downcast is sound.
                     // SAFETY: the non-nil block slot is Proc-tagged
                     // by mruby's call convention.
-                    Some(unsafe { crate::Proc::from_value_unchecked(Value::from_raw(block)) })
+                    Some(unsafe { crate::Proc::from_value_unchecked(Value::from_raw_unchecked(block)) })
                 };
                 (self)(mrb, self_ $(, $req)*, block).into_method_return(mrb)
             }

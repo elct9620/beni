@@ -510,7 +510,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_sclass_p` | macro | ❌ | ✅ | `Value::is_sclass`, via the value tag |
 | `mrb_string_p` | macro | ❌ | ✅ | `Value::is_string`, via the value tag |
 | `mrb_symbol_p` | macro | ❌ | ✅ | `Value::is_symbol`, via the value tag |
-| `mrb_symbol_value` | fn | ✅ | ✅ | `Symbol::from_sym` |
+| `mrb_symbol_value` | fn | ✅ | ✅ | `sys::FromRawId::from_raw` — the `unsafe` crossing of a raw interned id back into its typed `Symbol`, mirroring magnus's `rb_sys::FromRawId`; the crate's own interns reach the same boxing without it |
 | `mrb_test` | macro | ✅ | ✅ | `Value::to_bool` |
 | `mrb_true_p` | macro | ✅ | ✅ | `Value::is_true` |
 | `mrb_true_value` | fn | ✅ | ✅ | `Value::true_` |
@@ -599,4 +599,5 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `ParseMessage` | One compiler diagnostic's line, column, and text, read through accessors. mruby publishes `struct mrb_parser_message` as a parser field rather than through any call, so there is no C API to bind: the typed surface copies the slot out while the parser is alive and hands back an owned value that outlives it. `Ccontext::load_nstring` returns the first recorded error as `Error::Syntax`, and `Ccontext::warnings` answers the load's warnings. |
 | `Symbol equality` | A symbol compares, hashes, and renders by its interned id, mirroring magnus's `Id`. mruby publishes no C comparison to bind — interning is canonical, so the ids are the comparison — and the id is what carries it rather than the boxed value, whose layout varies with the boxing mode. |
 | `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` and `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as arbitrary owned bytes). Which numeric types convert follows the configured integer and float widths: a type converts only where it and the width hold every value of each other. |
+| `sys::FromRawValue / sys::FromRawId` | The `unsafe` crossings of a raw `mrb_value` or interned id back into their typed forms, beside the raw bindings as magnus's `rb_sys::FromRawValue` / `FromRawId` are. The reading direction needs no trait here: each typed handle answers its raw form through its own `as_raw`, which a `ReprValue` equivalent would one day unify the way magnus's `AsRawValue` does. A class pointer has no crossing trait — a class is a value in CRuby, so magnus offers only the checked downcast — and crosses through `RClass::from_raw` / `RModule::from_raw`, `unsafe` under the same rule. |
 | `sys::catch_unwind` | Panic boundary for a Rust closure handed to mruby as a C callback, magnus's `rb_sys::catch_unwind`: runs the closure under `std::panic::catch_unwind` and answers `Error::Panic` carrying the payload's message. The registered-method bridge and `Mrb::init_gem` go through it. Binds no C symbol. |

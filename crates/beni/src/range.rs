@@ -85,7 +85,7 @@ impl Range {
         // SAFETY: `self` is Range-tagged by the `from_value_unchecked`
         // contract; `mrb` is alive by the borrow. `mrb_range_beg_func`
         // reads only the `RRange` begin field.
-        Value::from_raw(unsafe { sys::mrb_range_beg_func(mrb.as_ptr(), self.0.as_raw()) })
+        Value::from_raw_unchecked(unsafe { sys::mrb_range_beg_func(mrb.as_ptr(), self.0.as_raw()) })
     }
 
     /// `mrb_range_end(mrb, self)` — the end value, Ruby's `Range#end`,
@@ -94,7 +94,7 @@ impl Range {
     pub fn end(self, mrb: &Mrb) -> Value {
         // SAFETY: as `begin`; `mrb_range_end_func` reads only the
         // `RRange` end field.
-        Value::from_raw(unsafe { sys::mrb_range_end_func(mrb.as_ptr(), self.0.as_raw()) })
+        Value::from_raw_unchecked(unsafe { sys::mrb_range_end_func(mrb.as_ptr(), self.0.as_raw()) })
     }
 
     /// `mrb_range_excl_p(mrb, self)` — TRUE when the range excludes its

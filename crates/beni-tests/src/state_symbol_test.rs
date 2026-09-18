@@ -286,3 +286,18 @@ fn symbols_compare_and_hash_by_the_name_they_carry() {
     assert_eq!(seen.get(&via_bytes), Some(&1));
     assert_eq!(seen.get(&other), None);
 }
+
+#[test]
+fn a_raw_id_crosses_back_into_the_symbol_it_names() {
+    let mrb = open_mrb();
+
+    // The seam an id leaves the typed surface through and returns by:
+    // the read is safe, the crossing back is the caller's to establish.
+    let interned = mrb.intern(b"beni_seam").expect("the name interns");
+    let id = interned.to_sym();
+    // SAFETY: `id` came from a symbol `mrb` interned.
+    let crossed = unsafe { <Symbol as beni::sys::FromRawId>::from_raw(id) };
+
+    assert_eq!(crossed, interned);
+    assert_eq!(crossed.name(&mrb).as_deref(), Some("beni_seam"));
+}

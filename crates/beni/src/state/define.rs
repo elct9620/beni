@@ -36,7 +36,7 @@ impl Mrb {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `sym` was interned against the same VM.
-            RModule::from_raw(unsafe { sys::mrb_define_module_id(mrb.as_ptr(), sym) })
+            RModule::from_raw_unchecked(unsafe { sys::mrb_define_module_id(mrb.as_ptr(), sym) })
         })
     }
 
@@ -57,7 +57,7 @@ impl Mrb {
         self.protect(|mrb| {
             // SAFETY: as `define_module`; `super_` was produced by
             // the same VM.
-            RClass::from_raw(unsafe {
+            RClass::from_raw_unchecked(unsafe {
                 sys::mrb_define_class_id(mrb.as_ptr(), sym.to_sym(), super_.as_raw())
             })
         })
@@ -90,7 +90,7 @@ impl Mrb {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `super_` was produced by the same VM.
-            RClass::from_raw(unsafe { sys::mrb_class_new(mrb.as_ptr(), super_.as_raw()) })
+            RClass::from_raw_unchecked(unsafe { sys::mrb_class_new(mrb.as_ptr(), super_.as_raw()) })
         })
     }
 
@@ -101,7 +101,7 @@ impl Mrb {
     pub fn module_new(&self) -> RModule {
         // SAFETY: `self` is alive by the borrow; the allocation
         // happens against the same VM.
-        RModule::from_raw(unsafe { sys::mrb_module_new(self.as_ptr()) })
+        RModule::from_raw_unchecked(unsafe { sys::mrb_module_new(self.as_ptr()) })
     }
 
     /// `mrb_class_get_id(mrb, name)` — fetch the top-level class named
@@ -114,7 +114,7 @@ impl Mrb {
         let sym = name.into_sym(self)?.to_sym();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
-            RClass::from_raw(unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) })
+            RClass::from_raw_unchecked(unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) })
         })
     }
 
@@ -167,7 +167,7 @@ impl Mrb {
         let sym = name.into_sym(self)?.to_sym();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
-            RModule::from_raw(unsafe { sys::mrb_module_get_id(mrb.as_ptr(), sym) })
+            RModule::from_raw_unchecked(unsafe { sys::mrb_module_get_id(mrb.as_ptr(), sym) })
         })
     }
 
@@ -208,7 +208,7 @@ impl Mrb {
             return Value::nil();
         };
         // SAFETY: `self` is alive; `sym` was interned against it.
-        Value::from_raw(unsafe { sys::mrb_gv_get(self.as_ptr(), sym) })
+        Value::from_raw_unchecked(unsafe { sys::mrb_gv_get(self.as_ptr(), sym) })
     }
 
     /// `mrb_gv_remove(mrb, sym)` — remove the global variable named by a

@@ -92,7 +92,7 @@ impl Hash {
             // SAFETY: as `contains_key`; `mrb_hash_get` runs the key's
             // `hash`/`eql?` and an absent-key `default` lookup, both of
             // which may raise — caught by `protect`.
-            Value::from_raw(unsafe {
+            Value::from_raw_unchecked(unsafe {
                 sys::mrb_hash_get(mrb.as_ptr(), self.0.as_raw(), key.as_raw())
             })
         })
@@ -105,7 +105,7 @@ impl Hash {
         // SAFETY: as `set`; `mrb_hash_keys` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw(sys::mrb_hash_keys(
+            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_keys(
                 mrb.as_ptr(),
                 self.0.as_raw(),
             )))
@@ -120,7 +120,7 @@ impl Hash {
         // SAFETY: as `keys`; `mrb_hash_values` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw(sys::mrb_hash_values(
+            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_values(
                 mrb.as_ptr(),
                 self.0.as_raw(),
             )))
@@ -177,7 +177,7 @@ impl Hash {
         mrb.protect(|mrb| {
             // SAFETY: as `contains_key`; `mrb_hash_fetch` runs the key's
             // `hash`/`eql?` and may raise — caught by `protect`.
-            Value::from_raw(unsafe {
+            Value::from_raw_unchecked(unsafe {
                 sys::mrb_hash_fetch(
                     mrb.as_ptr(),
                     self.0.as_raw(),
@@ -198,7 +198,7 @@ impl Hash {
             // SAFETY: as `set`; `mrb_hash_delete_key` modifies the hash
             // (raises `FrozenError` when frozen) and runs the key's
             // `hash`/`eql?` — caught by `protect`.
-            Value::from_raw(unsafe {
+            Value::from_raw_unchecked(unsafe {
                 sys::mrb_hash_delete_key(mrb.as_ptr(), self.0.as_raw(), key.as_raw())
             })
         })
@@ -246,7 +246,7 @@ impl Hash {
         // returns a fresh Hash-tagged value, so the unchecked wrap is
         // sound.
         unsafe {
-            Hash::from_value_unchecked(Value::from_raw(sys::mrb_hash_dup(
+            Hash::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_dup(
                 mrb.as_ptr(),
                 self.0.as_raw(),
             )))
@@ -296,8 +296,8 @@ impl Hash {
             // `mrb_hash_foreach` below; the foreach call borrows it
             // for the duration of the walk on this same thread.
             let walk: &mut Walk<F> = unsafe { &mut *(data as *mut Walk<F>) };
-            let key = Value::from_raw(key);
-            let val = Value::from_raw(val);
+            let key = Value::from_raw_unchecked(key);
+            let val = Value::from_raw_unchecked(val);
             // Catch here so a `body` panic stops the walk instead of
             // unwinding through `mrb_hash_foreach`'s C frame.
             // AssertUnwindSafe matches the crate's other panic

@@ -65,7 +65,7 @@ macro_rules! class_backed_repr {
         impl ReprValue for $handle {
             fn as_value(self) -> Value {
                 // SAFETY: `mrb_obj_value` only boxes the pointer.
-                Value::from_raw(unsafe {
+                Value::from_raw_unchecked(unsafe {
                     sys::mrb_obj_value(self.as_raw() as *mut core::ffi::c_void)
                 })
             }
@@ -151,7 +151,7 @@ impl Mrb {
                 &mut error,
             )
         };
-        let value = Value::from_raw(ret);
+        let value = Value::from_raw_unchecked(ret);
         if error {
             Err(Error::Exception(value))
         } else {

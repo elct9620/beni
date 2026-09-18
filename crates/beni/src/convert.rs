@@ -359,7 +359,7 @@ impl FromValue for RClass {
         // SAFETY: the unbox precondition (class or singleton-class
         // tagging) is established by the guard immediately before it.
         (value.is_class() || value.is_sclass())
-            .then(|| RClass::from_raw(unsafe { value.as_class_ptr() }))
+            .then(|| RClass::from_raw_unchecked(unsafe { value.as_class_ptr() }))
     }
 }
 
@@ -370,7 +370,7 @@ impl FromValue for RModule {
         // established by the `is_module` guard immediately before it.
         value
             .is_module()
-            .then(|| RModule::from_raw(unsafe { value.as_class_ptr() }))
+            .then(|| RModule::from_raw_unchecked(unsafe { value.as_class_ptr() }))
     }
 }
 

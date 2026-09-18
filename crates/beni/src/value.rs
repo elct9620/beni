@@ -165,11 +165,11 @@ impl core::fmt::Debug for Value {
 }
 
 impl Value {
-    /// Wrap a raw `mrb_value` produced by FFI. The most common
-    /// caller is a bridge function pointer receiving the receiver
-    /// from mruby.
+    /// Wrap a raw `mrb_value` the caller has established this VM
+    /// produced. The public crossing is `sys::FromRawValue::from_raw`,
+    /// which is `unsafe` for the establishing.
     #[inline]
-    pub const fn from_raw(v: sys::mrb_value) -> Self {
+    pub(crate) const fn from_raw_unchecked(v: sys::mrb_value) -> Self {
         Self(v)
     }
 
@@ -279,7 +279,7 @@ impl Value {
             // alive inside the protect frame. `mrb_integer_to_str` raises
             // `ArgumentError` on a base outside 2 through 36 — caught by
             // `protect` into `Err` — and otherwise returns a String value.
-            let v = Value::from_raw(unsafe {
+            let v = Value::from_raw_unchecked(unsafe {
                 sys::mrb_integer_to_str(mrb.as_ptr(), self.0, base as sys::mrb_int)
             });
             // SAFETY: a successful `mrb_integer_to_str` returns a
@@ -545,7 +545,7 @@ impl Value {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM.
-            crate::Symbol::from_sym(unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) })
+            crate::Symbol::from_sym_unchecked(unsafe { sys::mrb_obj_to_sym(mrb.as_ptr(), self.0) })
         })
     }
 
@@ -667,7 +667,7 @@ impl Value {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_inspect` dispatches
             // `inspect` and may raise — caught by `protect` into `Err`.
-            Value::from_raw(unsafe { sys::mrb_inspect(mrb.as_ptr(), self.0) })
+            Value::from_raw_unchecked(unsafe { sys::mrb_inspect(mrb.as_ptr(), self.0) })
         }) else {
             return String::new();
         };
@@ -687,7 +687,7 @@ impl Value {
         // `mrb_any_to_s` reads the class name and object id only, so it
         // returns a String-tagged value without dispatching user Ruby —
         // the unchecked wrap accepts it.
-        let v = Value::from_raw(unsafe { sys::mrb_any_to_s(mrb.as_ptr(), self.0) });
+        let v = Value::from_raw_unchecked(unsafe { sys::mrb_any_to_s(mrb.as_ptr(), self.0) });
         unsafe { RString::from_value_unchecked(v) }
     }
 
@@ -1140,7 +1140,10 @@ impl Value {
             let pairs: &mut Vec<(crate::Symbol, Value)> =
                 unsafe { &mut *(data as *mut Vec<(crate::Symbol, Value)>) };
             unsafe { sys::mrb_gc_protect(mrb, val) };
-            pairs.push((crate::Symbol::from_sym(name), Value::from_raw(val)));
+            pairs.push((
+                crate::Symbol::from_sym_unchecked(name),
+                Value::from_raw_unchecked(val),
+            ));
             0
         }
 
@@ -1355,7 +1358,7 @@ impl Value {
     pub fn class(self, mrb: &Mrb) -> RClass {
         // SAFETY: `mrb` is alive; `self` shares the VM. `mrb_obj_class`
         // returns the receiver's class pointer, never null.
-        RClass::from_raw(unsafe { sys::mrb_obj_class(mrb.as_ptr(), self.0) })
+        RClass::from_raw_unchecked(unsafe { sys::mrb_obj_class(mrb.as_ptr(), self.0) })
     }
 
     /// `mrb_singleton_class(mrb, self)` — the value's own singleton class,
@@ -1378,10 +1381,12 @@ impl Value {
             // `TypeError` for an immediate that has no singleton class —
             // caught by `protect` into `Err` — and otherwise returns a
             // class-tagged value.
-            let v = Value::from_raw(unsafe { sys::mrb_singleton_class(mrb.as_ptr(), self.0) });
+            let v = Value::from_raw_unchecked(unsafe {
+                sys::mrb_singleton_class(mrb.as_ptr(), self.0)
+            });
             // SAFETY: a value returned without a raise is the class-tagged value
             // `mrb_singleton_class` returns, so the pointer recovery accepts it.
-            RClass::from_raw(unsafe { v.as_class_ptr() })
+            RClass::from_raw_unchecked(unsafe { v.as_class_ptr() })
         })
     }
 
@@ -1416,7 +1421,7 @@ impl Value {
     pub fn freeze(self, mrb: &Mrb) -> Value {
         // SAFETY: `mrb` is alive; `self` shares the VM. `mrb_obj_freeze`
         // sets the frozen flag and returns the receiver.
-        Value::from_raw(unsafe { sys::mrb_obj_freeze(mrb.as_ptr(), self.0) })
+        Value::from_raw_unchecked(unsafe { sys::mrb_obj_freeze(mrb.as_ptr(), self.0) })
     }
 
     /// `mrb_check_frozen_value(mrb, self)` — a precondition guard that
@@ -1612,7 +1617,7 @@ impl Break {
     pub fn value(&self) -> Value {
         // SAFETY: `self.0` is break-tagged by the `Value::as_break`
         // gate that is this newtype's only constructor.
-        Value::from_raw(unsafe { sys::mrb_break_value_func(self.0.as_raw()) })
+        Value::from_raw_unchecked(unsafe { sys::mrb_break_value_func(self.0.as_raw()) })
     }
 }
 

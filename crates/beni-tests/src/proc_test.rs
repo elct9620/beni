@@ -143,7 +143,7 @@ fn a_proc_backed_by_a_c_function_has_no_bytecode() {
     // `mrb_obj_value` boxes the RProc the constructor just returned.
     let value = unsafe {
         let raw = beni::sys::mrb_proc_new_cfunc(mrb.as_ptr(), stub);
-        Value::from_raw(beni::sys::mrb_obj_value(raw.cast()))
+        <Value as beni::sys::FromRawValue>::from_raw(beni::sys::mrb_obj_value(raw.cast()))
     };
     let cfunc = Proc::from_value(value).expect("the constructor answers a Proc-tagged value");
 

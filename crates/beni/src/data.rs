@@ -166,7 +166,9 @@ impl RClass {
             };
             // SAFETY: `rdata` is a live object pointer just allocated
             // against this VM; `mrb_obj_value` reifies it.
-            Value::from_raw(unsafe { sys::mrb_obj_value(rdata as *mut core::ffi::c_void) })
+            Value::from_raw_unchecked(unsafe {
+                sys::mrb_obj_value(rdata as *mut core::ffi::c_void)
+            })
         });
         if wrapped.is_err() {
             // SAFETY: the allocation raised before handing the box to

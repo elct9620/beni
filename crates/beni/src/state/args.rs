@@ -143,7 +143,7 @@ impl Mrb {
     pub fn arg1(&self) -> Result<Value, Error> {
         // SAFETY: `mrb` is alive inside the protect frame; a wrong
         // argument count raises, which `protect` catches.
-        self.protect(|mrb| Value::from_raw(unsafe { sys::mrb_get_arg1(mrb.as_ptr()) }))
+        self.protect(|mrb| Value::from_raw_unchecked(unsafe { sys::mrb_get_arg1(mrb.as_ptr()) }))
     }
 
     /// Whether the current call was passed a block. A plain boolean
@@ -230,7 +230,7 @@ pub mod format {
                     );
                 }
             })?;
-            Ok(Value::from_raw(raw))
+            Ok(Value::from_raw_unchecked(raw))
         }
     }
 
@@ -347,7 +347,11 @@ pub mod format {
                     &mut block_raw as *mut sys::mrb_value,
                 );
             }
-            Ok((sym, slice_from_argv(argv, argc), Value::from_raw(block_raw)))
+            Ok((
+                sym,
+                slice_from_argv(argv, argc),
+                Value::from_raw_unchecked(block_raw),
+            ))
         }
     }
 
@@ -375,7 +379,7 @@ pub mod format {
                     );
                 }
             })?;
-            Ok((crate::value::widen(n), Value::from_raw(raw)))
+            Ok((crate::value::widen(n), Value::from_raw_unchecked(raw)))
         }
     }
 
@@ -401,7 +405,7 @@ pub mod format {
                     );
                 }
             })?;
-            Ok(Value::from_raw(raw))
+            Ok(Value::from_raw_unchecked(raw))
         }
     }
 
@@ -467,7 +471,10 @@ pub mod format {
                     &mut block_raw as *mut sys::mrb_value,
                 );
             }
-            Ok((slice_from_argv(argv, argc), Value::from_raw(block_raw)))
+            Ok((
+                slice_from_argv(argv, argc),
+                Value::from_raw_unchecked(block_raw),
+            ))
         }
     }
 
@@ -502,7 +509,7 @@ pub mod format {
                     );
                 }
                 // SAFETY: capture-all guarantees the bucket is a Hash value.
-                unsafe { crate::Hash::from_value_unchecked(Value::from_raw(out)) }
+                unsafe { crate::Hash::from_value_unchecked(Value::from_raw_unchecked(out)) }
             })
         }
     }
@@ -558,12 +565,12 @@ pub mod format {
                 );
             }
             // SAFETY: capture-all guarantees `out` is a Hash value.
-            let kw = unsafe { crate::Hash::from_value_unchecked(Value::from_raw(out)) };
+            let kw = unsafe { crate::Hash::from_value_unchecked(Value::from_raw_unchecked(out)) };
             Ok((
                 sym,
                 slice_from_argv(argv, argc),
                 kw,
-                Value::from_raw(block_raw),
+                Value::from_raw_unchecked(block_raw),
             ))
         }
     }

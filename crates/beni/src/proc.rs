@@ -83,7 +83,7 @@ impl Proc {
                     argv,
                 )
             };
-            Value::from_raw(raw)
+            Value::from_raw_unchecked(raw)
         })
     }
 }

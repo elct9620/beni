@@ -225,7 +225,7 @@ impl RString {
         // SAFETY: `self` is String-tagged by the newtype contract;
         // `mrb` is alive; `mrb_str_substr` clamps the range and reads
         // only the byte buffer, returning a fresh String or `nil`.
-        let v = Value::from_raw(unsafe {
+        let v = Value::from_raw_unchecked(unsafe {
             sys::mrb_str_substr(mrb.as_ptr(), self.0.as_raw(), beg, len)
         });
         if v.is_nil() {
@@ -356,7 +356,7 @@ impl RString {
         // `mrb_str_dup` returns a fresh String-tagged value, so the
         // unchecked wrap is sound.
         unsafe {
-            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_dup(
+            RString::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_str_dup(
                 mrb.as_ptr(),
                 self.0.as_raw(),
             )))
@@ -376,7 +376,7 @@ impl RString {
         // byte buffers and returns a fresh String-tagged value, so the
         // unchecked wrap is sound.
         unsafe {
-            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_plus(
+            RString::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_str_plus(
                 mrb.as_ptr(),
                 self.0.as_raw(),
                 other.0.as_raw(),
@@ -468,7 +468,7 @@ impl RString {
             // with `badcheck` TRUE raises `ArgumentError` on any input that
             // is not a clean integer in the base — caught by `protect` into
             // `Err`. On success it returns an Integer-tagged value.
-            Value::from_raw(unsafe {
+            Value::from_raw_unchecked(unsafe {
                 sys::mrb_str_to_integer(mrb.as_ptr(), self.0.as_raw(), base as sys::mrb_int, true)
             })
         })
@@ -498,7 +498,7 @@ impl RString {
             // returns the leading integer or 0 — but still raises
             // `ArgumentError` on an out-of-domain radix, caught by `protect`
             // into `Err`. On success it returns an Integer-tagged value.
-            Value::from_raw(unsafe {
+            Value::from_raw_unchecked(unsafe {
                 sys::mrb_str_to_integer(mrb.as_ptr(), self.0.as_raw(), base as sys::mrb_int, false)
             })
         })

@@ -87,7 +87,7 @@ impl Array {
         };
         // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
         // contract; `mrb_ary_entry` is bounds-tolerant.
-        Value::from_raw(unsafe { sys::mrb_ary_entry(self.0.as_raw(), idx) })
+        Value::from_raw_unchecked(unsafe { sys::mrb_ary_entry(self.0.as_raw(), idx) })
     }
 
     /// `mrb_ary_set(mrb, self, idx, val)` — write `val` at `idx`,
@@ -149,7 +149,7 @@ impl Array {
             // is Array-tagged by the `from_value_unchecked` contract.
             // `mrb_ary_pop` checks frozen state and may raise
             // `FrozenError` — caught by `protect`.
-            Value::from_raw(unsafe { sys::mrb_ary_pop(mrb.as_ptr(), self.0.as_raw()) })
+            Value::from_raw_unchecked(unsafe { sys::mrb_ary_pop(mrb.as_ptr(), self.0.as_raw()) })
         })
     }
 
@@ -161,7 +161,7 @@ impl Array {
         mrb.protect(|mrb| {
             // SAFETY: as `pop`; `mrb_ary_shift` checks frozen state and
             // may raise `FrozenError` — caught by `protect`.
-            Value::from_raw(unsafe { sys::mrb_ary_shift(mrb.as_ptr(), self.0.as_raw()) })
+            Value::from_raw_unchecked(unsafe { sys::mrb_ary_shift(mrb.as_ptr(), self.0.as_raw()) })
         })
     }
 
@@ -242,7 +242,7 @@ impl Array {
             // `mrb_ary_splice` routes through `mrb_ary_modify` and
             // range-checks `head`/`len`, raising `FrozenError` or
             // `IndexError` — caught by `protect` into `Err`.
-            Value::from_raw(unsafe {
+            Value::from_raw_unchecked(unsafe {
                 sys::mrb_ary_splice(mrb.as_ptr(), self.0.as_raw(), head, len, rpl.as_raw())
             })
         })
@@ -276,7 +276,7 @@ impl Array {
             // `sep` is nil or a String-tagged value from the same VM.
             // `mrb_ary_join` dispatches each element's `to_s`, which may
             // raise — caught by `protect` into `Err`.
-            let v = Value::from_raw(unsafe {
+            let v = Value::from_raw_unchecked(unsafe {
                 sys::mrb_ary_join(mrb.as_ptr(), self.0.as_raw(), sep.as_raw())
             });
             // SAFETY: `mrb_ary_join` returns a String-tagged value.
@@ -292,7 +292,7 @@ impl Array {
         // contract; `mrb_ary_dup` returns a fresh Array-tagged value,
         // so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_dup(
+            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_dup(
                 mrb.as_ptr(),
                 self.0.as_raw(),
             )))

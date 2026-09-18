@@ -114,7 +114,7 @@ impl<'mrb> Ccontext<'mrb> {
                 // SAFETY: `parser` parsed cleanly; `mrb_load_exec`
                 // takes ownership of it, frees it, and runs the
                 // generated Proc.
-                Value::from_raw(unsafe { sys::mrb_load_exec(mrb.as_ptr(), parser, raw) })
+                Value::from_raw_unchecked(unsafe { sys::mrb_load_exec(mrb.as_ptr(), parser, raw) })
             })
             .and_then(|value| self.mrb.outcome(value))
     }
@@ -156,8 +156,9 @@ impl<'mrb> Ccontext<'mrb> {
         unsafe { sys::mrb_ccontext::set_no_exec_raw(self.raw, true) };
         // SAFETY: `parser` parsed cleanly; `mrb_load_exec` takes
         // ownership of it and frees it.
-        let value =
-            Value::from_raw(unsafe { sys::mrb_load_exec(self.mrb.as_ptr(), parser, self.raw) });
+        let value = Value::from_raw_unchecked(unsafe {
+            sys::mrb_load_exec(self.mrb.as_ptr(), parser, self.raw)
+        });
         // SAFETY: as above.
         unsafe { sys::mrb_ccontext::set_no_exec_raw(self.raw, false) };
         value

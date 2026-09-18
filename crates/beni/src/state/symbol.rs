@@ -17,7 +17,7 @@ impl Mrb {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `s.as_ptr()` is NUL-terminated by the `&CStr` contract.
-            Symbol::from_sym(unsafe { sys::mrb_intern_cstr(mrb.as_ptr(), s.as_ptr()) })
+            Symbol::from_sym_unchecked(unsafe { sys::mrb_intern_cstr(mrb.as_ptr(), s.as_ptr()) })
         })
     }
 
@@ -31,7 +31,7 @@ impl Mrb {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `s`
             // originates from the same VM.
-            Symbol::from_sym(unsafe { sys::mrb_intern_str(mrb.as_ptr(), s.as_raw()) })
+            Symbol::from_sym_unchecked(unsafe { sys::mrb_intern_str(mrb.as_ptr(), s.as_raw()) })
         })
     }
 
@@ -48,7 +48,7 @@ impl Mrb {
             // SAFETY: `mrb` is alive inside the protect frame; `name` is a
             // valid byte slice and its length is passed alongside, so the
             // borrow need not be NUL-safe.
-            Symbol::from_sym(unsafe {
+            Symbol::from_sym_unchecked(unsafe {
                 sys::mrb_intern(
                     mrb.as_ptr(),
                     name.as_ptr() as *const core::ffi::c_char,
@@ -71,7 +71,7 @@ impl Mrb {
             // SAFETY: `mrb` is alive inside the protect frame; `name` is
             // `'static`, so the borrowed buffer outlives the VM as mruby's
             // no-free intern requires.
-            Symbol::from_sym(unsafe {
+            Symbol::from_sym_unchecked(unsafe {
                 sys::mrb_intern_static(
                     mrb.as_ptr(),
                     name.as_ptr() as *const core::ffi::c_char,
@@ -105,7 +105,7 @@ impl Mrb {
                 name.len(),
             )
         };
-        (sym != 0).then(|| Symbol::from_sym(sym))
+        (sym != 0).then(|| Symbol::from_sym_unchecked(sym))
     }
 
     /// `mrb_sym_name(mrb, sym)` — return the name of `sym` as an owned

@@ -179,7 +179,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Symbol::as_value;
     let _ = Symbol::as_raw;
     let _ = Symbol::new;
-    let _ = Symbol::from_sym;
+    let _ = <Symbol as sys::FromRawId>::from_raw;
     let _ = Symbol::to_sym;
     let _ = Symbol::name;
     let _ = <&core::ffi::CStr as IntoSym>::into_sym;
@@ -306,7 +306,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::equal;
     let _ = Value::float_to_int;
     let _ = Value::freeze;
-    let _ = Value::from_raw;
+    let _ = <Value as sys::FromRawValue>::from_raw;
     let _ = Value::funcall_with_block::<&core::ffi::CStr>;
     let _ = Value::inspect;
     let _ = Value::int_to_str;

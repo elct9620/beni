@@ -202,9 +202,9 @@ impl Mrb {
         // `mrb_obj_value` reifies into the matching `mrb_value`.
         let exc = unsafe { (*self.state.as_ptr()).exc };
         if exc.is_null() {
-            Value::from_raw(unsafe { sys::mrb_nil_value() })
+            Value::from_raw_unchecked(unsafe { sys::mrb_nil_value() })
         } else {
-            Value::from_raw(unsafe { sys::mrb_obj_value(exc as *mut core::ffi::c_void) })
+            Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(exc as *mut core::ffi::c_void) })
         }
     }
 
@@ -316,7 +316,7 @@ impl Mrb {
     #[inline]
     pub fn object_class(&self) -> RClass {
         // SAFETY: `self.state` is alive by the `&self` borrow.
-        RClass::from_raw(unsafe { sys::mrb_object_class(self.as_ptr()) })
+        RClass::from_raw_unchecked(unsafe { sys::mrb_object_class(self.as_ptr()) })
     }
 }
 

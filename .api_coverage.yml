@@ -299,7 +299,7 @@ typed:
   mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — returns an owned `Vec<u8>`, not a borrow: an inline (short) symbol's name unpacks into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). The true length carries out of band so an embedded NUL is preserved unescaped"
   mrb_sym_dump: "`Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), returned as an owned `String`, not a borrow: it draws on the same shared `mrb->symbuf` scratch an inline name unpacks into and the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). Never raises"
   mrb_sym_str: "`Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises"
-  mrb_symbol_value: Symbol::from_sym
+  mrb_symbol_value: "`sys::FromRawId::from_raw` — the `unsafe` crossing of a raw interned id back into its typed `Symbol`, mirroring magnus's `rb_sys::FromRawId`; the crate's own interns reach the same boxing without it"
   mrb_test: Value::to_bool
   mrb_top_run: Mrb::load_bytecode
   mrb_top_self: Mrb::load_bytecode
@@ -399,6 +399,15 @@ extensions:
     `Module::define_error` compose `mrb_define_class_id` /
     `mrb_define_class_under_id` with an exception-class superclass. Binds no
     new C symbol.
+  sys::FromRawValue / sys::FromRawId: >-
+    The `unsafe` crossings of a raw `mrb_value` or interned id back into
+    their typed forms, beside the raw bindings as magnus's `rb_sys::FromRawValue`
+    / `FromRawId` are. The reading direction needs no trait here: each typed
+    handle answers its raw form through its own `as_raw`, which a `ReprValue`
+    equivalent would one day unify the way magnus's `AsRawValue` does. A class
+    pointer has no crossing trait — a class is a value in CRuby, so magnus
+    offers only the checked downcast — and crosses through `RClass::from_raw`
+    / `RModule::from_raw`, `unsafe` under the same rule.
   sys::catch_unwind: >-
     Panic boundary for a Rust closure handed to mruby as a C callback,
     magnus's `rb_sys::catch_unwind`: runs the closure under

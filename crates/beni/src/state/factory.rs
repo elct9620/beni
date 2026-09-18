@@ -27,7 +27,7 @@ impl Mrb {
         // outlives the synchronous call. `mrb_str_new` always returns
         // a String-tagged value, so the unchecked wrap is sound.
         unsafe {
-            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new(
+            RString::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_str_new(
                 self.as_ptr(),
                 bytes.as_ptr() as *const core::ffi::c_char,
                 len,
@@ -44,7 +44,7 @@ impl Mrb {
         // the `&CStr` contract. `mrb_str_new_cstr` always returns a
         // String-tagged value, so the unchecked wrap is sound.
         unsafe {
-            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_cstr(
+            RString::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_str_new_cstr(
                 self.as_ptr(),
                 s.as_ptr(),
             )))
@@ -63,7 +63,7 @@ impl Mrb {
         // SAFETY: `self` is alive; `mrb_str_new_capa` always returns
         // a String-tagged value, so the unchecked wrap is sound.
         unsafe {
-            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_capa(
+            RString::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_str_new_capa(
                 self.as_ptr(),
                 capa,
             )))
@@ -89,7 +89,7 @@ impl Mrb {
         // NOFREE contract requires. `mrb_str_new_static` always returns
         // a String-tagged value, so the unchecked wrap is sound.
         unsafe {
-            RString::from_value_unchecked(Value::from_raw(sys::mrb_str_new_static(
+            RString::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_str_new_static(
                 self.as_ptr(),
                 bytes.as_ptr() as *const core::ffi::c_char,
                 len,
@@ -104,7 +104,9 @@ impl Mrb {
     pub fn ary_new(&self) -> Array {
         // SAFETY: `self` is alive; `mrb_ary_new` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
-        unsafe { Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_new(self.as_ptr()))) }
+        unsafe {
+            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new(self.as_ptr())))
+        }
     }
 
     /// `mrb_ary_new_capa(mrb, capa)` — construct an empty mruby `Array`
@@ -117,7 +119,10 @@ impl Mrb {
         // SAFETY: `self` is alive; `mrb_ary_new_capa` always returns
         // an Array-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_new_capa(self.as_ptr(), capa)))
+            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new_capa(
+                self.as_ptr(),
+                capa,
+            )))
         }
     }
 
@@ -132,7 +137,7 @@ impl Mrb {
         // pointer is a valid `*const mrb_value` for `len` elements,
         // which the call copies before returning.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw(sys::mrb_ary_new_from_values(
+            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new_from_values(
                 self.as_ptr(),
                 len,
                 values.as_ptr() as *const sys::mrb_value,
@@ -147,7 +152,9 @@ impl Mrb {
     pub fn hash_new(&self) -> Hash {
         // SAFETY: `self` is alive; `mrb_hash_new` always returns a
         // Hash-tagged value, so the unchecked wrap is sound.
-        unsafe { Hash::from_value_unchecked(Value::from_raw(sys::mrb_hash_new(self.as_ptr()))) }
+        unsafe {
+            Hash::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_new(self.as_ptr())))
+        }
     }
 
     /// `mrb_hash_new_capa(mrb, capa)` — construct an empty mruby `Hash`
@@ -160,7 +167,10 @@ impl Mrb {
         // SAFETY: `self` is alive; `mrb_hash_new_capa` always returns
         // a Hash-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Hash::from_value_unchecked(Value::from_raw(sys::mrb_hash_new_capa(self.as_ptr(), capa)))
+            Hash::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_new_capa(
+                self.as_ptr(),
+                capa,
+            )))
         }
     }
 
@@ -173,7 +183,7 @@ impl Mrb {
         // single-VM contract. `mrb_assoc_new` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw(sys::mrb_assoc_new(
+            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_assoc_new(
                 self.as_ptr(),
                 car.as_raw(),
                 cdr.as_raw(),
@@ -196,7 +206,7 @@ impl Mrb {
             // `mrb_range_new` compares the bounds and raises
             // `ArgumentError` on an incomparable pair — caught by
             // `protect` into `Err`.
-            let v = Value::from_raw(unsafe {
+            let v = Value::from_raw_unchecked(unsafe {
                 sys::mrb_range_new(mrb.as_ptr(), begin.as_raw(), end.as_raw(), exclusive)
             });
             // SAFETY: `mrb_range_new` returns a Range-tagged value when it
