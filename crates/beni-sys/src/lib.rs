@@ -241,6 +241,13 @@ mod width {
     include!("../build/width.rs");
 }
 
+/// The build script's GC arena check, reachable here for the same reason
+/// as the sidecar parse above.
+#[cfg(test)]
+mod arena {
+    include!("../build/arena.rs");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

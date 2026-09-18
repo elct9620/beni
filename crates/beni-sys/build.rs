@@ -24,10 +24,12 @@
 //      library the sidecar names.
 //   4. Leaves the bindings at `$OUT_DIR/bindings.rs`, the one path
 //      `src/lib.rs` includes them from.
-//   5. Publishes the integer width those bindings declare as `links`
-//      metadata, so a direct dependent offers only the integer
-//      conversions that width can hold. A documentation build publishes
-//      the width of the documentation bindings it stages instead.
+//   5. Refuses bindings of a configuration the crates do not support,
+//      then publishes the integer and float widths those bindings
+//      declare as `links` metadata, so a direct dependent offers only
+//      the numeric conversions those widths can hold. A documentation
+//      build checks and publishes the documentation bindings it stages
+//      instead.
 //
 // Archive discovery
 // -----------------
@@ -99,6 +101,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+include!("build/arena.rs");
 include!("build/sidecar.rs");
 include!("build/target.rs");
 include!("build/version.rs");
@@ -209,6 +212,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=BENI_VENDOR_DIR");
     println!("cargo:rerun-if-env-changed=WASI_SDK_PATH");
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=build/arena.rs");
     println!("cargo:rerun-if-changed=build/sidecar.rs");
     println!("cargo:rerun-if-changed=build/target.rs");
     println!("cargo:rerun-if-changed=build/version.rs");
@@ -227,6 +231,7 @@ fn main() {
     if env::var_os("DOCS_RS").is_some() {
         stage_documentation_bindings(&manifest_dir, &out_dir);
         let staged = out_dir.join("bindings.rs");
+        refuse_fixed_arena(&staged);
         println!("{}", integer_width_directive(&staged));
         println!("{}", float_width_directive(&staged));
         return;
@@ -279,6 +284,7 @@ fn main() {
         &static_wrappers_c,
     );
     compile_trampolines(&include_root, &compiler, &compile_flags, &static_wrappers_c);
+    refuse_fixed_arena(&bindings_rs);
     println!("{}", integer_width_directive(&bindings_rs));
     println!("{}", float_width_directive(&bindings_rs));
 
