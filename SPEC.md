@@ -470,8 +470,14 @@ yielding one reads the same whatever the raw bindings call the interned id. A
 name interns into a `Symbol`, and an already-interned id reifies back into one;
 the symbol reads its interned id back out. Those two — the reification and the
 read — are where the id itself crosses, the seam a consumer working below the
-typed surface hands an id to `beni::sys` through and takes one back from. The
-Rust-side name reaches
+typed surface hands an id to `beni::sys` through and takes one back from.
+
+Reading the id out is safe and reifying one is `unsafe`, like every crossing
+into the typed domain, and what a wrongly reified symbol costs is concrete: the
+name reification below answers an id naming no symbol with a value carrying no
+String, and hands that back as one.
+
+The Rust-side name reaches
 the intern as a NUL-terminated C string, as a borrowed byte slice carried with its
 own length, or as the bytes of an mruby String value. The length-carrying byte
 slice is the general form — it interns the exact bytes the slice spans, so a name
@@ -575,8 +581,9 @@ panic, and a break object carry no exception and answer no. Rescuing by class
 is a `match` on that answer and cleanup is the code after the operation, so the
 typed surface carries no `begin`/`rescue` or `begin`/`ensure` combinator.
 
-`beni::sys` carries every raw binding and two helpers for code working below the
-typed surface:
+`beni::sys` carries every raw binding, the `unsafe` conversions that cross a raw
+value or interned id back into its typed form, and two helpers for code working
+below the typed surface:
 
 - `sys::protect` runs a body inside mruby's protected frame and answers its
   value; an exception a raw binding raises there surfaces as an `Err` carrying
@@ -1087,6 +1094,18 @@ The `compiler` capability feature carries everything in this section.
   where its scope was opened. A rooted value is exempt for as long as its
   root lives, which is what lets a value outlive the frame that made it.
   The type system does not enforce the rule; the consumer upholds it.
+- The typed and raw domains meet asymmetrically. A typed handle answers the
+  raw form it carries — a value, an interned id, a class pointer — and that
+  read is safe: what the caller then does with the raw form is a raw call,
+  already `unsafe` on its own account. Crossing the other way is `unsafe`.
+  Nothing about a raw value, id, or pointer says it came from the
+  interpreter it will be used against, and the typed surface trusts what it
+  is handed rather than re-testing it, so a wrongly crossed one reaches
+  operations that read it as the thing it claims to be. This is `magnus`'s
+  `rb_sys` asymmetry, and the value's and the id's crossings sit beside the
+  raw bindings as they do there. The class pointer's has no counterpart to
+  follow — a class is a value in CRuby, so `magnus` offers only the checked
+  downcast — and stays on the class handle, `unsafe` under the same rule.
 - An interpreter crosses threads; it is never reached from two at once. One
   thread hands an interpreter to another, and separate threads each hold their
   own, but an interpreter is carried rather than shared: the typed surface
@@ -1100,7 +1119,11 @@ The `compiler` capability feature carries everything in this section.
 - A capability reaches the safe typed surface only when the wrapper can
   encode its invariant — a lifetime, a carrier type, or a runtime check —
   so a caller uses it without reasoning about mruby's VM internals, a
-  stronger bar than freedom from undefined behavior. Where the invariant is
+  stronger bar than freedom from undefined behavior. An operation `magnus`
+  gives an `unsafe` form is `unsafe` here too, whether or not an invariant
+  could be encoded for it: the safe surface's shape is `magnus`'s, and one
+  a `magnus` consumer reaches for through `unsafe` is not one this surface
+  makes safe under the same name. Where the invariant is
   not encodable, the honest form is `unsafe`: a typed `unsafe fn` on the
   `beni` surface when a typed shape can still carry the value — one
   caller-owned invariant left unencoded — otherwise a raw `beni::sys`
