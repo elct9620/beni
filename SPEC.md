@@ -492,6 +492,11 @@ an already-interned `Symbol` without creating one: the bytes resolve to the
 symbol they name when mruby has interned it before, and to nothing when no such
 symbol exists. The check dispatches nothing and never raises.
 
+A symbol compares and hashes by the id it carries. Interning is canonical, so
+two symbols are equal exactly when they name the same bytes, and a symbol keys a
+Rust-side map by that same id. Both are total, dispatch nothing, and never
+raise — the equality and hashing `magnus`'s `Id` carries.
+
 Where those interns take Rust bytes, an existing mruby value also coerces into a
 typed `Symbol`: a symbol value yields its own id; a string value interns its
 contents, surfacing the creating interns' `Err` when they are too long to be a
