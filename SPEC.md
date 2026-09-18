@@ -306,11 +306,12 @@ definition. Two typed conversions cross the Rust/Ruby boundary:
 Integer quantities cross the typed surface as Rust's own integer types, never as
 the configured-width integer the raw bindings declare, so a signature reads the
 same under every configured integer width. An index or offset mruby counts back
-from the end when it is negative is signed; every other count, length, or offset
+from the end when it is negative is `isize`; every other count, length, or offset
 — one mruby never computes with as a negative value, whether it rejects a
-negative one or cannot be handed one — is `usize`; and an integer mruby produces
-— an Integer's value, a parsed integer, an object identifier — is `i64`, which
-holds every configured width.
+negative one or cannot be handed one — is `usize`. An index, offset, or length
+beyond what the configured integer width holds stands for the width's minimum
+or maximum it exceeds, so it never wraps onto an in-range position. An integer mruby produces — an Integer's value, a parsed integer, an
+object identifier — is `i64`, which holds every configured width.
 
 Float quantities cross the same way — as Rust's own float types, never as the
 configured-width float the raw bindings declare. A float mruby produces — a
@@ -627,7 +628,7 @@ The typed array carries Ruby `Array`'s surface:
 | remove | take a value from either end |
 | extend | append another array's elements |
 | replace | make its contents a copy of another array's, in place — the receiver is mutated to hold those elements, not returned as a new array |
-| splice | replace a subsequence in place, Ruby's `ary[head, len] = rpl` — remove the `len` elements starting at `head` and put the replacement in their place; the primitive behind indexed assignment, insertion, and deletion. A `head` past the end grows the array with `nil` to reach it; a negative `head` counts from the tail. An array replacement splices in its elements, any other value is inserted as the single element it is, and an absent replacement deletes without inserting; the available run is truncated when `len` overshoots the tail. Surfaces an `Err` when the receiver is frozen, when `len` is negative, or when `head` reaches past the beginning or overshoots the maximum array size |
+| splice | replace a subsequence in place, Ruby's `ary[head, len] = rpl` — remove the `len` elements starting at `head` and put the replacement in their place; the primitive behind indexed assignment, insertion, and deletion. A `head` past the end grows the array with `nil` to reach it; a negative `head` counts from the tail. An array replacement splices in its elements, any other value is inserted as the single element it is, and an absent replacement deletes without inserting; the available run is truncated when `len` overshoots the tail. Surfaces an `Err` when the receiver is frozen, or when `head` reaches past the beginning or overshoots the maximum array size |
 | join | the elements rendered into one string, separated by a given separator — each element's `to_s` runs and a raise inside it surfaces as an `Err`; an absent separator concatenates the renderings with nothing between them |
 | clear | empty it |
 | duplicate | copy it |
