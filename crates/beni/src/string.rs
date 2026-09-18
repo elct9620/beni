@@ -514,7 +514,7 @@ impl RString {
     /// runs under exception protection, so that surfaces as `Err` rather than
     /// long-jumping. The `to_i` sibling for the integer parse.
     #[inline]
-    pub fn to_f(self, mrb: &Mrb) -> Result<sys::mrb_float, Error> {
+    pub fn to_f(self, mrb: &Mrb) -> Result<f64, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `self` is String-tagged by the newtype contract;
             // `mrb` is alive inside the protect frame. `mrb_str_to_dbl`
@@ -523,6 +523,11 @@ impl RString {
             // The C `double` is boxed into a Float value so it rides the
             // protect frame's `Value` return.
             let d = unsafe { sys::mrb_str_to_dbl(mrb.as_ptr(), self.0.as_raw(), true) };
+            // mruby's own `String#to_f` narrows the parse to the
+            // configured width, so the boxed Float matches what Ruby
+            // code reading the same bytes would see.
+            #[cfg(mrb_float32)]
+            let d = d as sys::mrb_float;
             Value::from_float(mrb, d)
         })
         // SAFETY: the `Ok` value was boxed by `Value::from_float`, so

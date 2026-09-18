@@ -350,3 +350,20 @@ fn option_reads_nil_as_none_and_defers_the_rest_to_its_inner_type() {
         "only nil reads as absent, not every falsy value"
     );
 }
+
+#[test]
+fn an_f32_converts_under_every_configured_float_width() {
+    let mrb = open_mrb();
+
+    // `f32` is the float every configured width holds, so it boxes
+    // under both; the value reads back through `f64`, which holds
+    // every width in the other direction.
+    let boxed = 1.5f32.into_value(&mrb);
+    assert!(boxed.is_float());
+    assert_eq!(f64::from_value(boxed), Some(1.5));
+
+    // Reading back as `f32` is offered only where the width carries
+    // every value of one, so the round trip is exact wherever it exists.
+    #[cfg(mrb_float32)]
+    assert_eq!(f32::from_value(boxed), Some(1.5));
+}

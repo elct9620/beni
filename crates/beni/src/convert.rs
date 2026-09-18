@@ -68,6 +68,26 @@ use crate::{
 /// fn converts<T: beni::IntoValue>() {}
 /// converts::<usize>();
 /// ```
+///
+/// A Rust float converts by the same rule against the configured float
+/// width: `f32` under every width, `f64` under a 64-bit width. Rendered
+/// documentation shows the 64-bit set.
+///
+/// ```
+/// fn converts<T: beni::IntoValue>() {}
+/// converts::<f32>();
+/// #[cfg(not(mrb_float32))]
+/// converts::<f64>();
+/// ```
+///
+/// A 32-bit float width does not hold every `f64`:
+///
+/// ```compile_fail
+/// fn converts<T: beni::IntoValue>() {}
+/// #[cfg(not(mrb_float32))]
+/// compile_error!("a 64-bit float width holds every f64");
+/// converts::<f64>();
+/// ```
 pub trait IntoValue {
     fn into_value(self, mrb: &Mrb) -> Value;
 }
@@ -117,10 +137,18 @@ impl IntoValue for isize {
     }
 }
 
+impl IntoValue for f32 {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        Value::from_float(mrb, sys::mrb_float::from(self))
+    }
+}
+
+#[cfg(not(mrb_float32))]
 impl IntoValue for f64 {
     #[inline]
     fn into_value(self, mrb: &Mrb) -> Value {
-        Value::from_float(mrb, self)
+        Value::from_float(mrb, sys::mrb_float::from(self))
     }
 }
 
@@ -258,6 +286,16 @@ impl FromValue for f64 {
         // SAFETY: the unbox precondition (MRB_TT_FLOAT tagging) is
         // established by the `is_float` guard immediately before it.
         value.is_float().then(|| unsafe { value.unbox_float() })
+    }
+}
+
+#[cfg(mrb_float32)]
+impl FromValue for f32 {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // The cfg admits only a configured width an `f32` holds every
+        // value of, so narrowing the widened read loses nothing.
+        <f64 as FromValue>::from_value(value).map(|f| f as f32)
     }
 }
 

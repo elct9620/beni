@@ -237,9 +237,12 @@ impl Value {
 
     /// `mrb_float_value(mrb, f)` — construct an mruby Float from `f`,
     /// via mruby's boxing-agnostic `MRB_INLINE` constructor (same
-    /// trampoline route as `Value::from_int`).
+    /// trampoline route as `Value::from_int`). Crate-internal like
+    /// `Value::from_int`: a Rust float reaches the value domain through
+    /// `IntoValue`, which offers only the floats the configured width
+    /// holds.
     #[inline]
-    pub fn from_float(mrb: &Mrb, f: sys::mrb_float) -> Self {
+    pub(crate) fn from_float(mrb: &Mrb, f: sys::mrb_float) -> Self {
         // SAFETY: `mrb` is alive by the `&Mrb` borrow.
         Self(unsafe { sys::mrb_float_value(mrb.as_ptr(), f) })
     }
@@ -983,9 +986,14 @@ impl Value {
     ///
     /// As `Value::unbox_integer`: caller has confirmed Float-tagging.
     #[inline]
-    pub unsafe fn unbox_float(self) -> sys::mrb_float {
+    pub unsafe fn unbox_float(self) -> f64 {
         // SAFETY: forwarded from caller.
-        unsafe { sys::mrb_float_func(self.0) }
+        let f = unsafe { sys::mrb_float_func(self.0) };
+        // The widening is the configured width's, not a cast the
+        // caller asked for, so it is spelled only where there is one.
+        #[cfg(mrb_float32)]
+        let f = f64::from(f);
+        f
     }
 
     /// `mrb_ary_entry(self, idx)` — read the element at `idx` from
@@ -1570,7 +1578,7 @@ impl Value {
     /// `unbox_float` at the archive's own float width, so nothing is
     /// lost between them.
     #[inline]
-    pub fn as_float(self, mrb: &Mrb) -> Result<sys::mrb_float, Error> {
+    pub fn as_float(self, mrb: &Mrb) -> Result<f64, Error> {
         mrb.protect(|mrb| {
             // SAFETY: as `as_int`; `mrb_as_float` raises `TypeError`
             // on a non-numeric value, caught by `protect`. The result

@@ -1432,12 +1432,14 @@ fn float_to_int_truncates_toward_zero() {
     let mrb = open_mrb();
 
     // A positive float truncates down, like Ruby's 3.9.to_i == 3.
-    let three = Value::from_float(&mrb, 3.9)
+    let three = 3.9f64
+        .into_value(&mrb)
         .float_to_int(&mrb)
         .expect("3.9 converts");
     assert_eq!(i32::from_value(three), Some(3));
     // A negative float truncates toward zero, like Ruby's -3.9.to_i == -3.
-    let neg_three = Value::from_float(&mrb, -3.9)
+    let neg_three = (-3.9f64)
+        .into_value(&mrb)
         .float_to_int(&mrb)
         .expect("-3.9 converts");
     assert_eq!(i32::from_value(neg_three), Some(-3));
@@ -1450,16 +1452,17 @@ fn float_to_int_surfaces_infinity_and_nan_as_err() {
     // Infinity and NaN have no integer; mruby raises RangeError, caught
     // into Err rather than long-jumping, and the VM stays usable after.
     assert!(matches!(
-        Value::from_float(&mrb, f64::INFINITY).float_to_int(&mrb),
+        f64::INFINITY.into_value(&mrb).float_to_int(&mrb),
         Err(Error::Exception(_))
     ));
     assert!(matches!(
-        Value::from_float(&mrb, f64::NAN).float_to_int(&mrb),
+        f64::NAN.into_value(&mrb).float_to_int(&mrb),
         Err(Error::Exception(_))
     ));
     assert_eq!(
         i32::from_value(
-            Value::from_float(&mrb, 2.5)
+            2.5f64
+                .into_value(&mrb)
                 .float_to_int(&mrb)
                 .expect("the VM survives the protected raise")
         ),
@@ -1493,7 +1496,8 @@ fn ensure_int_coerces_by_numeric_type_or_raises() {
 
     // A Float coerces by truncating toward zero, like Ruby's
     // Integer(-3.9) == -3 — the cross-numeric case.
-    let truncated = Value::from_float(&mrb, -3.9)
+    let truncated = (-3.9f64)
+        .into_value(&mrb)
         .ensure_int(&mrb)
         .expect("a Float coerces by truncation");
     assert!(truncated.is_integer());
@@ -1502,7 +1506,7 @@ fn ensure_int_coerces_by_numeric_type_or_raises() {
     // An infinite or NaN Float has no integer; mruby raises RangeError,
     // caught into Err, and the VM stays usable.
     assert!(matches!(
-        Value::from_float(&mrb, f64::INFINITY).ensure_int(&mrb),
+        f64::INFINITY.into_value(&mrb).ensure_int(&mrb),
         Err(Error::Exception(_))
     ));
 
@@ -1521,7 +1525,8 @@ fn ensure_float_coerces_by_numeric_type_or_raises() {
     let mrb = open_mrb();
 
     // A Float coerces unchanged, staying a Float value.
-    let same = Value::from_float(&mrb, 2.5)
+    let same = 2.5f64
+        .into_value(&mrb)
         .ensure_float(&mrb)
         .expect("a Float coerces without raising");
     assert!(same.is_float());
@@ -1577,11 +1582,12 @@ fn arithmetic_widens_a_mixed_operand_to_float() {
     // confirms the result is a Float, not an Integer.
     let sum = 2i32
         .into_value(&mrb)
-        .add(&mrb, Value::from_float(&mrb, 3.5))
+        .add(&mrb, 3.5f64.into_value(&mrb))
         .expect("2 + 3.5 computes");
     assert_eq!(f64::from_value(sum), Some(5.5));
     // The float receiver path widens the same way.
-    let product = Value::from_float(&mrb, 1.5)
+    let product = 1.5f64
+        .into_value(&mrb)
         .mul(&mrb, 4i32.into_value(&mrb))
         .expect("1.5 * 4 computes");
     assert_eq!(f64::from_value(product), Some(6.0));

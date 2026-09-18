@@ -131,7 +131,7 @@ fn from_value_failure_raises_before_body_runs() {
     let receiver = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let args = [Value::from_float(&mrb, 1.5), 2i32.into_value(&mrb)];
+    let args = [1.5f64.into_value(&mrb), 2i32.into_value(&mrb)];
     let err = receiver
         .funcall(&mrb, c"add", &args)
         .expect_err("the conversion failure must surface as a raise");
@@ -217,7 +217,7 @@ fn supplied_optional_failing_from_value_raises() {
         .funcall(
             &mrb,
             c"add",
-            &[1i32.into_value(&mrb), Value::from_float(&mrb, 1.5)],
+            &[1i32.into_value(&mrb), 1.5f64.into_value(&mrb)],
         )
         .expect_err("the supplied optional's conversion failure must raise");
     assert!(
