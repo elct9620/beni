@@ -40,6 +40,12 @@
 #                              mrb_int on 64-bit hosts). Catches
 #                              width-coincidence bugs that the repo's
 #                              MRB_INT32 validation config masks.
+#   $ rake rust:test:float32 — cargo test against an mruby built with
+#                              MRB_USE_FLOAT32, where `mrb_float` is
+#                              `float`. The crates convert a different
+#                              set of Rust floats under each configured
+#                              float width, and this is the only leg
+#                              that compiles the 32-bit set.
 #   $ rake rust:verify       — beni:build + the tasks above; the
 #                              single local entry point for "does the
 #                              Rust side compile and pass everywhere".
@@ -120,9 +126,19 @@ namespace :rust do
 
       BeniRust.default_abi_test
     end
+
+    # The crates offer a different set of float conversions under each
+    # configured float width, and every other leg builds the 64-bit one
+    # — see BeniRust.float32_test for the mechanics.
+    desc "cargo test against a MRB_USE_FLOAT32 mruby build (32-bit mrb_float)"
+    task float32: "beni:vendor:setup:mruby" do |t|
+      BeniRust.require_cargo!(t.name)
+
+      BeniRust.float32_test
+    end
   end
 
-  desc "Full local compile verification: build + host, feature-off, wasm32, documentation and default-ABI legs"
+  desc "Full local compile verification: build + host, feature-off, wasm32, documentation and per-ABI legs"
   task verify: ["beni:build", "rust:check", "rust:test", "rust:check:nodefault", "rust:check:wasm",
-                "rust:link:wasm", "rust:check:docs", "rust:test:default"]
+                "rust:link:wasm", "rust:check:docs", "rust:test:default", "rust:test:float32"]
 end

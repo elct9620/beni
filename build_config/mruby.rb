@@ -21,46 +21,7 @@
 # config opts out.
 MRuby::Lockfile.disable
 
-# Config-time constants shared across the targets below. Only defined
-# on first load, so `load`-ing this file twice in the same process does
-# not warn about constant redefinition.
-unless defined?(BeniBuildConfig)
-  # Config-time constants shared across the targets below.
-  module BeniBuildConfig
-    # ABI-bearing defines applied to BOTH the host and wasi targets,
-    # keeping `mrb_int` width and float boxing identical across them
-    # (without MRB_INT32 a 64-bit host defaults to MRB_INT64 while
-    # wasm32 stays 32-bit — see mruby's mrbconf.h). The beni crates
-    # align themselves automatically: their build script parses the
-    # `libmruby.flags.mak` sidecar each build leaves next to the
-    # archive, so edits here flow into bindgen without code changes.
-    ABI_DEFINES = %w[
-      MRB_INT32
-      MRB_WORDBOX_NO_INLINE_FLOAT
-    ].freeze
-
-    # Core-gem baseline shared by both targets: mruby-compiler (the
-    # wrapper's `mrb_load_nstring` needs it) plus the portable core
-    # extension gems. No I/O / network / process gems — those do not
-    # exist on wasm32-wasip1, and keeping the two targets' gem sets
-    # identical keeps the verified surface identical.
-    MRBGEM_BASELINE = %w[
-      mruby-compiler
-      mruby-array-ext
-      mruby-enum-ext
-      mruby-hash-ext
-      mruby-numeric-ext
-      mruby-object-ext
-      mruby-proc-ext
-      mruby-range-ext
-      mruby-string-ext
-      mruby-sprintf
-      mruby-symbol-ext
-      mruby-error
-      mruby-metaprog
-    ].freeze
-  end
-end
+require_relative "beni_build_config"
 
 # Native host build — the full archive plus the host mrbc the cross build
 # borrows. +:gcc+ forces a bare +gcc+ so +Toolchain.guess+ cannot pick

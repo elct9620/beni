@@ -98,6 +98,26 @@ pub trait IntoValue {
 /// folded in, so callers no longer pair a predicate with an `unsafe`
 /// unbox. Mirrors magnus's `TryConvert`; named `FromValue` here for the
 /// `T::from_value(v)` call shape.
+///
+/// A float target converts only where it holds every value the
+/// configured float width does: `f64` under every width, `f32` under a
+/// 32-bit width. Rendered documentation shows the 64-bit set.
+///
+/// ```
+/// fn converts<T: beni::FromValue>() {}
+/// converts::<f64>();
+/// #[cfg(mrb_float32)]
+/// converts::<f32>();
+/// ```
+///
+/// An `f32` does not hold every value a 64-bit width carries:
+///
+/// ```compile_fail
+/// fn converts<T: beni::FromValue>() {}
+/// #[cfg(mrb_float32)]
+/// compile_error!("a 32-bit float width fits an f32");
+/// converts::<f32>();
+/// ```
 pub trait FromValue: Sized {
     fn from_value(value: Value) -> Option<Self>;
 }

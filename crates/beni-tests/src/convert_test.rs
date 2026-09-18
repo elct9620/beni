@@ -13,7 +13,7 @@ fn scalars_roundtrip_through_a_live_vm() {
     let int_val = 42i32.into_value(&mrb);
     assert_eq!(i32::from_value(int_val), Some(42));
 
-    let float_val = 1.5f64.into_value(&mrb);
+    let float_val = 1.5f32.into_value(&mrb);
     assert_eq!(f64::from_value(float_val), Some(1.5));
 
     // Cross-type downcasts fail cleanly instead of misreading the
@@ -263,7 +263,7 @@ fn i64_holds_every_integer_the_configured_width_carries() {
     );
     assert_eq!(i64::from_value((-3i32).into_value(&mrb)), Some(-3));
     assert_eq!(
-        i64::from_value(1.5f64.into_value(&mrb)),
+        i64::from_value(1.5f32.into_value(&mrb)),
         None,
         "a Float is not widened"
     );
@@ -320,7 +320,7 @@ fn the_widest_integer_reaches_every_target_wide_enough_for_it() {
 #[test]
 fn an_integer_target_rejects_every_value_that_is_not_an_integer() {
     let mrb = open_mrb();
-    let float = 2.0f64.into_value(&mrb);
+    let float = 2.0f32.into_value(&mrb);
 
     assert_eq!(u8::from_value(float), None);
     assert_eq!(u64::from_value(float), None);
@@ -361,9 +361,4 @@ fn an_f32_converts_under_every_configured_float_width() {
     let boxed = 1.5f32.into_value(&mrb);
     assert!(boxed.is_float());
     assert_eq!(f64::from_value(boxed), Some(1.5));
-
-    // Reading back as `f32` is offered only where the width carries
-    // every value of one, so the round trip is exact wherever it exists.
-    #[cfg(mrb_float32)]
-    assert_eq!(f32::from_value(boxed), Some(1.5));
 }

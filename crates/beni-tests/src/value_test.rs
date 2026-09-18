@@ -1338,7 +1338,7 @@ fn as_int_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
 
     // A Float converts by truncating toward zero — unlike the
     // exact-tag `i32::from_value`, which rejects the Float tag.
-    let float_val = 2.9f64.into_value(&mrb);
+    let float_val = 2.9f32.into_value(&mrb);
     assert_eq!(i32::from_value(float_val), None);
     assert_eq!(float_val.as_int(&mrb).expect("a Float truncates"), 2);
 
@@ -1356,7 +1356,7 @@ fn as_float_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
 
     // A Float reads directly.
     assert_eq!(
-        1.5f64
+        1.5f32
             .into_value(&mrb)
             .as_float(&mrb)
             .expect("a Float converts"),
@@ -1422,7 +1422,7 @@ fn int_to_str_rejects_a_non_integer_receiver() {
     // TypeError, not coerced, because mrb_integer_to_str unboxes its
     // receiver without a tag check.
     assert!(matches!(
-        1.5f64.into_value(&mrb).int_to_str(&mrb, 10),
+        1.5f32.into_value(&mrb).int_to_str(&mrb, 10),
         Err(Error::Exception(_))
     ));
 }
@@ -1432,13 +1432,13 @@ fn float_to_int_truncates_toward_zero() {
     let mrb = open_mrb();
 
     // A positive float truncates down, like Ruby's 3.9.to_i == 3.
-    let three = 3.9f64
+    let three = 3.9f32
         .into_value(&mrb)
         .float_to_int(&mrb)
         .expect("3.9 converts");
     assert_eq!(i32::from_value(three), Some(3));
     // A negative float truncates toward zero, like Ruby's -3.9.to_i == -3.
-    let neg_three = (-3.9f64)
+    let neg_three = (-3.9f32)
         .into_value(&mrb)
         .float_to_int(&mrb)
         .expect("-3.9 converts");
@@ -1452,16 +1452,16 @@ fn float_to_int_surfaces_infinity_and_nan_as_err() {
     // Infinity and NaN have no integer; mruby raises RangeError, caught
     // into Err rather than long-jumping, and the VM stays usable after.
     assert!(matches!(
-        f64::INFINITY.into_value(&mrb).float_to_int(&mrb),
+        f32::INFINITY.into_value(&mrb).float_to_int(&mrb),
         Err(Error::Exception(_))
     ));
     assert!(matches!(
-        f64::NAN.into_value(&mrb).float_to_int(&mrb),
+        f32::NAN.into_value(&mrb).float_to_int(&mrb),
         Err(Error::Exception(_))
     ));
     assert_eq!(
         i32::from_value(
-            2.5f64
+            2.5f32
                 .into_value(&mrb)
                 .float_to_int(&mrb)
                 .expect("the VM survives the protected raise")
@@ -1496,7 +1496,7 @@ fn ensure_int_coerces_by_numeric_type_or_raises() {
 
     // A Float coerces by truncating toward zero, like Ruby's
     // Integer(-3.9) == -3 — the cross-numeric case.
-    let truncated = (-3.9f64)
+    let truncated = (-3.9f32)
         .into_value(&mrb)
         .ensure_int(&mrb)
         .expect("a Float coerces by truncation");
@@ -1506,7 +1506,7 @@ fn ensure_int_coerces_by_numeric_type_or_raises() {
     // An infinite or NaN Float has no integer; mruby raises RangeError,
     // caught into Err, and the VM stays usable.
     assert!(matches!(
-        f64::INFINITY.into_value(&mrb).ensure_int(&mrb),
+        f32::INFINITY.into_value(&mrb).ensure_int(&mrb),
         Err(Error::Exception(_))
     ));
 
@@ -1525,7 +1525,7 @@ fn ensure_float_coerces_by_numeric_type_or_raises() {
     let mrb = open_mrb();
 
     // A Float coerces unchanged, staying a Float value.
-    let same = 2.5f64
+    let same = 2.5f32
         .into_value(&mrb)
         .ensure_float(&mrb)
         .expect("a Float coerces without raising");
@@ -1582,11 +1582,11 @@ fn arithmetic_widens_a_mixed_operand_to_float() {
     // confirms the result is a Float, not an Integer.
     let sum = 2i32
         .into_value(&mrb)
-        .add(&mrb, 3.5f64.into_value(&mrb))
+        .add(&mrb, 3.5f32.into_value(&mrb))
         .expect("2 + 3.5 computes");
     assert_eq!(f64::from_value(sum), Some(5.5));
     // The float receiver path widens the same way.
-    let product = 1.5f64
+    let product = 1.5f32
         .into_value(&mrb)
         .mul(&mrb, 4i32.into_value(&mrb))
         .expect("1.5 * 4 computes");

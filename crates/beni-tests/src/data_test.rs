@@ -387,7 +387,7 @@ fn marking_refuses_every_built_in_layout_so_its_instances_keep_it() {
         String::from_value(mrb.str_new(b"box").as_value()),
         Some("box".to_string())
     );
-    assert!(1.5f64.into_value(&mrb).is_float());
+    assert!(1.5f32.into_value(&mrb).is_float());
     let joined = mrb
         .load_string(b"BeniDataRefusedString.new('abc') + 'def'")
         .expect("the subclass still builds strings");

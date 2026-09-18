@@ -23,6 +23,11 @@ module BeniRust
   # (gitignored) and is incremental across runs.
   DEFAULT_ABI_BUILD_DIR = File.join(ROOT, "tmp", "mruby-default-build")
 
+  # Scratch build dir for the 32-bit-float leg, kept apart from the
+  # other ABIs' trees for the same reason they are kept apart from
+  # each other.
+  FLOAT32_BUILD_DIR = File.join(ROOT, "tmp", "mruby-float32-build")
+
   # Whether cargo can be spawned. Asking cargo itself needs no lookup
   # tool, which +which+ is on POSIX hosts and is not on Windows.
   def self.cargo_available?
@@ -75,6 +80,31 @@ module BeniRust
          "cargo", "test", "-p", "beni", "-p", "beni-tests",
          "--target-dir", File.join(ROOT, "target", "default-abi"),
          chdir: ROOT)
+  end
+
+  # The 32-bit-float leg: build the vendored mruby under the float32
+  # verification config, then run the wrapper tests against that
+  # archive. It is the only build that compiles the crates' 32-bit
+  # float conversions, which no other ABI in the chain reaches. Its own
+  # cargo target dir, since the MRUBY_LIB_DIR switch would otherwise
+  # invalidate the main verification cache.
+  def self.float32_test
+    run!({ "MRUBY_LIB_DIR" => float32_lib_dir },
+         "cargo", "test", "-p", "beni", "-p", "beni-tests",
+         "--target-dir", File.join(ROOT, "target", "float32"),
+         chdir: ROOT)
+  end
+
+  # Build the vendored mruby under build_config/float32.rb and answer
+  # the staged path.
+  def self.float32_lib_dir
+    lib_dir = File.join(FLOAT32_BUILD_DIR, "host", "lib")
+    run!({ "MRUBY_BUILD_DIR" => FLOAT32_BUILD_DIR,
+           "MRUBY_CONFIG" => File.join(ROOT, "build_config", "float32.rb") },
+         RbConfig.ruby, "-S", "rake", "default",
+         File.join(lib_dir, Beni::Builder::FLAGS_MAK),
+         chdir: File.join(ROOT, "vendor", "mruby"))
+    lib_dir
   end
 
   # Build the vendored mruby with no MRUBY_CONFIG, so mruby's own

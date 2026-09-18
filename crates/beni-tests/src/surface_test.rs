@@ -190,7 +190,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = ParseMessage::column;
     let _ = ParseMessage::message;
     let _ = <i32 as IntoValue>::into_value;
-    let _ = <f64 as IntoValue>::into_value;
+    let _ = <f32 as IntoValue>::into_value;
     let _ = <bool as IntoValue>::into_value;
     let _ = <i32 as FromValue>::from_value;
     let _ = <f64 as FromValue>::from_value;
