@@ -291,8 +291,8 @@ The crate owns every Rust-level abstraction over the C API: an RAII interpreter
 handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes, and class and module
 definition. Three typed conversions cross the Rust/Ruby boundary — `IntoValue`
 out of Rust, the `FromValue` downcast that reads a value only as what its type
-tag already is, and `TryConvert`, the conversion a method's arguments cross,
-mirroring `magnus`'s `TryConvert`:
+tag already is, and `TryConvert`, the conversion a method's receiver and
+arguments cross, mirroring `magnus`'s `TryConvert`:
 
 | Conversion | Direction | Rule |
 |---|---|---|
@@ -727,8 +727,8 @@ its key can surface.
   `TypeError` surfaces when the name is bound to anything else, a class with a
   different superclass included. Methods are registered on those handles
   through the `Module` and `Object` traits (mirroring `magnus::Module` and
-  `magnus::Object`), accepting Rust closures whose arguments and return
-  values cross the boundary through `IntoValue` / `TryConvert`; the `Module`
+  `magnus::Object`), accepting Rust closures whose receiver, arguments, and
+  return values cross the boundary through `IntoValue` / `TryConvert`; the `Module`
   trait also binds constants, aliases existing methods, mixes another module
   into the handle two ways — including it after the receiver in the ancestry
   (Ruby's `Module#include`, the receiver's own methods win) and prepending it
@@ -815,6 +815,15 @@ its key can surface.
   name read always answers a name — synthesizing one for an anonymous handle —
   whereas the path read answers the qualified path or nothing, never a
   synthesized stand-in.
+- Every typed method registration, whatever its arity, hands the registered
+  Rust function its receiver converted through `TryConvert`, mirroring
+  `magnus`'s typed `self`: a function taking the receiver as a `Value` sees it
+  unchanged, and one taking a typed handle or a Rust value sees the receiver
+  converted by that type's rule. The receiver converts after a fixed-arity
+  registration's positional count is checked and before any argument converts,
+  so a call failing more than one of them raises the first failure in that
+  order; a receiver that fails the conversion raises its exception to the Ruby
+  caller before the body runs, as a failed argument does.
 - A method registered for any arity reads its own call frame instead of
   receiving converted positionals: a scan read projects the frame into typed
   parts, a single-argument read returns the one required argument, a count
@@ -1301,7 +1310,7 @@ The `compiler` capability feature carries everything in this section.
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, `sys::catch_unwind`) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Rust panic raised inside a `sys::protect` body | the process aborts at the FFI boundary; never unwinds into mruby's C frames |
-| Registered method receiving an argument that fails `TryConvert` conversion | the exception the conversion's `Err` carries raised to the Ruby caller, the closure body never runs |
+| Registered method whose receiver or argument fails `TryConvert` conversion | the exception the conversion's `Err` carries raised to the Ruby caller, the closure body never runs |
 | A registered method body's scan, single-argument, or named keyword read that the call does not fit — a wrong positional count, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or an unnamed keyword with no rest to collect it | surfaced to the body as a Rust `Err` carrying the exception raised for the mismatch; nothing raises past the body |
 | A heap region buffer too small to hold one heap page | no pages are added and the count answers zero; the interpreter keeps allocating as before |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
