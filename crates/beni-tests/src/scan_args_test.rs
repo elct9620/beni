@@ -241,7 +241,8 @@ fn or_nil(mrb: &Mrb, value: Option<impl IntoValue>) -> Value {
 // def t(a:, b:, c: nil, **rest) — answered as [a, b, c, rest].
 fn named_keywords(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let bucket = scan_args::<(), (), (), (), Hash, ()>(mrb)?.keywords;
-    let kw = get_kwargs::<_, (String, i32), (Option<bool>,), Hash>(mrb, bucket, &["a", "b"], &["c"])?;
+    let kw =
+        get_kwargs::<_, (String, i32), (Option<bool>,), Hash>(mrb, bucket, &["a", "b"], &["c"])?;
     let (a, b) = kw.required;
     let (c,) = kw.optional;
     Ok(mrb
@@ -260,7 +261,10 @@ fn named_keywords_bind_required_optional_and_rest() {
     define(&mrb, c"named", beni::method!(named_keywords, -1));
 
     let read = |src| eval::<Array>(&mrb, src).as_value().inspect(&mrb);
-    assert_eq!(read("named(a: 'x', b: 1, c: true, d: 2)"), r#"["x", 1, true, {d: 2}]"#);
+    assert_eq!(
+        read("named(a: 'x', b: 1, c: true, d: 2)"),
+        r#"["x", 1, true, {d: 2}]"#
+    );
     assert_eq!(read("named(b: 1, a: 'x')"), r#"["x", 1, nil, {}]"#);
     assert_eq!(
         raise_of(&mrb, "named(b: 1)"),
@@ -289,7 +293,9 @@ fn an_optional_keyword_the_hash_lacks_binds_none_and_the_hash_stays_whole() {
     define(&mrb, c"optional_kw", beni::method!(optional_keywords, -1));
 
     assert_eq!(
-        eval::<Array>(&mrb, "optional_kw(d: 4)").as_value().inspect(&mrb),
+        eval::<Array>(&mrb, "optional_kw(d: 4)")
+            .as_value()
+            .inspect(&mrb),
         "[nil, 4, 1]"
     );
 }
