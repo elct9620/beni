@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use crate::support::OwnedBytes;
 use beni::prelude::*;
 use beni::{FromValue, Id, IntoValue, Symbol};
 
@@ -72,7 +73,7 @@ fn to_str_reifies_the_name_as_a_mutable_string() {
 
     // The reified String carries the symbol's name bytes verbatim.
     let str = sym.to_str(&mrb);
-    assert_eq!(str.to_bytes(), b"flags");
+    assert_eq!(str.owned_bytes(), b"flags");
 
     // It is `Symbol#to_s`, not `#name`: the value is unfrozen, so a
     // consumer may mutate it — `Symbol#name` would come back frozen.

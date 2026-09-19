@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use crate::support::OwnedBytes;
 use beni::prelude::*;
 use beni::{Ccontext, DumpOptions, Error, FromValue, Module, Mrb, RString, Value};
 
@@ -202,7 +203,7 @@ fn load_string_inside(mrb: &Mrb, _self: Value) -> Value {
 }
 
 fn load_bytecode_inside(mrb: &Mrb, _self: Value, blob: RString) -> Value {
-    caught(mrb.load_bytecode(&blob.to_bytes()))
+    caught(mrb.load_bytecode(&blob.owned_bytes()))
 }
 
 #[test]

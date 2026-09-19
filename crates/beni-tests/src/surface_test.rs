@@ -153,7 +153,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RString::cat;
     let _ = RString::cat_str;
     let _ = RString::as_bytes;
-    let _ = RString::to_bytes;
     let _ = RString::to_char;
     let _ = RString::to_string;
     let _ = RString::len;
@@ -378,4 +377,12 @@ fn compiler_surface_is_reachable_from_outside() {
     let _ = Ccontext::compile;
     let _ = Ccontext::warnings;
     let _ = Mrb::load_string;
+}
+
+/// The `bytes` dependency feature's inherent surface, gated as the
+/// feature gates it.
+#[cfg(feature = "bytes")]
+#[test]
+fn bytes_surface_is_reachable_from_outside() {
+    let _ = RString::to_bytes;
 }

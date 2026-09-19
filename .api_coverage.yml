@@ -69,8 +69,8 @@ typed:
   MRB_ARGS_REQ: a typed method's positional arity, derived by `Module::define_method`
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
   RARRAY_LEN: Array::len
-  RSTRING_LEN: "`RString::as_bytes`, `RString::to_bytes`, `RString::len`"
-  RSTRING_PTR: "`RString::as_bytes`, `RString::to_bytes`"
+  RSTRING_LEN: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len`"
+  RSTRING_PTR: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature)"
   mrb_argnum_error: Error::argnum
   mrb_ary_clear: Array::clear
   mrb_ary_concat: Array::concat

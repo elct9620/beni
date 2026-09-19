@@ -4,12 +4,12 @@
 //! `#[repr(transparent)]` over `mrb_value`). The two share their
 //! in-memory layout — `RString` is exactly an `mrb_value` known to
 //! carry an mruby `String`. The String tag the newtype guarantees is
-//! what lets `cat` and `to_bytes` be safe and frees `as_bytes` of the
+//! what lets `cat` and the owned reads be safe and frees `as_bytes` of the
 //! tag obligation `Value` could not discharge.
 //!
 //! Mirrors magnus's `src/r_string.rs`: string factories live on `Mrb`
 //! (`str_new`, `str_new_cstr`), per-string ops (`cat`, `as_bytes`,
-//! `to_bytes`) live here.
+//! `to_string`, and `to_bytes` with the `bytes` feature) live here.
 
 use crate::{sys::AsRawValue, Error, Mrb, Value};
 use beni_sys as sys;
@@ -271,8 +271,8 @@ impl RString {
     ///
     /// The returned slice points at storage owned by the mruby VM; the
     /// `&Mrb` borrow keeps the state alive for the slice's lifetime,
-    /// but does not block GC or string mutation. Use `to_bytes` for an
-    /// owned copy that outlives later calls.
+    /// but does not block GC or string mutation. Convert to `Vec<u8>`
+    /// through `FromValue` for an owned copy that outlives later calls.
     ///
     /// # Safety
     ///
@@ -290,17 +290,20 @@ impl RString {
         unsafe { core::slice::from_raw_parts(ptr, len) }
     }
 
-    /// Copy this string's bytes into an owned `Vec<u8>`. The bytes are
+    /// This string's bytes as an owned `bytes::Bytes`. The bytes are
     /// copied out before returning, so — unlike `as_bytes` — the result
     /// needs no `&Mrb` lifetime anchor and outlives later mruby calls.
-    /// Backs `FromValue for String` and `FromValue for Vec<u8>`.
+    /// Mirrors magnus's `RString::to_bytes`; an owned `Vec<u8>` comes from
+    /// the `FromValue` conversion.
+    #[cfg(feature = "bytes")]
     #[inline]
-    pub fn to_bytes(self) -> Vec<u8> {
-        self.copy_bytes()
+    pub fn to_bytes(self) -> bytes::Bytes {
+        self.copy_bytes().into()
     }
 
-    /// This string's bytes copied into an owned `Vec<u8>` — the copy every
-    /// owned read of a string's bytes is built on.
+    /// This string's bytes copied into an owned `Vec<u8>`. The bytes are
+    /// copied out before returning, so the result outlives later mruby
+    /// calls; every owned read of a string's bytes is built on it.
     #[inline]
     pub(crate) fn copy_bytes(self) -> Vec<u8> {
         // SAFETY: `self` is String-tagged by the newtype contract;
@@ -343,8 +346,8 @@ impl RString {
     /// the embed-vs-heap length read matches the linked archive's
     /// layout). It is a byte count, not a character count, and is never
     /// negative, so the result is returned as `usize`. Mirrors
-    /// `Array::len`; cheaper than `to_bytes().len()`, which copies the
-    /// buffer out first.
+    /// `Array::len`; cheaper than an owned read's length, which copies
+    /// the buffer out first.
     #[inline]
     pub fn len(self) -> usize {
         // SAFETY: `self` is String-tagged by the newtype contract;

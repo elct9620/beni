@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use crate::support::OwnedBytes;
 use beni::prelude::*;
 use beni::{FromValue, Mrb, RString};
 
@@ -52,7 +53,7 @@ fn keep_restores_the_arena_and_protects_the_survivor() {
     unsafe { beni::sys::mrb_full_gc(mrb.as_ptr()) };
     // The survivor's bytes are still readable after the GC.
     let survived = RString::from_value(survivor).expect("the survivor is String-tagged");
-    assert_eq!(survived.to_bytes(), b"survivor");
+    assert_eq!(survived.owned_bytes(), b"survivor");
 }
 
 #[test]

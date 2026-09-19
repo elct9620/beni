@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use crate::support::OwnedBytes;
 use beni::prelude::*;
 use beni::{Error, IntoValue};
 
@@ -358,13 +359,13 @@ fn join_renders_elements_with_a_separator() {
     let joined = ary
         .join(&mrb, Some(mrb.str_new(b",")))
         .expect("join with a separator succeeds");
-    assert_eq!(joined.to_bytes(), b"1,2,3".to_vec());
+    assert_eq!(joined.owned_bytes(), b"1,2,3".to_vec());
 
     // A None separator concatenates the renderings with nothing between.
     let glued = ary
         .join(&mrb, None)
         .expect("join without a separator succeeds");
-    assert_eq!(glued.to_bytes(), b"123".to_vec());
+    assert_eq!(glued.owned_bytes(), b"123".to_vec());
 }
 
 #[test]

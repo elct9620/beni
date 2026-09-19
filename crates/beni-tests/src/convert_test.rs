@@ -1,3 +1,4 @@
+use crate::support::OwnedBytes;
 use crate::support::{open_mrb, same_object};
 use beni::prelude::*;
 use beni::{Array, ExceptionClass, FromValue, Hash, IntoValue, RClass, RModule, RString, Value};
@@ -63,7 +64,7 @@ fn rstring_downcasts_by_tag() {
     // `mrb_str_*` calls would misread.
     let s = mrb.str_new(b"hi").as_value();
     assert_eq!(
-        RString::from_value(s).map(|r| r.to_bytes()),
+        RString::from_value(s).map(|r| r.owned_bytes()),
         Some(b"hi".to_vec())
     );
     assert!(RString::from_value(42i32.into_value(&mrb)).is_none());

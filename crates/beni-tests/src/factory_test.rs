@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use crate::support::OwnedBytes;
 use beni::prelude::*;
 
 #[test]
@@ -25,7 +26,7 @@ fn str_new_capa_preallocates_an_empty_string() {
     assert!(s.is_empty());
     s.cat(&mrb, b"reserved")
         .expect("append to a fresh string succeeds");
-    assert_eq!(s.to_bytes(), b"reserved".to_vec());
+    assert_eq!(s.owned_bytes(), b"reserved".to_vec());
 }
 
 #[test]
@@ -36,7 +37,7 @@ fn str_new_static_aliases_a_static_buffer_without_copying() {
     // `mrb_str_new_lit` macro takes.
     let s = mrb.str_new_static(b"borrowed");
     assert_eq!(s.len(), 8);
-    assert_eq!(s.to_bytes(), b"borrowed".to_vec());
+    assert_eq!(s.owned_bytes(), b"borrowed".to_vec());
 }
 
 #[test]
@@ -49,13 +50,13 @@ fn str_new_static_copies_on_in_place_write() {
     let s = mrb.str_new_static(b"static");
     s.cat(&mrb, b"+more")
         .expect("appending to a static-backed string succeeds after copy");
-    assert_eq!(s.to_bytes(), b"static+more".to_vec());
+    assert_eq!(s.owned_bytes(), b"static+more".to_vec());
 
     // Resize likewise reallocates first; shrinking drops the tail.
     let r = mrb.str_new_static(b"Hello, world!");
     r.resize(&mrb, 5)
         .expect("resizing a static-backed string succeeds");
-    assert_eq!(r.to_bytes(), b"Hello".to_vec());
+    assert_eq!(r.owned_bytes(), b"Hello".to_vec());
 }
 
 #[test]

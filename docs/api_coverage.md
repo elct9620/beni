@@ -428,8 +428,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `RSTRING_CSTR` | macro | ❌ | ✅ | defined as `mrb_string_cstr` |
 | `RSTRING_EMBED_LEN` | macro | ❌ | ❌ |  |
 | `RSTRING_END` | macro | ❌ | ❌ |  |
-| `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes`, `RString::len` |
-| `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_bytes`, `RString::to_bytes` |
+| `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len` |
+| `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature) |
 | `mrb_obj_as_string` | fn | ✅ | ✅ | `Value::obj_as_string` |
 | `mrb_ptr_to_str` | fn | ✅ | ❌ |  |
 | `mrb_str_append` | fn | ✅ | ✅ | `RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed |

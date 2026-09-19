@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use crate::support::OwnedBytes;
 use beni::prelude::*;
 
 #[test]
@@ -61,7 +62,7 @@ fn gc_triggers_keep_a_reachable_value_valid() {
     // The reachable survivor is still a valid String afterwards.
     let kept = mrb.gv_get(c"$survivor");
     let kept = RString::from_value(kept).expect("the survivor is String-tagged");
-    assert_eq!(kept.to_bytes(), b"survivor");
+    assert_eq!(kept.owned_bytes(), b"survivor");
 }
 
 /// A buffer generous enough to carve several heap pages from; the
@@ -99,7 +100,7 @@ fn a_region_too_small_for_one_page_yields_none() {
 
     // Adding nothing leaves the interpreter allocating as before.
     let kept = mrb.str_new(b"still allocating");
-    assert_eq!(kept.to_bytes(), b"still allocating");
+    assert_eq!(kept.owned_bytes(), b"still allocating");
 }
 
 #[test]

@@ -1,6 +1,6 @@
 //! What every test here needs before it can ask anything.
 
-use beni::{IntoValue, Mrb};
+use beni::{FromValue, IntoValue, Mrb, RString, ReprValue};
 
 /// A fresh interpreter. Every test opens one, and a failure here is
 /// the archive missing rather than the case failing, so the message
@@ -33,4 +33,16 @@ macro_rules! typed_data {
             }
         }
     };
+}
+
+/// A string's bytes as an owned `Vec<u8>`, the way a consumer without
+/// the `bytes` feature reads them — through the `FromValue` conversion.
+pub trait OwnedBytes {
+    fn owned_bytes(self) -> Vec<u8>;
+}
+
+impl OwnedBytes for RString {
+    fn owned_bytes(self) -> Vec<u8> {
+        Vec::<u8>::from_value(self.as_value()).expect("a string handle is String-tagged")
+    }
 }

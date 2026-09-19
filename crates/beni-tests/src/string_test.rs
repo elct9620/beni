@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use crate::support::OwnedBytes;
 use beni::prelude::*;
 use beni::{Ccontext, Error, FromValue, IntoValue, RString};
 
@@ -11,11 +12,11 @@ fn cat_appends_bytes_in_place() {
         .expect("appending to a mutable string succeeds");
     // The same handle now names the grown string — append mutated it
     // in place rather than producing a new object.
-    assert_eq!(s.to_bytes(), b"foobar".to_vec());
+    assert_eq!(s.owned_bytes(), b"foobar".to_vec());
 
     // Appending empty bytes leaves the receiver unchanged.
     s.cat(&mrb, b"").expect("appending nothing succeeds");
-    assert_eq!(s.to_bytes(), b"foobar".to_vec());
+    assert_eq!(s.owned_bytes(), b"foobar".to_vec());
 }
 
 #[test]
@@ -26,7 +27,7 @@ fn cat_appends_a_static_literal_in_place() {
     // C's `mrb_str_cat_lit(mrb, str, lit)` does — the literal-append path.
     let s = mrb.str_new(b"foo");
     s.cat(&mrb, b"bar").expect("appending a literal succeeds");
-    assert_eq!(s.to_bytes(), b"foobar".to_vec());
+    assert_eq!(s.owned_bytes(), b"foobar".to_vec());
 }
 
 #[test]
@@ -38,13 +39,13 @@ fn cat_str_appends_another_string_in_place() {
     s.cat_str(&mrb, tail)
         .expect("appending a string to a mutable string succeeds");
     // The receiver grew in place; the source is untouched.
-    assert_eq!(s.to_bytes(), b"foobar".to_vec());
-    assert_eq!(tail.to_bytes(), b"bar".to_vec());
+    assert_eq!(s.owned_bytes(), b"foobar".to_vec());
+    assert_eq!(tail.owned_bytes(), b"bar".to_vec());
 
     // Self-append doubles the receiver — the source snapshot is taken
     // before the buffer grows.
     s.cat_str(&mrb, s).expect("self-append succeeds");
-    assert_eq!(s.to_bytes(), b"foobarfoobar".to_vec());
+    assert_eq!(s.owned_bytes(), b"foobarfoobar".to_vec());
 }
 
 #[test]
@@ -76,11 +77,11 @@ fn cat_cstr_appends_a_c_string_in_place() {
         .expect("appending a C string to a mutable string succeeds");
     // The same handle now names the grown string — the bytes up to the
     // terminating NUL were appended in place.
-    assert_eq!(s.to_bytes(), b"foobar".to_vec());
+    assert_eq!(s.owned_bytes(), b"foobar".to_vec());
 
     // Appending an empty C string leaves the receiver unchanged.
     s.cat_cstr(&mrb, c"").expect("appending nothing succeeds");
-    assert_eq!(s.to_bytes(), b"foobar".to_vec());
+    assert_eq!(s.owned_bytes(), b"foobar".to_vec());
 }
 
 #[test]
@@ -145,8 +146,8 @@ fn dup_copies_into_an_independent_string() {
     // dup is an independent object: appending to the original leaves
     // the copy untouched.
     s.cat(&mrb, b"+more").expect("append succeeds");
-    assert_eq!(copy.to_bytes(), b"orig".to_vec());
-    assert_eq!(s.to_bytes(), b"orig+more".to_vec());
+    assert_eq!(copy.owned_bytes(), b"orig".to_vec());
+    assert_eq!(s.owned_bytes(), b"orig+more".to_vec());
 }
 
 #[test]
@@ -157,26 +158,26 @@ fn plus_concatenates_into_a_new_string_leaving_operands_unchanged() {
     let b = mrb.str_new(b"bar");
     // Capture both operands' bytes before the call to prove
     // non-mutation against the post-call reads.
-    let a_before = a.to_bytes();
-    let b_before = b.to_bytes();
+    let a_before = a.owned_bytes();
+    let b_before = b.owned_bytes();
 
     let joined = a.plus(&mrb, b);
 
     // The result is the concatenation of both operands.
-    assert_eq!(joined.to_bytes(), b"foobar".to_vec());
+    assert_eq!(joined.owned_bytes(), b"foobar".to_vec());
 
     // Neither operand was mutated — plus builds a new string rather
     // than growing the receiver the way cat_str does.
-    assert_eq!(a.to_bytes(), a_before);
-    assert_eq!(b.to_bytes(), b_before);
+    assert_eq!(a.owned_bytes(), a_before);
+    assert_eq!(b.owned_bytes(), b_before);
 
     // The result is an independent object: growing it in place leaves
     // the receiver untouched.
     joined
         .cat(&mrb, b"!")
         .expect("appending to the result succeeds");
-    assert_eq!(joined.to_bytes(), b"foobar!".to_vec());
-    assert_eq!(a.to_bytes(), b"foo".to_vec());
+    assert_eq!(joined.owned_bytes(), b"foobar!".to_vec());
+    assert_eq!(a.owned_bytes(), b"foo".to_vec());
 }
 
 #[test]
@@ -249,13 +250,13 @@ fn intern_names_the_symbol_for_the_receiver_bytes() {
 }
 
 #[test]
-fn to_bytes_copies_arbitrary_bytes() {
+fn an_owned_byte_read_copies_arbitrary_bytes() {
     let mrb = open_mrb();
 
-    // Binary bytes survive the owned copy — `to_bytes` does not
-    // require valid UTF-8.
+    // Binary bytes survive the owned copy — the `Vec<u8>` read does
+    // not require valid UTF-8.
     let s = mrb.str_new(&[0xff, 0x00, 0xfe]);
-    assert_eq!(s.to_bytes(), vec![0xff, 0x00, 0xfe]);
+    assert_eq!(s.owned_bytes(), vec![0xff, 0x00, 0xfe]);
 }
 
 #[test]
@@ -266,13 +267,13 @@ fn concat_coerces_a_non_string_argument_in_place() {
     let s = mrb.str_new(b"foo");
     s.concat(&mrb, mrb.str_new(b"bar").as_value())
         .expect("appending a string succeeds");
-    assert_eq!(s.to_bytes(), b"foobar".to_vec());
+    assert_eq!(s.owned_bytes(), b"foobar".to_vec());
 
     // A non-string argument is coerced before appending: an Integer
     // renders to its decimal text.
     s.concat(&mrb, 42i32.into_value(&mrb))
         .expect("appending a coerced integer succeeds");
-    assert_eq!(s.to_bytes(), b"foobar42".to_vec());
+    assert_eq!(s.owned_bytes(), b"foobar42".to_vec());
 }
 
 #[test]
@@ -296,14 +297,14 @@ fn resize_truncates_and_extends_in_place() {
     // Shrinking drops the tail; the same handle names the result.
     let s = mrb.str_new(b"Hello, world!");
     s.resize(&mrb, 5).expect("shrinking succeeds");
-    assert_eq!(s.to_bytes(), b"Hello".to_vec());
+    assert_eq!(s.owned_bytes(), b"Hello".to_vec());
 
     // Growing extends the length; the original prefix is preserved,
     // the new tail's contents are unspecified, so only the length is
     // asserted.
     s.resize(&mrb, 8).expect("growing succeeds");
     assert_eq!(s.len(), 8);
-    assert_eq!(&s.to_bytes()[..5], b"Hello");
+    assert_eq!(&s.owned_bytes()[..5], b"Hello");
 }
 
 #[test]
@@ -348,22 +349,22 @@ fn substr_reads_a_range_and_clamps_out_of_range() {
 
     // An in-range slice yields the substring.
     let he = s.substr(&mrb, 0, 2).expect("an in-range slice is Some");
-    assert_eq!(he.to_bytes(), b"He".to_vec());
+    assert_eq!(he.owned_bytes(), b"He".to_vec());
 
     // A negative beg counts from the end.
     let bang = s.substr(&mrb, -1, 1).expect("a tail slice is Some");
-    assert_eq!(bang.to_bytes(), b"!".to_vec());
+    assert_eq!(bang.owned_bytes(), b"!".to_vec());
 
     // An over-long len clamps to the string's end.
     let tail = s.substr(&mrb, 7, 100).expect("an over-long len clamps");
-    assert_eq!(tail.to_bytes(), b"world!".to_vec());
+    assert_eq!(tail.owned_bytes(), b"world!".to_vec());
 
     // A len beyond every configured width clamps the same way instead
     // of wrapping to a negative length mruby answers with nil.
     let rest = s
         .substr(&mrb, 7, usize::MAX)
         .expect("an out-of-width len clamps");
-    assert_eq!(rest.to_bytes(), b"world!".to_vec());
+    assert_eq!(rest.owned_bytes(), b"world!".to_vec());
 
     // A beg past the end yields None, the way mruby returns nil.
     assert!(s.substr(&mrb, 100, 1).is_none());
@@ -603,4 +604,16 @@ fn to_f_surfaces_invalid_input_as_err() {
         mrb.str_new(b"thx1138").to_f(&mrb),
         Err(Error::Exception(_))
     ));
+}
+
+#[cfg(feature = "bytes")]
+#[test]
+fn to_bytes_reads_every_byte_as_bytes() {
+    let mrb = open_mrb();
+    let raw: &[u8] = b"a\0\xffz";
+    let s = mrb.str_new(raw);
+
+    let bytes: bytes::Bytes = s.to_bytes();
+
+    assert_eq!(&bytes[..], raw);
 }

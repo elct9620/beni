@@ -1,3 +1,4 @@
+use crate::support::OwnedBytes;
 use crate::support::{open_mrb, same_object};
 use beni::prelude::*;
 use beni::scan_args::scan_args;
@@ -292,7 +293,7 @@ fn any_to_s_renders_the_default_object_form() {
     let obj = cxt
         .load_nstring(b"class Plain; end; Plain.new")
         .expect("the test source must compile and run");
-    let rendered = obj.any_to_s(&mrb).to_bytes();
+    let rendered = obj.any_to_s(&mrb).owned_bytes();
     assert!(
         rendered.starts_with(b"#<Plain:0x"),
         "expected the default heap-object form, got {:?}",
@@ -537,7 +538,7 @@ fn ensure_string_returns_the_handle_or_raises_by_tag() {
         .ensure_string(&mrb)
         .expect("a String value coerces without raising");
     assert!(s.obj_equal(&mrb, handle.as_value()));
-    assert_eq!(handle.to_bytes(), b"hi".to_vec());
+    assert_eq!(handle.owned_bytes(), b"hi".to_vec());
 
     // A non-String tag raises `TypeError` rather than coercing — the
     // contrast with `obj_as_string`, which would render the integer
@@ -1383,13 +1384,17 @@ fn int_to_str_renders_in_base_ten_and_other_radixes() {
     let n = 12345i32.into_value(&mrb);
     // Base 10 is the plain decimal rendering.
     assert_eq!(
-        n.int_to_str(&mrb, 10).expect("base 10 renders").to_bytes(),
+        n.int_to_str(&mrb, 10)
+            .expect("base 10 renders")
+            .owned_bytes(),
         b"12345".to_vec()
     );
     // A non-decimal radix renders in that base, like Ruby's
     // 12345.to_s(16) == "3039".
     assert_eq!(
-        n.int_to_str(&mrb, 16).expect("base 16 renders").to_bytes(),
+        n.int_to_str(&mrb, 16)
+            .expect("base 16 renders")
+            .owned_bytes(),
         b"3039".to_vec()
     );
 }
@@ -1409,7 +1414,7 @@ fn int_to_str_surfaces_an_invalid_radix_as_err() {
             .into_value(&mrb)
             .int_to_str(&mrb, 10)
             .expect("the VM survives the protected raise")
-            .to_bytes(),
+            .owned_bytes(),
         b"42".to_vec()
     );
 }
@@ -1825,7 +1830,7 @@ fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
             mrb.full_gc();
         }
         let s = RString::from_value(val).expect("the seeded values are strings");
-        seen.push(String::from_utf8(s.to_bytes()).expect("the seeded bytes are UTF-8"));
+        seen.push(String::from_utf8(s.owned_bytes()).expect("the seeded bytes are UTF-8"));
         ForEach::Continue
     });
     seen.sort();
