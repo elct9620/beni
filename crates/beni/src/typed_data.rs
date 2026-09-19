@@ -189,6 +189,44 @@ impl Mrb {
     }
 }
 
+/// Copies a `TypedData` payload across mruby's `dup` and `clone`, which
+/// otherwise copy a carrier without it. Mirrors magnus's
+/// `typed_data::Dup`; register each as the method it replaces:
+///
+/// ```ignore
+/// class.define_method(mrb, c"dup", method!(<Point as Dup>::dup, 0))?;
+/// class.define_method(mrb, c"clone", method!(<Point as Dup>::clone, -1))?;
+/// ```
+pub trait Dup: Sized {
+    /// A clone of the receiver's payload, which the method's return
+    /// wraps as a new instance.
+    fn dup(mrb: &Mrb, rb_self: &Self) -> Self;
+
+    /// Copy the receiver as mruby's `clone` does — singleton class and
+    /// frozen state kept, `initialize_copy` run — carrying a clone of
+    /// its payload. Takes no arguments, as mruby's `clone` does not.
+    fn clone(mrb: &Mrb, rb_self: Obj<Self>) -> Result<Obj<Self>, Error>;
+}
+
+impl<T: Clone + TypedData> Dup for T {
+    fn dup(_mrb: &Mrb, rb_self: &Self) -> Self {
+        rb_self.clone()
+    }
+
+    fn clone(mrb: &Mrb, rb_self: Obj<Self>) -> Result<Obj<Self>, Error> {
+        crate::scan_args::scan_args::<(), (), (), (), (), ()>(mrb)?;
+        let copy = rb_self.as_value().obj_clone(mrb)?;
+        let payload = Box::into_raw(Box::new((*rb_self).clone()));
+        // SAFETY: `copy` is the carrier `mrb_obj_clone` just made, which
+        // holds no payload; the box is handed to it under `T`'s data
+        // type, whose release hook drops it with the carrier.
+        unsafe {
+            sys::mrb_data_init(copy.as_raw(), payload.cast(), T::data_type().as_raw());
+        }
+        Ok(typed(RTypedData(copy)))
+    }
+}
+
 fn typed<T: TypedData>(inner: RTypedData) -> Obj<T> {
     Obj {
         inner,

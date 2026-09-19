@@ -289,3 +289,135 @@ fn a_value_wraps_as_the_class_its_type_names_for_it() {
     assert_eq!(square_as_round.as_value().classname(&mrb), "BeniRound");
     assert!(matches!(*square_as_round, Shape::Square));
 }
+
+#[derive(Clone)]
+struct Counter {
+    n: std::cell::Cell<i32>,
+}
+
+static COUNTER_TYPE: DataType<Counter> = DataType::new(c"BeniCounter");
+
+// SAFETY: `BeniCounter` is marked by `define_counter` before any wrap.
+unsafe impl TypedData for Counter {
+    fn class(mrb: &Mrb) -> RClass {
+        mrb.class_get(c"BeniCounter")
+            .expect("BeniCounter is defined")
+    }
+
+    fn data_type() -> &'static DataType<Self> {
+        &COUNTER_TYPE
+    }
+}
+
+fn counter_n(_mrb: &Mrb, rb_self: &Counter) -> i32 {
+    rb_self.n.get()
+}
+
+fn counter_bump(_mrb: &Mrb, rb_self: &Counter) -> i32 {
+    rb_self.n.set(rb_self.n.get() + 1);
+    rb_self.n.get()
+}
+
+fn define_counter(mrb: &Mrb) {
+    use beni::typed_data::Dup;
+    let class = define_marked(mrb, c"BeniCounter");
+    class
+        .define_method(mrb, c"n", beni::method!(counter_n, 0))
+        .expect("registering n must succeed");
+    class
+        .define_method(mrb, c"bump", beni::method!(counter_bump, 0))
+        .expect("registering bump must succeed");
+    class
+        .define_method(mrb, c"dup", beni::method!(<Counter as Dup>::dup, 0))
+        .expect("registering dup must succeed");
+    class
+        .define_method(mrb, c"clone", beni::method!(<Counter as Dup>::clone, -1))
+        .expect("registering clone must succeed");
+}
+
+fn read_n(mrb: &Mrb, obj: Value) -> i32 {
+    let n = obj.funcall(mrb, c"n", &[]).expect("n reads the payload");
+    i32::from_value(n).expect("n is an Integer")
+}
+
+#[test]
+fn dup_carries_an_independent_copy_of_the_payload() {
+    let mrb = open_mrb();
+    define_counter(&mrb);
+    let original = mrb
+        .obj_wrap(Counter {
+            n: std::cell::Cell::new(1),
+        })
+        .as_value();
+
+    let copy = original.funcall(&mrb, c"dup", &[]).expect("dup copies");
+    assert_eq!(copy.classname(&mrb), "BeniCounter");
+    assert!(!copy.obj_equal(&mrb, original), "dup answers a new object");
+    assert_eq!(read_n(&mrb, copy), 1);
+
+    copy.funcall(&mrb, c"bump", &[]).expect("bump the copy");
+    assert_eq!(read_n(&mrb, copy), 2);
+    assert_eq!(
+        read_n(&mrb, original),
+        1,
+        "the original keeps its own payload"
+    );
+}
+
+#[test]
+fn clone_keeps_singleton_and_frozen_state_with_a_copied_payload() {
+    let mrb = open_mrb();
+    define_counter(&mrb);
+    let original = mrb
+        .obj_wrap(Counter {
+            n: std::cell::Cell::new(5),
+        })
+        .as_value();
+    original
+        .singleton_class(&mrb)
+        .expect("a carrier has a singleton class")
+        .define_method(&mrb, c"only_mine", beni::method!(counter_n, 0))
+        .expect("registering a singleton method must succeed");
+    original.freeze(&mrb);
+
+    let copy = original.funcall(&mrb, c"clone", &[]).expect("clone copies");
+    assert!(
+        !copy.obj_equal(&mrb, original),
+        "clone answers a new object"
+    );
+    assert_eq!(read_n(&mrb, copy), 5);
+    let frozen = copy
+        .funcall(&mrb, c"frozen?", &[])
+        .expect("frozen? answers");
+    assert!(frozen.is_true(), "clone keeps the frozen state");
+    let mine = copy
+        .funcall(&mrb, c"only_mine", &[])
+        .expect("clone keeps the singleton class");
+    assert_eq!(i32::from_value(mine), Some(5));
+
+    copy.funcall(&mrb, c"bump", &[]).expect("bump the copy");
+    assert_eq!(
+        read_n(&mrb, original),
+        5,
+        "the original keeps its own payload"
+    );
+}
+
+#[test]
+fn clone_takes_no_arguments() {
+    let mrb = open_mrb();
+    define_counter(&mrb);
+    let original = mrb
+        .obj_wrap(Counter {
+            n: std::cell::Cell::new(0),
+        })
+        .as_value();
+
+    let err = original
+        .funcall(&mrb, c"clone", &[true.into_value(&mrb)])
+        .expect_err("clone rejects an argument");
+    match err {
+        Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
+        other => panic!("an argument raises ArgumentError, got {other}"),
+    }
+}
