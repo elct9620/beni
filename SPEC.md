@@ -289,7 +289,10 @@ Selection, checksums, and cross-compile activation:
 
 The crate owns every Rust-level abstraction over the C API: an RAII interpreter
 handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes, and class and module
-definition. Two typed conversions cross the Rust/Ruby boundary:
+definition. Three typed conversions cross the Rust/Ruby boundary — `IntoValue`
+out of Rust, the `FromValue` downcast that reads a value only as what its type
+tag already is, and `TryConvert`, the conversion a method's arguments cross,
+mirroring `magnus`'s `TryConvert`:
 
 | Conversion | Direction | Rule |
 |---|---|---|
@@ -302,6 +305,21 @@ definition. Two typed conversions cross the Rust/Ruby boundary:
 | `FromValue` → `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64` / `isize` / `usize` | `Value` → Rust integer | converts an Integer that fits the configured integer width, never a Float; the target takes the Integer when its value lies within the target's own range and rejects it otherwise — `i64` holds every such Integer, and an unsigned target rejects every negative one; any other value rejects, an arbitrary-width Integer beyond the configured width included; every target listed converts under every configured integer width |
 | `FromValue` → a Rust float | `Value` → Rust float | converts a Float, never an Integer; a float target converts only where it holds every value the configured float width does: `f64` under every width, `f32` under a 32-bit width; an `f32` under a 64-bit width has no conversion and fails to compile; any other value rejects |
 | `FromValue` → `Option<T>` | `Value` → `Option<T>` | `nil` to `None`; any other value converts by `T`'s rule to `Some`, rejecting what `T` rejects |
+| `TryConvert` | `Value` → Rust value or typed handle | answers the converted value, or an `Err` carrying the exception mruby raises for the same mismatch, worded as mruby words it; runs no user Ruby. Each rule below names what converts; every other value surfaces the `TypeError` "*value* cannot be converted to *target*", *value* naming the value's class — or `nil`, `true`, or `false` itself — and *target* the Ruby class the rule converts from |
+| `TryConvert` → `Value` / `bool` / `Option<T>` | `Value` → the same | as the `FromValue` rule for each; `Option<T>` answers `T`'s `Err` where `T` rejects |
+| `TryConvert` → `RString` / `Array` / `Hash` / `Symbol` / `Range` / `RClass` / `RModule` / `ExceptionClass` | `Value` → typed handle | converts what the `FromValue` downcast converts and nothing more — mruby has no implicit `to_str`, `to_ary`, or `to_hash` conversion; *target* is the handle's Ruby class. A class, module, or exception-class handle surfaces instead the `TypeError` "*value* is not a class", "*value* is not a module", or "*value* is not a class inheriting Exception", *value* the inspected form, as mruby words a class or module mismatch |
+| `TryConvert` → `Proc` | `Value` → `Proc` | converts a `Proc` alone and dispatches no `to_proc`, mruby converting to a `Proc` only a block being passed; any other value surfaces the `TypeError` "wrong argument type *class* (expected Proc)" |
+| `TryConvert` → `i8` / `i16` / `i32` / `i64` / `i128` / `u8` / `u16` / `u32` / `u64` / `u128` / `isize` / `usize` | `Value` → Rust integer | converts an Integer, or a Float truncated toward zero, as mruby's own C-method arguments do; an infinite or NaN Float, and an arbitrary-width Integer beyond the configured integer width, surface the `RangeError` mruby raises for each, and an Integer within that width but outside the target's own range the `RangeError` "*value* out of range", *value* its inspected form; *target* is `Integer` |
+| `TryConvert` → a non-zero Rust integer | `Value` → `NonZeroI8` … `NonZeroUsize` | converts as its integer does; zero surfaces the `ArgumentError` "value must be non-zero" |
+| `TryConvert` → `f64` / `f32` | `Value` → Rust float | converts a Float, or an Integer widened, as mruby's own C-method arguments do; `nil` surfaces the `TypeError` "can't convert nil into Float" mruby raises; *target* is `Float`. Both targets convert under every configured float width, an `f32` narrowing a wider Float to its nearest `f32`, a magnitude beyond `f32` becoming an infinity |
+| `TryConvert` → `String` / `char` / `PathBuf` | `Value` → Rust text | converts a String's bytes: `String` UTF-8 bytes, `char` UTF-8 bytes holding exactly one character, `PathBuf` any bytes on a Unix target and UTF-8 bytes on any other. Bytes that are not UTF-8 where UTF-8 is required surface the `ArgumentError` "invalid UTF-8 byte sequence"; a string of any other length than one character surfaces the `TypeError` with *target* `char`. No path protocol applies — mruby has no `to_path`; *target* is `String` |
+| `TryConvert` → `Vec<T>` / `[T; N]` / a tuple of 1 to 12 elements | `Value` → Rust sequence | converts an Array, each element by its own type's rule, surfacing the first element's `Err`; a fixed-length target converts an Array of exactly its length and surfaces the `TypeError` "expected Array of length *N*" for any other; *target* is `Array` |
+| `TryConvert` → `HashMap<K, V>` / `BTreeMap<K, V>` | `Value` → Rust map | converts a Hash, each key and value by its own type's rule, surfacing the first `Err`; *target* is `Hash` |
+
+A sequence or map target holds any element type `TryConvert` converts to, a
+`Value` or typed handle included: each element crosses out to Rust and stays
+reachable as the Garbage collection section promises for every value that does,
+wherever the Rust side stores it.
 
 Integer quantities cross the typed surface as Rust's own integer types, never as
 the configured-width integer the raw bindings declare, so a signature reads the
@@ -330,7 +348,7 @@ raising form suits one that requires a String argument and rejects anything else
 Every type tag a value on the typed surface can carry also carries a
 per-type predicate (`Value::is_array`, `is_string`, `is_integer`, `is_sclass`,
 … — the analogue of mruby's `mrb_*_p` macros). A typed handle's `FromValue`
-downcast — magnus's `TryConvert` analogue — agrees exactly with the predicates
+downcast — magnus's `from_value` analogue — agrees exactly with the predicates
 of the tags it converts on: it accepts precisely the values one of those
 predicates holds for. The class predicate answers for the class tag alone and
 the singleton-class predicate for the singleton-class tag, so the class
@@ -361,9 +379,14 @@ borrows a string literal. From an mruby string Rust reads the bytes three ways:
 | owned `String` | the bytes when valid UTF-8 | a non-string tag, or non-UTF-8 bytes |
 | owned `Vec<u8>` | arbitrary bytes | a non-string tag |
 
-The three reads above never raise. Rust also reads the bytes two fallible ways.
-It reads them as a NUL-terminated C-string view — the bytes guaranteed to end in
-a `\0`, suitable for a C boundary — which surfaces an `Err`, the `ArgumentError`
+The three reads above never raise. Mirroring `magnus`'s `RString::to_string` and
+`to_char`, a string handle also reads its bytes as an owned `String` that
+surfaces an `Err`, the `ArgumentError` "invalid UTF-8 byte sequence", for bytes
+that are not UTF-8, and as a `char` that surfaces the same `Err` for such bytes
+and a `TypeError` for a string holding other than exactly one character — the
+reads the `String` and `char` `TryConvert` rules make. Rust also reads the bytes
+two more fallible ways. It reads them as a NUL-terminated C-string view — the
+bytes guaranteed to end in a `\0`, suitable for a C boundary — which surfaces an `Err`, the `ArgumentError`
 mruby raises, when the bytes contain an embedded NUL, because a C string cannot
 carry an embedded NUL. magnus offers no direct C-string accessor, so the read
 anchors on mruby's own `mrb_string_cstr`. It also parses the bytes to an integer
@@ -639,6 +662,7 @@ The typed array carries Ruby `Array`'s surface:
 | join | the elements rendered into one string, separated by a given separator — each element's `to_s` runs and a raise inside it surfaces as an `Err`; an absent separator concatenates the renderings with nothing between them |
 | clear | empty it |
 | duplicate | copy it |
+| convert to a Rust sequence | the elements, each converted through `TryConvert`, as a Rust vector, or as a fixed-length Rust array when the array holds exactly that many elements — mirroring `magnus`'s `RArray::to_vec` and `to_array`; surfaces the first element's `Err`, or the `TypeError` "expected Array of length *N*" for a fixed-length read of any other length |
 
 A typed hash constructs empty, or empty with a preallocated capacity that reserves room for the assignments that follow — the capacity is a hint, not content, and the hash starts empty. Beyond construction it carries Ruby `Hash`'s surface:
 
@@ -654,6 +678,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | duplicate | copy it |
 | keys / values | read as typed arrays |
 | size / emptiness | the entry count, and whether it holds no entries |
+| convert to a Rust map | the pairs, each key and value converted through `TryConvert`, as a Rust hash map or ordered map — mirroring `magnus`'s `RHash::to_hash_map` and `to_btree_map`; surfaces the first `Err` |
 | iterate | visit each key-value pair in insertion order, handing both to a closure that signals whether to continue or stop — stopping ends the walk before the remaining pairs, returning a `Result`. The walk dispatches no Ruby of its own, but a closure that re-enters the VM to mutate the hash's table surfaces an `Err` carrying the `RuntimeError` mruby raises for the in-walk modification. A closure panic stops the walk and resurfaces on the Rust side once the walk unwinds, never crossing into mruby's frames |
 
 #### Value operations
@@ -703,7 +728,7 @@ its key can surface.
   different superclass included. Methods are registered on those handles
   through the `Module` and `Object` traits (mirroring `magnus::Module` and
   `magnus::Object`), accepting Rust closures whose arguments and return
-  values cross the boundary through `IntoValue` / `FromValue`; the `Module`
+  values cross the boundary through `IntoValue` / `TryConvert`; the `Module`
   trait also binds constants, aliases existing methods, mixes another module
   into the handle two ways — including it after the receiver in the ancestry
   (Ruby's `Module#include`, the receiver's own methods win) and prepending it
@@ -813,11 +838,11 @@ its key can surface.
   positionals, optional positionals, a splat, trailing required positionals,
   a keyword bucket, and a block, handed back separately so a body reads any
   argument shape mruby accepts in one read. Each positional crosses through
-  `FromValue`; an optional positional binds `Some` of its converted value when
+  `TryConvert`; an optional positional binds `Some` of its converted value when
   the call supplies it and `None` when omitted; a trailing required positional
   binds after the splat. The splat collects the remaining positionals either
   as an array handle — valid for the whole call whatever the body re-enters —
-  or as a collection of values each converted through `FromValue`. The block
+  or as a collection of values each converted through `TryConvert`. The block
   part is either a block the call must pass, whose absence surfaces as an
   `ArgumentError`, or an optional block that is `None` when no block was
   passed; a scan read without a block part ignores a block the call passes.
@@ -833,7 +858,7 @@ its key can surface.
   hash and two lists of symbol-or-name keys, the required keywords and the
   optional ones, and hands back the required values, the optional values, and
   a rest, each part declared by its type as the scan read's are. Each value
-  crosses through `FromValue`; an optional keyword the hash lacks binds
+  crosses through `TryConvert`; an optional keyword the hash lacks binds
   `None`. The rest is either a new hash holding the keywords neither list
   names, or absent, in which case a keyword neither list names surfaces as an
   `ArgumentError`, as a required keyword the hash lacks does. The given hash
@@ -841,16 +866,17 @@ its key can surface.
   declares is a programming error, and the read panics.
 - A typed method registration declares a fixed count of required positionals
   and, after them, a count of optional positionals: each required positional
-  crosses through `FromValue`, and each optional positional crosses as an
+  crosses through `TryConvert`, and each optional positional crosses as an
   `Option` of its type — present in the call binds `Some` of the argument
-  converted through `FromValue`, omitted binds `None`. Mirroring `magnus`'s trailing-`Option` arguments, the optional slots
-  are the trailing parameters of the registered Rust function. The registration
-  derives the argument-spec aspec from the two counts: required-only declares
-  the required aspec, and a required-plus-optional declaration the
-  required-and-optional aspec mruby uses to accept the optional positionals
-  while still requiring the leading ones. A `FromValue` failure on a supplied
-  argument — required or optional — raises to the Ruby caller before the body
-  runs, as for the required-only form.
+  converted through `TryConvert`, omitted binds `None`. Mirroring `magnus`'s
+  trailing-`Option` arguments, the optional slots are the trailing parameters
+  of the registered Rust function. The registration derives the argument-spec
+  aspec from the two counts: required-only declares the required aspec, and a
+  required-plus-optional declaration the required-and-optional aspec mruby
+  uses to accept the optional positionals while still requiring the leading
+  ones. A `TryConvert` failure on a
+  supplied argument — required or optional — raises its exception to the Ruby
+  caller before the body runs, as for the required-only form.
 - A typed method registration declares that it accepts a block: the block
   crosses as an `Option<Proc>` trailing parameter on the registered Rust
   function — present in the call binds `Some`, omitted binds `None`, since
@@ -1275,7 +1301,7 @@ The `compiler` capability feature carries everything in this section.
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, `sys::catch_unwind`) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Rust panic raised inside a `sys::protect` body | the process aborts at the FFI boundary; never unwinds into mruby's C frames |
-| Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
+| Registered method receiving an argument that fails `TryConvert` conversion | the exception the conversion's `Err` carries raised to the Ruby caller, the closure body never runs |
 | A registered method body's scan, single-argument, or named keyword read that the call does not fit — a wrong positional count, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or an unnamed keyword with no rest to collect it | surfaced to the body as a Rust `Err` carrying the exception raised for the mismatch; nothing raises past the body |
 | A heap region buffer too small to hold one heap page | no pages are added and the count answers zero; the interpreter keeps allocating as before |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
