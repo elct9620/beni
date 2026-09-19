@@ -8,14 +8,13 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload whose `Drop` counts into the case's own counter — the only
 /// way to observe from Rust that the collector reclaimed its carrier.
+#[beni::wrap(class = "BeniReachCarrier", name = "BeniReachProbe")]
 struct Probe(&'static AtomicUsize);
 impl Drop for Probe {
     fn drop(&mut self) {
         self.0.fetch_add(1, Ordering::SeqCst);
     }
 }
-
-typed_data!(Probe, c"BeniReachProbe", c"BeniReachCarrier");
 
 /// A carrier whose only hold, once this returns, is whatever `store`
 /// put it in: the arena scope it was made in has already ended.

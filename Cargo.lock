@@ -15,8 +15,18 @@ dependencies = [
 name = "beni"
 version = "0.16.0"
 dependencies = [
+ "beni-macros",
  "beni-sys",
  "bytes",
+]
+
+[[package]]
+name = "beni-macros"
+version = "0.16.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

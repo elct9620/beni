@@ -1,0 +1,27 @@
+# beni-macros — the `beni` crate's attribute and derive macros.
+#
+# A proc-macro crate can export nothing but macros, so they live here
+# and reach consumers through `beni`'s re-exports (`beni::wrap`,
+# `beni::TypedData`), as magnus-macros reaches them through `magnus`.
+# The expansions name `::beni` paths, so this crate never depends on it.
+
+[package]
+name = "beni-macros"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Derive and attribute macros for the beni mruby wrapper, re-exported through `beni`."
+readme = "README.md"
+keywords = ["mruby", "ruby", "bindings", "embedding"]
+categories = ["api-bindings"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+# `Literal::c_string` spells a data type's name as a C-string literal.
+proc-macro2 = "1.0.80"
+quote = "1"
+syn = { version = "2", features = ["full"] }

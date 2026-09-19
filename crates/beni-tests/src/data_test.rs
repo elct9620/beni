@@ -5,24 +5,22 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload with no observable drop — the value wrapped where only the
 /// carrier's class matters.
+#[beni::wrap(class = "BeniDataMarkedBase", name = "BeniHolder")]
 struct Holder {
     tag: i32,
 }
-
-typed_data!(Holder, c"BeniHolder", c"BeniDataMarkedBase");
 
 /// Drop probe with its own counter — kept distinct from `Holder` so
 /// the roundtrip test's VM teardown cannot perturb the assertion.
 static PROBE_DROPS: AtomicUsize = AtomicUsize::new(0);
 
+#[beni::wrap(class = "BeniDropHolder", name = "BeniDropProbe")]
 struct DropProbe;
 impl Drop for DropProbe {
     fn drop(&mut self) {
         PROBE_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
-
-typed_data!(DropProbe, c"BeniDropProbe", c"BeniDropHolder");
 
 #[test]
 fn release_hook_drops_the_boxed_value_on_close() {
@@ -53,6 +51,7 @@ fn release_hook_drops_the_boxed_value_on_close() {
 /// interpreter was handed to can be told from a close at home.
 static RELEASED_ON: std::sync::Mutex<Option<std::thread::ThreadId>> = std::sync::Mutex::new(None);
 
+#[beni::wrap(class = "BeniThreadHolder", name = "BeniThreadProbe")]
 struct ThreadProbe;
 impl Drop for ThreadProbe {
     fn drop(&mut self) {
@@ -61,8 +60,6 @@ impl Drop for ThreadProbe {
             .expect("the probe mutex is never poisoned") = Some(std::thread::current().id());
     }
 }
-
-typed_data!(ThreadProbe, c"BeniThreadProbe", c"BeniThreadHolder");
 
 #[test]
 fn release_hook_runs_on_the_thread_the_interpreter_was_carried_to() {
@@ -106,6 +103,7 @@ fn release_hook_runs_on_the_thread_the_interpreter_was_carried_to() {
 /// whose destructor unwinds while the GC sweeps it from a C frame.
 static PANIC_DROPS: AtomicUsize = AtomicUsize::new(0);
 
+#[beni::wrap(class = "BeniPanicHolder", name = "BeniPanicOnDrop")]
 struct PanicOnDrop;
 impl Drop for PanicOnDrop {
     fn drop(&mut self) {
@@ -113,8 +111,6 @@ impl Drop for PanicOnDrop {
         panic!("payload drop panics from the GC sweep");
     }
 }
-
-typed_data!(PanicOnDrop, c"BeniPanicOnDrop", c"BeniPanicHolder");
 
 #[test]
 fn release_hook_contains_a_panicking_drop_on_close() {
@@ -292,8 +288,13 @@ fn an_undefined_allocator_refuses_new_and_allocate_but_not_a_wrap_or_copy() {
         .expect("marking an ordinary class must succeed");
     class.undef_default_alloc_func(&mrb);
 
-    for src in [&b"BeniDataMarkedBase.new"[..], b"BeniDataMarkedBase.allocate"] {
-        let err = mrb.load_string(src).expect_err("Ruby cannot allocate the class");
+    for src in [
+        &b"BeniDataMarkedBase.new"[..],
+        b"BeniDataMarkedBase.allocate",
+    ] {
+        let err = mrb
+            .load_string(src)
+            .expect_err("Ruby cannot allocate the class");
         assert_allocator_undefined(&mrb, err, "BeniDataMarkedBase");
     }
 

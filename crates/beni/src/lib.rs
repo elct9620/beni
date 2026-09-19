@@ -17,6 +17,8 @@
 //!                      scan_args      (magnus-shaped frame reads)
 //!                      method         (method! bridges + MethodN crossing)
 //!                      gem            (Gem trait + Mrb::init_gem)
+//!                      wrap / TypedData derive (beni-macros,
+//!                                      re-exported at the root)
 //!
 //! L1  RAII / newtypes  state          (Mrb owning *mut mrb_state,
 //!                                      ArenaScope arena bracketing)
@@ -112,6 +114,113 @@ pub use string::RString;
 pub use symbol::{Id, IntoId, Symbol};
 pub use try_convert::TryConvert;
 pub use typed_data::{RTypedData, TypedData};
+
+/// ```
+/// #[beni::wrap(class = "Point")]
+/// struct Point {
+///     x: i32,
+///     y: i32,
+/// }
+/// ```
+///
+/// `class` is a constant path from `Object` — `"Geometry::Point"` names
+/// a nested class — resolved in the interpreter at hand each time the
+/// type names it, and marked to carry data with its default allocator
+/// undefined as it is. A path naming no class, or a class that refuses
+/// the mark, panics. `name` names the data type and defaults to `class`.
+///
+/// mruby hands a class its superclass's mark and allocator state when
+/// the class is defined, so a subclass Ruby defines before the type
+/// first names its class carries neither, and wrapping into it panics.
+/// Call `TypedData::class` before Ruby code subclasses the type's class.
+///
+/// The attributes magnus accepts beyond `class` and `name` are GC and
+/// Ractor hints mruby's data type has no counterpart for, and are
+/// compile errors, as is a generic type:
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point", mark)]
+/// struct Point;
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point", size)]
+/// struct Point;
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point", compact)]
+/// struct Point;
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point", free_immediately)]
+/// struct Point;
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point", wb_protected)]
+/// struct Point;
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point", frozen_shareable)]
+/// struct Point;
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point", unsafe_generics)]
+/// struct Point<T: Send + 'static>(T);
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point")]
+/// struct Point<T: Send + 'static>(T);
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point")]
+/// struct Point {
+///     #[beni(opaque_attr_reader)]
+///     x: i32,
+/// }
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(name = "Point")]
+/// struct Point;
+/// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Po\0int")]
+/// struct Point;
+/// ```
+pub use beni_macros::wrap;
+
+/// ```
+/// #[derive(beni::TypedData)]
+/// #[beni(class = "Shape")]
+/// enum Shape {
+///     #[beni(class = "Shape::Circle")]
+///     Circle { r: f64 },
+///     Square(f64),
+/// }
+/// ```
+///
+/// Each variant carrying `#[beni(class = "...")]` wraps as that class —
+/// the type's class or a subclass of it — and every other variant as
+/// the type's class. See `wrap` for the attributes and what naming a
+/// class does.
+///
+/// ```compile_fail
+/// #[derive(beni::TypedData)]
+/// #[beni(class = "Shape")]
+/// enum Shape {
+///     #[beni(class = "Circle", mark)]
+///     Circle,
+/// }
+/// ```
+pub use beni_macros::TypedData;
 pub use value::cstr_ptr;
 pub use value::{Break, ReprValue, Value};
 

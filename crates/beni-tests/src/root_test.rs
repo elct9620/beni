@@ -8,6 +8,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 /// cannot perturb another's assertion.
 static ROOTED_DROPS: AtomicUsize = AtomicUsize::new(0);
 
+#[beni::wrap(class = "BeniRootedHolder", name = "BeniRootedProbe")]
 struct RootedProbe;
 impl Drop for RootedProbe {
     fn drop(&mut self) {
@@ -15,10 +16,9 @@ impl Drop for RootedProbe {
     }
 }
 
-typed_data!(RootedProbe, c"BeniRootedProbe", c"BeniRootedHolder");
-
 static LOOSE_DROPS: AtomicUsize = AtomicUsize::new(0);
 
+#[beni::wrap(class = "BeniLooseHolder", name = "BeniLooseProbe")]
 struct LooseProbe;
 impl Drop for LooseProbe {
     fn drop(&mut self) {
@@ -26,10 +26,9 @@ impl Drop for LooseProbe {
     }
 }
 
-typed_data!(LooseProbe, c"BeniLooseProbe", c"BeniLooseHolder");
-
 static GUARDED_DROPS: AtomicUsize = AtomicUsize::new(0);
 
+#[beni::wrap(class = "BeniGuardedHolder", name = "BeniGuardedProbe")]
 struct GuardedProbe;
 impl Drop for GuardedProbe {
     fn drop(&mut self) {
@@ -37,18 +36,15 @@ impl Drop for GuardedProbe {
     }
 }
 
-typed_data!(GuardedProbe, c"BeniGuardedProbe", c"BeniGuardedHolder");
-
 static SHARED_DROPS: AtomicUsize = AtomicUsize::new(0);
 
+#[beni::wrap(class = "BeniSharedHolder", name = "BeniSharedProbe")]
 struct SharedProbe;
 impl Drop for SharedProbe {
     fn drop(&mut self) {
         SHARED_DROPS.fetch_add(1, Ordering::SeqCst);
     }
 }
-
-typed_data!(SharedProbe, c"BeniSharedProbe", c"BeniSharedHolder");
 
 /// A class whose instances carry a data payload, defined under a
 /// name of its own so the probes cannot collide.

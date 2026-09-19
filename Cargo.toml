@@ -1,11 +1,11 @@
 # Cargo workspace for the beni crates; the beni Ruby gem cohabits at the
 # repo root (rb-sys uses the same gem + crates layout).
 [workspace]
-members = ["crates/beni-sys", "crates/beni", "crates/beni-tests"]
+members = ["crates/beni-sys", "crates/beni", "crates/beni-macros", "crates/beni-tests"]
 # beni-tests always needs a real libmruby.a, so it stays out of the
 # selection a bare cargo command uses; the gates that stage an archive
 # reach it with an explicit --workspace.
-default-members = ["crates/beni-sys", "crates/beni"]
+default-members = ["crates/beni-sys", "crates/beni", "crates/beni-macros"]
 # The consumer scenarios are consumers' projects, not members of this
 # workspace; excluding them here is what lets each manifest stay the
 # shape a consumer's actually is — which for embedded_no_compiler

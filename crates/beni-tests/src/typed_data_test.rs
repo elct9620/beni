@@ -6,15 +6,13 @@ use beni::{
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[beni::wrap(class = "BeniPoint")]
 struct Point {
     x: i32,
 }
 
-typed_data!(Point, c"BeniPoint", c"BeniPoint");
-
+#[beni::wrap(class = "BeniOther")]
 struct Other;
-
-typed_data!(Other, c"BeniOther", c"BeniOther");
 
 fn define_marked(mrb: &Mrb, name: &core::ffi::CStr) -> RClass {
     let class = mrb
@@ -269,11 +267,10 @@ fn a_value_wraps_as_the_class_its_type_names_for_it() {
 }
 
 #[derive(Clone)]
+#[beni::wrap(class = "BeniCounter")]
 struct Counter {
     n: std::cell::Cell<i32>,
 }
-
-typed_data!(Counter, c"BeniCounter", c"BeniCounter");
 
 fn counter_n(_mrb: &Mrb, rb_self: &Counter) -> i32 {
     rb_self.n.get()
