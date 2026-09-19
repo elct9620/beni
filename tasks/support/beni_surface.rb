@@ -4,6 +4,7 @@ require_relative "beni_surface/syntax"
 require_relative "beni_surface/scan"
 require_relative "beni_surface/modules"
 require_relative "beni_surface/net"
+require_relative "beni_surface/macros"
 
 # Public-surface drift gate support
 # =================================
@@ -15,9 +16,10 @@ require_relative "beni_surface/net"
 # through; this scan is what keeps the net and the surface from
 # drifting apart as items are added or removed.
 #
-# Scope: inherent +pub fn+s declared in column-zero +impl+ blocks.
-# Trait items stay out — the compiler type-checks trait declarations
-# and default bodies without a reference.
+# Scope: inherent +pub fn+s declared in column-zero +impl+ blocks, and
+# the macros +beni-macros+ exports through +beni+. Trait items stay
+# out — the compiler type-checks trait declarations and default bodies
+# without a reference.
 #
 # A capability feature is an axis of the expectation rather than an
 # exemption from it: an item a feature carries is expected in the net
@@ -28,6 +30,7 @@ module BeniSurface
   ROOT = File.expand_path("../..", __dir__)
   CRATE_SRC = File.join(ROOT, "crates", "beni", "src")
   SURFACE_TEST_FILE = File.join(ROOT, "crates", "beni-tests", "src", "surface_test.rs")
+  MACRO_SRC = File.join(ROOT, "crates", "beni-macros", "src", "lib.rs")
 
   # Comparison outcome between the scanned surface and the net bodies.
   Report = Data.define(:missing, :stale, :total) do
@@ -38,11 +41,19 @@ module BeniSurface
 
   module_function
 
-  def verify(crate_src: CRATE_SRC, net_file: SURFACE_TEST_FILE)
+  def verify(crate_src: CRATE_SRC, net_file: SURFACE_TEST_FILE, macro_src: MACRO_SRC)
     entries = surface(crate_src)
+    macros = Macros.call(File.read(macro_src))
     bodies = Net.call(net_file)
-    missing = entries.reject { |entry| referenced?(bodies[entry.feature], entry) }
-    Report.new(missing: missing, stale: stale_refs(entries, bodies.values.join), total: entries.size)
+    net = bodies.values.join
+    Report.new(missing: missing(entries, bodies) + macros.reject { |entry| entry.referenced?(net) },
+               stale: stale_refs(entries, net), total: entries.size + macros.size)
+  end
+
+  # Entries no net body names — each looked for in the body its
+  # feature gates, the ungated one for an ungated entry.
+  def missing(entries, bodies)
+    entries.reject { |entry| referenced?(bodies[entry.feature], entry) }
   end
 
   # Whether one net body names the entry. A generic type instantiates

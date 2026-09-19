@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "tmpdir"
-
-require_relative "../../tasks/support/beni_surface"
+require_relative "surface_harness"
 
 # The drift net's feature axis. An item a capability feature carries
 # used to leave the expectation the moment it was gated, so the gate
 # stayed green while the net stopped naming it. These pin that a gated
 # item is expected in its own feature's net body and nowhere else.
 class TestSurfaceGate < Minitest::Test
+  include SurfaceHarness
+
   def test_expects_a_feature_gated_fn_in_that_feature_body
     report = verify(crate: gated_crate, net: complete_net)
 
@@ -139,16 +139,5 @@ class TestSurfaceGate < Minitest::Test
           let _ = Mrb::open;
       }
     RUST
-  end
-
-  def verify(crate:, net:)
-    Dir.mktmpdir do |dir|
-      src = File.join(dir, "src")
-      Dir.mkdir(src)
-      crate.each { |name, body| File.write(File.join(src, name), body) }
-      net_file = File.join(dir, "surface_test.rs")
-      File.write(net_file, net)
-      BeniSurface.verify(crate_src: src, net_file: net_file)
-    end
   end
 end

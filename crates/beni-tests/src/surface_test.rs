@@ -1,10 +1,10 @@
 //! Public-surface drift net, held from consumer position.
 //!
 //! Every inherent `pub fn` the `beni` crate declares is named here
-//! once, through the paths a consumer reaches it by. An item that
-//! stops being public — or a root re-export its path runs through
-//! that stops being exported — breaks this file's compilation, which
-//! no in-crate test can see. `rake api:surface` keeps the list and
+//! once, through the paths a consumer reaches it by, and every macro
+//! it re-exports is applied once. An item that stops being public — or
+//! a root re-export its path runs through that stops being exported —
+//! breaks this file's compilation, which no in-crate test can see. `rake api:surface` keeps the list and
 //! the crate's own surface from drifting apart in either direction.
 
 use beni::*;
@@ -95,6 +95,15 @@ fn full_api_surface_is_reachable_from_outside() {
         let _ = Mrb::obj_wrap_as::<Probe>;
         let _ = RTypedData::from_value_unchecked;
         let _ = RTypedData::get::<Probe>;
+    }
+    {
+        #[beni::wrap(class = "Wrapped")]
+        struct Wrapped;
+        #[derive(beni::TypedData)]
+        #[beni(class = "Derived")]
+        struct Derived;
+        let _ = Mrb::wrap::<Wrapped>;
+        let _ = Mrb::wrap::<Derived>;
     }
     let _ = DataType::<i32>::new;
     let _ = ExceptionClass::as_r_class;
