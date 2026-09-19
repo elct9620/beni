@@ -76,6 +76,7 @@ pub mod prelude {
     pub use crate::{FromValue as _, Module as _, Object as _, ReprValue as _};
 }
 pub mod range;
+pub mod scan_args;
 pub mod state;
 pub mod string;
 pub mod symbol;

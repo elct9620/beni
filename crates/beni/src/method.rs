@@ -142,7 +142,7 @@ pub(crate) fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str)
 /// The `TypeError` a bridge raises when an argument fails its
 /// `FromValue` conversion — named after the Rust type the registered
 /// function expected.
-fn arg_type_error<T>(mrb: &Mrb) -> Error {
+pub(crate) fn arg_type_error<T>(mrb: &Mrb) -> Error {
     let msg = format!(
         "wrong argument type (expected {})",
         core::any::type_name::<T>()

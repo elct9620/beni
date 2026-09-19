@@ -587,7 +587,7 @@ pub mod format {
 /// The slice's lifetime is bound by the caller's `&self` borrow on
 /// `Mrb` (the call frame that produced argv).
 #[inline]
-fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: sys::mrb_int) -> &'a [Value] {
+pub(crate) fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: sys::mrb_int) -> &'a [Value] {
     if argc > 0 && !argv.is_null() {
         // SAFETY: Value is `#[repr(transparent)]` over mrb_value;
         // mruby owns the buffer for the duration of the call frame
@@ -604,7 +604,7 @@ fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: sys::mrb_int) -> &'a [
 /// — when the call passed none, so a caller reads `*out` as a Hash
 /// unconditionally (`vendor/mruby/src/class.c:1649`).
 #[inline]
-fn capture_all_kwargs(out: *mut sys::mrb_value) -> sys::mrb_kwargs {
+pub(crate) fn capture_all_kwargs(out: *mut sys::mrb_value) -> sys::mrb_kwargs {
     sys::mrb_kwargs {
         num: 0,
         required: 0,
