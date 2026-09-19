@@ -3,7 +3,7 @@
 require "test_helper"
 
 module Beni
-  # Release lockstep: the three packages ship one version, and the Rust
+  # Release lockstep: the four packages ship one version, and the Rust
   # channel moves together with the wasi-sdk pin. These asserts turn a
   # partial bump into a test failure instead of a broken downstream
   # build.
@@ -12,14 +12,13 @@ module Beni
 
     def test_gem_workspace_and_dependency_versions_match
       workspace = File.read(File.join(ROOT, "Cargo.toml"))[/^version = "([^"]+)"/, 1]
-      dependency = File.read(File.join(ROOT, "crates", "beni", "Cargo.toml"))[
-        /beni-sys = \{[^}]*version = "([^"]+)"/, 1
-      ]
 
       assert_equal Beni::VERSION, workspace,
                    "workspace Cargo.toml version drifted from lib/beni/version.rb"
-      assert_equal Beni::VERSION, dependency,
-                   "crates/beni's beni-sys dependency version drifted from lib/beni/version.rb"
+      %w[beni-sys beni-macros].each do |crate|
+        assert_equal Beni::VERSION, beni_dependency_version(crate),
+                     "crates/beni's #{crate} dependency version drifted from lib/beni/version.rb"
+      end
     end
 
     def test_rust_channel_and_wasi_sdk_pin_move_together
@@ -34,6 +33,13 @@ module Beni
 
       assert_operator Gem::Version.new(wasi_sdk), :>=, Gem::Version.new("33"),
                       "rust-toolchain #{channel} needs wasi-sdk >= 33 (__wasi_init_tp); pinned #{wasi_sdk}"
+    end
+
+    private
+
+    # The version requirement crates/beni pins on a sibling crate.
+    def beni_dependency_version(crate)
+      File.read(File.join(ROOT, "crates", "beni", "Cargo.toml"))[/^#{crate} = \{[^}]*version = "([^"]+)"/, 1]
     end
   end
 end

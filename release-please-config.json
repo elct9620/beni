@@ -18,6 +18,11 @@
           "type": "toml",
           "path": "crates/beni/Cargo.toml",
           "jsonpath": "$.dependencies['beni-sys'].version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/beni/Cargo.toml",
+          "jsonpath": "$.dependencies['beni-macros'].version"
         }
       ]
     }

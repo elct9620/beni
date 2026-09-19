@@ -1,6 +1,6 @@
-# Publishes `beni-sys` and `beni` to crates.io via OIDC Trusted
-# Publishing. `cargo publish --workspace` (stable since 1.90) orders the
-# uploads by dependency (beni-sys first) and waits for index propagation
+# Publishes `beni-sys`, `beni-macros` and `beni` to crates.io via OIDC
+# Trusted Publishing. `cargo publish --workspace` (stable since 1.90)
+# orders the uploads by dependency (beni last) and waits for index propagation
 # between them. Its verify builds compile the packaged crates, which
 # needs an archive like any other build, so the gem stages one first and
 # names it through BENI_VENDOR_DIR. The manual-recovery shape mirrors the gem's —
@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   publish-crates:
-    name: Publish beni-sys and beni to crates.io
+    name: Publish beni-sys, beni-macros and beni to crates.io
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -95,7 +95,7 @@ jobs:
         env:
           BENI_VENDOR_DIR: ${{ github.workspace }}/vendor
       # Trusted Publishing: exchange the workflow's OIDC token for a
-      # short-lived crates.io token. beni-sys and beni each name two
+      # short-lived crates.io token. Each crate names two
       # publishers on crates.io: release-please.yml for the chained
       # release and this file for manual dispatch.
       - uses: rust-lang/crates-io-auth-action@bbd81622f20ce9e2dd9622e3218b975523e45bbe # v1.0.4
