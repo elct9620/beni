@@ -30,12 +30,12 @@
 # What this crate is NOT
 # ----------------------
 #   * Not a magnus-style typed value wrapper. The safe `Mrb` /
-#     `Ccontext` / `Value` / `Class` / `Array` / `Hash` ergonomics,
-#     the `IntoValue` / `FromValue` trait seam, the `Format`-based
-#     `mrb_get_args` dispatch, and the typed `mrb_func_t` alias all
-#     live in the sibling `beni` crate. This crate stays a pure
-#     FFI surface (bindings + ABI constants); the typed wrappers
-#     consume it as a path dependency.
+#     `Ccontext` / `Value` / `RClass` / `RModule` / `Array` / `Hash`
+#     ergonomics, the `IntoValue` / `FromValue` / `TryConvert`
+#     conversion seam, the `scan_args` frame reads, and the typed
+#     `mrb_func_t` alias all live in the sibling `beni` crate. This
+#     crate stays a pure FFI surface (bindings + ABI constants); the
+#     typed wrappers consume it as a path dependency.
 
 [package]
 name = "beni-sys"

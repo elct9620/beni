@@ -3,12 +3,12 @@
 # Mirrors the magnus / rb-sys split applied at the mruby boundary:
 # `beni-sys` owns the bindgen-generated `extern "C"` surface and the
 # layout-safe C shims; this crate owns every Rust-level abstraction
-# above it (the `Mrb` / `Ccontext` RAII types, the `Value` / `Class` /
-# `Array` / `Hash` newtypes, the `IntoValue` / `FromValue` trait seam,
-# the `Format`-based `mrb_get_args` dispatch, and the `protect`
-# closure wrapper). Consumers `use beni::Mrb` for typed access and
-# fall through to `beni::sys::mrb_*` only at the raw-FFI escape
-# hatch.
+# above it (the `Mrb` / `Ccontext` RAII types, the `Value` / `RClass` /
+# `RModule` / `Array` / `Hash` handles, the `IntoValue` / `FromValue` /
+# `TryConvert` conversion seam, the magnus-shaped `scan_args` frame
+# reads, and the `protect` closure wrapper). Consumers `use beni::Mrb`
+# for typed access and fall through to `beni::sys::mrb_*` only at the
+# raw-FFI escape hatch.
 
 [package]
 name = "beni"
