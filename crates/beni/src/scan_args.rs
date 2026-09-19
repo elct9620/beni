@@ -13,10 +13,11 @@
 //! Each part is `()` when the shape has none of it. Where magnus scans an
 //! argument slice, `scan_args` reads the frame, because mruby parses
 //! arguments only from the frame; the `Args` it answers has magnus's shape.
+//! `get_kwargs` takes a keyword bucket apart by name, as magnus's does.
 
 use crate::method::{arg_type_error, core_exception};
 use crate::state::args::{capture_all_kwargs, slice_from_argv};
-use crate::{Array, Error, FromValue, Hash, Mrb, Proc, Value};
+use crate::{Array, Error, FromValue, Hash, IntoId, Mrb, Proc, ReprValue, Symbol, Value};
 use beni_sys as sys;
 
 /// The parts `scan_args` hands back, each typed by the parameter that
@@ -36,6 +37,17 @@ pub struct Args<Req, Opt, Splat, Trail, Kw, Block> {
     pub block: Block,
 }
 
+/// The parts `get_kwargs` hands back, each typed by the parameter that
+/// declared it.
+pub struct KwArgs<Req, Opt, Splat> {
+    /// Values of the required keywords.
+    pub required: Req,
+    /// Values of the optional keywords, `None` for each the hash lacks.
+    pub optional: Opt,
+    /// The keywords neither list names.
+    pub splat: Splat,
+}
+
 mod private {
     use super::*;
 
@@ -48,8 +60,8 @@ mod private {
     pub trait ScanArgsOpt: Sized {
         const LEN: usize;
 
-        /// `vals` holds the supplied optionals, at most `LEN` of them.
-        fn from_slice(mrb: &Mrb, vals: &[Value]) -> Result<Self, Error>;
+        /// `vals` holds one slot per optional, `None` where it was omitted.
+        fn from_options(mrb: &Mrb, vals: &[Option<Value>]) -> Result<Self, Error>;
     }
 
     pub trait ScanArgsSplat: Sized {
@@ -80,7 +92,7 @@ mod private {
     impl ScanArgsOpt for () {
         const LEN: usize = 0;
 
-        fn from_slice(_: &Mrb, _: &[Value]) -> Result<Self, Error> {
+        fn from_options(_: &Mrb, _: &[Option<Value>]) -> Result<Self, Error> {
             Ok(())
         }
     }
@@ -98,8 +110,8 @@ mod private {
             impl<$($t: FromValue),+> ScanArgsOpt for ($(Option<$t>,)+) {
                 const LEN: usize = $len;
 
-                fn from_slice(mrb: &Mrb, vals: &[Value]) -> Result<Self, Error> {
-                    Ok(($(vals.get($i).map(|v| convert::<$t>(mrb, *v)).transpose()?,)+))
+                fn from_options(mrb: &Mrb, vals: &[Option<Value>]) -> Result<Self, Error> {
+                    Ok(($(vals[$i].map(|v| convert::<$t>(mrb, v)).transpose()?,)+))
                 }
             }
         };
@@ -161,9 +173,7 @@ mod private {
 
     impl ScanArgsBlock for Proc {
         fn from_block(mrb: &Mrb, block: Value) -> Result<Self, Error> {
-            Proc::from_value(block).ok_or_else(|| {
-                Error::Exception(core_exception(mrb, c"ArgumentError", "no block given"))
-            })
+            Proc::from_value(block).ok_or_else(|| argument_error(mrb, "no block given"))
         }
     }
 
@@ -174,13 +184,14 @@ mod private {
     }
 }
 
-/// Required positionals of `scan_args`: `()`, or a tuple of up to nine
-/// `FromValue` types.
+/// Required positionals of `scan_args`, or required keywords of
+/// `get_kwargs`: `()`, or a tuple of up to nine `FromValue` types.
 pub trait ScanArgsRequired: private::ScanArgsRequired {}
 impl<T: private::ScanArgsRequired> ScanArgsRequired for T {}
 
-/// Optional positionals of `scan_args`: `()`, or a tuple of up to nine
-/// `Option`s of `FromValue` types.
+/// Optional positionals of `scan_args`, or optional keywords of
+/// `get_kwargs`: `()`, or a tuple of up to nine `Option`s of `FromValue`
+/// types.
 pub trait ScanArgsOpt: private::ScanArgsOpt {}
 impl<T: private::ScanArgsOpt> ScanArgsOpt for T {}
 
@@ -189,7 +200,8 @@ impl<T: private::ScanArgsOpt> ScanArgsOpt for T {}
 pub trait ScanArgsSplat: private::ScanArgsSplat {}
 impl<T: private::ScanArgsSplat> ScanArgsSplat for T {}
 
-/// The keyword bucket of `scan_args`: `()` or a `Hash`.
+/// The keyword bucket of `scan_args`, or the unnamed keywords of
+/// `get_kwargs`: `()` or a `Hash`.
 pub trait ScanArgsKw: private::ScanArgsKw {}
 impl<T: private::ScanArgsKw> ScanArgsKw for T {}
 
@@ -232,14 +244,84 @@ where
     let supplied = (positionals.len() - fixed).min(Opt::LEN);
     let (required, rest) = positionals.split_at(Req::LEN);
     let (optional, rest) = rest.split_at(supplied);
+    let optional: Vec<Option<Value>> = (0..Opt::LEN).map(|i| optional.get(i).copied()).collect();
     let (splat, trailing) = rest.split_at(rest.len() - Trail::LEN);
     Ok(Args {
         required: Req::from_slice(mrb, required)?,
-        optional: Opt::from_slice(mrb, optional)?,
+        optional: Opt::from_options(mrb, &optional)?,
         splat: Splat::from_slice(mrb, splat)?,
         trailing: Trail::from_slice(mrb, trailing)?,
         keywords: Kw::from_bucket(frame.keywords),
         block: Block::from_block(mrb, frame.block)?,
+    })
+}
+
+/// Take the keywords `required` and `optional` name out of `kw` into the
+/// shape the type parameters declare, leaving `kw` unchanged. A required
+/// keyword `kw` lacks, or a keyword neither list names when `Splat` is `()`,
+/// answers the `Err` carrying an `ArgumentError`, and a value of the wrong
+/// type one carrying a `TypeError`. Mirrors magnus's `get_kwargs`.
+///
+/// # Panics
+///
+/// When `required` or `optional` differs in length from the count `Req` or
+/// `Opt` declares.
+///
+/// ```ignore
+/// // def test(a:, b:, c: nil, **rest)
+/// let kw = beni::scan_args::get_kwargs(mrb, bucket, &["a", "b"], &["c"])?;
+/// let (a, b): (String, usize) = kw.required;
+/// let (c,): (Option<bool>,) = kw.optional;
+/// let rest: Hash = kw.splat;
+/// ```
+pub fn get_kwargs<K, Req, Opt, Splat>(
+    mrb: &Mrb,
+    kw: Hash,
+    required: &[K],
+    optional: &[K],
+) -> Result<KwArgs<Req, Opt, Splat>, Error>
+where
+    K: IntoId + Copy,
+    Req: ScanArgsRequired,
+    Opt: ScanArgsOpt,
+    Splat: ScanArgsKw,
+{
+    assert_eq!(required.len(), Req::LEN, "one name per required keyword");
+    assert_eq!(optional.len(), Opt::LEN, "one name per optional keyword");
+    let rest = kw.dup(mrb);
+    let take = |name: K| -> Result<(Value, Option<Value>), Error> {
+        let key = Symbol::from(name.into_id(mrb)?).as_value();
+        let value = if rest.contains_key(mrb, key)? {
+            Some(rest.delete(mrb, key)?)
+        } else {
+            None
+        };
+        Ok((key, value))
+    };
+
+    let mut required_values = Vec::with_capacity(required.len());
+    for &name in required {
+        match take(name)? {
+            (_, Some(value)) => required_values.push(value),
+            (key, None) => {
+                let name = key.to_string(mrb);
+                return Err(argument_error(mrb, &format!("missing keyword: {name}")));
+            }
+        }
+    }
+    let optional_values = optional
+        .iter()
+        .map(|&name| take(name).map(|(_, value)| value))
+        .collect::<Result<Vec<_>, _>>()?;
+    if !Splat::REQ && !rest.is_empty(mrb) {
+        let key = rest.keys(mrb).entry(0).to_string(mrb);
+        return Err(argument_error(mrb, &format!("unknown keyword: {key}")));
+    }
+
+    Ok(KwArgs {
+        required: Req::from_slice(mrb, &required_values)?,
+        optional: Opt::from_options(mrb, &optional_values)?,
+        splat: Splat::from_bucket(Splat::REQ.then_some(rest)),
     })
 }
 
@@ -316,6 +398,10 @@ fn argnum_error(mrb: &Mrb, given: usize, min: usize, max: Option<usize>) -> Erro
         Err(err) => err,
         Ok(_) => unreachable!("mrb_argnum_error always raises"),
     }
+}
+
+fn argument_error(mrb: &Mrb, msg: &str) -> Error {
+    Error::Exception(core_exception(mrb, c"ArgumentError", msg))
 }
 
 fn convert<T: FromValue>(mrb: &Mrb, value: Value) -> Result<T, Error> {

@@ -1,6 +1,6 @@
 use crate::support::open_mrb;
 use beni::prelude::*;
-use beni::scan_args::scan_args;
+use beni::scan_args::{get_kwargs, scan_args};
 use beni::{Array, Error, FromValue, Hash, IntoValue, Mrb, Proc, Value};
 
 /// Define `name` on `Object` as a `-1` method running `body`.
@@ -232,4 +232,89 @@ fn a_call_that_does_not_fit_leaves_the_body_through_its_own_return() {
         raise_of(&mrb, src);
         assert_eq!(GUARD_DROPS.with(core::cell::Cell::get), before + 1, "{src}");
     }
+}
+
+fn or_nil(mrb: &Mrb, value: Option<impl IntoValue>) -> Value {
+    value.map_or(Value::nil(), |value| value.into_value(mrb))
+}
+
+// def t(a:, b:, c: nil, **rest) — answered as [a, b, c, rest].
+fn named_keywords(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let bucket = scan_args::<(), (), (), (), Hash, ()>(mrb)?.keywords;
+    let kw = get_kwargs::<_, (String, i32), (Option<bool>,), Hash>(mrb, bucket, &["a", "b"], &["c"])?;
+    let (a, b) = kw.required;
+    let (c,) = kw.optional;
+    Ok(mrb
+        .ary_new_from_values(&[
+            mrb.str_new(a.as_bytes()).as_value(),
+            b.into_value(mrb),
+            or_nil(mrb, c),
+            kw.splat.as_value(),
+        ])
+        .as_value())
+}
+
+#[test]
+fn named_keywords_bind_required_optional_and_rest() {
+    let mrb = open_mrb();
+    define(&mrb, c"named", beni::method!(named_keywords, -1));
+
+    let read = |src| eval::<Array>(&mrb, src).as_value().inspect(&mrb);
+    assert_eq!(read("named(a: 'x', b: 1, c: true, d: 2)"), r#"["x", 1, true, {d: 2}]"#);
+    assert_eq!(read("named(b: 1, a: 'x')"), r#"["x", 1, nil, {}]"#);
+    assert_eq!(
+        raise_of(&mrb, "named(b: 1)"),
+        ("ArgumentError".into(), "missing keyword: a".into())
+    );
+    assert_eq!(raise_of(&mrb, "named(a: 1, b: 1)").0, "TypeError");
+}
+
+// def t(c: nil, d: nil) — answered as [c, d, the bucket's size afterwards].
+fn optional_keywords(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let bucket = scan_args::<(), (), (), (), Hash, ()>(mrb)?.keywords;
+    let kw = get_kwargs::<_, (), (Option<i32>, Option<i32>), ()>(mrb, bucket, &[], &["c", "d"])?;
+    let (c, d) = kw.optional;
+    Ok(mrb
+        .ary_new_from_values(&[
+            or_nil(mrb, c),
+            or_nil(mrb, d),
+            (bucket.len(mrb) as i32).into_value(mrb),
+        ])
+        .as_value())
+}
+
+#[test]
+fn an_optional_keyword_the_hash_lacks_binds_none_and_the_hash_stays_whole() {
+    let mrb = open_mrb();
+    define(&mrb, c"optional_kw", beni::method!(optional_keywords, -1));
+
+    assert_eq!(
+        eval::<Array>(&mrb, "optional_kw(d: 4)").as_value().inspect(&mrb),
+        "[nil, 4, 1]"
+    );
+}
+
+#[test]
+fn a_keyword_no_list_names_is_an_argument_error_without_a_rest() {
+    let mrb = open_mrb();
+    define(&mrb, c"optional_kw", beni::method!(optional_keywords, -1));
+
+    assert_eq!(
+        raise_of(&mrb, "optional_kw(c: 1, e: 5)"),
+        ("ArgumentError".into(), "unknown keyword: e".into())
+    );
+}
+
+fn mismatched_names(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let bucket = mrb.hash_new();
+    get_kwargs::<_, (i32, i32), (), ()>(mrb, bucket, &["a"], &[])?;
+    Ok(Value::nil())
+}
+
+#[test]
+fn a_name_list_that_differs_from_its_part_panics() {
+    let mrb = open_mrb();
+    define(&mrb, c"mismatched", beni::method!(mismatched_names, -1));
+
+    assert_eq!(raise_of(&mrb, "mismatched").0, "RuntimeError");
 }
