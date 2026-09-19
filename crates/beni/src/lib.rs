@@ -258,3 +258,9 @@ pub type mrb_func_t = unsafe extern "C" fn(mrb: *mut sys::mrb_state, self_: Valu
 mod width {
     include!("../build/width.rs");
 }
+
+/// The README's example, compiled and run as a doctest so the page
+/// crates.io shows keeps to the current surface.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
