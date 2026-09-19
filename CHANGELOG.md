@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.17.0](https://github.com/elct9620/beni/compare/v0.16.0...v0.17.0) (2026-09-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** RString::to_bytes() -> Vec<u8> is gone. Read an owned Vec<u8> with Vec::<u8>::from_value(s.as_value()), or enable the bytes feature, where s.to_bytes() answers a bytes::Bytes.
+* **beni:** RClass::data_wrap(mrb, value, &TYPE) becomes an unsafe impl TypedData for the payload type plus Mrb::wrap_as(value, class) (or wrap / obj_wrap); Value::data_get(mrb, &TYPE) becomes <&T>::try_convert or RTypedData::get::<T>; Value::data_reinit has no replacement beyond typed_data::Dup's clone.
+* **beni:** the Method0 … Method2Block and MethodAny traits take the receiver type as a new leading type parameter, so a closure registered without an annotated receiver no longer infers.
+* **beni:** method!, scan_args, and get_kwargs bound their parameters on TryConvert rather than FromValue; a Float argument now truncates into an integer parameter instead of being rejected, and a conversion failure's message is mruby's rather than "wrong argument type (expected <Rust type>)".
+* **beni:** Array::entry(idx) is now entry(mrb, idx),
+* **beni:** count a call's keyword hash as its last argument
+* **beni:** read a call's arguments through scan_args alone
+* **beni:** read any handle's raw value through sys::AsRawValue over ReprValue
+* **beni:** reach a class pointer only through the class value
+* **beni:** carry the interned id on its own Id beside the Symbol handle
+* **beni-sys:** an archive configured with MRB_GC_FIXED_ARENA no longer builds.
+* **beni:** Array::splice takes (isize, usize), RString::substr takes (isize, usize) and RString::index takes an isize offset.
+* **beni:** cross into the typed domain only through unsafe
+* **beni:** keep the configured-width float out of the typed signatures
+* **beni:** key every named operation by a symbol-or-name key
+* **beni:** resolve a symbol-or-name key to a typed symbol
+* **beni:** keep the configured-width integer out of the typed signatures
+* **beni:** take the argument count Error::argnum renders as usize
+
+### Features
+
+* **beni-sys:** publish the float width the bindings declare ([7e2759e](https://github.com/elct9620/beni/commit/7e2759ead998ce64540e5c115141a903743bfa1d))
+* **beni-sys:** publish the integer width the bindings declare ([fd00fb0](https://github.com/elct9620/beni/commit/fd00fb0c8e0d069045b23e4d3bae0671e61316e0))
+* **beni-sys:** refuse bindings of a fixed-size GC arena ([e958a33](https://github.com/elct9620/beni/commit/e958a3347181ece291b937a24fabceb09b72cffa))
+* **beni:** carry Rust data through magnus's TypedData ([84c212c](https://github.com/elct9620/beni/commit/84c212c0d2bf2266a08429c530a3695c51ba4290))
+* **beni:** carry the interned id on its own Id beside the Symbol handle ([0be46b4](https://github.com/elct9620/beni/commit/0be46b4a70fbce0a988b224ae4715e76ceaf4ad7))
+* **beni:** convert a method's receiver through TryConvert ([933666e](https://github.com/elct9620/beni/commit/933666e3a67e96348fdf9ae2a7fb1c9661de0e5a))
+* **beni:** convert arrays and hashes into Rust collections through TryConvert ([cba8b1d](https://github.com/elct9620/beni/commit/cba8b1db8a86cee74c96578b8c840246f11790cb))
+* **beni:** convert bytes::Bytes behind a bytes feature ([f157771](https://github.com/elct9620/beni/commit/f1577718502d2b41e980db9ea63b22647ef5c006))
+* **beni:** convert every Rust integer the configured width holds ([e8b990a](https://github.com/elct9620/beni/commit/e8b990a6c73253b5c2e8b6ad703dc2cc502c43be))
+* **beni:** convert method arguments through TryConvert ([b33f907](https://github.com/elct9620/beni/commit/b33f907162e7c57592d1421076186194e0c5929c))
+* **beni:** copy a TypedData payload through typed_data::Dup ([2a964a7](https://github.com/elct9620/beni/commit/2a964a7caf633a2bc7053788e12bb9ab6cc611a6))
+* **beni:** count a call's keyword hash as its last argument ([95a7ec2](https://github.com/elct9620/beni/commit/95a7ec25cbffd30f0f8244f8ccf7e39214bf1a57))
+* **beni:** cross into the typed domain only through unsafe ([9ab09ca](https://github.com/elct9620/beni/commit/9ab09ca714db4ad22a4e541ec0abecfbfb5ec63f))
+* **beni:** keep the configured-width float out of the typed signatures ([515d527](https://github.com/elct9620/beni/commit/515d527c2985f6703907f732131e3f44a33de829))
+* **beni:** keep the configured-width integer out of the typed signatures ([4a0d3b0](https://github.com/elct9620/beni/commit/4a0d3b06820c8704337da63e99619b47a2a1fa10))
+* **beni:** key every named operation by a symbol-or-name key ([8bfbecc](https://github.com/elct9620/beni/commit/8bfbecc5cee087c0695d512293eae7422c6bbd82))
+* **beni:** reach a class pointer only through the class value ([02bc3a7](https://github.com/elct9620/beni/commit/02bc3a7ccec6f2ee78d5f9e50e9f39b1b9769843))
+* **beni:** reach Rust data only through TypedData ([e6577de](https://github.com/elct9620/beni/commit/e6577ded0b9a769193222d998970525a3202b785))
+* **beni:** read a call's arguments through scan_args alone ([549c397](https://github.com/elct9620/beni/commit/549c397225bfa855bd31e5670523aed4ae771eb1))
+* **beni:** read a string handle as bytes::Bytes through to_bytes ([c86d8b2](https://github.com/elct9620/beni/commit/c86d8b2f5dbd468e7d9c00099bd28bc4e99b63e2))
+* **beni:** read any argument shape through scan_args ([f446f88](https://github.com/elct9620/beni/commit/f446f886c2b7ef073f54f3a69d3b284fa78e4a2f))
+* **beni:** read any handle's raw value through sys::AsRawValue over ReprValue ([a838630](https://github.com/elct9620/beni/commit/a838630214142cbfceeb691292977ba718a2e81e))
+* **beni:** resolve a symbol-or-name key to a typed symbol ([48943cc](https://github.com/elct9620/beni/commit/48943ccf949ca195fcfac18b4cd472949976e371))
+* **beni:** take a keyword bucket apart by name through get_kwargs ([3cea138](https://github.com/elct9620/beni/commit/3cea138e9095125b731a19ab23167364361c6a85))
+* **beni:** take splice and substring positions as isize and lengths as usize ([af0d505](https://github.com/elct9620/beni/commit/af0d505652f27068fdb2019bd68c5bf260b07680))
+* **beni:** undefine a class's default allocator as magnus does ([08a93c8](https://github.com/elct9620/beni/commit/08a93c8b508f378c17dfa563d773b8da48acd6c5))
+* **beni:** wrap Rust types through #[beni::wrap] and derive(TypedData) ([82b6803](https://github.com/elct9620/beni/commit/82b6803ae5bddd92c0c162d25a8be49b109a93b3))
+* **surface:** hold the re-exported macros in the drift net ([99815e9](https://github.com/elct9620/beni/commit/99815e93910d4f517559dd8a8fd6a7e962bf8e5c))
+
+
+### Bug Fixes
+
+* **beni-sys:** keep the float-width refusals on one line ([cd76ec1](https://github.com/elct9620/beni/commit/cd76ec139463b0d38414081b45204ddc82ec86f6))
+* **beni:** keep a value read out of a container reachable after it lets go ([366b1b1](https://github.com/elct9620/beni/commit/366b1b17e53e8fd4902622bc28d82cd7bcfdba51))
+* **beni:** take the argument count Error::argnum renders as usize ([1dcc8de](https://github.com/elct9620/beni/commit/1dcc8dee51b936bf95e0a25c39b26ac4cabf6c06))
+
 ## [0.16.0](https://github.com/elct9620/beni/compare/v0.15.0...v0.16.0) (2026-09-14)
 
 
