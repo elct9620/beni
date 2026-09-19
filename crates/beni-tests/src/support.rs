@@ -15,3 +15,22 @@ pub fn open_mrb() -> Mrb {
 pub fn same_object(mrb: &Mrb, a: impl IntoValue, b: impl IntoValue) -> bool {
     a.into_value(mrb).obj_equal(mrb, b.into_value(mrb))
 }
+
+/// Makes `$ty` a `TypedData` tagged `$type_name` whose values wrap as
+/// `$class` — the carrier class each case defines and marks before it
+/// wraps anything.
+macro_rules! typed_data {
+    ($ty:ty, $type_name:literal, $class:literal) => {
+        // SAFETY: every case marks `$class` before wrapping into it.
+        unsafe impl beni::TypedData for $ty {
+            fn class(mrb: &beni::Mrb) -> beni::RClass {
+                mrb.class_get($class).expect("the carrier class is defined")
+            }
+
+            fn data_type() -> &'static beni::DataType<Self> {
+                static DATA_TYPE: beni::DataType<$ty> = beni::DataType::new($type_name);
+                &DATA_TYPE
+            }
+        }
+    };
+}

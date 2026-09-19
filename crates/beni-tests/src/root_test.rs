@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{DataType, Mrb, RClass};
+use beni::{Mrb, RClass, ReprValue, TryConvert};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload whose `Drop` records that the collector reclaimed its
@@ -15,7 +15,7 @@ impl Drop for RootedProbe {
     }
 }
 
-static ROOTED_TYPE: DataType<RootedProbe> = DataType::new(c"BeniRootedProbe");
+typed_data!(RootedProbe, c"BeniRootedProbe", c"BeniRootedHolder");
 
 static LOOSE_DROPS: AtomicUsize = AtomicUsize::new(0);
 
@@ -26,7 +26,7 @@ impl Drop for LooseProbe {
     }
 }
 
-static LOOSE_TYPE: DataType<LooseProbe> = DataType::new(c"BeniLooseProbe");
+typed_data!(LooseProbe, c"BeniLooseProbe", c"BeniLooseHolder");
 
 static GUARDED_DROPS: AtomicUsize = AtomicUsize::new(0);
 
@@ -37,7 +37,7 @@ impl Drop for GuardedProbe {
     }
 }
 
-static GUARDED_TYPE: DataType<GuardedProbe> = DataType::new(c"BeniGuardedProbe");
+typed_data!(GuardedProbe, c"BeniGuardedProbe", c"BeniGuardedHolder");
 
 static SHARED_DROPS: AtomicUsize = AtomicUsize::new(0);
 
@@ -48,7 +48,7 @@ impl Drop for SharedProbe {
     }
 }
 
-static SHARED_TYPE: DataType<SharedProbe> = DataType::new(c"BeniSharedProbe");
+typed_data!(SharedProbe, c"BeniSharedProbe", c"BeniSharedHolder");
 
 /// A class whose instances carry a data payload, defined under a
 /// name of its own so the probes cannot collide.
@@ -72,9 +72,7 @@ fn a_registered_value_survives_collection() {
         // The wrap leaves the carrier in the arena, so the scope's
         // end is what leaves the root as its only hold.
         let scope = mrb.arena_scope();
-        let obj = class
-            .data_wrap(&mrb, RootedProbe, &ROOTED_TYPE)
-            .expect("wrapping into a marked class must succeed");
+        let obj = mrb.wrap_as(RootedProbe, class).as_value();
         mrb.gc_register_forever(obj);
         drop(scope);
     }
@@ -102,9 +100,7 @@ fn an_unregistered_value_is_reclaimed_by_the_same_collection() {
 
     {
         let scope = mrb.arena_scope();
-        let _obj = class
-            .data_wrap(&mrb, LooseProbe, &LOOSE_TYPE)
-            .expect("wrapping into a marked class must succeed");
+        let _obj = mrb.wrap_as(LooseProbe, class).as_value();
         drop(scope);
     }
 
@@ -125,9 +121,7 @@ fn a_guard_holds_its_value_until_it_is_dropped() {
 
     let root = {
         let scope = mrb.arena_scope();
-        let obj = class
-            .data_wrap(&mrb, GuardedProbe, &GUARDED_TYPE)
-            .expect("wrapping into a marked class must succeed");
+        let obj = mrb.wrap_as(GuardedProbe, class).as_value();
         let root = mrb.gc_root(obj).expect("taking a root must succeed");
         drop(scope);
         root
@@ -140,7 +134,9 @@ fn a_guard_holds_its_value_until_it_is_dropped() {
         "the guard must hold its value across a full collection"
     );
     assert!(
-        root.value().data_get(&mrb, &GUARDED_TYPE).is_some(),
+        beni::RTypedData::try_convert(root.value(), &mrb)
+            .and_then(|obj| obj.get::<GuardedProbe>(&mrb).map(|_| ()))
+            .is_ok(),
         "the guard must read back the value it rooted"
     );
 
@@ -161,9 +157,7 @@ fn roots_over_one_value_release_independently() {
 
     let survivor = {
         let scope = mrb.arena_scope();
-        let obj = class
-            .data_wrap(&mrb, SharedProbe, &SHARED_TYPE)
-            .expect("wrapping into a marked class must succeed");
+        let obj = mrb.wrap_as(SharedProbe, class).as_value();
         let first = mrb.gc_root(obj).expect("taking a root must succeed");
         let second = mrb.gc_root(obj).expect("taking a second root must succeed");
         drop(scope);

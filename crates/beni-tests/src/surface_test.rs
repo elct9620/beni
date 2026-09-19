@@ -61,8 +61,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::is_data;
     let _ = Value::is_string;
     let _ = Value::is_symbol;
-    let _ = Value::data_get::<i32>;
-    let _ = Value::data_reinit::<i32>;
     let _ = Value::unbox_integer;
     let _ = Value::unbox_float;
     let _ = Value::ary_entry;
@@ -78,7 +76,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RClass::real;
     let _ = RClass::obj_new;
     let _ = RClass::set_instance_data_tt;
-    let _ = RClass::data_wrap::<i32>;
     {
         struct Probe;
         static PROBE: DataType<Probe> = DataType::new(c"Probe");

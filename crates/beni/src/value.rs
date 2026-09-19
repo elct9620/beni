@@ -979,8 +979,8 @@ impl Value {
     }
 
     /// TRUE when `self` carries `MRB_TT_CDATA` — a Rust value wrapped
-    /// through the data-carrier seam. See `Value::is_integer`. Pair
-    /// with `Value::data_get` for the type-checked extraction path.
+    /// as `TypedData`. See `Value::is_integer`. Pair with `TryConvert`
+    /// into `&T` for the type-checked extraction path.
     #[inline]
     pub fn is_data(self) -> bool {
         // SAFETY: as `is_integer`.

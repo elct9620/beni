@@ -4,6 +4,7 @@
 //! suite, so the gate sits here rather than on each module below.
 #![cfg(test)]
 
+#[macro_use]
 mod support;
 
 mod arena_test;

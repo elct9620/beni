@@ -10,33 +10,11 @@ struct Point {
     x: i32,
 }
 
-static POINT_TYPE: DataType<Point> = DataType::new(c"BeniPoint");
-
-// SAFETY: `BeniPoint` is marked by `define_point` before any wrap.
-unsafe impl TypedData for Point {
-    fn class(mrb: &Mrb) -> RClass {
-        mrb.class_get(c"BeniPoint").expect("BeniPoint is defined")
-    }
-
-    fn data_type() -> &'static DataType<Self> {
-        &POINT_TYPE
-    }
-}
+typed_data!(Point, c"BeniPoint", c"BeniPoint");
 
 struct Other;
 
-static OTHER_TYPE: DataType<Other> = DataType::new(c"BeniOther");
-
-// SAFETY: `BeniOther` is marked by `define_point` before any wrap.
-unsafe impl TypedData for Other {
-    fn class(mrb: &Mrb) -> RClass {
-        mrb.class_get(c"BeniOther").expect("BeniOther is defined")
-    }
-
-    fn data_type() -> &'static DataType<Self> {
-        &OTHER_TYPE
-    }
-}
+typed_data!(Other, c"BeniOther", c"BeniOther");
 
 fn define_marked(mrb: &Mrb, name: &core::ffi::CStr) -> RClass {
     let class = mrb
@@ -295,19 +273,7 @@ struct Counter {
     n: std::cell::Cell<i32>,
 }
 
-static COUNTER_TYPE: DataType<Counter> = DataType::new(c"BeniCounter");
-
-// SAFETY: `BeniCounter` is marked by `define_counter` before any wrap.
-unsafe impl TypedData for Counter {
-    fn class(mrb: &Mrb) -> RClass {
-        mrb.class_get(c"BeniCounter")
-            .expect("BeniCounter is defined")
-    }
-
-    fn data_type() -> &'static DataType<Self> {
-        &COUNTER_TYPE
-    }
-}
+typed_data!(Counter, c"BeniCounter", c"BeniCounter");
 
 fn counter_n(_mrb: &Mrb, rb_self: &Counter) -> i32 {
     rb_self.n.get()

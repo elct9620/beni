@@ -3,7 +3,7 @@
 //! afterwards must not reclaim what the caller still holds.
 
 use crate::support::open_mrb;
-use beni::{DataType, ForEach, IntoValue, Mrb, RClass, ReprValue, Value};
+use beni::{ForEach, IntoValue, Mrb, RClass, ReprValue, Value};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload whose `Drop` counts into the case's own counter — the only
@@ -15,7 +15,7 @@ impl Drop for Probe {
     }
 }
 
-static PROBE_TYPE: DataType<Probe> = DataType::new(c"BeniReachProbe");
+typed_data!(Probe, c"BeniReachProbe", c"BeniReachCarrier");
 
 /// A carrier whose only hold, once this returns, is whatever `store`
 /// put it in: the arena scope it was made in has already ended.
@@ -27,9 +27,7 @@ fn stored_carrier(mrb: &Mrb, drops: &'static AtomicUsize, store: impl FnOnce(Val
         .set_instance_data_tt(mrb)
         .expect("marking an ordinary class must succeed");
     let scope = mrb.arena_scope();
-    let obj = class
-        .data_wrap(mrb, Probe(drops), &PROBE_TYPE)
-        .expect("wrapping into a marked class must succeed");
+    let obj = mrb.wrap_as(Probe(drops), class).as_value();
     store(obj);
     drop(scope);
 }

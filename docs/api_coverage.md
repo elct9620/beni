@@ -141,7 +141,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_intern_str` | fn | ✅ | ✅ | `Mrb::intern_str` |
 | `mrb_locale_free` | macro | ❌ | 🚫 | conditional: `_WIN32` — see `mrb_locale_from_utf8` |
 | `mrb_locale_from_utf8` | fn | ❌ | 🚫 | conditional: `_WIN32` — `vendor/mruby/include/mruby.h:1248` makes it an identity macro off Windows, where there is no encoding to convert |
-| `mrb_malloc` | fn | ✅ | 🚫 | declined: VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `RClass::data_wrap` is the graduated seam between the two |
+| `mrb_malloc` | fn | ✅ | 🚫 | declined: VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `TypedData`'s wraps are the graduated seam between the two |
 | `mrb_malloc_simple` | fn | ✅ | 🚫 | declined: VM allocator, the non-raising variant — see `mrb_malloc` |
 | `mrb_method_cache_clear` | fn | ✅ | ❌ |  |
 | `mrb_module_get` | fn | ✅ | ✅ | `Mrb::module_get` with a name key — interns and routes through `mrb_module_get_id` |
@@ -152,7 +152,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_name_error` | fn | ✅ | ✅ | subsumed: `RClass::obj_new` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef` |
 | `mrb_notimplement` | fn | ✅ | ❌ |  |
 | `mrb_notimplement_m` | fn | ✅ | ❌ |  |
-| `mrb_obj_alloc` | fn | ✅ | 🚫 | declined: allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `RClass::data_wrap` |
+| `mrb_obj_alloc` | fn | ✅ | 🚫 | declined: allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `Mrb::wrap_as` |
 | `mrb_obj_class` | fn | ✅ | ✅ | `Value::class` |
 | `mrb_obj_classname` | fn | ✅ | ✅ | `Value::classname` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form |
 | `mrb_obj_clone` | fn | ✅ | ✅ | `Value::obj_clone` |
@@ -307,15 +307,15 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 |--------|------|:---:|:-----:|------|
 | `DATA_CHECK_GET_PTR` | macro | ❌ | ✅ | defined as `mrb_data_check_get_ptr` |
 | `DATA_GET_PTR` | macro | ❌ | ❌ |  |
-| `DATA_PTR` | macro | ❌ | 🚫 | declined: reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `Value::data_get`, which returns `None` where this returns a wrong-typed pointer |
+| `DATA_PTR` | macro | ❌ | 🚫 | declined: reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `TryConvert` for `&T`, which answers a `TypeError` where this returns a wrong-typed pointer |
 | `DATA_TYPE` | macro | ❌ | 🚫 | declined: reads `RDATA(d)->type` with no type check — see `DATA_PTR` |
 | `mrb_check_datatype` | macro | ❌ | ❌ |  |
 | `mrb_data_check_and_get` | macro | ❌ | ❌ |  |
-| `mrb_data_check_get_ptr` | fn | ✅ | ✅ | `Value::data_get` |
+| `mrb_data_check_get_ptr` | fn | ✅ | ✅ | `TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — the type-checked read of a carrier's payload |
 | `mrb_data_check_type` | fn | ✅ | ✅ | `TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — a mismatch surfaces the `TypeError` this check raises, protected into an `Err` |
 | `mrb_data_get_ptr` | fn | ✅ | ❌ |  |
-| `mrb_data_init` | fn | ✅ | ✅ | `Value::data_reinit` |
-| `mrb_data_object_alloc` | fn | ✅ | ✅ | `RClass::data_wrap` — fallible (returns `Result`, protects the alloc and reclaims the box on a raise); the CDATA mark stays the separate `RClass::set_instance_data_tt` setup step, not folded in (see DataType extension) |
+| `mrb_data_init` | fn | ✅ | ✅ | `typed_data::Dup::clone` — installs a clone of the payload into the bare carrier `mrb_obj_clone` made, the one install on the typed surface |
+| `mrb_data_object_alloc` | fn | ✅ | ✅ | `Mrb::wrap_as`, and `wrap` / `obj_wrap` / `obj_wrap_as` through it — protected, so an unmarked class, which breaks `TypedData`'s contract, reclaims the box and panics rather than raising across the boundary |
 | `mrb_get_datatype` | macro | ❌ | ❌ |  |
 ## mruby/dump.h
 
@@ -500,7 +500,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_msvc_vsnprintf` | fn | ❌ | ❌ |  |
 | `mrb_nil_p` | macro | ✅ | ✅ | `Value::is_nil` |
 | `mrb_nil_value` | fn | ✅ | ✅ | `Value::nil` |
-| `mrb_obj_value` | fn | ✅ | ✅ | `ReprValue::as_value` on `RClass`, `RModule`, and `ExceptionClass`, `RClass::data_wrap` |
+| `mrb_obj_value` | fn | ✅ | ✅ | `ReprValue::as_value` on `RClass`, `RModule`, and `ExceptionClass`, `Mrb::wrap_as` |
 | `mrb_object_p` | macro | ❌ | ❌ |  |
 | `mrb_proc_p` | macro | ❌ | ✅ | `Value::is_proc`, via the value tag |
 | `mrb_range_p` | macro | ❌ | ✅ | `Value::is_range`, via the value tag |
@@ -564,7 +564,7 @@ covered (✅); the Via column names the surface that covers each one.
 | `i` | ✅ | scan_args + FromValue<i32> / FromValue<i64> / Value::ensure_int |
 | `b` | ✅ | scan_args + FromValue<bool> |
 | `n` | ✅ | scan_args + FromValue<Symbol> |
-| `d` | ✅ | scan_args + Value::data_get |
+| `d` | ✅ | scan_args + TryConvert for &T / Obj<T> |
 | `&` | ✅ | scan_args block part, or block-accepting registration |
 | `*` | ✅ | scan_args splat part — an Array handle or a converted Vec |
 | `\|` | ✅ | scan_args optional part, or optional-positional registration |
@@ -589,7 +589,7 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 |------|-------------|
 | `ArenaScope` | RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore` with a `mrb_gc_protect` keep — a safety guard with no single C API. |
 | `Array::entries` | `ExactSizeIterator` walk of an array by C-level index: composes the already-graduated `Array::entry` (`mrb_ary_entry`) and `Array::len` (`RARRAY_LEN`) over a length snapshot taken when the walk begins, binding no new C symbol. A live view rather than a content snapshot — a re-entrant mutation is only partly visible, and a position the array no longer reaches reads `nil` — dispatching no Ruby, the idiomatic Rust surface over mruby's caller-side index loop (which the C API has no iterator primitive for). |
-| `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, adding Rust-side type safety to the data pointer. `RClass::data_wrap` returns a `Result` and runs the alloc under `protect`, reclaiming the boxed payload when the wrap raises: allocating against a class not yet marked CDATA raises, and marking is a deliberately separate class-setup step (`RClass::set_instance_data_tt`) — mruby's two-step design marks the class once at setup and wraps per instance, so `data_wrap` neither folds the mark in nor presumes it, leaving the caller to assemble both steps. The mark is refused unless the class allocates plain objects or is already a carrier, so no built-in layout is read as a carrier. The `DataType::dfree` release hook wraps the payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame of mruby's GC sweep, where unwinding is undefined. |
+| `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, reached through `TypedData`, magnus's shape: a Rust type names its own `DataType` and class, so a wrap and a read take no descriptor. The class mark is a separate class-setup step (`RClass::set_instance_data_tt`) that magnus has no counterpart for, since mruby allocates a carrier only from a marked class; `TypedData`'s unsafe contract makes every class it names a marked one, which keeps wrapping infallible. The mark is refused unless the class allocates plain objects or is already a carrier, so no built-in layout is read as a carrier. The `DataType::dfree` release hook wraps the payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame of mruby's GC sweep, where unwinding is undefined. |
 | `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by exception protection (`mrb_protect_error`), which `sys::protect` offers a raw call. `Error::is_kind_of` asks the carried exception Ruby's `is_a?` (`mrb_obj_is_kind_of`). `Error::new` builds an exception error from a class and a message (via `ExceptionClass::exc_new`) for a handler to raise its own exception, and `Error::argnum` builds the canonical wrong-argument-count `ArgumentError` (via `mrb_argnum_error`) for a handler validating its own arity. |
 | `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `Value::funcall`, `Value::ensure_array`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
 | `ExceptionClass` | Typed handle on an exception class, magnus's `ExceptionClass`: only it builds or raises an exception, so `mrb_exc_new` / `mrb_exc_new_str` never meet a class whose instances are not exceptions. `Mrb::define_error` and `Module::define_error` compose `mrb_define_class_id` / `mrb_define_class_under_id` with an exception-class superclass. Binds no new C symbol. |

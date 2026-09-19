@@ -19,6 +19,30 @@ use core::ops::Deref;
 /// A Rust type mruby objects carry as their payload. Mirrors magnus's
 /// `TypedData`.
 ///
+/// The payload travels with the interpreter and is dropped by the
+/// release hook on whichever thread reaches it, so only a `Send` type
+/// is `TypedData`:
+///
+/// ```
+/// # use beni::{DataType, Mrb, RClass, TypedData};
+/// struct Counter(u32);
+/// static COUNTER: DataType<Counter> = DataType::new(c"Counter");
+/// unsafe impl TypedData for Counter {
+///     fn class(mrb: &Mrb) -> RClass { mrb.object_class() }
+///     fn data_type() -> &'static DataType<Self> { &COUNTER }
+/// }
+/// ```
+///
+/// ```compile_fail
+/// # use beni::{DataType, Mrb, RClass, TypedData};
+/// struct Bare(*const ());
+/// static BARE: DataType<Bare> = DataType::new(c"Bare");
+/// unsafe impl TypedData for Bare {
+///     fn class(mrb: &Mrb) -> RClass { mrb.object_class() }
+///     fn data_type() -> &'static DataType<Self> { &BARE }
+/// }
+/// ```
+///
 /// # Safety
 ///
 /// Every class `class` and `class_for` name must be marked through

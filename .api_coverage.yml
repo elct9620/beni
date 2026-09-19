@@ -137,10 +137,10 @@ typed:
   mrb_cv_defined: "`Value::cv_defined` — the value-level class-variable presence test, walking the ancestry; `mrb_mod_cv_defined` (the raw-`RClass*` form) stays in `sys`"
   mrb_cv_get: Value::cv_get
   mrb_cv_set: "`Value::cv_set` — the value-level class-variable write; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in `sys`"
-  mrb_data_check_get_ptr: Value::data_get
+  mrb_data_check_get_ptr: "`TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — the type-checked read of a carrier's payload"
   mrb_data_check_type: "`TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — a mismatch surfaces the `TypeError` this check raises, protected into an `Err`"
-  mrb_data_init: Value::data_reinit
-  mrb_data_object_alloc: "`RClass::data_wrap` — fallible (returns `Result`, protects the alloc and reclaims the box on a raise); the CDATA mark stays the separate `RClass::set_instance_data_tt` setup step, not folded in (see DataType extension)"
+  mrb_data_init: "`typed_data::Dup::clone` — installs a clone of the payload into the bare carrier `mrb_obj_clone` made, the one install on the typed surface"
+  mrb_data_object_alloc: "`Mrb::wrap_as`, and `wrap` / `obj_wrap` / `obj_wrap_as` through it — protected, so an unmarked class, which breaks `TypedData`'s contract, reclaims the box and panics rather than raising across the boundary"
   mrb_define_alias: "`Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id`"
   mrb_define_alias_id: "`Module::alias_method` with `Id` keys (the symbol-or-name key, both names keyed independently)"
   mrb_define_class: "`Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id`"
@@ -257,7 +257,7 @@ typed:
   mrb_obj_is_kind_of: "`Value::is_kind_of`, `Error::is_kind_of`"
   mrb_obj_new: RClass::obj_new
   mrb_obj_to_sym: "`Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path"
-  mrb_obj_value: "`ReprValue::as_value` on `RClass`, `RModule`, and `ExceptionClass`, `RClass::data_wrap`"
+  mrb_obj_value: "`ReprValue::as_value` on `RClass`, `RModule`, and `ExceptionClass`, `Mrb::wrap_as`"
   mrb_open: Mrb::open
   mrb_prepend_module: Module::prepend_module
   mrb_protect_error: sys::protect
@@ -363,18 +363,16 @@ extensions:
     `mrb_true_value` / `mrb_false_value`.
   DataType: >-
     Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`,
-    adding Rust-side type safety to the data pointer. `RClass::data_wrap`
-    returns a `Result` and runs the alloc under `protect`, reclaiming the
-    boxed payload when the wrap raises: allocating against a class not yet
-    marked CDATA raises, and marking is a deliberately separate class-setup
-    step (`RClass::set_instance_data_tt`) — mruby's two-step design marks
-    the class once at setup and wraps per instance, so `data_wrap` neither
-    folds the mark in nor presumes it, leaving the caller to assemble both
-    steps. The mark is refused unless the class allocates plain objects or
-    is already a carrier, so no built-in layout is read as a carrier. The
-    `DataType::dfree` release hook wraps the payload drop in
-    `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame
-    of mruby's GC sweep, where unwinding is undefined.
+    reached through `TypedData`, magnus's shape: a Rust type names its own
+    `DataType` and class, so a wrap and a read take no descriptor. The class
+    mark is a separate class-setup step (`RClass::set_instance_data_tt`) that
+    magnus has no counterpart for, since mruby allocates a carrier only from
+    a marked class; `TypedData`'s unsafe contract makes every class it names
+    a marked one, which keeps wrapping infallible. The mark is refused unless
+    the class allocates plain objects or is already a carrier, so no built-in
+    layout is read as a carrier. The `DataType::dfree` release hook wraps the
+    payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind
+    across the C frame of mruby's GC sweep, where unwinding is undefined.
   convert: >-
     `IntoValue` / `FromValue` trait conversions (magnus-style) layered on
     the value box/unbox primitives, including `FromValue for String` and
@@ -455,7 +453,7 @@ get_args_formats:
   i: { status: covered, via: "scan_args + FromValue<i32> / FromValue<i64> / Value::ensure_int" }
   b: { status: covered, via: "scan_args + FromValue<bool>" }
   n: { status: covered, via: "scan_args + FromValue<Symbol>" }
-  d: { status: covered, via: "scan_args + Value::data_get" }
+  d: { status: covered, via: "scan_args + TryConvert for &T / Obj<T>" }
   "&": { status: covered, via: "scan_args block part, or block-accepting registration" }
   "*": { status: covered, via: "scan_args splat part — an Array handle or a converted Vec" }
   "|": { status: covered, via: "scan_args optional part, or optional-positional registration" }
@@ -490,7 +488,7 @@ subsumed:
 declined:
   mrb_sys_fail: "declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from an exception class and a message, which `ExceptionClass::raise` already reaches from a Rust `std::io::Error`"
   mrb_print_error: "writes the pending exception and its backtrace to the process's standard error (`vendor/mruby/src/error.c:843-866`) — no typed shape carries a write to the host's stderr, and SPEC holds the same line for the compiler's diagnostics: where a diagnostic is written is the host's choice, not beni's. `Error::message` and `Error::backtrace` hand a Rust caller the same text to write where it chooses"
-  mrb_malloc: "VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `RClass::data_wrap` is the graduated seam between the two"
+  mrb_malloc: "VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `TypedData`'s wraps are the graduated seam between the two"
   mrb_malloc_simple: "VM allocator, the non-raising variant — see `mrb_malloc`"
   mrb_calloc: "VM allocator — see `mrb_malloc`"
   mrb_realloc: "VM allocator — see `mrb_malloc`"
@@ -506,7 +504,7 @@ declined:
   mrb_range_ptr: "unchecked cast to `struct RRange*` — see `mrb_str_ptr`"
   mrb_check_frozen: "takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `Value::check_frozen`"
   mrb_frozen_error: "raises what `mrb_check_frozen` checks for, taking the object as `void*` the same way (`vendor/mruby/include/mruby.h:1446`) — see `mrb_check_frozen`; the pointer form cannot express the immediate mruby raises the same `FrozenError` for, which the `mrb_value` form tests before raising (`vendor/mruby/src/error.c:693-699`)"
-  DATA_PTR: "reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `Value::data_get`, which returns `None` where this returns a wrong-typed pointer"
+  DATA_PTR: "reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `TryConvert` for `&T`, which answers a `TypeError` where this returns a wrong-typed pointer"
   DATA_TYPE: "reads `RDATA(d)->type` with no type check — see `DATA_PTR`"
   mrb_gc_unregister: "removes a root by value, so it drops every registration of that value at once (`vendor/mruby/src/gc.c:537-553`) — no typed shape can release one holder's root without releasing another's. The releasable root is the GcRoot extension, whose slot supplies the identity this call lacks; the never-released half is `Mrb::gc_register_forever`"
   mrb_gc_mark: "marks one object during the collector's mark phase — mruby's `mrb_data_type` carries only `struct_name` and `dfree` (`vendor/mruby/include/mruby/data.h:22-28`), so an embedder has no mark hook to write and no typed caller reaches it (contrast magnus's `gc::Marker`, which exists because CRuby's `rb_data_type_t` has `dmark`)"
@@ -515,7 +513,7 @@ declined:
   mrb_field_write_barrier: "the two-object form, taking both as `struct RBasic*` — see `mrb_write_barrier`"
   mrb_field_write_barrier_value: "the `mrb_value` form of `mrb_field_write_barrier`, still taking the owner as `struct RBasic*` — see `mrb_write_barrier`"
   mrb_object_dead_p: "asks whether the collector has reclaimed a `struct RBasic*` — see `mrb_str_ptr`; a typed `Value` names a live object or it is not one"
-  mrb_obj_alloc: "allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `RClass::data_wrap`"
+  mrb_obj_alloc: "allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `Mrb::wrap_as`"
   mrb_free_context: "releases a `struct mrb_context*` — VM-internal, the same call-frame machinery whose indices stay in `sys`; `Mrb::drop` releases the interpreter and every context it owns"
   mrb_iclass_p: "tests for the include-class tag, which no value a typed caller holds carries — mruby keeps include classes internal, filtering them out of `ObjectSpace` (`vendor/mruby/mrbgems/mruby-objectspace/src/mruby_objectspace.c:131-135`) and answering the included module in their place from `Module#ancestors` (`vendor/mruby/src/class.c:2245-2246`)"
 conditional:
