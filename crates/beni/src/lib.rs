@@ -2,12 +2,11 @@
 //!
 //! This crate owns every Rust-level abstraction above the mruby C
 //! API: the `Mrb` / `Ccontext` RAII types, the `Value` / `RClass` /
-//! `Array` / `Hash` newtypes, the `IntoValue` / `FromValue` /
-//! `TryConvert` trait seam, and the `scan_args` reads of a call's arguments. The sibling
-//! `beni-sys` crate keeps
-//! only the bindgen-generated `extern "C"` declarations and the
-//! layout-safe C shims — the same split magnus + rb-sys apply at
-//! the CRuby boundary.
+//! `RModule` / `Array` / `Hash` handles, the `IntoValue` / `FromValue`
+//! / `TryConvert` conversion seam, and the `scan_args` reads of a
+//! call's arguments. The sibling `beni-sys` crate keeps only the
+//! bindgen-generated `extern "C"` declarations and the layout-safe C
+//! shims — the same split magnus + rb-sys apply at the CRuby boundary.
 //!
 //! ## Layering
 //!
