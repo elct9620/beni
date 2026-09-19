@@ -21,6 +21,17 @@ module Beni
       end
     end
 
+    def test_readme_install_snippets_name_the_released_version
+      readme = File.read(File.join(ROOT, "crates", "beni", "README.md"))
+      versions = readme.scan(/^beni = .*?"(\d[^"]*)"/).flatten
+
+      refute_empty versions, "crates/beni/README.md names no beni dependency version"
+      versions.each do |version|
+        assert_equal Beni::VERSION, version,
+                     "crates/beni/README.md install snippet drifted from lib/beni/version.rb"
+      end
+    end
+
     def test_rust_channel_and_wasi_sdk_pin_move_together
       channel = File.read(File.join(ROOT, "rust-toolchain.toml"))[/^channel = "([^"]+)"/, 1]
       wasi_sdk = Beni::Vendor::BUILT_IN_PAIRS.fetch("wasi-sdk").fetch(:version)

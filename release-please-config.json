@@ -23,7 +23,8 @@
           "type": "toml",
           "path": "crates/beni/Cargo.toml",
           "jsonpath": "$.dependencies['beni-macros'].version"
-        }
+        },
+        "crates/beni/README.md"
       ]
     }
   }

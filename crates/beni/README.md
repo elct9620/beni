@@ -24,20 +24,24 @@ surface, this crate owns every abstraction above it.
 
 ## Usage
 
+<!-- x-release-please-start-version -->
 ```toml
 [dependencies]
-beni = "0.1"
+beni = "0.16.0"
 ```
+<!-- x-release-please-end -->
 
 The `compiler` feature is on by default and carries what mruby keeps in
 its compiler gem — `Ccontext` and `Mrb::load_string`. Turn default
 features off to embed mruby without compiling Ruby at run time; loading
 precompiled bytecode needs no compiler and stays.
 
+<!-- x-release-please-start-version -->
 ```toml
 [dependencies]
-beni = { version = "0.1", default-features = false }
+beni = { version = "0.16.0", default-features = false }
 ```
+<!-- x-release-please-end -->
 
 The `bytes` feature, off by default, converts `bytes::Bytes` to and from
 an mruby String.
