@@ -296,6 +296,13 @@ impl RString {
     /// Backs `FromValue for String` and `FromValue for Vec<u8>`.
     #[inline]
     pub fn to_bytes(self) -> Vec<u8> {
+        self.copy_bytes()
+    }
+
+    /// This string's bytes copied into an owned `Vec<u8>` — the copy every
+    /// owned read of a string's bytes is built on.
+    #[inline]
+    pub(crate) fn copy_bytes(self) -> Vec<u8> {
         // SAFETY: `self` is String-tagged by the newtype contract;
         // `mrb_rstring_ptr_func` / `mrb_rstring_len_func` read the RString
         // header without touching `mrb_state`, and the slice is
@@ -314,7 +321,7 @@ impl RString {
     /// magnus's `RString::to_string`.
     #[inline]
     pub fn to_string(self, mrb: &Mrb) -> Result<String, Error> {
-        String::from_utf8(self.to_bytes()).map_err(|_| crate::try_convert::invalid_utf8(mrb))
+        String::from_utf8(self.copy_bytes()).map_err(|_| crate::try_convert::invalid_utf8(mrb))
     }
 
     /// The one character the string holds, or the `Err` carrying the
@@ -452,7 +459,7 @@ impl RString {
         })?;
         // On the success path `mrb_string_cstr` proved the bytes hold no
         // NUL, so the CString build cannot fail.
-        Ok(std::ffi::CString::new(self.to_bytes())
+        Ok(std::ffi::CString::new(self.copy_bytes())
             .expect("mrb_string_cstr rejected any embedded NUL"))
     }
 

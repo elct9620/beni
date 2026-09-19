@@ -182,7 +182,7 @@ mod tests {
         assert_eq!(
             RString::from_value(reused.value())
                 .expect("the reused slot holds the second value")
-                .to_bytes(),
+                .copy_bytes(),
             b"second"
         );
     }

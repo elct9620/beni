@@ -459,7 +459,7 @@ impl FromValue for String {
     // cannot become one.
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
-        Self::from_utf8(RString::from_value(value)?.to_bytes()).ok()
+        Self::from_utf8(RString::from_value(value)?.copy_bytes()).ok()
     }
 }
 
@@ -470,6 +470,6 @@ impl FromValue for Vec<u8> {
     // non-string tag rejects.
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
-        Some(RString::from_value(value)?.to_bytes())
+        Some(RString::from_value(value)?.copy_bytes())
     }
 }

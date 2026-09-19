@@ -203,7 +203,7 @@ impl TryConvert for String {
 impl TryConvert for bytes::Bytes {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        Ok(RString::try_convert(val, mrb)?.to_bytes().into())
+        Ok(RString::try_convert(val, mrb)?.copy_bytes().into())
     }
 }
 
@@ -221,7 +221,7 @@ impl TryConvert for std::path::PathBuf {
         #[cfg(unix)]
         {
             use std::os::unix::ffi::OsStringExt;
-            Ok(std::ffi::OsString::from_vec(string.to_bytes()).into())
+            Ok(std::ffi::OsString::from_vec(string.copy_bytes()).into())
         }
         #[cfg(not(unix))]
         {
