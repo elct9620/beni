@@ -260,7 +260,7 @@ Selection, checksums, and cross-compile activation:
 
 ### beni crate — typed wrapper
 
-#### Capability features
+#### Cargo features
 
 - The surface a consumer gets by default is mruby's core capability plus every
   capability feature. A capability mruby keeps in a gem rather than its core is
@@ -284,6 +284,14 @@ Selection, checksums, and cross-compile activation:
   outside it — and the parse message a compile failure is reported in stays
   outside it too, being one of those shapes. Disabling default features is how a
   consumer that never compiles Ruby at run time says so.
+- A dependency feature is the second axis beside capability: it carries the
+  conversions to a third-party Rust crate's types, gated as `magnus` gates the
+  same integration. It is disabled by default, and like a capability feature it
+  only adds surface.
+- `bytes` is a dependency feature carrying the `bytes` crate's `Bytes`: a
+  string handle reads its bytes as a `Bytes`, `TryConvert` converts a String
+  into one, and `IntoValue` boxes one into a new String, mirroring `magnus`'s
+  `RString::to_bytes` and its `bytes` feature's conversions.
 
 #### Handle, values, and conversions
 
@@ -299,6 +307,7 @@ arguments cross, mirroring `magnus`'s `TryConvert`:
 | `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`bool`, or a Rust integer or float the rows below admit) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` / `RTypedData` / `Obj<T>` — yields the value naming that same object, and an `Id` boxes into the symbol value it names, raising nothing and running no Ruby |
 | `IntoValue` for a Rust integer | Rust integer → Integer `Value` | a Rust integer type converts only where every value it holds fits the configured integer width, so the conversion stays total: `i8` / `i16` / `i32` / `u8` / `u16` under every width, `u32` / `i64` under a 64-bit width, `isize` where the cargo target's pointer width is no wider than the configured integer width; every other integer type — `u64`, `usize`, `i128`, `u128`, and a `u32` / `i64` / `isize` the width does not fit — has no conversion and fails to compile |
 | `IntoValue` for a typed data value | `T: TypedData` → data carrier `Value` | wraps the value as a new instance of the class its type names for it, as `obj_wrap` does; total for every type that keeps the `TypedData` contract |
+| `IntoValue` for `Bytes`, with the `bytes` feature | `Bytes` → String `Value` | copies the bytes into a new String |
 | `IntoValue` for a Rust float | Rust float → Float `Value` | a Rust float type converts only where every value it holds fits the configured float width, so the conversion stays total: `f32` under every width, `f64` under a 64-bit width; an `f64` under a 32-bit width has no conversion and fails to compile |
 | `FromValue` → `Value` | `Value` → `Value` | identity — the value itself; total, never rejects |
 | `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag, subclass instances included for strings and containers — a class handle converts on the class or the singleton-class tag, a module handle on the module tag, an exception-class handle on the class tag when that class is an exception class; any other value rejects |
@@ -314,6 +323,7 @@ arguments cross, mirroring `magnus`'s `TryConvert`:
 | `TryConvert` → a non-zero Rust integer | `Value` → `NonZeroI8` … `NonZeroUsize` | converts as its integer does; zero surfaces the `ArgumentError` "value must be non-zero" |
 | `TryConvert` → `f64` / `f32` | `Value` → Rust float | converts a Float, or an Integer widened, as mruby's own C-method arguments do; `nil` surfaces the `TypeError` "can't convert nil into Float" mruby raises; *target* is `Float`. Both targets convert under every configured float width, an `f32` narrowing a wider Float to its nearest `f32`, a magnitude beyond `f32` becoming an infinity |
 | `TryConvert` → `String` / `char` / `PathBuf` | `Value` → Rust text | converts a String's bytes: `String` UTF-8 bytes, `char` UTF-8 bytes holding exactly one character, `PathBuf` any bytes on a Unix target and UTF-8 bytes on any other. Bytes that are not UTF-8 where UTF-8 is required surface the `ArgumentError` "invalid UTF-8 byte sequence"; a string of any other length than one character surfaces the `TypeError` with *target* `char`. No path protocol applies — mruby has no `to_path`; *target* is `String` |
+| `TryConvert` → `Bytes`, with the `bytes` feature | `Value` → Rust bytes | converts a String's bytes, any bytes; *target* is `String` |
 | `TryConvert` → `Vec<T>` / `[T; N]` / a tuple of 1 to 12 elements | `Value` → Rust sequence | converts an Array, each element by its own type's rule, surfacing the first element's `Err`; a fixed-length target converts an Array of exactly its length and surfaces the `TypeError` "expected Array of length *N*" for any other; *target* is `Array` |
 | `TryConvert` → `HashMap<K, V>` / `BTreeMap<K, V>` | `Value` → Rust map | converts a Hash, each key and value by its own type's rule, surfacing the first `Err`; *target* is `Hash` |
 | `TryConvert` → `RTypedData` | `Value` → typed handle | converts any data carrier, holding a payload or not; any other value surfaces the `TypeError` "wrong argument type *value* (expected C data)", *value* named as mruby's own type check names it |
@@ -374,15 +384,16 @@ dangling alias impossible), since mruby never frees it; mruby treats such a stri
 copy-on-write, so an in-place append or resize reallocates first and then behaves
 like any other string. magnus has no direct analogue, so this construction anchors
 on mruby's own `mrb_str_new_static`, with `mrb_str_new_lit` the convenience that
-borrows a string literal. From an mruby string Rust reads the bytes three ways:
+borrows a string literal. From an mruby string Rust reads the bytes these ways:
 
 | Read | Yields | Rejects |
 |---|---|---|
 | borrowed slice | a byte view of the string | — |
 | owned `String` | the bytes when valid UTF-8 | a non-string tag, or non-UTF-8 bytes |
 | owned `Vec<u8>` | arbitrary bytes | a non-string tag |
+| owned `Bytes`, with the `bytes` feature | arbitrary bytes | — |
 
-The three reads above never raise. Mirroring `magnus`'s `RString::to_string` and
+The reads above never raise. Mirroring `magnus`'s `RString::to_string` and
 `to_char`, a string handle also reads its bytes as an owned `String` that
 surfaces an `Err`, the `ArgumentError` "invalid UTF-8 byte sequence", for bytes
 that are not UTF-8, and as a `char` that surfaces the same `Err` for such bytes
@@ -1369,6 +1380,7 @@ The `compiler` capability feature carries everything in this section.
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
 | capability feature | a cargo feature on the `beni` crate carrying a capability mruby keeps in a gem rather than its core — declared by the consumer rather than probed from the archive, enabled by default, and additive, so enabling one only adds surface |
+| dependency feature | a cargo feature on the `beni` crate carrying the conversions to a third-party Rust crate's types, disabled by default and additive, so enabling one only adds surface |
 | library-internal header | a header mruby stages beside an archive while marking it internal to the library; its declarations are not embedder API, and the typed surface reaches them only under the admission rule |
 | admitted internal symbol | a library-internal header's symbol the typed surface carries because no published symbol delivers its capability — admitted one at a time, recorded with what settles it, and never re-exported raw |
 | declined symbol | public embedder API the typed surface deliberately does not carry, outside the coverage measure and recorded with what settles it |
