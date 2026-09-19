@@ -138,6 +138,7 @@ typed:
   mrb_cv_get: Value::cv_get
   mrb_cv_set: "`Value::cv_set` — the value-level class-variable write; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in `sys`"
   mrb_data_check_get_ptr: Value::data_get
+  mrb_data_check_type: "`TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — a mismatch surfaces the `TypeError` this check raises, protected into an `Err`"
   mrb_data_init: Value::data_reinit
   mrb_data_object_alloc: "`RClass::data_wrap` — fallible (returns `Result`, protects the alloc and reclaims the box on a raise); the CDATA mark stays the separate `RClass::set_instance_data_tt` setup step, not folded in (see DataType extension)"
   mrb_define_alias: "`Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id`"

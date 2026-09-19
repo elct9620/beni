@@ -79,6 +79,25 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RClass::obj_new;
     let _ = RClass::set_instance_data_tt;
     let _ = RClass::data_wrap::<i32>;
+    {
+        struct Probe;
+        static PROBE: DataType<Probe> = DataType::new(c"Probe");
+        // SAFETY: never wrapped; named only for its paths.
+        unsafe impl TypedData for Probe {
+            fn class(mrb: &Mrb) -> RClass {
+                mrb.object_class()
+            }
+            fn data_type() -> &'static DataType<Self> {
+                &PROBE
+            }
+        }
+        let _ = Mrb::wrap::<Probe>;
+        let _ = Mrb::wrap_as::<Probe>;
+        let _ = Mrb::obj_wrap::<Probe>;
+        let _ = Mrb::obj_wrap_as::<Probe>;
+        let _ = RTypedData::from_value_unchecked;
+        let _ = RTypedData::get::<Probe>;
+    }
     let _ = DataType::<i32>::new;
     let _ = ExceptionClass::as_r_class;
     let _ = ExceptionClass::raise;

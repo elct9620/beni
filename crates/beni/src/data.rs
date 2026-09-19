@@ -82,8 +82,15 @@ impl<T> DataType<T> {
     /// must outlive every wrapped object — which the `'static` bound on
     /// the callers (`data_wrap` / `data_get`) guarantees.
     #[inline]
-    fn as_raw(&self) -> *const sys::mrb_data_type {
+    pub(crate) fn as_raw(&self) -> *const sys::mrb_data_type {
         &self.raw
+    }
+
+    /// The name mruby diagnostics show for this data type.
+    pub(crate) fn name(&self) -> std::borrow::Cow<'static, str> {
+        // SAFETY: `struct_name` came from the `&'static CStr` handed to
+        // `DataType::new`.
+        unsafe { core::ffi::CStr::from_ptr(self.raw.struct_name) }.to_string_lossy()
     }
 }
 

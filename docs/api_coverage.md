@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 319 | 318 (100%) | 226 (71%) |
+| function | 319 | 318 (100%) | 227 (71%) |
 | macro | 110 | 28 (25%) | 71 (65%) |
-| total | 429 | 346 (81%) | 297 (69%) |
+| total | 429 | 346 (81%) | 298 (69%) |
 
 ## mruby.h
 
@@ -312,7 +312,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_check_datatype` | macro | ❌ | ❌ |  |
 | `mrb_data_check_and_get` | macro | ❌ | ❌ |  |
 | `mrb_data_check_get_ptr` | fn | ✅ | ✅ | `Value::data_get` |
-| `mrb_data_check_type` | fn | ✅ | ❌ |  |
+| `mrb_data_check_type` | fn | ✅ | ✅ | `TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — a mismatch surfaces the `TypeError` this check raises, protected into an `Err` |
 | `mrb_data_get_ptr` | fn | ✅ | ❌ |  |
 | `mrb_data_init` | fn | ✅ | ✅ | `Value::data_reinit` |
 | `mrb_data_object_alloc` | fn | ✅ | ✅ | `RClass::data_wrap` — fallible (returns `Result`, protects the alloc and reclaims the box on a raise); the CDATA mark stays the separate `RClass::set_instance_data_tt` setup step, not folded in (see DataType extension) |

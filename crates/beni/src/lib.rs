@@ -26,7 +26,8 @@
 //!                      array / hash   (typed factories on top of Value)
 //!                      string / range (RString / Range newtypes)
 //!                      symbol / proc  (Id, Symbol / Proc newtypes)
-//!                      data           (DataType<T> + CDATA wrap / get)
+//!                      data           (DataType<T>, a carrier's data type)
+//!                      typed_data     (TypedData + RTypedData / Obj<T>)
 //!                      ccontext       (Ccontext RAII)
 //!                      error / parse  (Error + ParseMessage — the shapes
 //!                                      a failure is reported in)
@@ -83,6 +84,7 @@ pub mod string;
 pub mod symbol;
 pub mod sys;
 pub mod try_convert;
+pub mod typed_data;
 pub mod value;
 
 pub use state::arena::ArenaScope;
@@ -106,6 +108,7 @@ pub use range::{Range, RangeBegLen};
 pub use string::RString;
 pub use symbol::{Id, IntoId, Symbol};
 pub use try_convert::TryConvert;
+pub use typed_data::{RTypedData, TypedData};
 pub use value::cstr_ptr;
 pub use value::{Break, ReprValue, Value};
 
