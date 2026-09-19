@@ -71,18 +71,21 @@ the archive it builds.
 
 ## Packages
 
-One repository; the gem and the two published crates release in lockstep under
-a single version number.
+One repository; the gem and the three published crates release in lockstep
+under a single version number.
 
 | Package | Registry | Responsibility |
 |---|---|---|
 | `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build the archive for the crates to consume |
 | `beni-sys` crate | crates.io | `-sys` style FFI surface over the mruby C API, generated against the discovered archive per supported mruby version |
 | `beni` crate | crates.io | safe typed wrapper over `beni-sys`, aligned with magnus idioms |
+| `beni-macros` crate | crates.io | the `beni` crate's attribute and derive macros, reached through the `beni` crate's re-exports as `magnus`'s are through `magnus` |
 | `beni-tests` crate | not published | the `beni` crate's behavior suite, held outside the crate so each test reaches it through public paths alone |
 
 Responsibility boundary: the gem stages toolchains and archives; `beni-sys`
-binds them; the `beni` crate is the only package consumers write Rust against.
+binds them; the `beni` crate is the only package consumers write Rust against,
+and `beni-macros` is reached through it — its macros are named through `beni`
+and expand to code against it.
 `beni-tests` ships to no one — it holds the `beni` crate's behavior from where
 a consumer stands. What no consumer can observe — an invariant internal to the
 crate — stays tested inside it.
@@ -933,8 +936,9 @@ its key can surface.
   drops the payload — and the class its values wrap as, optionally choosing a
   class per value, which is then that class or a subclass of it. The
   implementer upholds the trait's contract: every class it names is marked to
-  carry data, as below. A data type belongs to one Rust type, so a carrier of
-  `T`'s data type holds a `T`.
+  carry data, as below — by hand, or by the macros below, which uphold it
+  themselves. A data type belongs to one Rust type, so a carrier of `T`'s data
+  type holds a `T`.
 - A class is marked so its instances are data carriers holding Rust data, and
   a class defined from a marked superclass is marked too. Marking is fallible:
   only a class whose instances are plain objects or data carriers accepts the
@@ -944,6 +948,12 @@ its key can surface.
   subclasses included — reject the mark with an `Err` carrying a `TypeError`
   and stay unmarked, so every instance keeps the layout mruby's own methods
   read.
+- A class's default allocator is undefined in one call, mirroring `magnus`'s
+  `undef_default_alloc_func`: afterwards Ruby's `new` and `allocate` on the
+  class, and on any class later defined from it, raise mruby's `TypeError`
+  "allocator undefined for *class*", while a wrap into it and a `dup` / `clone`
+  of one of its carriers still allocate. A singleton class, which Ruby never
+  allocates through, is left unchanged.
 - A `TypedData` value wraps as a new instance of the class its type names for
   it, or of a given class — the type's class or a subclass of it, which a debug
   build asserts — answered as an untyped `RTypedData` handle or a typed
@@ -972,6 +982,34 @@ its key can surface.
   `clone` takes no arguments, as mruby's own does not: an argument surfaces
   the `ArgumentError` mruby raises for a wrong argument count, and a raising
   `initialize_copy` surfaces as an `Err`.
+- `#[beni::wrap(class = "…")]` on a struct or enum implements `TypedData` for
+  it, as does `#[derive(beni::TypedData)]` with a `#[beni(class = "…")]`
+  attribute, mirroring `magnus`'s `wrap` and `TypedData` derive. The two
+  generate the same implementation, and the derive takes no companion derive,
+  `beni` carrying no `DataTypeFunctions`. `class` is required: a constant path
+  resolved from `Object` as `Object.const_get` resolves one, so
+  `"Outer::Inner"` names a nested class. `name` is the data type's name and
+  defaults to the `class` path. An enum variant carrying
+  `#[beni(class = "…")]` wraps as that class — the type's class or a subclass
+  of it — and every other variant as the type's class.
+- A class the generated implementation names is resolved in the interpreter at
+  hand whenever it is named, never carried from one interpreter to another, and
+  each time it is marked to carry data and has its default allocator undefined,
+  which is how the macros uphold the `TypedData` contract. Naming a class
+  panics when its path does not resolve to a class — it names no constant, a
+  `const_missing` hook raises, or the constant is not a class — or when the
+  class refuses the mark.
+- The macros accept `class` and `name` on the type and `class` on an enum
+  variant, each a string holding no NUL byte. Every other attribute — `magnus`'s `mark`, `size`, `compact`,
+  `free_immediately`, `wb_protected`, `frozen_shareable`, `unsafe_generics`,
+  and `opaque_attr_reader` included — is a compile error, as is a type with
+  generic parameters or lifetimes.
+- mruby hands a class its superclass's mark and allocator state when the class
+  is defined, so a class defined from the type's class before the type first
+  names it carries neither, and wrapping into it breaks the contract as an
+  unmarked class does. The macros' documentation directs a consumer to have
+  the type name its class — through `TypedData::class` — before Ruby code
+  defines subclasses of it.
 
 #### Garbage collection
 
@@ -1321,6 +1359,9 @@ The `compiler` capability feature carries everything in this section.
 | A name of `UINT16_MAX` bytes or more given to a creating intern, to a string's coercion to a symbol, or as a symbol-or-name key | surfaced as a Rust `Err` carrying the `ArgumentError`, never unwinds across FFI; an operation that reports no failure answers instead as it does for a name nothing is bound under — a predicate `false`, a read `nil`, a removal a no-op |
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A `TypedData` value wrapped as an instance of a class that cannot carry data — one never marked, breaking the `TypedData` contract | the payload not yet handed to a carrier is reclaimed, never leaked, and the wrap panics; nothing unwinds across FFI |
+| A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — whose path does not resolve to a class, or whose class refuses the mark | panics; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
+| Ruby's `new` or `allocate` on a class whose default allocator is undefined | raises mruby's `TypeError` "allocator undefined for *class*"; reached through the typed surface, surfaced as a Rust `Err` |
+| A `wrap` or `TypedData` derive missing `class`, given an attribute the macros do not accept or a value holding a NUL byte, or applied to a type with generic parameters or lifetimes | a compile error naming the offending attribute, value, or generics; nothing is generated |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
