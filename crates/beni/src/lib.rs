@@ -2,8 +2,8 @@
 //!
 //! This crate owns every Rust-level abstraction above the mruby C
 //! API: the `Mrb` / `Ccontext` RAII types, the `Value` / `RClass` /
-//! `Array` / `Hash` newtypes, the `IntoValue` / `FromValue` trait
-//! seam, and the `scan_args` reads of a call's arguments. The sibling
+//! `Array` / `Hash` newtypes, the `IntoValue` / `FromValue` /
+//! `TryConvert` trait seam, and the `scan_args` reads of a call's arguments. The sibling
 //! `beni-sys` crate keeps
 //! only the bindgen-generated `extern "C"` declarations and the
 //! layout-safe C shims — the same split magnus + rb-sys apply at
@@ -13,6 +13,7 @@
 //!
 //! ```text
 //! L2  trait seams      convert        (IntoValue / FromValue)
+//!                      try_convert    (TryConvert, the argument crossing)
 //!                      scan_args      (magnus-shaped frame reads)
 //!                      method         (method! bridges + MethodN crossing)
 //!                      gem            (Gem trait + Mrb::init_gem)
@@ -81,6 +82,7 @@ pub mod state;
 pub mod string;
 pub mod symbol;
 pub mod sys;
+pub mod try_convert;
 pub mod value;
 
 pub use state::arena::ArenaScope;
@@ -103,6 +105,7 @@ pub use proc::{DumpOptions, Proc};
 pub use range::{Range, RangeBegLen};
 pub use string::RString;
 pub use symbol::{Id, IntoId, Symbol};
+pub use try_convert::TryConvert;
 pub use value::cstr_ptr;
 pub use value::{Break, ReprValue, Value};
 

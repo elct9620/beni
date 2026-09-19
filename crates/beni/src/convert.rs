@@ -3,8 +3,9 @@
 //!
 //! This is beni's small slice of the magnus conversion contract:
 //! `IntoValue` mirrors magnus's `IntoValue` (Rust → value, infallible
-//! boxing), `FromValue` mirrors magnus's `TryConvert` (value → Rust,
-//! fallible downcast). Both sit ON TOP of the unsafe tag primitives in
+//! boxing), `FromValue` mirrors magnus's `from_value` (value → Rust,
+//! exact-tag downcast); the argument conversion, magnus's `TryConvert`,
+//! lives in `try_convert`. Both sit ON TOP of the unsafe tag primitives in
 //! `value.rs` (`mrb_int_value` / `is_integer` + `unbox_integer` / …):
 //! those primitives are the C-bind floor, these traits are the safe
 //! typed seam consumers call.
@@ -97,8 +98,9 @@ pub trait IntoValue {
 /// the value is not tagged as the target type or, for a Rust integer,
 /// carries an Integer outside the target's own range. Safe: the tag check is
 /// folded in, so callers no longer pair a predicate with an `unsafe`
-/// unbox. Mirrors magnus's `TryConvert`; named `FromValue` here for the
-/// `T::from_value(v)` call shape.
+/// unbox. Mirrors magnus's `from_value`, gathered into one trait for the
+/// `T::from_value(v)` call shape; `TryConvert` is the fallible conversion
+/// that surfaces mruby's exception instead.
 ///
 /// A float target converts only where it holds every value the
 /// configured float width does: `f64` under every width, `f32` under a
@@ -446,7 +448,7 @@ impl FromValue for String {
     // A String-tagged value whose bytes are valid UTF-8 converts; a
     // non-string tag and a non-UTF-8 string both reject — a Rust
     // `String` is UTF-8 by invariant, so non-UTF-8 bytes genuinely
-    // cannot become one. Mirrors magnus's `TryConvert for String`.
+    // cannot become one.
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         Self::from_utf8(RString::from_value(value)?.to_bytes()).ok()

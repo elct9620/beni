@@ -14,9 +14,9 @@
 //!      format repeated per arity) under exception protection — this
 //!      is also the argument-count enforcement point: a mismatched
 //!      count comes back as an `ArgumentError` `Err` before any
-//!      `FromValue` conversion runs,
-//!   2. convert each through `FromValue` — a failed conversion
-//!      raises `TypeError` to the Ruby caller **before** the wrapped
+//!      `TryConvert` conversion runs,
+//!   2. convert each through `TryConvert` — a failed conversion
+//!      raises its exception to the Ruby caller **before** the wrapped
 //!      function runs,
 //!   3. call the function inside `catch_unwind` — a Rust panic is
 //!      converted to a `RuntimeError` raised to the Ruby caller
@@ -37,7 +37,7 @@
 //! because the expansion nests it inside an `extern "C" fn`.
 
 use crate::state::args::read_frame;
-use crate::{sys::AsRawValue, Error, FromValue, IntoValue, Mrb, Value};
+use crate::{sys::AsRawValue, Error, IntoValue, Mrb, TryConvert, Value};
 use beni_sys as sys;
 
 /// Bridge + arity pair produced by the `method!` macro and
@@ -139,17 +139,6 @@ pub(crate) fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str)
     class.exc_new(mrb, msg)
 }
 
-/// The `TypeError` a bridge raises when an argument fails its
-/// `FromValue` conversion — named after the Rust type the registered
-/// function expected.
-pub(crate) fn arg_type_error<T>(mrb: &Mrb) -> Error {
-    let msg = format!(
-        "wrong argument type (expected {})",
-        core::any::type_name::<T>()
-    );
-    Error::Exception(core_exception(mrb, c"TypeError", &msg))
-}
-
 /// Convert `err` into a pending mruby exception and long-jump to the
 /// Ruby caller. A `Syntax` is wrapped as a `SyntaxError` and a
 /// `Panic` as a `RuntimeError`; each message `String` is dropped
@@ -214,7 +203,7 @@ macro_rules! define_method_trait {
         pub trait $name<$($t,)* Res>
         where
             Self: Sized + Fn(&Mrb, Value $(, $t)*) -> Res,
-            $($t: FromValue,)*
+            $($t: TryConvert,)*
             Res: MethodReturn,
         {
             /// Read and convert the call-frame arguments, run the
@@ -237,8 +226,7 @@ macro_rules! define_method_trait {
                     }
                 })?;
                 $(
-                    let $arg = $t::from_value(Value::from_raw_unchecked($arg))
-                        .ok_or_else(|| arg_type_error::<$t>(mrb))?;
+                    let $arg = $t::try_convert(Value::from_raw_unchecked($arg), mrb)?;
                 )*
                 (self)(mrb, self_ $(, $arg)*).into_method_return(mrb)
             }
@@ -259,7 +247,7 @@ macro_rules! define_method_trait {
         impl<Func, $($t,)* Res> $name<$($t,)* Res> for Func
         where
             Func: Fn(&Mrb, Value $(, $t)*) -> Res,
-            $($t: FromValue,)*
+            $($t: TryConvert,)*
             Res: MethodReturn,
         {
         }
@@ -313,7 +301,7 @@ define_method_trait!(
 /// An omitted optional leaves its out-parameter untouched, so each
 /// optional slot is seeded with the undef sentinel and read back: an
 /// unchanged (still-undef) slot is the omitted case, any other value
-/// the supplied case converted through `FromValue`.
+/// the supplied case converted through `TryConvert`.
 macro_rules! define_method_req_opt_trait {
     (
         $(#[$attr:meta])* $name:ident, $fmt:literal,
@@ -324,8 +312,8 @@ macro_rules! define_method_req_opt_trait {
         pub trait $name<$($rt,)* $($ot,)* Res>
         where
             Self: Sized + Fn(&Mrb, Value $(, $rt)* $(, Option<$ot>)*) -> Res,
-            $($rt: FromValue,)*
-            $($ot: FromValue,)*
+            $($rt: TryConvert,)*
+            $($ot: TryConvert,)*
             Res: MethodReturn,
         {
             /// Read and convert the call-frame arguments, run the
@@ -353,8 +341,7 @@ macro_rules! define_method_req_opt_trait {
                     }
                 })?;
                 $(
-                    let $req = $rt::from_value(Value::from_raw_unchecked($req))
-                        .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
+                    let $req = $rt::try_convert(Value::from_raw_unchecked($req), mrb)?;
                 )*
                 $(
                     // SAFETY: `mrb` is alive; `$opt` is a valid value.
@@ -362,8 +349,7 @@ macro_rules! define_method_req_opt_trait {
                         None
                     } else {
                         Some(
-                            $ot::from_value(Value::from_raw_unchecked($opt))
-                                .ok_or_else(|| arg_type_error::<$ot>(mrb))?,
+                            $ot::try_convert(Value::from_raw_unchecked($opt), mrb)?,
                         )
                     };
                 )*
@@ -386,8 +372,8 @@ macro_rules! define_method_req_opt_trait {
         impl<Func, $($rt,)* $($ot,)* Res> $name<$($rt,)* $($ot,)* Res> for Func
         where
             Func: Fn(&Mrb, Value $(, $rt)* $(, Option<$ot>)*) -> Res,
-            $($rt: FromValue,)*
-            $($ot: FromValue,)*
+            $($rt: TryConvert,)*
+            $($ot: TryConvert,)*
             Res: MethodReturn,
         {
         }
@@ -430,7 +416,7 @@ macro_rules! define_method_req_block_trait {
         pub trait $name<$($rt,)* Res>
         where
             Self: Sized + Fn(&Mrb, Value $(, $rt)*, Option<crate::Proc>) -> Res,
-            $($rt: FromValue,)*
+            $($rt: TryConvert,)*
             Res: MethodReturn,
         {
             /// Read and convert the call-frame arguments and the block,
@@ -456,8 +442,7 @@ macro_rules! define_method_req_block_trait {
                     }
                 })?;
                 $(
-                    let $req = $rt::from_value(Value::from_raw_unchecked($req))
-                        .ok_or_else(|| arg_type_error::<$rt>(mrb))?;
+                    let $req = $rt::try_convert(Value::from_raw_unchecked($req), mrb)?;
                 )*
                 // SAFETY: `mrb` is alive; `block` is a valid value.
                 let block = if unsafe { sys::mrb_nil_p_func(block) } {
@@ -488,7 +473,7 @@ macro_rules! define_method_req_block_trait {
         impl<Func, $($rt,)* Res> $name<$($rt,)* Res> for Func
         where
             Func: Fn(&Mrb, Value $(, $rt)*, Option<crate::Proc>) -> Res,
-            $($rt: FromValue,)*
+            $($rt: TryConvert,)*
             Res: MethodReturn,
         {
         }
@@ -556,7 +541,7 @@ where
 /// Wrap a Rust function as an mruby method registration.
 ///
 /// The arity follows the function: `0..=4` for that many required
-/// positional arguments (each converted through `FromValue` before
+/// positional arguments (each converted through `TryConvert` before
 /// the function runs), or `-1` for a function that reads the call
 /// frame itself via `scan_args::scan_args`.
 ///

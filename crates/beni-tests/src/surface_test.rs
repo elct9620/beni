@@ -136,6 +136,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RString::cat_str;
     let _ = RString::as_bytes;
     let _ = RString::to_bytes;
+    let _ = RString::to_char;
+    let _ = RString::to_string;
     let _ = RString::len;
     let _ = RString::is_empty;
     let _ = Proc::from_value_unchecked;

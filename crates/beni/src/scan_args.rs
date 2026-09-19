@@ -15,9 +15,11 @@
 //! arguments only from the frame; the `Args` it answers has magnus's shape.
 //! `get_kwargs` takes a keyword bucket apart by name, as magnus's does.
 
-use crate::method::{arg_type_error, core_exception};
 use crate::state::args::{capture_all_kwargs, slice_from_argv};
-use crate::{Array, Error, FromValue, Hash, IntoId, Mrb, Proc, ReprValue, Symbol, Value};
+use crate::try_convert::argument_error;
+use crate::{
+    Array, Error, FromValue, Hash, IntoId, Mrb, Proc, ReprValue, Symbol, TryConvert, Value,
+};
 use beni_sys as sys;
 
 /// The parts `scan_args` hands back, each typed by the parameter that
@@ -99,19 +101,19 @@ mod private {
 
     macro_rules! impl_positional_parts {
         ($len:literal; $($t:ident $i:tt),+) => {
-            impl<$($t: FromValue),+> ScanArgsRequired for ($($t,)+) {
+            impl<$($t: TryConvert),+> ScanArgsRequired for ($($t,)+) {
                 const LEN: usize = $len;
 
                 fn from_slice(mrb: &Mrb, vals: &[Value]) -> Result<Self, Error> {
-                    Ok(($(convert::<$t>(mrb, vals[$i])?,)+))
+                    Ok(($($t::try_convert(vals[$i], mrb)?,)+))
                 }
             }
 
-            impl<$($t: FromValue),+> ScanArgsOpt for ($(Option<$t>,)+) {
+            impl<$($t: TryConvert),+> ScanArgsOpt for ($(Option<$t>,)+) {
                 const LEN: usize = $len;
 
                 fn from_options(mrb: &Mrb, vals: &[Option<Value>]) -> Result<Self, Error> {
-                    Ok(($(vals[$i].map(|v| convert::<$t>(mrb, v)).transpose()?,)+))
+                    Ok(($(vals[$i].map(|v| $t::try_convert(v, mrb)).transpose()?,)+))
                 }
             }
         };
@@ -143,11 +145,11 @@ mod private {
         }
     }
 
-    impl<T: FromValue> ScanArgsSplat for Vec<T> {
+    impl<T: TryConvert> ScanArgsSplat for Vec<T> {
         const REQ: bool = true;
 
         fn from_slice(mrb: &Mrb, vals: &[Value]) -> Result<Self, Error> {
-            vals.iter().map(|v| convert::<T>(mrb, *v)).collect()
+            vals.iter().map(|v| T::try_convert(*v, mrb)).collect()
         }
     }
 
@@ -178,25 +180,25 @@ mod private {
     }
 
     impl ScanArgsBlock for Option<Proc> {
-        fn from_block(mrb: &Mrb, block: Value) -> Result<Self, Error> {
-            convert(mrb, block)
+        fn from_block(_: &Mrb, block: Value) -> Result<Self, Error> {
+            Ok(Proc::from_value(block))
         }
     }
 }
 
 /// Required positionals of `scan_args`, or required keywords of
-/// `get_kwargs`: `()`, or a tuple of up to nine `FromValue` types.
+/// `get_kwargs`: `()`, or a tuple of up to nine `TryConvert` types.
 pub trait ScanArgsRequired: private::ScanArgsRequired {}
 impl<T: private::ScanArgsRequired> ScanArgsRequired for T {}
 
 /// Optional positionals of `scan_args`, or optional keywords of
-/// `get_kwargs`: `()`, or a tuple of up to nine `Option`s of `FromValue`
+/// `get_kwargs`: `()`, or a tuple of up to nine `Option`s of `TryConvert`
 /// types.
 pub trait ScanArgsOpt: private::ScanArgsOpt {}
 impl<T: private::ScanArgsOpt> ScanArgsOpt for T {}
 
 /// The splat of `scan_args`: `()`, an `Array` handle, or a `Vec` of a
-/// `FromValue` type.
+/// `TryConvert` type.
 pub trait ScanArgsSplat: private::ScanArgsSplat {}
 impl<T: private::ScanArgsSplat> ScanArgsSplat for T {}
 
@@ -398,12 +400,4 @@ fn argnum_error(mrb: &Mrb, given: usize, min: usize, max: Option<usize>) -> Erro
         Err(err) => err,
         Ok(_) => unreachable!("mrb_argnum_error always raises"),
     }
-}
-
-fn argument_error(mrb: &Mrb, msg: &str) -> Error {
-    Error::Exception(core_exception(mrb, c"ArgumentError", msg))
-}
-
-fn convert<T: FromValue>(mrb: &Mrb, value: Value) -> Result<T, Error> {
-    T::from_value(value).ok_or_else(|| arg_type_error::<T>(mrb))
 }

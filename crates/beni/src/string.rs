@@ -309,6 +309,28 @@ impl RString {
         bytes.to_vec()
     }
 
+    /// The bytes as an owned `String`, or the `Err` carrying the
+    /// `ArgumentError` mruby raises for bytes that are not UTF-8. Mirrors
+    /// magnus's `RString::to_string`.
+    #[inline]
+    pub fn to_string(self, mrb: &Mrb) -> Result<String, Error> {
+        String::from_utf8(self.to_bytes()).map_err(|_| crate::try_convert::invalid_utf8(mrb))
+    }
+
+    /// The one character the string holds, or the `Err` carrying the
+    /// `ArgumentError` for bytes that are not UTF-8 or the `TypeError` for
+    /// a string holding any other number of characters. Mirrors magnus's
+    /// `RString::to_char`.
+    #[inline]
+    pub fn to_char(self, mrb: &Mrb) -> Result<char, Error> {
+        let string = self.to_string(mrb)?;
+        let mut chars = string.chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) => Ok(c),
+            _ => Err(crate::try_convert::not_convertible(self.0, mrb, "char")),
+        }
+    }
+
     /// `RSTRING_LEN(self)` — the number of bytes in this string, via the
     /// `mrb_rstring_len_func` shim (the macro expanded in the C compiler so
     /// the embed-vs-heap length read matches the linked archive's

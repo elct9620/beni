@@ -11,7 +11,8 @@ surface, this crate owns every abstraction above it.
   compile contexts
 - `Value` / `RClass` / `RModule` / `Array` / `Hash` — typed handles
   over `mrb_value`
-- `IntoValue` / `FromValue` — the Rust ⇄ mruby conversion seam
+- `IntoValue` / `FromValue` / `TryConvert` — the Rust ⇄ mruby conversion
+  seam, `TryConvert` being the one a method's arguments cross
 - `method!` — registers a typed Rust function as an mruby method,
   with argument conversion and a sealed panic boundary
 - `beni::sys` — raw-FFI escape hatch carrying all of `beni-sys`, with

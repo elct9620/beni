@@ -119,28 +119,24 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
 }
 
 #[test]
-fn from_value_failure_raises_before_body_runs() {
+fn conversion_failure_raises_before_body_runs() {
     let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniStrictAdder");
     class
         .define_method(&mrb, c"add", beni::method!(observed_add, 2))
         .expect("registering the typed method must succeed");
 
-    // A Float argument fails the i32 FromValue conversion: the
-    // bridge must raise TypeError to the Ruby caller and the
-    // wrapped function must never run.
+    // A String argument fails the i32 conversion: the bridge must
+    // raise mruby's TypeError to the Ruby caller and the wrapped
+    // function must never run.
     let receiver = class
         .obj_new(&mrb, &[])
         .expect("the receiver constructs without raising");
-    let args = [1.5f32.into_value(&mrb), 2i32.into_value(&mrb)];
+    let args = [mrb.str_new(b"x").as_value(), 2i32.into_value(&mrb)];
     let err = receiver
         .funcall(&mrb, c"add", &args)
         .expect_err("the conversion failure must surface as a raise");
-    assert!(
-        err.message(&mrb).contains("i32"),
-        "the TypeError must name the expected Rust type: {}",
-        err.message(&mrb)
-    );
+    assert_eq!(err.message(&mrb), "String cannot be converted to Integer");
     assert!(
         !TYPE_ERROR_BODY_RAN.load(Ordering::SeqCst),
         "the wrapped function must not run on conversion failure"
@@ -201,7 +197,28 @@ fn all_optional_method_reads_its_lone_slot() {
 }
 
 #[test]
-fn supplied_optional_failing_from_value_raises() {
+fn a_float_argument_truncates_into_an_integer_parameter() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniTruncatingAdder");
+    class
+        .define_method(&mrb, c"add", beni::method!(opt_add, 1, 1))
+        .expect("registering the optional-arg method must succeed");
+
+    let receiver = class
+        .obj_new(&mrb, &[])
+        .expect("the receiver constructs without raising");
+    let got = receiver
+        .funcall(
+            &mrb,
+            c"add",
+            &[1.5f32.into_value(&mrb), 2.75f32.into_value(&mrb)],
+        )
+        .expect("a Float argument converts into an i32 parameter");
+    assert_eq!(i32::from_value(got), Some(3));
+}
+
+#[test]
+fn supplied_optional_failing_conversion_raises() {
     let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniOptStrict");
     class
@@ -218,14 +235,10 @@ fn supplied_optional_failing_from_value_raises() {
         .funcall(
             &mrb,
             c"add",
-            &[1i32.into_value(&mrb), 1.5f32.into_value(&mrb)],
+            &[1i32.into_value(&mrb), mrb.str_new(b"x").as_value()],
         )
         .expect_err("the supplied optional's conversion failure must raise");
-    assert!(
-        err.message(&mrb).contains("i32"),
-        "the TypeError must name the expected Rust type: {}",
-        err.message(&mrb)
-    );
+    assert_eq!(err.message(&mrb), "String cannot be converted to Integer");
 }
 
 #[test]
