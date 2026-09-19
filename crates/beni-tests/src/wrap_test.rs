@@ -78,7 +78,9 @@ fn the_data_type_is_named_after_the_class_unless_named_otherwise() {
     let default = mrb.wrap(DefaultName).as_value();
 
     let err = <&DefaultName>::try_convert(custom, &mrb).err().unwrap();
-    assert!(err.message(&mrb).ends_with("(expected BeniWrapDefaultName)"));
+    assert!(err
+        .message(&mrb)
+        .ends_with("(expected BeniWrapDefaultName)"));
     let err = <&CustomName>::try_convert(default, &mrb).err().unwrap();
     assert!(err.message(&mrb).ends_with("(expected BeniWrapCustom)"));
 }
@@ -88,7 +90,9 @@ fn a_path_naming_no_class_panics() {
     let mrb = open_mrb();
     define(&mrb, b"BeniWrapMissing = 1");
 
-    let payload = catch_unwind(AssertUnwindSafe(|| mrb.wrap(Missing))).err().unwrap();
+    let payload = catch_unwind(AssertUnwindSafe(|| mrb.wrap(Missing)))
+        .err()
+        .unwrap();
 
     assert!(panic_message(payload).starts_with("BeniWrapMissing does not name a class"));
 }
@@ -97,7 +101,9 @@ fn a_path_naming_no_class_panics() {
 fn a_class_refusing_the_mark_panics() {
     let mrb = open_mrb();
 
-    let payload = catch_unwind(AssertUnwindSafe(|| mrb.wrap(Stringly))).err().unwrap();
+    let payload = catch_unwind(AssertUnwindSafe(|| mrb.wrap(Stringly)))
+        .err()
+        .unwrap();
 
     assert!(panic_message(payload).starts_with("String cannot carry Rust data"));
     assert!(
