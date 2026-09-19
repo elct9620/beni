@@ -12,7 +12,9 @@ surface, this crate owns every abstraction above it.
 - `Value` / `RClass` / `RModule` / `Array` / `Hash` — typed handles
   over `mrb_value`
 - `IntoValue` / `FromValue` / `TryConvert` — the Rust ⇄ mruby conversion
-  seam, `TryConvert` being the one a method's arguments cross
+  seam, `TryConvert` being the one a method's receiver and arguments cross
+- `TypedData` — a Rust type carried as an mruby object's payload, read
+  back as `&T` or `typed_data::Obj<T>`
 - `method!` — registers a typed Rust function as an mruby method,
   with argument conversion and a sealed panic boundary
 - `beni::sys` — raw-FFI escape hatch carrying all of `beni-sys`, with
@@ -35,6 +37,9 @@ precompiled bytecode needs no compiler and stays.
 [dependencies]
 beni = { version = "0.1", default-features = false }
 ```
+
+The `bytes` feature, off by default, converts `bytes::Bytes` to and from
+an mruby String.
 
 ```rust
 use beni::{Module, Mrb, Value};
