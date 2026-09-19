@@ -192,7 +192,7 @@ typed:
   mrb_gc_register: "`Mrb::gc_register_forever` — root a value for the interpreter's remaining lifetime. Only the never-released shape graduates: mruby's registry is keyed by value, so a removal drops every root over it, and a shape that never removes cannot drop another holder's (the releasable shape is the GcRoot extension)"
   mrb_get_arg1: "`Mrb::arg1` — the single required argument, or the keyword hash when the call passed keywords alone; any other count comes back as the `ArgumentError` `Err`"
   mrb_get_argc: Mrb::argc
-  mrb_get_args: "state::args — the format markers and frame-read helpers; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol"
+  mrb_get_args: "scan_args — the magnus-shaped frame read; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol"
   mrb_get_argv: "`Mrb::argv` — a copy of the call frame's positional arguments, valid across a VM re-entry, the companion to `Mrb::argc`; `Mrb::argv_unchecked` is the zero-copy view of the same frame"
   mrb_gv_get: Mrb::gv_get
   mrb_gv_remove: Mrb::gv_remove
@@ -436,34 +436,32 @@ extensions:
 #
 # `mrb_get_args` is one symbol whose format string is a vocabulary of argument
 # specifiers, so the vocabulary is its own coverage lens (see SPEC's coverage
-# measure). Every specifier is covered through a format marker, a read composed
-# with a conversion, the keyword read, or the typed method registration. The
-# composable tuple-scan and the named-keyword form are ergonomic surfaces
-# reachable today through composition, not per-specifier gaps, so they are not
-# tracked here. `via` names the covering Rust surface; the `api:formats` gate
-# checks that every specifier a `format::` marker reads is marked covered.
+# measure). Every specifier is covered through a part of `scan_args`, a
+# `scan_args` read composed with a conversion, `get_kwargs`, or the typed method
+# registration. `via` names the covering Rust surface; the `api:formats` gate
+# checks that every specifier the crate hands `mrb_get_args` is marked covered.
 get_args_formats:
-  o: { status: covered, via: "format::O, or the composable read" }
-  C: { status: covered, via: "read + FromValue<RClass> / FromValue<RModule>, or Value::is_class / is_sclass / is_module" }
-  S: { status: covered, via: "format::S, or read + Value::ensure_string" }
-  A: { status: covered, via: "read + FromValue<Array> / Value::ensure_array" }
-  H: { status: covered, via: "read + FromValue<Hash> / Value::ensure_hash" }
-  s: { status: covered, via: "format::Str — a copy of the String argument's bytes" }
-  z: { status: covered, via: "read + RString::to_cstr" }
-  a: { status: covered, via: "read + Array::entries" }
-  c: { status: covered, via: "read + FromValue<RClass> / FromValue<RModule>" }
-  f: { status: covered, via: "read + FromValue<f64> / Value::ensure_float" }
-  i: { status: covered, via: "format::Io, or read + FromValue<i32> / FromValue<i64> / Value::ensure_int" }
-  b: { status: covered, via: "read + Value::to_bool" }
-  n: { status: covered, via: "format::NRest / NRestBlock / NRestKwBlock, or read + FromValue<Symbol>" }
-  d: { status: covered, via: "read + Value::data_get" }
-  "&": { status: covered, via: "format::NRestBlock / RestBlock / NRestKwBlock, or block-accepting registration" }
-  "*": { status: covered, via: "format::Rest — re-entry-stable borrowed slice" }
-  "|": { status: covered, via: "optional-positional registration (Option crossing), or Mrb::argv indexing" }
-  "?": { status: covered, via: "optional-given answered by the Option crossing" }
-  ":": { status: covered, via: "format::Kw / NRestKwBlock — the keyword bucket" }
-  "!": { status: covered, via: "read + FromValue<Option<T>> — nil reads as None, any other value by T's rule" }
-  "+": { status: covered, via: "read + Value::check_frozen" }
+  o: { status: covered, via: "scan_args required / optional / trailing parts, or the typed method registration" }
+  C: { status: covered, via: "scan_args + FromValue<RClass> / FromValue<RModule>, or Value::is_class / is_sclass / is_module" }
+  S: { status: covered, via: "scan_args + FromValue<RString>, or Value::ensure_string" }
+  A: { status: covered, via: "scan_args + FromValue<Array> / Value::ensure_array" }
+  H: { status: covered, via: "scan_args + FromValue<Hash> / Value::ensure_hash" }
+  s: { status: covered, via: "scan_args + FromValue<Vec<u8>> — a copy of the String argument's bytes" }
+  z: { status: covered, via: "scan_args + RString::to_cstr" }
+  a: { status: covered, via: "scan_args + Array::entries" }
+  c: { status: covered, via: "scan_args + FromValue<RClass> / FromValue<RModule>" }
+  f: { status: covered, via: "scan_args + FromValue<f64> / Value::ensure_float" }
+  i: { status: covered, via: "scan_args + FromValue<i32> / FromValue<i64> / Value::ensure_int" }
+  b: { status: covered, via: "scan_args + FromValue<bool>" }
+  n: { status: covered, via: "scan_args + FromValue<Symbol>" }
+  d: { status: covered, via: "scan_args + Value::data_get" }
+  "&": { status: covered, via: "scan_args block part, or block-accepting registration" }
+  "*": { status: covered, via: "scan_args splat part — an Array handle or a converted Vec" }
+  "|": { status: covered, via: "scan_args optional part, or optional-positional registration" }
+  "?": { status: covered, via: "the Option a scan_args optional part or an optional-positional registration binds" }
+  ":": { status: covered, via: "scan_args keyword part, then get_kwargs by name" }
+  "!": { status: covered, via: "scan_args + FromValue<Option<T>> — nil reads as None, any other value by T's rule" }
+  "+": { status: covered, via: "scan_args + Value::check_frozen" }
 subsumed:
   mrb_funcall: "`Value::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"
   mrb_funcall_id: "`Value::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"

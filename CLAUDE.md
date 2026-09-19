@@ -65,7 +65,7 @@ beni gem (lib/)                          crates/
 ─────────────────────────────────       ─────────────────────────────────────
 Tasks      Beni::Tasks (Rake::TaskLib    beni      typed wrapper (magnus idioms)
   │          — beni:* task surface)        L2  convert::{IntoValue, FromValue}
-Build      Beni::Builder (drives            │   state::args (Format dispatch)
+Build      Beni::Builder (drives            │   scan_args (magnus-shaped frame reads)
   │          mruby's own rake via            │   state::protect (mrb_protect_error)
   │          MRUBY_CONFIG; requests          L1  Mrb RAII · Value + typed
   │          flags.mak file tasks)           │   newtypes · Ccontext †

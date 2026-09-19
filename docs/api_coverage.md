@@ -123,7 +123,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_gc_unregister` | fn | ✅ | 🚫 | declined: removes a root by value, so it drops every registration of that value at once (`vendor/mruby/src/gc.c:537-553`) — no typed shape can release one holder's root without releasing another's. The releasable root is the GcRoot extension, whose slot supplies the identity this call lacks; the never-released half is `Mrb::gc_register_forever` |
 | `mrb_get_arg1` | fn | ✅ | ✅ | `Mrb::arg1` — the single required argument, or the keyword hash when the call passed keywords alone; any other count comes back as the `ArgumentError` `Err` |
 | `mrb_get_argc` | fn | ✅ | ✅ | `Mrb::argc` |
-| `mrb_get_args` | fn | ✅ | ✅ | state::args — the format markers and frame-read helpers; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol |
+| `mrb_get_args` | fn | ✅ | ✅ | scan_args — the magnus-shaped frame read; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol |
 | `mrb_get_args_a` | fn | ✅ | ❌ |  |
 | `mrb_get_argv` | fn | ✅ | ✅ | `Mrb::argv` — a copy of the call frame's positional arguments, valid across a VM re-entry, the companion to `Mrb::argc`; `Mrb::argv_unchecked` is the zero-copy view of the same frame |
 | `mrb_get_mid` | fn | ✅ | ❌ |  |
@@ -551,27 +551,27 @@ covered (✅); the Via column names the surface that covers each one.
 
 | Specifier | Covered | Via |
 |-----------|:-------:|-----|
-| `o` | ✅ | format::O, or the composable read |
-| `C` | ✅ | read + FromValue<RClass> / FromValue<RModule>, or Value::is_class / is_sclass / is_module |
-| `S` | ✅ | format::S, or read + Value::ensure_string |
-| `A` | ✅ | read + FromValue<Array> / Value::ensure_array |
-| `H` | ✅ | read + FromValue<Hash> / Value::ensure_hash |
-| `s` | ✅ | format::Str — a copy of the String argument's bytes |
-| `z` | ✅ | read + RString::to_cstr |
-| `a` | ✅ | read + Array::entries |
-| `c` | ✅ | read + FromValue<RClass> / FromValue<RModule> |
-| `f` | ✅ | read + FromValue<f64> / Value::ensure_float |
-| `i` | ✅ | format::Io, or read + FromValue<i32> / FromValue<i64> / Value::ensure_int |
-| `b` | ✅ | read + Value::to_bool |
-| `n` | ✅ | format::NRest / NRestBlock / NRestKwBlock, or read + FromValue<Symbol> |
-| `d` | ✅ | read + Value::data_get |
-| `&` | ✅ | format::NRestBlock / RestBlock / NRestKwBlock, or block-accepting registration |
-| `*` | ✅ | format::Rest — re-entry-stable borrowed slice |
-| `\|` | ✅ | optional-positional registration (Option crossing), or Mrb::argv indexing |
-| `?` | ✅ | optional-given answered by the Option crossing |
-| `:` | ✅ | format::Kw / NRestKwBlock — the keyword bucket |
-| `!` | ✅ | read + FromValue<Option<T>> — nil reads as None, any other value by T's rule |
-| `+` | ✅ | read + Value::check_frozen |
+| `o` | ✅ | scan_args required / optional / trailing parts, or the typed method registration |
+| `C` | ✅ | scan_args + FromValue<RClass> / FromValue<RModule>, or Value::is_class / is_sclass / is_module |
+| `S` | ✅ | scan_args + FromValue<RString>, or Value::ensure_string |
+| `A` | ✅ | scan_args + FromValue<Array> / Value::ensure_array |
+| `H` | ✅ | scan_args + FromValue<Hash> / Value::ensure_hash |
+| `s` | ✅ | scan_args + FromValue<Vec<u8>> — a copy of the String argument's bytes |
+| `z` | ✅ | scan_args + RString::to_cstr |
+| `a` | ✅ | scan_args + Array::entries |
+| `c` | ✅ | scan_args + FromValue<RClass> / FromValue<RModule> |
+| `f` | ✅ | scan_args + FromValue<f64> / Value::ensure_float |
+| `i` | ✅ | scan_args + FromValue<i32> / FromValue<i64> / Value::ensure_int |
+| `b` | ✅ | scan_args + FromValue<bool> |
+| `n` | ✅ | scan_args + FromValue<Symbol> |
+| `d` | ✅ | scan_args + Value::data_get |
+| `&` | ✅ | scan_args block part, or block-accepting registration |
+| `*` | ✅ | scan_args splat part — an Array handle or a converted Vec |
+| `\|` | ✅ | scan_args optional part, or optional-positional registration |
+| `?` | ✅ | the Option a scan_args optional part or an optional-positional registration binds |
+| `:` | ✅ | scan_args keyword part, then get_kwargs by name |
+| `!` | ✅ | scan_args + FromValue<Option<T>> — nil reads as None, any other value by T's rule |
+| `+` | ✅ | scan_args + Value::check_frozen |
 ## Admitted internal symbols
 
 Declared in a header mruby marks internal to the library, so outside the

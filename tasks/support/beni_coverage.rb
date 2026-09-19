@@ -56,7 +56,8 @@ module BeniCoverage
   MANIFEST = File.join(ROOT, ".api_coverage.yml")
   OUTPUT = File.join(ROOT, "docs", "api_coverage.md")
   VERSION_H = File.join(INCLUDE_ROOT, "mruby", "version.h")
-  ARGS_RS = File.join(ROOT, "crates", "beni", "src", "state", "args.rs")
+  BENI_SRC = File.join(ROOT, "crates", "beni", "src")
+  METHOD_RS = File.join(BENI_SRC, "method.rs")
 
   module_function
 
@@ -175,30 +176,34 @@ module BeniCoverage
     %w[MAJOR MINOR TEENY].map { |part| src[/MRUBY_RELEASE_#{part}\s+(\d+)/, 1] }.join(".")
   end
 
-  # Specifier chars every +format::+ marker reads, scanned from the +FMT+
-  # constants in the args module. The lens gate's numerator is derived from
-  # Rust source, so a new marker cannot silently escape the coverage lens.
-  def marker_specifiers
-    File.readlines(ARGS_RS)
-        .reject { |line| line.strip.start_with?("//") }
-        .join
-        .scan(/const\s+FMT\b[^=]*=\s*c"([^"]*)"/)
-        .join.chars.uniq
+  # Specifier chars the crate hands +mrb_get_args+: the format literal at
+  # each call, and each format a typed method registration declares. The
+  # lens gate's numerator is derived from Rust source, so a new read cannot
+  # silently escape the coverage lens.
+  def read_specifiers
+    calls = Dir.glob(File.join(BENI_SRC, "**", "*.rs")).flat_map do |path|
+      rust_code(path).scan(/mrb_get_args\(\s*[^,]+,\s*c"([^"]*)"/)
+    end
+    registrations = rust_code(METHOD_RS).scan(/^\s*c"([^"]*)",\s*$/)
+    (calls + registrations).join.chars.uniq
   end
 
-  # Problems between the marker FMT vocabulary and the +get_args_formats+
-  # lens — empty when they agree. Every specifier a marker reads must be
-  # recorded covered through a +format::+ surface.
+  def rust_code(path)
+    File.readlines(path).reject { |line| line.strip.start_with?("//") }.join
+  end
+
+  # Problems between the specifiers the crate reads and the
+  # +get_args_formats+ lens — empty when they agree. Every specifier read
+  # must be recorded covered.
   def formats_drift
     lens = load_manifest["get_args_formats"] || {}
-    marker_specifiers.filter_map { |ch| format_lens_problem(ch, lens[ch]) }
+    read_specifiers.filter_map { |ch| format_lens_problem(ch, lens[ch]) }
   end
 
   def format_lens_problem(char, entry)
-    prefix = "specifier #{char.inspect} is read by a format marker but"
+    prefix = "specifier #{char.inspect} is read by the crate but"
     return "#{prefix} absent from get_args_formats" if entry.nil?
     return "#{prefix} not marked covered" if entry["status"] != "covered"
-    return "#{prefix} its via names no format:: surface" unless entry["via"].to_s.include?("format::")
 
     nil
   end

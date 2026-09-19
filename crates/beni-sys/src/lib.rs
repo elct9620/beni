@@ -33,8 +33,8 @@
 //! ## No typed wrappers here
 //!
 //! The typed `Value` / `RClass` / `Array` / `Hash` newtypes, the
-//! `Mrb` / `Ccontext` RAII wrappers, and the `IntoValue` /
-//! `FromValue` / `Format` trait seams all live in the sibling
+//! `Mrb` / `Ccontext` RAII wrappers, the `IntoValue` / `FromValue`
+//! trait seams, and the `scan_args` reads all live in the sibling
 //! `beni` crate. This crate stays a pure FFI surface: bindgen
 //! output, the `mrb_func_t` typed-fn alias, the
 //! `mrb_value::zeroed()` constant, the `mrb_args_*` aspec encoders,

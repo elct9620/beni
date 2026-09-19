@@ -38,15 +38,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::intern_str;
     let _ = Mrb::sym_name;
     let _ = Mrb::load_bytecode;
-    let _ = Mrb::get_args::<format::O>;
-    let _ = <format::O as Format>::read;
-    let _ = <format::Rest as Format>::read;
-    let _ = <format::NRest as Format>::read;
-    let _ = <format::NRestBlock as Format>::read;
-    let _ = <format::Io as Format>::read;
-    let _ = <format::S as Format>::read;
-    let _ = <format::Str as Format>::read;
-    let _ = <format::RestBlock as Format>::read;
+    let _ = scan_args::scan_args::<(), (), (), (), (), ()>;
+    let _ = scan_args::get_kwargs::<&str, (), (), ()>;
     let _ = Value::nil;
     let _ = Value::true_;
     let _ = Value::false_;

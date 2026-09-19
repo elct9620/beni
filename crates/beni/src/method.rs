@@ -519,7 +519,7 @@ define_method_req_block_trait!(
 
 /// Typed crossing for an any-arity method (`method!(f, -1)`): the
 /// wrapped function reads the call frame itself via
-/// `Mrb::get_args` (`format::Rest` and friends), and registration
+/// `scan_args::scan_args` and friends, and registration
 /// uses the any-arguments aspec. The panic boundary and return seam
 /// still apply.
 pub trait MethodAny<Res>
@@ -558,7 +558,7 @@ where
 /// The arity follows the function: `0..=4` for that many required
 /// positional arguments (each converted through `FromValue` before
 /// the function runs), or `-1` for a function that reads the call
-/// frame itself via `Mrb::get_args`.
+/// frame itself via `scan_args::scan_args`.
 ///
 /// ```ignore
 /// fn add(_mrb: &Mrb, _self: Value, a: i32, b: i32) -> i32 {

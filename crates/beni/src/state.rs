@@ -35,11 +35,8 @@
 //!   * `factory` — `String` / `Array` / `Hash` factories
 //!   * `symbol` — symbol intern + name lookup
 //!   * `define` — top-level module / class / const / gvar
-//!   * `args` — `mrb_get_args` shape-typed dispatch via
-//!     `Format` trait + `format`
-//!     ZST markers (currently the only trait-based cluster — see the
-//!     `args` module doc for the pattern, applicable to future
-//!     clusters once combinatorial pressure shows up)
+//!   * `args` — the single-argument, count, argument-array, and block
+//!     reads of the call frame beside `scan_args`
 //!   * `load` — RITE bytecode loaders
 //!   * `protect` — closure-based `mrb_protect_error`
 //!   * `root` — GC roots outliving the frame that made the value

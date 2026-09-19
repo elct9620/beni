@@ -3,7 +3,7 @@
 //! This crate owns every Rust-level abstraction above the mruby C
 //! API: the `Mrb` / `Ccontext` RAII types, the `Value` / `RClass` /
 //! `Array` / `Hash` newtypes, the `IntoValue` / `FromValue` trait
-//! seam, and the `Format`-based `mrb_get_args` dispatch. The sibling
+//! seam, and the `scan_args` reads of a call's arguments. The sibling
 //! `beni-sys` crate keeps
 //! only the bindgen-generated `extern "C"` declarations and the
 //! layout-safe C shims — the same split magnus + rb-sys apply at
@@ -13,7 +13,7 @@
 //!
 //! ```text
 //! L2  trait seams      convert        (IntoValue / FromValue)
-//!                      state::args    (Format trait + ZST + GAT dispatch)
+//!                      scan_args      (magnus-shaped frame reads)
 //!                      method         (method! bridges + MethodN crossing)
 //!                      gem            (Gem trait + Mrb::init_gem)
 //!
@@ -86,8 +86,6 @@ pub mod value;
 pub use state::arena::ArenaScope;
 pub use state::root::GcRoot;
 pub use state::{Mrb, MrbOpenError};
-
-pub use state::args::{format, Format};
 
 #[cfg(feature = "compiler")]
 pub use ccontext::Ccontext;

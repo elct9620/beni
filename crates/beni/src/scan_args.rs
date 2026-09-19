@@ -233,8 +233,8 @@ where
     Kw: ScanArgsKw,
     Block: ScanArgsBlock,
 {
-    let frame = read_frame(mrb, Kw::REQ);
-    let positionals = frame.positionals.as_slice();
+    let call = read_call(mrb, Kw::REQ);
+    let positionals = call.positionals.as_slice();
     let fixed = Req::LEN + Trail::LEN;
     let max = (!Splat::REQ).then_some(fixed + Opt::LEN);
     if positionals.len() < fixed || max.is_some_and(|max| positionals.len() > max) {
@@ -251,8 +251,8 @@ where
         optional: Opt::from_options(mrb, &optional)?,
         splat: Splat::from_slice(mrb, splat)?,
         trailing: Trail::from_slice(mrb, trailing)?,
-        keywords: Kw::from_bucket(frame.keywords),
-        block: Block::from_block(mrb, frame.block)?,
+        keywords: Kw::from_bucket(call.keywords),
+        block: Block::from_block(mrb, call.block)?,
     })
 }
 
@@ -337,7 +337,7 @@ struct Frame {
 /// Read the frame once, keeping the keywords in their own bucket when
 /// `keywords` is set and otherwise letting mruby fold a non-empty keyword
 /// hash into the positionals.
-fn read_frame(mrb: &Mrb, keywords: bool) -> Frame {
+fn read_call(mrb: &Mrb, keywords: bool) -> Frame {
     let mut argv: *const sys::mrb_value = core::ptr::null();
     let mut argc: sys::mrb_int = 0;
     let mut bucket = sys::mrb_value::zeroed();

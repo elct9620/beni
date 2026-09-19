@@ -1,6 +1,6 @@
 use crate::support::open_mrb;
-use beni::state::args::format;
-use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, Value};
+use beni::scan_args::scan_args;
+use beni::{Array, Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, Symbol, Value};
 
 #[test]
 fn new_builds_an_exception_error_carrying_the_message() {
@@ -270,8 +270,7 @@ fn is_kind_of_answers_false_for_an_error_carrying_no_exception() {
 /// Yield the captured block, which breaks out, and answer whether the
 /// escaped break error counts as an `Exception`.
 fn break_is_an_exception(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    let (_sym, _rest, block_val) = mrb.get_args::<format::NRestBlock>()?;
-    let block = Proc::from_value(block_val).expect("the captured block is a Proc");
+    let block = scan_args::<(Symbol,), (), Array, (), (), Proc>(mrb)?.block;
     let exception = mrb.exc_get(c"Exception")?;
     let err = block.call(mrb, &[]).expect_err("the block breaks out");
     let Error::Exception(escaped) = &err else {

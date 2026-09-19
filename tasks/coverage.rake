@@ -80,12 +80,12 @@ end
 # sources, so it holds anywhere the checkout does — no vendored
 # toolchain, no network.
 namespace :api do
-  desc "Verify every get_args format marker is recorded in the coverage lens"
+  desc "Verify every get_args specifier the crate reads is recorded in the coverage lens"
   task :formats do
     problems = BeniCoverage.formats_drift
     problems.each { |problem| puts "[api:formats] #{problem}" }
     abort "[api:formats] get_args format lens drift detected" unless problems.empty?
 
-    puts "[api:formats] #{BeniCoverage.marker_specifiers.size} marker specifiers all recorded"
+    puts "[api:formats] #{BeniCoverage.read_specifiers.size} read specifiers all recorded"
   end
 end

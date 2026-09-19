@@ -1,14 +1,13 @@
 use crate::support::{open_mrb, same_object};
 use beni::prelude::*;
-use beni::state::args::format;
-use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, Symbol, Value};
+use beni::scan_args::scan_args;
+use beni::{Array, Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, Symbol, Value};
 
 /// Yielder method in the boundary-terminating shape kobako uses:
 /// read the captured (non-orphan) block, yield it, and on a real
 /// `break` report its carried value back as the method's result.
 fn report_break(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    let (_sym, _rest, block_val) = mrb.get_args::<format::NRestBlock>()?;
-    let block = Proc::from_value(block_val).expect("the captured block is a Proc");
+    let block = scan_args::<(Symbol,), (), Array, (), (), Proc>(mrb)?.block;
     Ok(match block.call(mrb, &[]) {
         Ok(_) => (-1i32).into_value(mrb),
         Err(Error::Exception(exc)) => match exc.as_break() {
