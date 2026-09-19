@@ -99,7 +99,7 @@ impl Error {
             return Vec::new();
         };
         frames
-            .entries()
+            .entries(mrb)
             .map(|frame| frame.string_lossy(mrb))
             .collect()
     }

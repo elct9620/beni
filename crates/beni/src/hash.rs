@@ -264,14 +264,17 @@ impl Hash {
         // trampoline borrows it per pair; on a panic it stashes the
         // unwind payload here and reports `Stop`, so the C walk ends
         // without a panic crossing its frames. The payload resumes
-        // below once control is back on the Rust side.
+        // below once control is back on the Rust side. `held` keeps
+        // every pair handed to `body` reachable once the walk's protect
+        // frame has released its arena, even after this hash lets it go.
         struct Walk<F> {
             body: F,
             panic: Option<Box<dyn std::any::Any + Send>>,
+            held: Array,
         }
 
         unsafe extern "C" fn trampoline<F>(
-            _mrb: *mut sys::mrb_state,
+            mrb: *mut sys::mrb_state,
             key: sys::mrb_value,
             val: sys::mrb_value,
             data: *mut core::ffi::c_void,
@@ -283,6 +286,13 @@ impl Hash {
             // `mrb_hash_foreach` below; the foreach call borrows it
             // for the duration of the walk on this same thread.
             let walk: &mut Walk<F> = unsafe { &mut *(data as *mut Walk<F>) };
+            // SAFETY: `mrb` is the live state driving the walk and `held`
+            // a fresh Array from it; a push that raises long-jumps to the
+            // walk's protect frame across no value that needs dropping.
+            unsafe {
+                sys::mrb_ary_push(mrb, walk.held.as_raw(), key);
+                sys::mrb_ary_push(mrb, walk.held.as_raw(), val);
+            }
             let key = Value::from_raw_unchecked(key);
             let val = Value::from_raw_unchecked(val);
             // Catch here so a `body` panic stops the walk instead of
@@ -302,7 +312,11 @@ impl Hash {
             }
         }
 
-        let mut walk = Walk { body, panic: None };
+        let mut walk = Walk {
+            body,
+            panic: None,
+            held: mrb.ary_new(),
+        };
         // Run the whole walk under `protect`: `H_CHECK_MODIFIED` raises
         // `RuntimeError` when `body` re-enters the VM and mutates this
         // hash mid-walk, and that raise long-jumps out of

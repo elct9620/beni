@@ -12,8 +12,8 @@ fn push_and_entry_roundtrip_through_a_live_array() {
     ary.push(&mrb, mrb.str_new(b"second").as_value())
         .expect("push to a fresh array succeeds");
 
-    assert_eq!(ary.entry(0).to_string(&mrb), "first");
-    assert_eq!(ary.entry(-1).to_string(&mrb), "second");
+    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "first");
+    assert_eq!(ary.entry(&mrb, -1).to_string(&mrb), "second");
 }
 
 #[test]
@@ -24,7 +24,7 @@ fn raw_entry_reads_nil_past_the_configured_width() {
         .expect("push to a fresh array succeeds");
 
     // SAFETY: `ary` is an Array, so its value is Array-tagged.
-    let past = unsafe { ary.as_value().ary_entry(isize::MAX) };
+    let past = unsafe { ary.as_value().ary_entry(&mrb, isize::MAX) };
 
     assert!(past.is_nil());
 }
@@ -37,12 +37,12 @@ fn entry_is_nil_out_of_range_in_both_directions() {
     ary.push(&mrb, mrb.str_new(b"only").as_value())
         .expect("push to a fresh array succeeds");
 
-    assert!(ary.entry(1).is_nil());
-    assert!(ary.entry(-2).is_nil());
+    assert!(ary.entry(&mrb, 1).is_nil());
+    assert!(ary.entry(&mrb, -2).is_nil());
     // An index beyond the archive's `mrb_int` width is out of
     // range by definition — same nil contract, no truncation.
-    assert!(ary.entry(isize::MAX).is_nil());
-    assert!(ary.entry(isize::MIN).is_nil());
+    assert!(ary.entry(&mrb, isize::MAX).is_nil());
+    assert!(ary.entry(&mrb, isize::MIN).is_nil());
 }
 
 #[test]
@@ -54,14 +54,14 @@ fn store_writes_grows_and_counts_from_the_tail() {
     ary.store(&mrb, 2, mrb.str_new(b"two").as_value())
         .expect("an in-range store succeeds");
     assert_eq!(ary.len(), 3);
-    assert!(ary.entry(0).is_nil());
-    assert!(ary.entry(1).is_nil());
-    assert_eq!(ary.entry(2).to_string(&mrb), "two");
+    assert!(ary.entry(&mrb, 0).is_nil());
+    assert!(ary.entry(&mrb, 1).is_nil());
+    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "two");
 
     // A negative index counts from the tail.
     ary.store(&mrb, -1, mrb.str_new(b"last").as_value())
         .expect("a negative in-range store succeeds");
-    assert_eq!(ary.entry(2).to_string(&mrb), "last");
+    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "last");
 }
 
 #[test]
@@ -156,9 +156,9 @@ fn unshift_prepends_and_concat_extends() {
         .expect("push succeeds");
     ary.concat(&mrb, tail).expect("concat succeeds");
 
-    assert_eq!(ary.entry(0).to_string(&mrb), "head");
-    assert_eq!(ary.entry(1).to_string(&mrb), "mid");
-    assert_eq!(ary.entry(2).to_string(&mrb), "tail");
+    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "head");
+    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "mid");
+    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "tail");
 }
 
 #[test]
@@ -174,7 +174,7 @@ fn clear_empties_and_dup_copies_independently() {
     // clear emptied the original; dup is an independent array.
     assert!(ary.is_empty());
     assert_eq!(copy.len(), 1);
-    assert_eq!(copy.entry(0).to_string(&mrb), "x");
+    assert_eq!(copy.entry(&mrb, 0).to_string(&mrb), "x");
 }
 
 #[test]
@@ -197,9 +197,9 @@ fn replace_swaps_the_whole_contents_in_place() {
 
     // The receiver now holds a copy of other's elements, in place.
     assert_eq!(ary.len(), 3);
-    assert_eq!(ary.entry(0).to_string(&mrb), "3");
-    assert_eq!(ary.entry(1).to_string(&mrb), "4");
-    assert_eq!(ary.entry(2).to_string(&mrb), "5");
+    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "3");
+    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "4");
+    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "5");
 }
 
 #[test]
@@ -212,14 +212,14 @@ fn resize_grows_with_nil_and_truncates() {
     // Growing past the current length fills the new slots with nil.
     ary.resize(&mrb, 3).expect("grow succeeds");
     assert_eq!(ary.len(), 3);
-    assert_eq!(ary.entry(0).to_string(&mrb), "a");
-    assert!(ary.entry(1).is_nil());
-    assert!(ary.entry(2).is_nil());
+    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "a");
+    assert!(ary.entry(&mrb, 1).is_nil());
+    assert!(ary.entry(&mrb, 2).is_nil());
 
     // Truncating drops the tail.
     ary.resize(&mrb, 1).expect("truncate succeeds");
     assert_eq!(ary.len(), 1);
-    assert_eq!(ary.entry(0).to_string(&mrb), "a");
+    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "a");
 }
 
 #[test]
@@ -241,15 +241,15 @@ fn splice_inserts_replaces_and_deletes_in_place() {
     ary.splice(&mrb, 1, 0, ins.as_value())
         .expect("a zero-length splice succeeds");
     assert_eq!(ary.len(), 5);
-    assert_eq!(ary.entry(1).to_string(&mrb), "10");
-    assert_eq!(ary.entry(2).to_string(&mrb), "11");
+    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "10");
+    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "11");
 
     // A non-array replacement is inserted as the single element it is,
     // replacing the run in place: [1,10,11,2,3] -> [1,10,99,2,3].
     ary.splice(&mrb, 2, 1, 99i32.into_value(&mrb))
         .expect("an in-place single-element replace succeeds");
     assert_eq!(ary.len(), 5);
-    assert_eq!(ary.entry(2).to_string(&mrb), "99");
+    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "99");
 
     // Replacing with fewer elements than removed shrinks the array;
     // an empty replacement deletes outright: removing the two slots at
@@ -257,15 +257,15 @@ fn splice_inserts_replaces_and_deletes_in_place() {
     ary.splice(&mrb, 2, 2, mrb.ary_new().as_value())
         .expect("a shrinking delete-and-replace succeeds");
     assert_eq!(ary.len(), 3);
-    assert_eq!(ary.entry(0).to_string(&mrb), "1");
-    assert_eq!(ary.entry(1).to_string(&mrb), "10");
-    assert_eq!(ary.entry(2).to_string(&mrb), "3");
+    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "1");
+    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "10");
+    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "3");
 
     // A len overshooting the tail removes only the run that exists.
     ary.splice(&mrb, 2, 100, mrb.ary_new().as_value())
         .expect("an over-long len truncates to the tail");
     assert_eq!(ary.len(), 2);
-    assert_eq!(ary.entry(1).to_string(&mrb), "10");
+    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "10");
 
     // The return value is the receiver itself.
     let returned = ary
@@ -448,7 +448,7 @@ fn entries_visits_nothing_for_an_empty_array() {
     let ary = mrb.ary_new();
 
     // A length-0 walk yields no elements at all.
-    assert_eq!(ary.entries().count(), 0);
+    assert_eq!(ary.entries(&mrb).count(), 0);
 }
 
 #[test]
@@ -462,8 +462,8 @@ fn entries_walks_elements_first_to_last() {
 
     // The count is exact up front (ExactSizeIterator), and the walk reads
     // the slots from the first to the last in order.
-    assert_eq!(ary.entries().len(), 3);
-    let rendered: Vec<String> = ary.entries().map(|v| v.to_string(&mrb)).collect();
+    assert_eq!(ary.entries(&mrb).len(), 3);
+    let rendered: Vec<String> = ary.entries(&mrb).map(|v| v.to_string(&mrb)).collect();
     assert_eq!(rendered, ["1", "2", "3"]);
 }
 
@@ -481,7 +481,7 @@ fn entries_snapshots_the_length_so_a_shrink_reads_nil_past_the_new_end() {
     // reads its live value, and the two positions the array no longer
     // reaches read nil. Re-reading the length each step would instead have
     // stopped after the single live element.
-    let mut walk = ary.entries();
+    let mut walk = ary.entries(&mrb);
     assert_eq!(
         walk.next()
             .expect("the first slot is visited")
@@ -514,7 +514,7 @@ fn entries_does_not_visit_elements_appended_after_the_walk_begins() {
     // The walk fixes its length at 1 when it begins. Growing the array
     // mid-walk does not lengthen the walk: it ends after the one element
     // present at the start, never reaching the appended tail.
-    let mut walk = ary.entries();
+    let mut walk = ary.entries(&mrb);
     assert_eq!(
         walk.next()
             .expect("the first slot is visited")
@@ -544,7 +544,7 @@ fn entries_reads_a_slot_changed_mid_walk_as_its_current_value() {
     // start. Overwriting a not-yet-visited slot mid-walk therefore
     // surfaces its current value when the walk reaches it — a content
     // snapshot would instead yield the value the slot held at the start.
-    let mut walk = ary.entries();
+    let mut walk = ary.entries(&mrb);
     assert_eq!(
         walk.next()
             .expect("the first slot is visited")

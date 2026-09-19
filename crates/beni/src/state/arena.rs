@@ -7,11 +7,11 @@
 //! `Mrb::arena_scope` brackets such a region so its allocations are
 //! released together.
 //!
-//! The safety contract is the spec's GC validity rule: a value
-//! created inside an arena scope is not used after that scope ends,
-//! and a survivor carried out through `ArenaScope::keep` counts as
-//! created where the scope was opened. The type system does not
-//! enforce the rule; the consumer upholds it.
+//! The safety contract is the spec's GC validity rule: a value that
+//! crossed out to Rust inside an arena scope is not used after that
+//! scope ends, and a survivor carried out through `ArenaScope::keep`
+//! counts as crossing out where the scope was opened. The type system
+//! does not enforce the rule; the consumer upholds it.
 
 use crate::{sys::AsRawValue, Mrb, Value};
 use beni_sys as sys;
@@ -45,6 +45,15 @@ impl Mrb {
             // the index.
             idx: unsafe { sys::mrb_gc_arena_save_func(self.as_ptr()) },
         }
+    }
+
+    /// Protect `v` in the arena as it crosses out to Rust, so it stays
+    /// reachable after the object it was read out of lets it go.
+    pub(crate) fn hold(&self, v: Value) -> Value {
+        // SAFETY: `self` is alive; `v` originates from the same VM, and
+        // protecting an immediate is a no-op.
+        unsafe { sys::mrb_gc_protect(self.as_ptr(), v.as_raw()) };
+        v
     }
 }
 

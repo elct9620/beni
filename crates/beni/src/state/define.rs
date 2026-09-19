@@ -210,7 +210,9 @@ impl Mrb {
             return Value::nil();
         };
         // SAFETY: `self` is alive; `sym` was interned against it.
-        Value::from_raw_unchecked(unsafe { sys::mrb_gv_get(self.as_ptr(), sym) })
+        self.hold(Value::from_raw_unchecked(unsafe {
+            sys::mrb_gv_get(self.as_ptr(), sym)
+        }))
     }
 
     /// `mrb_gv_remove(mrb, sym)` — remove the global variable named by a

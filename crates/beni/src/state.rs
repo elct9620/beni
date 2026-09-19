@@ -201,7 +201,11 @@ impl Mrb {
         if exc.is_null() {
             Value::from_raw_unchecked(unsafe { sys::mrb_nil_value() })
         } else {
-            Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(exc as *mut core::ffi::c_void) })
+            // The handle is the exception's only root while it is
+            // pending, so the arena holds it before a caller clears it.
+            self.hold(Value::from_raw_unchecked(unsafe {
+                sys::mrb_obj_value(exc as *mut core::ffi::c_void)
+            }))
         }
     }
 
@@ -214,13 +218,8 @@ impl Mrb {
         if exc.is_nil() {
             Ok(value)
         } else {
-            // The handle is the exception's only root while it is
-            // pending, so the arena takes it over before the handle
-            // lets go. Protecting first is what keeps that handover
-            // unbroken: claiming an arena slot can itself collect.
-            // SAFETY: `self.state` is alive by the `&self` borrow;
-            // `exc` is the non-nil exception this VM has pending.
-            unsafe { sys::mrb_gc_protect(self.as_ptr(), exc.as_raw()) };
+            // `pending_exc` already holds `exc` in the arena, so clearing
+            // the handle leaves it reachable.
             self.clear_exc();
             Err(Error::Exception(exc))
         }

@@ -605,7 +605,7 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
         .to_ary(&mrb)
         .expect("a scalar wraps without raising");
     assert_eq!(wrapped.len(), 1);
-    assert_eq!(i32::from_value(wrapped.entry(0)), Some(7));
+    assert_eq!(i32::from_value(wrapped.entry(&mrb, 0)), Some(7));
 
     // `nil` answers `to_a` with an empty array here (mruby-object-ext
     // defines `NilClass#to_a`), so it spreads to `[]` — the responder
@@ -641,7 +641,7 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
         .to_ary(&mrb)
         .expect("a nil-returning to_a wraps without raising");
     assert_eq!(nil_returned.len(), 1);
-    assert!(nil_obj.obj_equal(&mrb, nil_returned.entry(0)));
+    assert!(nil_obj.obj_equal(&mrb, nil_returned.entry(&mrb, 0)));
 
     // A `to_a` that returns a non-array non-`nil` value raises a
     // genuine `TypeError`, caught into the `Err` rather than wrapping.

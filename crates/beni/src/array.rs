@@ -67,13 +67,15 @@ impl Array {
     /// definition. The type guarantee from the constructor makes
     /// this safe for any `idx`.
     #[inline]
-    pub fn entry(self, idx: isize) -> Value {
+    pub fn entry(self, mrb: &Mrb, idx: isize) -> Value {
         let Ok(idx) = sys::mrb_int::try_from(idx) else {
             return Value::nil();
         };
         // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
         // contract; `mrb_ary_entry` is bounds-tolerant.
-        Value::from_raw_unchecked(unsafe { sys::mrb_ary_entry(self.0.as_raw(), idx) })
+        mrb.hold(Value::from_raw_unchecked(unsafe {
+            sys::mrb_ary_entry(self.0.as_raw(), idx)
+        }))
     }
 
     /// `mrb_ary_set(mrb, self, idx, val)` — write `val` at `idx`,
@@ -312,8 +314,9 @@ impl Array {
     /// value. Capture the elements as they stand by duplicating the array
     /// first.
     #[inline]
-    pub fn entries(self) -> Entries {
+    pub fn entries(self, mrb: &Mrb) -> Entries<'_> {
         Entries {
+            mrb,
             ary: self,
             idx: 0,
             len: self.len(),
@@ -326,13 +329,14 @@ impl Array {
 /// position the array no longer reaches. `ExactSizeIterator` reports that
 /// fixed length: exactly as many items as the array held at the walk's
 /// start, regardless of a mutation during it.
-pub struct Entries {
+pub struct Entries<'mrb> {
+    mrb: &'mrb Mrb,
     ary: Array,
     idx: usize,
     len: usize,
 }
 
-impl Iterator for Entries {
+impl Iterator for Entries<'_> {
     type Item = Value;
 
     #[inline]
@@ -340,7 +344,7 @@ impl Iterator for Entries {
         if self.idx >= self.len {
             return None;
         }
-        let v = self.ary.entry(self.idx as isize);
+        let v = self.ary.entry(self.mrb, self.idx as isize);
         self.idx += 1;
         Some(v)
     }
@@ -352,4 +356,4 @@ impl Iterator for Entries {
     }
 }
 
-impl ExactSizeIterator for Entries {}
+impl ExactSizeIterator for Entries<'_> {}

@@ -23,6 +23,7 @@ mod method_test;
 mod proc_test;
 mod protect_test;
 mod range_test;
+mod reach_test;
 mod root_test;
 mod scan_args_test;
 mod smoke_test;

@@ -121,7 +121,7 @@ fn container_downcast_includes_subclass_instances() {
     let ary = Array::from_value(sub).expect("subclass instance carries MRB_TT_ARRAY");
     ary.push(&mrb, mrb.str_new(b"x").as_value())
         .expect("push to a fresh array succeeds");
-    assert_eq!(ary.entry(0).to_string(&mrb), "x");
+    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "x");
 }
 
 #[test]

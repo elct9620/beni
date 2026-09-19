@@ -314,7 +314,7 @@ where
         .map(|&name| take(name).map(|(_, value)| value))
         .collect::<Result<Vec<_>, _>>()?;
     if !Splat::REQ && !rest.is_empty(mrb) {
-        let key = rest.keys(mrb).entry(0).to_string(mrb);
+        let key = rest.keys(mrb).entry(mrb, 0).to_string(mrb);
         return Err(argument_error(mrb, &format!("unknown keyword: {key}")));
     }
 

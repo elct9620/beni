@@ -39,8 +39,8 @@ fn keys_returns_the_typed_key_array() {
     .expect("assigning into a fresh hash succeeds");
     let keys = hash.keys(&mrb);
 
-    assert_eq!(keys.entry(0).to_string(&mrb), "k");
-    assert!(keys.entry(1).is_nil());
+    assert_eq!(keys.entry(&mrb, 0).to_string(&mrb), "k");
+    assert!(keys.entry(&mrb, 1).is_nil());
 }
 
 #[test]
@@ -148,7 +148,7 @@ fn values_size_and_emptiness_read_the_structure() {
 
     assert_eq!(hash.len(&mrb), 1);
     assert!(!hash.is_empty(&mrb));
-    assert_eq!(hash.values(&mrb).entry(0).to_string(&mrb), "v");
+    assert_eq!(hash.values(&mrb).entry(&mrb, 0).to_string(&mrb), "v");
 }
 
 #[test]

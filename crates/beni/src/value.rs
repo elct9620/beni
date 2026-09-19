@@ -1083,12 +1083,12 @@ impl Value {
     /// returns `mrb_nil_value` rather than reading past the buffer;
     /// passing a non-Array yields an undefined `Value`.
     #[inline]
-    pub unsafe fn ary_entry(self, idx: isize) -> Value {
+    pub unsafe fn ary_entry(self, mrb: &Mrb, idx: isize) -> Value {
         let Ok(idx) = sys::mrb_int::try_from(idx) else {
             return Value::nil();
         };
         // SAFETY: forwarded from caller.
-        Value(unsafe { sys::mrb_ary_entry(self.0, idx) })
+        mrb.hold(Value(unsafe { sys::mrb_ary_entry(self.0, idx) }))
     }
 
     // ----------------------------------------------------------------
@@ -1130,7 +1130,7 @@ impl Value {
             return Value::nil();
         };
         // SAFETY: as `iv_set`.
-        Value(unsafe { sys::mrb_iv_get(mrb.as_ptr(), self.0, sym) })
+        mrb.hold(Value(unsafe { sys::mrb_iv_get(mrb.as_ptr(), self.0, sym) }))
     }
 
     /// `mrb_iv_defined(mrb, self, sym)` — TRUE when instance variable

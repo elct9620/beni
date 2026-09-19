@@ -100,8 +100,8 @@ fn ary_new_from_values_copies_the_slice_in_order() {
     let ary = mrb.ary_new_from_values(&values);
 
     assert_eq!(ary.len(), 3);
-    assert_eq!(ary.entry(0).to_string(&mrb), "a");
-    assert_eq!(ary.entry(2).to_string(&mrb), "c");
+    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "a");
+    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "c");
 }
 
 #[test]
@@ -114,6 +114,6 @@ fn assoc_new_pairs_the_two_values_in_order() {
     );
 
     assert_eq!(pair.len(), 2);
-    assert_eq!(pair.entry(0).to_string(&mrb), "car");
-    assert_eq!(pair.entry(1).to_string(&mrb), "cdr");
+    assert_eq!(pair.entry(&mrb, 0).to_string(&mrb), "car");
+    assert_eq!(pair.entry(&mrb, 1).to_string(&mrb), "cdr");
 }
