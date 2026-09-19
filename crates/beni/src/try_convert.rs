@@ -1,5 +1,5 @@
-//! `TryConvert`, the conversion a method's arguments cross — magnus's
-//! `TryConvert` in mruby's terms.
+//! `TryConvert`, the conversion a method's receiver and arguments cross —
+//! magnus's `TryConvert` in mruby's terms.
 //!
 //! A mismatch surfaces the exception mruby raises for the same mismatch,
 //! worded as mruby words it. Where CRuby dispatches an implicit
@@ -18,8 +18,8 @@ use core::num::{
 /// Convert an mruby `Value` into a Rust value or typed handle, or answer
 /// the `Err` carrying the exception mruby raises for the mismatch. Mirrors
 /// magnus's `TryConvert`, taking the interpreter the exception is built
-/// in; the conversion a registered method's arguments, `scan_args`, and
-/// `get_kwargs` apply.
+/// in; the conversion a registered method's receiver and arguments,
+/// `scan_args`, and `get_kwargs` apply.
 ///
 /// Unlike the `FromValue` downcast, a numeric target converts across the
 /// numeric types as mruby's own C-method arguments do, and an `f32`

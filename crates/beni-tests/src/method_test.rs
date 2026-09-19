@@ -576,3 +576,79 @@ fn block_accepting_arity_raises_argument_error_on_wrong_count() {
 
     assert_each_raises_argument_error(&mrb, receiver, c"apply", &[vec![], vec![one, one]]);
 }
+
+static STRING_RECEIVER_BODY_RAN: AtomicBool = AtomicBool::new(false);
+
+// The receiver crosses as the typed handle the function asks for.
+fn receiver_len(_mrb: &Mrb, rb_self: RString, suffix: i32) -> i32 {
+    STRING_RECEIVER_BODY_RAN.store(true, Ordering::SeqCst);
+    rb_self.len() as i32 + suffix
+}
+
+fn any_arity_receiver_len(_mrb: &Mrb, rb_self: RString) -> i32 {
+    rb_self.len() as i32
+}
+
+#[test]
+fn a_typed_receiver_converts_before_the_body_runs() {
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"typed_len", beni::method!(receiver_len, 1))
+        .expect("registering the typed-receiver method must succeed");
+
+    let got = mrb
+        .str_new(b"abc")
+        .as_value()
+        .funcall(&mrb, c"typed_len", &[10i32.into_value(&mrb)])
+        .expect("a String receiver converts");
+    assert_eq!(i32::from_value(got), Some(13));
+
+    STRING_RECEIVER_BODY_RAN.store(false, Ordering::SeqCst);
+    let err = 1i32
+        .into_value(&mrb)
+        .funcall(&mrb, c"typed_len", &[10i32.into_value(&mrb)])
+        .expect_err("an Integer receiver fails the String conversion");
+    assert_eq!(err.message(&mrb), "Integer cannot be converted to String");
+    assert!(
+        !STRING_RECEIVER_BODY_RAN.load(Ordering::SeqCst),
+        "the wrapped function must not run when the receiver fails to convert"
+    );
+}
+
+#[test]
+fn a_wrong_count_raises_before_the_receiver_converts() {
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"typed_len", beni::method!(receiver_len, 1))
+        .expect("registering the typed-receiver method must succeed");
+
+    // Both the count and the receiver are wrong: the count check wins.
+    let err = 1i32
+        .into_value(&mrb)
+        .funcall(&mrb, c"typed_len", &[])
+        .expect_err("a wrong count must surface as Err");
+    match err {
+        Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
+        other => panic!("a wrong argument count must raise, got {other}"),
+    }
+}
+
+#[test]
+fn an_any_arity_method_converts_its_receiver() {
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"any_len", beni::method!(any_arity_receiver_len, -1))
+        .expect("registering the any-arity method must succeed");
+
+    let got = mrb
+        .str_new(b"abcd")
+        .as_value()
+        .funcall(&mrb, c"any_len", &[])
+        .expect("a String receiver converts");
+    assert_eq!(i32::from_value(got), Some(4));
+
+    let err = Value::nil()
+        .funcall(&mrb, c"any_len", &[])
+        .expect_err("nil fails the String conversion");
+    assert_eq!(err.message(&mrb), "nil cannot be converted to String");
+}

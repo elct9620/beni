@@ -15,7 +15,8 @@
 //!      is also the argument-count enforcement point: a mismatched
 //!      count comes back as an `ArgumentError` `Err` before any
 //!      `TryConvert` conversion runs,
-//!   2. convert each through `TryConvert` — a failed conversion
+//!   2. convert the receiver, then each argument, through `TryConvert`
+//!      — mirroring magnus's typed `self` — a failed conversion
 //!      raises its exception to the Ruby caller **before** the wrapped
 //!      function runs,
 //!   3. call the function inside `catch_unwind` — a Rust panic is
@@ -200,16 +201,17 @@ where
 macro_rules! define_method_trait {
     ($(#[$attr:meta])* $name:ident, $fmt:literal, $(($arg:ident, $t:ident)),*) => {
         $(#[$attr])*
-        pub trait $name<$($t,)* Res>
+        pub trait $name<S, $($t,)* Res>
         where
-            Self: Sized + Fn(&Mrb, Value $(, $t)*) -> Res,
+            Self: Sized + Fn(&Mrb, S $(, $t)*) -> Res,
+            S: TryConvert,
             $($t: TryConvert,)*
             Res: MethodReturn,
         {
             /// Read and convert the call-frame arguments, run the
             /// wrapped function, and project its return. A failed
-            /// argument conversion returns `Err` before the wrapped
-            /// function runs.
+            /// receiver or argument conversion returns `Err` before the
+            /// wrapped function runs.
             #[doc(hidden)]
             fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
                 $(let mut $arg = sys::mrb_value::zeroed();)*
@@ -225,6 +227,7 @@ macro_rules! define_method_trait {
                         );
                     }
                 })?;
+                let self_ = S::try_convert(self_, mrb)?;
                 $(
                     let $arg = $t::try_convert(Value::from_raw_unchecked($arg), mrb)?;
                 )*
@@ -244,9 +247,10 @@ macro_rules! define_method_trait {
             }
         }
 
-        impl<Func, $($t,)* Res> $name<$($t,)* Res> for Func
+        impl<Func, S, $($t,)* Res> $name<S, $($t,)* Res> for Func
         where
-            Func: Fn(&Mrb, Value $(, $t)*) -> Res,
+            Func: Fn(&Mrb, S $(, $t)*) -> Res,
+            S: TryConvert,
             $($t: TryConvert,)*
             Res: MethodReturn,
         {
@@ -309,17 +313,18 @@ macro_rules! define_method_req_opt_trait {
         [$(($opt:ident, $ot:ident)),*]
     ) => {
         $(#[$attr])*
-        pub trait $name<$($rt,)* $($ot,)* Res>
+        pub trait $name<S, $($rt,)* $($ot,)* Res>
         where
-            Self: Sized + Fn(&Mrb, Value $(, $rt)* $(, Option<$ot>)*) -> Res,
+            Self: Sized + Fn(&Mrb, S $(, $rt)* $(, Option<$ot>)*) -> Res,
+            S: TryConvert,
             $($rt: TryConvert,)*
             $($ot: TryConvert,)*
             Res: MethodReturn,
         {
             /// Read and convert the call-frame arguments, run the
             /// wrapped function, and project its return. A failed
-            /// argument conversion — required or supplied optional —
-            /// returns `Err` before the wrapped function runs.
+            /// receiver or argument conversion — required or supplied
+            /// optional — returns `Err` before the wrapped function runs.
             #[doc(hidden)]
             fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
                 $(let mut $req = sys::mrb_value::zeroed();)*
@@ -340,6 +345,7 @@ macro_rules! define_method_req_opt_trait {
                         );
                     }
                 })?;
+                let self_ = S::try_convert(self_, mrb)?;
                 $(
                     let $req = $rt::try_convert(Value::from_raw_unchecked($req), mrb)?;
                 )*
@@ -369,9 +375,10 @@ macro_rules! define_method_req_opt_trait {
             }
         }
 
-        impl<Func, $($rt,)* $($ot,)* Res> $name<$($rt,)* $($ot,)* Res> for Func
+        impl<Func, S, $($rt,)* $($ot,)* Res> $name<S, $($rt,)* $($ot,)* Res> for Func
         where
-            Func: Fn(&Mrb, Value $(, $rt)* $(, Option<$ot>)*) -> Res,
+            Func: Fn(&Mrb, S $(, $rt)* $(, Option<$ot>)*) -> Res,
+            S: TryConvert,
             $($rt: TryConvert,)*
             $($ot: TryConvert,)*
             Res: MethodReturn,
@@ -413,16 +420,17 @@ macro_rules! define_method_req_block_trait {
         [$(($req:ident, $rt:ident)),*]
     ) => {
         $(#[$attr])*
-        pub trait $name<$($rt,)* Res>
+        pub trait $name<S, $($rt,)* Res>
         where
-            Self: Sized + Fn(&Mrb, Value $(, $rt)*, Option<crate::Proc>) -> Res,
+            Self: Sized + Fn(&Mrb, S $(, $rt)*, Option<crate::Proc>) -> Res,
+            S: TryConvert,
             $($rt: TryConvert,)*
             Res: MethodReturn,
         {
             /// Read and convert the call-frame arguments and the block,
             /// run the wrapped function, and project its return. A
-            /// failed required-argument conversion returns `Err` before
-            /// the wrapped function runs.
+            /// failed receiver or required-argument conversion returns
+            /// `Err` before the wrapped function runs.
             #[doc(hidden)]
             fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
                 $(let mut $req = sys::mrb_value::zeroed();)*
@@ -441,6 +449,7 @@ macro_rules! define_method_req_block_trait {
                         );
                     }
                 })?;
+                let self_ = S::try_convert(self_, mrb)?;
                 $(
                     let $req = $rt::try_convert(Value::from_raw_unchecked($req), mrb)?;
                 )*
@@ -470,9 +479,10 @@ macro_rules! define_method_req_block_trait {
             }
         }
 
-        impl<Func, $($rt,)* Res> $name<$($rt,)* Res> for Func
+        impl<Func, S, $($rt,)* Res> $name<S, $($rt,)* Res> for Func
         where
-            Func: Fn(&Mrb, Value $(, $rt)*, Option<crate::Proc>) -> Res,
+            Func: Fn(&Mrb, S $(, $rt)*, Option<crate::Proc>) -> Res,
+            S: TryConvert,
             $($rt: TryConvert,)*
             Res: MethodReturn,
         {
@@ -507,15 +517,17 @@ define_method_req_block_trait!(
 /// `scan_args::scan_args` and friends, and registration
 /// uses the any-arguments aspec. The panic boundary and return seam
 /// still apply.
-pub trait MethodAny<Res>
+pub trait MethodAny<S, Res>
 where
-    Self: Sized + Fn(&Mrb, Value) -> Res,
+    Self: Sized + Fn(&Mrb, S) -> Res,
+    S: TryConvert,
     Res: MethodReturn,
 {
-    /// Run the wrapped function and project its return.
+    /// Convert the receiver, run the wrapped function, and project its
+    /// return.
     #[doc(hidden)]
     fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
-        (self)(mrb, self_).into_method_return(mrb)
+        (self)(mrb, S::try_convert(self_, mrb)?).into_method_return(mrb)
     }
 
     /// Bridge entry: `call_convert_value` inside the panic boundary,
@@ -531,9 +543,10 @@ where
     }
 }
 
-impl<Func, Res> MethodAny<Res> for Func
+impl<Func, S, Res> MethodAny<S, Res> for Func
 where
-    Func: Fn(&Mrb, Value) -> Res,
+    Func: Fn(&Mrb, S) -> Res,
+    S: TryConvert,
     Res: MethodReturn,
 {
 }
@@ -543,7 +556,9 @@ where
 /// The arity follows the function: `0..=4` for that many required
 /// positional arguments (each converted through `TryConvert` before
 /// the function runs), or `-1` for a function that reads the call
-/// frame itself via `scan_args::scan_args`.
+/// frame itself via `scan_args::scan_args`. The receiver, the parameter
+/// after `&Mrb`, converts through `TryConvert` too, so a method takes it
+/// as the handle or Rust value it expects, as magnus's typed `self`.
 ///
 /// ```ignore
 /// fn add(_mrb: &Mrb, _self: Value, a: i32, b: i32) -> i32 {
