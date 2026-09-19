@@ -189,6 +189,14 @@ impl IntoValue for bool {
 // A handle on a Ruby object converts into the value naming that same
 // object: the `Value`-newtype handles unwrap it, the class handles box
 // their pointer.
+#[cfg(feature = "bytes")]
+impl IntoValue for bytes::Bytes {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        mrb.str_new(&self).as_value()
+    }
+}
+
 impl IntoValue for Symbol {
     #[inline]
     fn into_value(self, _mrb: &Mrb) -> Value {

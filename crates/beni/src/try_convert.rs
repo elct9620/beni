@@ -199,6 +199,14 @@ impl TryConvert for String {
     }
 }
 
+#[cfg(feature = "bytes")]
+impl TryConvert for bytes::Bytes {
+    #[inline]
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        Ok(RString::try_convert(val, mrb)?.to_bytes().into())
+    }
+}
+
 impl TryConvert for char {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {

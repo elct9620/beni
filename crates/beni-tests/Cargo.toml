@@ -32,14 +32,17 @@ doc = false
 doctest = false
 bench = false
 
-# Mirrors the wrapper's capability features so a test can be gated the
-# way the surface it exercises is. The suite reaches for the source
+# Mirrors the wrapper's features so a test can be gated the way the
+# surface it exercises is, the dependency features included so the
+# default run exercises their conversions too. The suite reaches for the source
 # loader throughout its setup, so it is written against the full
 # surface; the shape a consumer gets with default features off is held
 # by `rake rust:check:nodefault` and the compiler-less scenario.
 [features]
-default = ["compiler"]
+default = ["compiler", "bytes"]
 compiler = ["beni/compiler"]
+bytes = ["beni/bytes", "dep:bytes"]
 
 [dependencies]
 beni = { path = "../beni" }
+bytes = { version = "1", optional = true }

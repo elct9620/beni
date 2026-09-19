@@ -16,6 +16,7 @@ name = "beni"
 version = "0.16.0"
 dependencies = [
  "beni-sys",
+ "bytes",
 ]
 
 [[package]]
@@ -31,6 +32,7 @@ name = "beni-tests"
 version = "0.16.0"
 dependencies = [
  "beni",
+ "bytes",
 ]
 
 [[package]]
@@ -58,6 +60,12 @@ name = "bitflags"
 version = "2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84d7ced0ae9557296835c32bf1b1e02b44c746701f898460fb000d7eaa84f00a"
+
+[[package]]
+name = "bytes"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cc"

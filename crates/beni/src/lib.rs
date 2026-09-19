@@ -35,12 +35,15 @@
 //! L0  raw FFI          sys          (beni-sys::* + protect / catch_unwind)
 //! ```
 //!
-//! ## Capability features
+//! ## Cargo features
 //!
 //! `compiler`, on by default, carries what mruby keeps in its compiler
 //! gem: the `Ccontext` compile context and `Mrb::load_string`. Turn
 //! default features off to embed mruby without compiling Ruby at run
 //! time — loading precompiled bytecode needs no compiler and stays.
+//!
+//! `bytes`, off by default, carries `TryConvert` and `IntoValue` for
+//! `bytes::Bytes`, as magnus's `bytes` feature does.
 //!
 //! ## Raw-FFI escape hatch
 //!

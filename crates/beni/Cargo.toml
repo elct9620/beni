@@ -26,9 +26,11 @@ categories = ["api-bindings"]
 # crate refuses a cross target it has no archive for. Building the
 # default alone keeps the rendered page to the platform the
 # documentation bindings describe.
+# The dependency features are enabled so their conversions are shown.
 [package.metadata.docs.rs]
 default-target = "x86_64-unknown-linux-gnu"
 targets = []
+features = ["bytes"]
 
 [lib]
 # `rlib` only — consumers link this crate as a path / registry
@@ -46,6 +48,11 @@ default = ["compiler"]
 # never compiles Ruby at run time turns default features off; loading
 # precompiled bytecode needs no compiler and stays outside it.
 compiler = []
+# Dependency features carry the conversions to a third-party crate's
+# types, gated as magnus gates the same integration. Each only adds
+# surface, and every one is off by default.
+# `bytes` — `TryConvert` / `IntoValue` for `bytes::Bytes`.
+bytes = ["dep:bytes"]
 
 [dependencies]
 # `beni-sys` — sibling crate carrying the bindgen-generated FFI
@@ -53,3 +60,4 @@ compiler = []
 # raw-FFI escape hatch access (`beni::sys::mrb_*`). The version
 # requirement is what registry consumers resolve against.
 beni-sys = { path = "../beni-sys", version = "0.16.0" }
+bytes = { version = "1", optional = true }

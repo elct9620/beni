@@ -265,3 +265,21 @@ fn the_handles_read_their_elements_into_rust_collections() {
         HashMap::from([("a".to_owned(), 1)])
     );
 }
+
+#[cfg(feature = "bytes")]
+#[test]
+fn bytes_convert_to_and_from_a_string() {
+    use beni::{IntoValue, TryConvert};
+
+    let mrb = crate::support::open_mrb();
+    let raw: &[u8] = b"a\0\xffz";
+
+    let value = bytes::Bytes::from_static(raw).into_value(&mrb);
+    assert!(value.is_string(), "Bytes box into a String");
+    let back = bytes::Bytes::try_convert(value, &mrb).expect("a String converts to Bytes");
+    assert_eq!(&back[..], raw, "every byte survives the round trip");
+
+    let err = bytes::Bytes::try_convert(1i32.into_value(&mrb), &mrb)
+        .expect_err("an Integer is no String");
+    assert_eq!(err.message(&mrb), "Integer cannot be converted to String");
+}
