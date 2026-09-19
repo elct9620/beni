@@ -13,13 +13,14 @@ semantics and may still evolve between minor versions.
 
 ## Packages
 
-All three packages release in lockstep under a single version.
+All four packages release in lockstep under a single version.
 
 | Package | Registry | Role |
 |---|---|---|
 | `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build the archive |
 | `beni-sys` crate | crates.io | bindgen FFI surface over the mruby C API |
 | `beni` crate | crates.io | safe typed wrapper over `beni-sys`, aligned with magnus idioms |
+| `beni-macros` crate | crates.io | the `beni` crate's `wrap` and `TypedData` macros, used through `beni` |
 
 ## Getting started
 

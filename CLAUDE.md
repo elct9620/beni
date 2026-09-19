@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sdk and builds the mruby archive through Rake, and two Rust crates (`beni-sys` bindgen FFI, `beni` typed wrapper) bind the resulting archive — the magnus / rb-sys split applied at the mruby boundary. The unpublished `beni-tests` crate holds the typed suite in consumer position. wasm32-wasip1 is a downstream verification target only (for kobako), not a product target. All three published packages release in lockstep under one version.
+beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sdk and builds the mruby archive through Rake, and two Rust crates (`beni-sys` bindgen FFI, `beni` typed wrapper) bind the resulting archive — the magnus / rb-sys split applied at the mruby boundary — with `beni-macros` carrying the `beni` crate's proc macros as magnus-macros does magnus's. The unpublished `beni-tests` crate holds the typed suite in consumer position. wasm32-wasip1 is a downstream verification target only (for kobako), not a product target. All four published packages release in lockstep under one version.
 
 ## Principles
 
@@ -78,6 +78,9 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
              Tarball}                       wrap_static_fns (single C TU) ·
                                             links = "mruby" (one linker)
 
+                                          beni-macros  wrap / TypedData
+                                            derive, re-exported by beni
+
                                           beni-tests  publish = false; the
                                             typed suite run from consumer
                                             position, always against a real
@@ -106,7 +109,8 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
 | Config generation | `lib/beni/build_config.rb` | Copies the staged upstream default (see Principle 4); `build_config/mruby.rb` is the repo's own validation config. |
 | Archive discovery / ABI alignment | `crates/beni-sys/build.rs` | The file-top comment is the authoritative mode/contract description. |
 | Typed wrapper | `crates/beni/src/lib.rs` | Module-level doc carries the L0–L2 tier map. |
-| Typed wrapper's tests | `crates/beni-tests/src/*_test.rs` | Consumer position: public paths only, always against a staged archive. `surface_test.rs` names every inherent pub fn from outside, so a dropped re-export breaks it; `api:surface` keeps that list and the crate's surface in step. Reached by `rake rust:test`, not by a bare `cargo test`. |
+| Wrapper macros | `crates/beni-macros/src/typed_data.rs` | `wrap` / `TypedData` derive expansion; the tested docs and compile-fail cases sit on the re-exports in `crates/beni/src/lib.rs`. |
+| Typed wrapper's tests | `crates/beni-tests/src/*_test.rs` | Consumer position: public paths only, always against a staged archive. `surface_test.rs` names every inherent pub fn and applies every re-exported macro from outside, so a dropped re-export breaks it; `api:surface` keeps that list and the crate's surface in step. Reached by `rake rust:test`, not by a bare `cargo test`. |
 | Consumer scenarios | `test/scenarios/*/Rakefile` | Each documents the consumer path it pins; harness contract is `scenario:setup` → `beni:build` → `scenario:verify`. Read the headers to see which postures are already covered before adding one. |
 | Verification chain | `tasks/rust.rake`, `tasks/docs.rake` | Header lists every leg of `rust:verify` and what it is for; the documentation bindings are generated rather than tracked, so `docs.rake` is where that contract lives. |
 | CI lanes | `.github/workflows/main.yml` | Lane rationale is commented inline (e.g. why wasm clippy lives in verify, not lint). |
