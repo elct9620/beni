@@ -288,10 +288,9 @@ Selection, checksums, and cross-compile activation:
   conversions to a third-party Rust crate's types, gated as `magnus` gates the
   same integration. It is disabled by default, and like a capability feature it
   only adds surface.
-- `bytes` is a dependency feature carrying the `bytes` crate's `Bytes`: a
-  string handle reads its bytes as a `Bytes`, `TryConvert` converts a String
-  into one, and `IntoValue` boxes one into a new String, mirroring `magnus`'s
-  `RString::to_bytes` and its `bytes` feature's conversions.
+- `bytes` is a dependency feature carrying the `bytes` crate's `Bytes`:
+  `TryConvert` converts a String into one and `IntoValue` copies one into a
+  new String, mirroring the conversions `magnus`'s `bytes` feature carries.
 
 #### Handle, values, and conversions
 
@@ -384,16 +383,15 @@ dangling alias impossible), since mruby never frees it; mruby treats such a stri
 copy-on-write, so an in-place append or resize reallocates first and then behaves
 like any other string. magnus has no direct analogue, so this construction anchors
 on mruby's own `mrb_str_new_static`, with `mrb_str_new_lit` the convenience that
-borrows a string literal. From an mruby string Rust reads the bytes these ways:
+borrows a string literal. From an mruby string Rust reads the bytes three ways:
 
 | Read | Yields | Rejects |
 |---|---|---|
 | borrowed slice | a byte view of the string | — |
 | owned `String` | the bytes when valid UTF-8 | a non-string tag, or non-UTF-8 bytes |
 | owned `Vec<u8>` | arbitrary bytes | a non-string tag |
-| owned `Bytes`, with the `bytes` feature | arbitrary bytes | — |
 
-The reads above never raise. Mirroring `magnus`'s `RString::to_string` and
+The three reads above never raise. Mirroring `magnus`'s `RString::to_string` and
 `to_char`, a string handle also reads its bytes as an owned `String` that
 surfaces an `Err`, the `ArgumentError` "invalid UTF-8 byte sequence", for bytes
 that are not UTF-8, and as a `char` that surfaces the same `Err` for such bytes
