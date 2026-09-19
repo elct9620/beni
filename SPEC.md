@@ -296,8 +296,9 @@ arguments cross, mirroring `magnus`'s `TryConvert`:
 
 | Conversion | Direction | Rule |
 |---|---|---|
-| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`bool`, or a Rust integer or float the rows below admit) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` — yields the value naming that same object, and an `Id` boxes into the symbol value it names, raising nothing and running no Ruby |
+| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`bool`, or a Rust integer or float the rows below admit) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` / `RTypedData` / `Obj<T>` — yields the value naming that same object, and an `Id` boxes into the symbol value it names, raising nothing and running no Ruby |
 | `IntoValue` for a Rust integer | Rust integer → Integer `Value` | a Rust integer type converts only where every value it holds fits the configured integer width, so the conversion stays total: `i8` / `i16` / `i32` / `u8` / `u16` under every width, `u32` / `i64` under a 64-bit width, `isize` where the cargo target's pointer width is no wider than the configured integer width; every other integer type — `u64`, `usize`, `i128`, `u128`, and a `u32` / `i64` / `isize` the width does not fit — has no conversion and fails to compile |
+| `IntoValue` for a typed data value | `T: TypedData` → data carrier `Value` | wraps the value as a new instance of the class its type names for it, as `obj_wrap` does; total for every type that keeps the `TypedData` contract |
 | `IntoValue` for a Rust float | Rust float → Float `Value` | a Rust float type converts only where every value it holds fits the configured float width, so the conversion stays total: `f32` under every width, `f64` under a 64-bit width; an `f64` under a 32-bit width has no conversion and fails to compile |
 | `FromValue` → `Value` | `Value` → `Value` | identity — the value itself; total, never rejects |
 | `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag, subclass instances included for strings and containers — a class handle converts on the class or the singleton-class tag, a module handle on the module tag, an exception-class handle on the class tag when that class is an exception class; any other value rejects |
@@ -315,6 +316,8 @@ arguments cross, mirroring `magnus`'s `TryConvert`:
 | `TryConvert` → `String` / `char` / `PathBuf` | `Value` → Rust text | converts a String's bytes: `String` UTF-8 bytes, `char` UTF-8 bytes holding exactly one character, `PathBuf` any bytes on a Unix target and UTF-8 bytes on any other. Bytes that are not UTF-8 where UTF-8 is required surface the `ArgumentError` "invalid UTF-8 byte sequence"; a string of any other length than one character surfaces the `TypeError` with *target* `char`. No path protocol applies — mruby has no `to_path`; *target* is `String` |
 | `TryConvert` → `Vec<T>` / `[T; N]` / a tuple of 1 to 12 elements | `Value` → Rust sequence | converts an Array, each element by its own type's rule, surfacing the first element's `Err`; a fixed-length target converts an Array of exactly its length and surfaces the `TypeError` "expected Array of length *N*" for any other; *target* is `Array` |
 | `TryConvert` → `HashMap<K, V>` / `BTreeMap<K, V>` | `Value` → Rust map | converts a Hash, each key and value by its own type's rule, surfacing the first `Err`; *target* is `Hash` |
+| `TryConvert` → `RTypedData` | `Value` → typed handle | converts any data carrier, holding a payload or not; any other value surfaces the `TypeError` "wrong argument type *value* (expected C data)", *value* named as mruby's own type check names it |
+| `TryConvert` → `&T` / `Obj<T>` for `T: TypedData` | `Value` → reference to the payload, or typed handle | converts a data carrier holding a payload of `T`'s data type, and surfaces the `TypeError` mruby's own data-type check raises otherwise: "wrong argument type *value* (expected C data)" for a value that is no data carrier, "wrong argument type *name* (expected *T name*)" for a carrier of another data type, *name* that data type's name, and "uninitialized *class* (expected *T name*)" for a carrier holding no payload, *class* the carrier's class; *T name* is the name `T`'s data type declares. The reference borrows the payload for as long as its carrier stays reachable |
 
 A sequence or map target holds any element type `TryConvert` converts to, a
 `Value` or typed handle included: each element crosses out to Rust and stays
@@ -638,7 +641,7 @@ raise/return contract:
 | Interns a name, creating its symbol — a C-string, byte-slice, String-value, or static-buffer intern, or a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (an `ArgumentError`) | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
 | Marks a class so its instances carry Rust data | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`) | `Result` |
-| Wraps a Rust value as a data carrier — allocating a fresh instance of a marked class to carry it | the class cannot carry a data carrier — it was never marked — so the allocation raises a `TypeError`; the unwrapped Rust value is reclaimed rather than leaked | `Result` |
+| Reads a data carrier's payload through an `RTypedData` handle, or copies a carrier through `typed_data::Dup`'s `clone` | the carrier holds no payload or one of another data type (a `TypeError`); `clone` also when it is passed an argument (an `ArgumentError`) or the copy's `initialize_copy` raises | `Result` |
 | Reads the call's arguments by shape — a scan read or the single-argument read in a method registered for any arity, or a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or a keyword no list names when the read collects no rest; a scan read of an array-handle splat and an optional block alone fits every call | `Result` |
 | Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, the context's filename is too long to be a symbol, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
@@ -913,35 +916,51 @@ its key can surface.
   need no separate form: a singleton method defined on a class is its class
   method, mirroring magnus.
 - A Rust-owned value backs an mruby object through the data-carrier
-  mechanism (`CDATA`): a class is marked so its instances are data carriers
-  holding Rust data, a Rust value is wrapped as an instance of that class, and
-  it is extracted back type-checked against the data type it was registered
-  under — a value carrying a different data type, or none, does not extract.
-  A class defined from a marked superclass is marked too. Marking is
-  fallible: only a class whose instances are plain objects or data carriers
-  accepts the mark. A singleton class, whose one instance is the object it
-  belongs to, and a class whose instances have a built-in layout of their
-  own — an exception, a string, an array, a hash, a range, a proc, a number,
-  a class or module, subclasses included — reject the mark with an `Err`
-  carrying a `TypeError` and stay unmarked, so every instance keeps the layout
-  mruby's own methods read. Wrapping is fallible: a marked class yields an
-  `Ok` carrying the new instance, while an unmarked class surfaces the
-  `TypeError` mruby raises for that allocation as a Rust `Err`, and the Rust
-  value waiting to be handed to the carrier is recovered rather than leaked.
-  A bare carrier that holds no payload yet — the instance an mruby `dup` or
-  `clone` allocates before `initialize_copy` runs — can have a Rust value
-  installed into it. The install targets a bare carrier: it does not release
-  any payload the carrier already holds,
-  and on a value that carries no data type it does nothing — a total
-  operation safe on any value. It is the seam through which a typed object
-  copies its Rust state. The mruby garbage collector owns a successfully
-  wrapped value's lifetime, releasing it when its carrier is collected —
-  on whichever thread reaches the interpreter, so a value wraps only if it
-  can cross threads.
-  Mirrors `magnus`'s typed-data wrapping, and meets the graduation bar —
-  a wrapping that cannot succeed reports its failure as an `Err` instead of
-  unwinding across the boundary, and the unwrapped value is reclaimed — so
-  it lives on the typed surface rather than behind `beni::sys`.
+  mechanism (`CDATA`), in `magnus`'s typed-data shape. A Rust type opts in by
+  implementing the `unsafe` `TypedData` trait: it names its data type — a
+  `'static` descriptor carrying the name mruby diagnostics show, whose release
+  drops the payload — and the class its values wrap as, optionally choosing a
+  class per value, which is then that class or a subclass of it. The
+  implementer upholds the trait's contract: every class it names is marked to
+  carry data, as below. A data type belongs to one Rust type, so a carrier of
+  `T`'s data type holds a `T`.
+- A class is marked so its instances are data carriers holding Rust data, and
+  a class defined from a marked superclass is marked too. Marking is fallible:
+  only a class whose instances are plain objects or data carriers accepts the
+  mark. A singleton class, whose one instance is the object it belongs to, and
+  a class whose instances have a built-in layout of their own — an exception,
+  a string, an array, a hash, a range, a proc, a number, a class or module,
+  subclasses included — reject the mark with an `Err` carrying a `TypeError`
+  and stay unmarked, so every instance keeps the layout mruby's own methods
+  read.
+- A `TypedData` value wraps as a new instance of the class its type names for
+  it, or of a given class — the type's class or a subclass of it, which a debug
+  build asserts — answered as an untyped `RTypedData` handle or a typed
+  `Obj<T>` handle, mirroring `magnus`'s `wrap` / `wrap_as` and `obj_wrap` /
+  `obj_wrap_as`. Wrapping does not fail for a type keeping its contract; a
+  class that cannot carry data breaks the contract, and the wrap reclaims the
+  payload and panics rather than raising across the boundary. The mruby
+  garbage collector owns a wrapped payload, releasing it when its carrier is
+  collected — on whichever thread reaches the interpreter, so a type is
+  `TypedData` only if it can cross threads.
+- A wrapped payload reads back as `&T` through the `TryConvert` rule for
+  `&T` — a method takes its receiver or an argument that way — through an
+  `RTypedData` handle's read, which answers that rule's `Result`, and through
+  an `Obj<T>` handle, which dereferences to the payload it was converted or
+  wrapped with. Nothing on the typed surface replaces or removes a payload
+  once a carrier holds one, so a reference stays valid for as long as its
+  carrier stays reachable.
+- mruby's `dup` and `clone` of a data carrier copy the object without its
+  payload, leaving a carrier that holds none and that converts to no `T`. A
+  type that is `TypedData` and `Clone` copies its payload through
+  `typed_data::Dup`, mirroring `magnus`'s: its `dup` answers a clone of the
+  receiver's payload, which a method returning it wraps as a new instance, and
+  its `clone` copies the receiver as mruby's `clone` does — its singleton
+  class and frozen state kept, its `initialize_copy` run — and installs a
+  clone of the payload into the copy, answering the copy as an `Obj<T>`.
+  `clone` takes no arguments, as mruby's own does not: an argument surfaces
+  the `ArgumentError` mruby raises for a wrong argument count, and a raising
+  `initialize_copy` surfaces as an `Err`.
 
 #### Garbage collection
 
@@ -1290,7 +1309,7 @@ The `compiler` capability feature carries everything in this section.
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
 | A name of `UINT16_MAX` bytes or more given to a creating intern, to a string's coercion to a symbol, or as a symbol-or-name key | surfaced as a Rust `Err` carrying the `ArgumentError`, never unwinds across FFI; an operation that reports no failure answers instead as it does for a name nothing is bound under — a predicate `false`, a read `nil`, a removal a no-op |
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
-| A Rust value wrapped as a data carrier against a class that cannot carry one — never marked — raising mruby's allocation `TypeError` | surfaced as a Rust `Err`, never unwinds across FFI; the value not yet handed to the carrier is reclaimed, never leaked |
+| A `TypedData` value wrapped as an instance of a class that cannot carry data — one never marked, breaking the `TypedData` contract | the payload not yet handed to a carrier is reclaimed, never leaked, and the wrap panics; nothing unwinds across FFI |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
