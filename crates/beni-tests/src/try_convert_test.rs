@@ -1,6 +1,6 @@
-//! `TryConvert`, the conversion a method's arguments cross: what each
-//! target converts, and the exception — class and wording mruby's own —
-//! every other value surfaces.
+//! `TryConvert`, the conversion a method's receiver and arguments cross:
+//! what each target converts, and the exception — class and wording
+//! mruby's own — every other value surfaces.
 
 use crate::support::open_mrb;
 use beni::{
