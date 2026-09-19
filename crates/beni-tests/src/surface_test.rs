@@ -129,6 +129,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Array::push;
     let _ = Array::entry;
     let _ = Array::entries;
+    let _ = Array::to_vec::<i64>;
+    let _ = Array::to_array::<i64, 1>;
     let _ = Array::len;
     let _ = Array::is_empty;
     let _ = RString::from_value_unchecked;
@@ -147,6 +149,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Hash::set;
     let _ = Hash::get;
     let _ = Hash::keys;
+    let _ = Hash::to_hash_map::<i64, i64>;
+    let _ = Hash::to_btree_map::<i64, i64>;
     let _ = Range::from_value_unchecked;
     let _ = Range::begin;
     let _ = Range::end;

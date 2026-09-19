@@ -8,6 +8,7 @@ use beni::{
     TryConvert, Value,
 };
 use core::num::{NonZeroI32, NonZeroU8};
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 fn eval(mrb: &Mrb, source: &str) -> Value {
@@ -189,5 +190,78 @@ fn a_text_target_reads_a_string_and_requires_utf8() {
     assert_eq!(
         rejection::<PathBuf>(&mrb, "1"),
         pair("TypeError", "Integer cannot be converted to String")
+    );
+}
+
+#[test]
+fn a_sequence_target_converts_each_element_of_an_array() {
+    let mrb = open_mrb();
+    assert_eq!(convert::<Vec<i32>>(&mrb, "[1, 2.5, 3]"), vec![1, 2, 3]);
+    assert_eq!(convert::<[String; 2]>(&mrb, "['a', 'b']"), ["a", "b"]);
+    assert_eq!(
+        convert::<(i32, String)>(&mrb, "[1, 'x']"),
+        (1, "x".to_owned())
+    );
+    let held = convert::<Vec<Value>>(&mrb, "[nil, :s]");
+    assert_eq!(held.len(), 2);
+    assert_eq!(
+        rejection::<Vec<i32>>(&mrb, "[1, 'x']"),
+        pair("TypeError", "String cannot be converted to Integer")
+    );
+    assert_eq!(
+        rejection::<(i32, i32)>(&mrb, "[1]"),
+        pair("TypeError", "expected Array of length 2")
+    );
+    assert_eq!(
+        rejection::<[i32; 1]>(&mrb, "[1, 2]"),
+        pair("TypeError", "expected Array of length 1")
+    );
+    assert_eq!(
+        rejection::<Vec<i32>>(&mrb, "{}"),
+        pair("TypeError", "Hash cannot be converted to Array")
+    );
+}
+
+#[test]
+fn a_map_target_converts_each_pair_of_a_hash() {
+    let mrb = open_mrb();
+    let map = convert::<HashMap<String, i32>>(&mrb, "{'a' => 1, 'b' => 2.9}");
+    assert_eq!(
+        map,
+        HashMap::from([("a".to_owned(), 1), ("b".to_owned(), 2)])
+    );
+    let ordered = convert::<BTreeMap<i32, bool>>(&mrb, "{2 => nil, 1 => 0}");
+    assert_eq!(ordered, BTreeMap::from([(1, true), (2, false)]));
+    assert_eq!(
+        rejection::<HashMap<String, i32>>(&mrb, "{'a' => 'x'}"),
+        pair("TypeError", "String cannot be converted to Integer")
+    );
+    assert_eq!(
+        rejection::<BTreeMap<i32, i32>>(&mrb, "[]"),
+        pair("TypeError", "Array cannot be converted to Hash")
+    );
+}
+
+#[test]
+fn the_handles_read_their_elements_into_rust_collections() {
+    let mrb = open_mrb();
+    let ary = convert::<Array>(&mrb, "[1, 2]");
+    assert_eq!(ary.to_vec::<u8>(&mrb).expect("both fit a u8"), vec![1, 2]);
+    assert_eq!(
+        ary.to_array::<i64, 2>(&mrb).expect("the length matches"),
+        [1, 2]
+    );
+    assert!(ary.to_array::<i64, 3>(&mrb).is_err());
+    let hash = convert::<Hash>(&mrb, "{a: 1}");
+    assert_eq!(
+        hash.to_btree_map::<String, i32>(&mrb)
+            .map_err(|e| e.message(&mrb)),
+        Err("Symbol cannot be converted to String".to_owned())
+    );
+    let hash = convert::<Hash>(&mrb, "{'a' => 1}");
+    assert_eq!(
+        hash.to_hash_map::<String, i32>(&mrb)
+            .expect("the pairs convert"),
+        HashMap::from([("a".to_owned(), 1)])
     );
 }

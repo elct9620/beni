@@ -66,6 +66,12 @@ pub(crate) fn not_convertible(val: Value, mrb: &Mrb, target: &str) -> Error {
     )
 }
 
+/// The `TypeError` for an array whose length a fixed-length target
+/// does not match.
+pub(crate) fn length_error(mrb: &Mrb, len: usize) -> Error {
+    type_error(mrb, &format!("expected Array of length {len}"))
+}
+
 pub(crate) fn invalid_utf8(mrb: &Mrb) -> Error {
     argument_error(mrb, "invalid UTF-8 byte sequence")
 }
@@ -213,5 +219,68 @@ impl TryConvert for std::path::PathBuf {
         {
             string.to_string(mrb).map(Into::into)
         }
+    }
+}
+
+impl<T: TryConvert> TryConvert for Vec<T> {
+    #[inline]
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        Array::try_convert(val, mrb)?.to_vec(mrb)
+    }
+}
+
+impl<T: TryConvert, const N: usize> TryConvert for [T; N] {
+    #[inline]
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        Array::try_convert(val, mrb)?.to_array(mrb)
+    }
+}
+
+macro_rules! try_convert_tuple {
+    ($len:literal; $($t:ident $i:tt),+) => {
+        impl<$($t: TryConvert),+> TryConvert for ($($t,)+) {
+            fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+                let ary = Array::try_convert(val, mrb)?;
+                if ary.len() != $len {
+                    return Err(length_error(mrb, $len));
+                }
+                Ok(($($t::try_convert(ary.entry(mrb, $i), mrb)?,)+))
+            }
+        }
+    };
+}
+
+try_convert_tuple!(1; T0 0);
+try_convert_tuple!(2; T0 0, T1 1);
+try_convert_tuple!(3; T0 0, T1 1, T2 2);
+try_convert_tuple!(4; T0 0, T1 1, T2 2, T3 3);
+try_convert_tuple!(5; T0 0, T1 1, T2 2, T3 3, T4 4);
+try_convert_tuple!(6; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5);
+try_convert_tuple!(7; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6);
+try_convert_tuple!(8; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7);
+try_convert_tuple!(9; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
+try_convert_tuple!(10; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
+try_convert_tuple!(11; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10);
+try_convert_tuple!(12; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10, T11 11);
+
+impl<K, V> TryConvert for std::collections::HashMap<K, V>
+where
+    K: TryConvert + Eq + core::hash::Hash,
+    V: TryConvert,
+{
+    #[inline]
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        Hash::try_convert(val, mrb)?.to_hash_map(mrb)
+    }
+}
+
+impl<K, V> TryConvert for std::collections::BTreeMap<K, V>
+where
+    K: TryConvert + Ord,
+    V: TryConvert,
+{
+    #[inline]
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        Hash::try_convert(val, mrb)?.to_btree_map(mrb)
     }
 }

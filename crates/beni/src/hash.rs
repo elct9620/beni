@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_hash.rs`: factories live on `Ruby` /
 //! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
 
-use crate::{sys::AsRawValue, Array, Error, Mrb, Value};
+use crate::{sys::AsRawValue, Array, Error, Mrb, TryConvert, Value};
 use beni_sys as sys;
 
 /// Signal a `Hash::each` closure returns to steer the walk. Mirrors
@@ -347,5 +347,46 @@ impl Hash {
             std::panic::resume_unwind(payload);
         }
         result.map(|_| ())
+    }
+
+    /// The pairs, each key and value converted through `TryConvert`, as a
+    /// Rust hash map, or the first `Err`. Mirrors magnus's
+    /// `RHash::to_hash_map`.
+    pub fn to_hash_map<K, V>(self, mrb: &Mrb) -> Result<std::collections::HashMap<K, V>, Error>
+    where
+        K: TryConvert + Eq + core::hash::Hash,
+        V: TryConvert,
+    {
+        self.converted_pairs(mrb)
+    }
+
+    /// The pairs, each key and value converted through `TryConvert`, as a
+    /// Rust ordered map, or the first `Err`. Mirrors magnus's
+    /// `RHash::to_btree_map`.
+    pub fn to_btree_map<K, V>(self, mrb: &Mrb) -> Result<std::collections::BTreeMap<K, V>, Error>
+    where
+        K: TryConvert + Ord,
+        V: TryConvert,
+    {
+        self.converted_pairs(mrb)
+    }
+
+    /// Walk the pairs first and convert after, since a conversion's `Err`
+    /// cannot leave the walk's closure.
+    fn converted_pairs<K, V, C>(self, mrb: &Mrb) -> Result<C, Error>
+    where
+        K: TryConvert,
+        V: TryConvert,
+        C: FromIterator<(K, V)>,
+    {
+        let mut pairs = Vec::with_capacity(self.len(mrb));
+        self.each(mrb, |key, val| {
+            pairs.push((key, val));
+            ForEach::Continue
+        })?;
+        pairs
+            .into_iter()
+            .map(|(key, val)| Ok((K::try_convert(key, mrb)?, V::try_convert(val, mrb)?)))
+            .collect()
     }
 }

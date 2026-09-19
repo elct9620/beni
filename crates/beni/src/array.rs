@@ -11,7 +11,8 @@
 //! `entry`) live here. Named-value constructors that magnus places on
 //! the type itself stay there too (`Symbol::new`).
 
-use crate::{sys::AsRawValue, Error, Mrb, RString, ReprValue, Value};
+use crate::try_convert::length_error;
+use crate::{sys::AsRawValue, Error, Mrb, RString, ReprValue, TryConvert, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
@@ -321,6 +322,24 @@ impl Array {
             idx: 0,
             len: self.len(),
         }
+    }
+
+    /// The elements, each converted through `TryConvert`, as a Rust vector,
+    /// or the first element's `Err`. Mirrors magnus's `RArray::to_vec`.
+    pub fn to_vec<T: TryConvert>(self, mrb: &Mrb) -> Result<Vec<T>, Error> {
+        self.entries(mrb).map(|v| T::try_convert(v, mrb)).collect()
+    }
+
+    /// The elements, each converted through `TryConvert`, as a Rust array
+    /// of exactly `N` of them, or the `TypeError` for an array of any other
+    /// length. Mirrors magnus's `RArray::to_array`.
+    pub fn to_array<T: TryConvert, const N: usize>(self, mrb: &Mrb) -> Result<[T; N], Error> {
+        if self.len() != N {
+            return Err(length_error(mrb, N));
+        }
+        self.to_vec(mrb)?
+            .try_into()
+            .map_err(|_| length_error(mrb, N))
     }
 }
 
