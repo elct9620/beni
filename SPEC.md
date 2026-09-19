@@ -911,11 +911,12 @@ its key can surface.
 #### Garbage collection
 
 - `Mrb::arena_scope` bounds GC arena growth across a region of Rust code:
-  values created inside the scope hold arena protection until the scope
-  ends, and the scope's end releases it. `keep` ends the scope and
-  re-protects the one value it names; dropping the scope ends it with no
-  survivor. Arena protection reaches only as far as the C frame that opened
-  the scope; a value a Rust caller holds past that frame needs a root.
+  values that cross out to Rust inside the scope stay reachable until the
+  scope ends, and the scope's end releases the arena protection taken inside
+  it. `keep` ends the scope and re-protects the one value it names; dropping
+  the scope ends it with no survivor. Arena protection reaches only as far
+  as the C frame that opened the scope; a value a Rust caller holds past that
+  frame needs a root.
 - A **root** keeps a value reachable independently of the arena and of any
   Ruby reference to it. The typed surface carries two rooting shapes, which
   differ in whether the root is ever released:
@@ -937,10 +938,14 @@ its key can surface.
     an unrooted value: where mruby refuses the release the value stays rooted
     for the interpreter's remaining lifetime, so the failure a consumer can
     meet is over-retention, never a value collected while still held.
-- Every exception the typed surface hands to a Rust caller holds arena protection
-  as it crosses out, however that exception was produced, so a caller renders its
-  message and backtrace without rooting it first. Like any other value, one held
-  past the arena scope that was open when it crossed out needs a root.
+- Every value the typed surface hands to a Rust caller stays reachable from the
+  moment it crosses out until the innermost arena scope then open ends, and at
+  most until the C frame it crossed out in returns to mruby — one it creates,
+  one it reads out of an array, a hash, or a variable, a method's argument, and
+  an exception however that exception was produced — even after the object
+  that held it lets it go, so a caller renders an exception's message and
+  backtrace without rooting it first. A value held past that point needs a
+  root.
 - A consumer reaching mruby's own root registry through `beni::sys` owns an
   invariant the typed shapes encode: that registry is keyed by value rather
   than by registration, so removing a value removes every root over it and a
@@ -1106,10 +1111,12 @@ The `compiler` capability feature carries everything in this section.
 #### Graduation, safety, and coverage
 
 - The safe API cannot cause undefined behavior while the GC validity rule
-  holds: a value created inside an arena scope is not used after that
-  scope ends, and a survivor carried out through `keep` counts as created
-  where its scope was opened. A rooted value is exempt for as long as its
-  root lives, which is what lets a value outlive the frame that made it.
+  holds: a value that crossed out to Rust — created or read — is not used
+  after the innermost arena scope open as it crossed out ends, nor after the
+  C frame it crossed out in returns to mruby, and a survivor carried out
+  through `keep` counts as crossing out where its scope was opened. A rooted
+  value is exempt for as long as its root lives, which is what lets a value
+  outlive the frame that made it.
   The type system does not enforce the rule; the consumer upholds it.
 - The typed and raw domains meet asymmetrically. A typed form answers the
   raw form it carries — a value handle its value, an `Id` its interned id —
