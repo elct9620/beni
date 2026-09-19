@@ -616,7 +616,7 @@ raise/return contract:
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
 | Marks a class so its instances carry Rust data | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`) | `Result` |
 | Wraps a Rust value as a data carrier — allocating a fresh instance of a marked class to carry it | the class cannot carry a data carrier — it was never marked — so the allocation raises a `TypeError`; the unwrapped Rust value is reclaimed rather than leaked | `Result` |
-| Reads the call's arguments by shape — a shape-typed read or the single-argument read in a method registered for any arity | the call does not fit the read's shape: too few or too many positionals, or an argument of the wrong type; a rest-only shape fits every call | `Result` |
+| Reads the call's arguments by shape — a scan read or the single-argument read in a method registered for any arity, or a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or a keyword no list names when the read collects no rest; a scan read of an array-handle splat and an optional block alone fits every call | `Result` |
 | Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, the context's filename is too long to be a symbol, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
@@ -791,45 +791,54 @@ its key can surface.
   whereas the path read answers the qualified path or nothing, never a
   synthesized stand-in.
 - A method registered for any arity reads its own call frame instead of
-  receiving converted positionals: a shape-typed read projects the frame
-  against a format marker into a typed tuple, a single-argument read returns
-  the one required argument, a count read returns the number of arguments
-  passed, and an argument-array read returns all positional arguments. Every
-  shape-typed read and the single-argument read answer a `Result`: a call that
-  does not fit the read's shape — too few or too many positionals, or an
-  argument of the wrong type — surfaces as an `Err` carrying the exception
-  mruby raises for the mismatch, and nothing raises past the body, which
-  decides how the failure leaves it. The single-argument read's shape is
-  exactly one positional, the keyword hash standing in for it when the call
-  passed keywords and no positional; a read whose shape is a rest array alone,
-  with or without the block, fits every call and always answers `Ok`. The count
-  read and the argument-array read are total — they never fail. A shape-typed read
-  whose format captures a rest array hands back a slice that stays valid for
-  the whole call: it survives any VM re-entry — a funcall or an allocation —
-  the body performs while holding it, so a body that re-enters with rest
-  arguments in hand needs no copy of its own; the slice ties its borrow to the
-  `Mrb` handle the body holds. The argument-array read hands back a copy of the
-  positionals of its own, likewise valid whatever the body re-enters. A
-  zero-copy view of the same positionals is an `unsafe` read: it views the live
-  call frame, which a VM re-entry may move, so its caller keeps the view from
-  spanning a re-entry. The rest-only read's slice, the argument-array copy, and
-  the view each hold exactly the count read's length and are empty for an
-  empty argument list. A shape-typed read whose format reads a String
-  argument's bytes rather than a positional slot hands back a copy of those
-  bytes; a zero-length String yields an empty copy.
-- A shape-typed read composes its shape from independent parts — required
-  positionals, optional positionals, an optional rest, trailing required
-  positionals, a keyword bucket, and a block — and hands each part back
-  separately, letting a body read any argument shape mruby accepts in one
-  read. An optional positional binds its value when the call supplies it and
-  nothing when omitted; a trailing required positional binds after the rest;
-  the block part is nothing when no block was passed. The keyword bucket holds
-  the call's keyword arguments apart from the positionals: always a hash,
-  empty rather than absent when the call passed none, and never capturing an
-  explicit positional hash the caller wrote — that stays among the
-  positionals. A keyword read may instead name the keywords it expects,
-  binding each named value, treating a missing one as absent, and collecting
-  the unnamed keywords as the rest.
+  receiving converted positionals: a scan read projects the frame into typed
+  parts, a single-argument read returns the one required argument, a count
+  read returns the number of arguments passed, and an argument-array read
+  returns them. The scan read and the single-argument read answer a `Result`:
+  a call that does not fit the read's shape — too few or too many
+  positionals, an argument of the wrong type, or a missing required block —
+  surfaces as an `Err` carrying the exception raised for the mismatch, and
+  nothing raises past the body, which decides how the failure leaves it. The
+  single-argument read's shape is exactly one positional, the keyword hash
+  standing in for it when the call passed keywords and no positional. The
+  count read and the argument-array read are total — they never fail, and
+  they change nothing a later read in the same call sees. Both count a
+  non-empty keyword hash the call passed as one trailing positional, whatever
+  read ran before them: the argument-array read hands back a copy of that
+  many values of its own, valid whatever the body re-enters, and empty for an
+  empty argument list.
+- The scan read mirrors `magnus`'s `scan_args`, reading the frame where magnus
+  reads an argument slice. It composes its shape from six parts, each declared
+  by the type it hands back and each absent when declared as `()`: required
+  positionals, optional positionals, a splat, trailing required positionals,
+  a keyword bucket, and a block, handed back separately so a body reads any
+  argument shape mruby accepts in one read. Each positional crosses through
+  `FromValue`; an optional positional binds `Some` of its converted value when
+  the call supplies it and `None` when omitted; a trailing required positional
+  binds after the splat. The splat collects the remaining positionals either
+  as an array handle — valid for the whole call whatever the body re-enters —
+  or as a collection of values each converted through `FromValue`. The block
+  part is either a block the call must pass, whose absence surfaces as an
+  `ArgumentError`, or an optional block that is `None` when no block was
+  passed; a scan read without a block part ignores a block the call passes.
+  The keyword bucket holds the call's keyword arguments apart from the
+  positionals: always a hash, empty rather than absent when the call passed
+  none, and never capturing an explicit positional hash the caller wrote —
+  that stays among the positionals. A scan read without a keyword part reads
+  a non-empty keyword hash as its last positional, and every later read in
+  the same call sees it there. A scan read whose only parts are an
+  array-handle splat and an optional block fits every call and always
+  answers `Ok`.
+- The named keyword read mirrors `magnus`'s `get_kwargs`: it takes a keyword
+  hash and two lists of symbol-or-name keys, the required keywords and the
+  optional ones, and hands back the required values, the optional values, and
+  a rest, each part declared by its type as the scan read's are. Each value
+  crosses through `FromValue`; an optional keyword the hash lacks binds
+  `None`. The rest is either a new hash holding the keywords neither list
+  names, or absent, in which case a keyword neither list names surfaces as an
+  `ArgumentError`, as a required keyword the hash lacks does. The given hash
+  is left unchanged. A key list whose length differs from the count its part
+  declares is a programming error, and the read panics.
 - A typed method registration declares a fixed count of required positionals
   and, after them, a count of optional positionals: each required positional
   crosses through `FromValue`, and each optional positional crosses as an
@@ -1163,9 +1172,10 @@ The `compiler` capability feature carries everything in this section.
   required, the required-and-optional, the any-arguments, and the block aspecs.
   `mrb_get_args` is one symbol whose format string is a vocabulary of argument
   specifiers, so that vocabulary is measured as its own lens: every specifier
-  is covered through the typed surface — a format marker, a read composed with
-  a conversion, the keyword read, or the typed method registration that
-  declares it — and the lens records which surface covers each one.
+  is covered through the typed surface — a part of the scan read, a read
+  composed with a conversion, the named keyword read, or the typed method
+  registration that declares it — and the lens records which surface covers
+  each one.
 - Symbols carrying the same capability are covered together. Where one C
   symbol is defined as another, covering either covers both. Where two C
   symbols differ only in what a Rust caller already expresses otherwise — a
@@ -1259,7 +1269,7 @@ The `compiler` capability feature carries everything in this section.
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, `sys::catch_unwind`) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Rust panic raised inside a `sys::protect` body | the process aborts at the FFI boundary; never unwinds into mruby's C frames |
 | Registered method receiving an argument that fails `FromValue` conversion | raised as an mruby exception to the Ruby caller, the closure body never runs |
-| A registered method body's shape-typed or single-argument read that the call does not fit — a wrong positional count, or an argument of the wrong type | surfaced to the body as a Rust `Err` carrying the exception mruby raises for the mismatch; nothing raises past the body |
+| A registered method body's scan, single-argument, or named keyword read that the call does not fit — a wrong positional count, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or an unnamed keyword with no rest to collect it | surfaced to the body as a Rust `Err` carrying the exception raised for the mismatch; nothing raises past the body |
 | A heap region buffer too small to hold one heap page | no pages are added and the count answers zero; the interpreter keeps allocating as before |
 | `Gem::init` returns `Err` | interpreter setup aborts, the error surfaces to the embedder |
 
