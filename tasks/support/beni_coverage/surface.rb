@@ -39,7 +39,8 @@ module BeniCoverage
       /\ARSTRING_/,
       /\ARARRAY_/,
       /\ADATA_/,
-      /\AMRB_SET_INSTANCE_TT\z/
+      /\AMRB_SET_INSTANCE_TT\z/,
+      /\AMRB_UNDEF_ALLOCATOR\z/
     ].freeze
 
     # +mrb_*+ macros that look like embedder API by name but are not:

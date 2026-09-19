@@ -76,6 +76,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RClass::real;
     let _ = RClass::obj_new;
     let _ = RClass::set_instance_data_tt;
+    let _ = RClass::undef_default_alloc_func;
     {
         struct Probe;
         static PROBE: DataType<Probe> = DataType::new(c"Probe");

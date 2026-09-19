@@ -337,6 +337,19 @@ mrb_instance_tt_func(struct RClass *c)
   return MRB_INSTANCE_TT(c);
 }
 
+/* Undefine a class's default allocator. Counterpart to the
+ * `MRB_UNDEF_ALLOCATOR(c)` macro in <mruby/class.h>, which sets the
+ * class's `MRB_FL_UNDEF_ALLOCATE` flag bit that bindgen cannot expand.
+ * A class takes the flag from its superclass when defined
+ * (src/class.c:3220), and `new` / `allocate` raise on it
+ * (src/class.c:2828) while `mrb_data_object_alloc` does not look at it.
+ * The macro asserts `c` is a plain class (`MRB_TT_CLASS`). */
+static inline void
+mrb_undef_allocator_func(struct RClass *c)
+{
+  MRB_UNDEF_ALLOCATOR(c);
+}
+
 /* Integer conversion across the numeric types. Counterpart to the
  * `mrb_as_int(mrb, val)` macro in <mruby.h>, which expands to
  * `mrb_integer(mrb_ensure_int_type(mrb, val))`: an Integer reads directly

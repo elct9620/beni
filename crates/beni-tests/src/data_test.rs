@@ -268,3 +268,66 @@ fn a_class_defined_from_a_marked_class_carries_data_and_accepts_the_mark() {
         .set_instance_data_tt(&mrb)
         .expect("a class whose instances are data carriers accepts the mark");
 }
+
+/// `err` is mruby's allocator refusal for `class`.
+fn assert_allocator_undefined(mrb: &beni::Mrb, err: beni::Error, class: &str) {
+    use beni::Module;
+
+    let message = err.message(mrb);
+    match err {
+        beni::Error::Exception(exc) => assert_eq!(exc.class(mrb).name(mrb), "TypeError"),
+        other => panic!("the refusal must carry an exception, got {other:?}"),
+    }
+    assert_eq!(message, format!("allocator undefined for {class}"));
+}
+
+#[test]
+fn an_undefined_allocator_refuses_new_and_allocate_but_not_a_wrap_or_copy() {
+    let mrb = open_mrb();
+    let class = mrb
+        .define_class(c"BeniDataMarkedBase", mrb.object_class())
+        .expect("defining the class must succeed");
+    class
+        .set_instance_data_tt(&mrb)
+        .expect("marking an ordinary class must succeed");
+    class.undef_default_alloc_func(&mrb);
+
+    for src in [&b"BeniDataMarkedBase.new"[..], b"BeniDataMarkedBase.allocate"] {
+        let err = mrb.load_string(src).expect_err("Ruby cannot allocate the class");
+        assert_allocator_undefined(&mrb, err, "BeniDataMarkedBase");
+    }
+
+    // A wrap and mruby's copies allocate without the default allocator.
+    let wrapped = mrb.wrap_as(Holder { tag: 5 }, class);
+    assert_eq!(wrapped.get::<Holder>(&mrb).map(|h| h.tag).ok(), Some(5));
+    for copy in [c"dup", c"clone"] {
+        let copied = wrapped
+            .as_value()
+            .funcall(&mrb, copy, &[])
+            .expect("copying a carrier still allocates");
+        assert!(copied.is_kind_of(&mrb, class));
+    }
+}
+
+#[test]
+fn only_a_class_defined_after_the_allocator_is_undefined_inherits_it() {
+    let mrb = open_mrb();
+    let base = mrb
+        .define_class(c"BeniDataAllocBase", mrb.object_class())
+        .expect("defining the base class must succeed");
+    let earlier = mrb
+        .define_class(c"BeniDataAllocEarlier", base)
+        .expect("defining the earlier subclass must succeed");
+    base.undef_default_alloc_func(&mrb);
+    mrb.define_class(c"BeniDataAllocLater", base)
+        .expect("defining the later subclass must succeed");
+
+    let err = mrb
+        .load_string(b"BeniDataAllocLater.new")
+        .expect_err("a later subclass takes the undefined allocator");
+    assert_allocator_undefined(&mrb, err, "BeniDataAllocLater");
+    let instance = mrb
+        .load_string(b"BeniDataAllocEarlier.new")
+        .expect("an earlier subclass keeps its allocator");
+    assert!(instance.is_kind_of(&mrb, earlier));
+}

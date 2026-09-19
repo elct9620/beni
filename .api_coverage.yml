@@ -68,6 +68,7 @@ typed:
   MRB_ARGS_OPT: a typed method's optional positional arity, derived by `Module::define_method` (the optional component of the `method!(f, req, opt)` aspec)
   MRB_ARGS_REQ: a typed method's positional arity, derived by `Module::define_method`
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
+  MRB_UNDEF_ALLOCATOR: RClass::undef_default_alloc_func
   RARRAY_LEN: Array::len
   RSTRING_LEN: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len`"
   RSTRING_PTR: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature)"

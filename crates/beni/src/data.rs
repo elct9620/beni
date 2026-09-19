@@ -1,5 +1,6 @@
-//! `DataType<T>`, the data type a carrier is tagged with, and the class
-//! mark that makes a class allocate data carriers (`CDATA`).
+//! `DataType<T>`, the data type a carrier is tagged with, the class
+//! mark that makes a class allocate data carriers (`CDATA`), and the
+//! allocator switch that keeps Ruby from allocating empty ones.
 //!
 //! A `DataType<T>` is a `'static` descriptor binding an mruby
 //! `mrb_data_type` to the Rust type `T` it carries: its release hook
@@ -7,7 +8,7 @@
 //! compares descriptors by identity, so a carrier's data type proves its
 //! payload's Rust type; `typed_data` wraps and reads through it.
 
-use crate::{Error, Mrb, RClass};
+use crate::{Error, Mrb, RClass, ReprValue};
 use beni_sys as sys;
 use core::marker::PhantomData;
 
@@ -104,6 +105,23 @@ impl RClass {
         // the shim only rewrites the class's instance-tt flag bits.
         unsafe { sys::mrb_set_instance_tt_func(self.as_internal(), sys::MRB_TT_CDATA) };
         Ok(())
+    }
+
+    /// Undefine the default allocator of this class and of any class
+    /// later defined from it, so Ruby's `new` and `allocate` raise while
+    /// wraps still allocate. Mirrors magnus's `undef_default_alloc_func`;
+    /// a singleton class, which Ruby never allocates through, is left
+    /// unchanged.
+    pub fn undef_default_alloc_func(self, mrb: &Mrb) {
+        // The `&Mrb` borrow is what serializes this flag write: an
+        // `RClass` crosses threads on its own, its interpreter does not.
+        let _ = mrb;
+        if self.as_value().is_class() {
+            // SAFETY: `self` is a live plain class of the VM borrowed as
+            // `mrb`, the one kind `MRB_UNDEF_ALLOCATOR` accepts; the shim
+            // only sets a flag bit.
+            unsafe { sys::mrb_undef_allocator_func(self.as_internal()) };
+        }
     }
 }
 
