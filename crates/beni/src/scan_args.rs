@@ -328,16 +328,16 @@ where
 /// The call frame as one read sees it: the positionals copied out of the
 /// frame that keeps their values alive, the keyword bucket, and the block
 /// slot.
-struct Frame {
-    positionals: Vec<Value>,
-    keywords: Option<Hash>,
-    block: Value,
+pub(crate) struct Frame {
+    pub(crate) positionals: Vec<Value>,
+    pub(crate) keywords: Option<Hash>,
+    pub(crate) block: Value,
 }
 
 /// Read the frame once, keeping the keywords in their own bucket when
-/// `keywords` is set and otherwise letting mruby fold a non-empty keyword
-/// hash into the positionals.
-fn read_call(mrb: &Mrb, keywords: bool) -> Frame {
+/// `keywords` is set, which leaves the frame as it was, and otherwise
+/// letting mruby fold a non-empty keyword hash into the positionals.
+pub(crate) fn read_call(mrb: &Mrb, keywords: bool) -> Frame {
     let mut argv: *const sys::mrb_value = core::ptr::null();
     let mut argc: sys::mrb_int = 0;
     let mut bucket = sys::mrb_value::zeroed();

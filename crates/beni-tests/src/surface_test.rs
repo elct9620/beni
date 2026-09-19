@@ -236,7 +236,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::arg1;
     let _ = Mrb::argc;
     let _ = Mrb::argv;
-    let _ = Mrb::argv_unchecked;
     let _ = Mrb::ary_new_capa;
     let _ = Mrb::ary_new_from_values;
     let _ = Mrb::assoc_new;

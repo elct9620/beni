@@ -191,9 +191,9 @@ typed:
   mrb_gc_protect: "`ArenaScope::keep` (see ArenaScope extension)"
   mrb_gc_register: "`Mrb::gc_register_forever` — root a value for the interpreter's remaining lifetime. Only the never-released shape graduates: mruby's registry is keyed by value, so a removal drops every root over it, and a shape that never removes cannot drop another holder's (the releasable shape is the GcRoot extension)"
   mrb_get_arg1: "`Mrb::arg1` — the single required argument, or the keyword hash when the call passed keywords alone; any other count comes back as the `ArgumentError` `Err`"
-  mrb_get_argc: Mrb::argc
+  mrb_get_argc: "`Mrb::argc` — the call's argument count, a non-empty keyword hash counted as one trailing positional as magnus's argument slice holds it; the positionals alone are a `scan_args` splat beside its keyword part"
   mrb_get_args: "scan_args — the magnus-shaped frame read; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol"
-  mrb_get_argv: "`Mrb::argv` — a copy of the call frame's positional arguments, valid across a VM re-entry, the companion to `Mrb::argc`; `Mrb::argv_unchecked` is the zero-copy view of the same frame"
+  mrb_get_argv: "`Mrb::argv` — a copy of the call's arguments, valid across a VM re-entry, the companion to `Mrb::argc`, a non-empty keyword hash its last value"
   mrb_gv_get: Mrb::gv_get
   mrb_gv_remove: Mrb::gv_remove
   mrb_gv_set: Mrb::gv_set

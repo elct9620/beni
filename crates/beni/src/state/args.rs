@@ -2,7 +2,7 @@
 //! required argument, the argument count and array, and whether a block
 //! was passed.
 
-use crate::{Error, Mrb, Value};
+use crate::{Error, Mrb, ReprValue, Value};
 use beni_sys as sys;
 
 /// Run a call-frame read under exception protection. `mrb_get_args`
@@ -41,45 +41,27 @@ impl Mrb {
     }
 
     /// Read the number of arguments passed to the call frame, splat
-    /// arguments counted as their expanded length. Does not raise.
+    /// arguments counted as their expanded length and a non-empty keyword
+    /// hash as one trailing positional, whatever read ran before. Total:
+    /// it never fails, and a later read sees the frame unchanged.
     #[inline]
     pub fn argc(&self) -> usize {
-        // SAFETY: `self` is alive by the `&self` borrow; the read is
-        // total — it never raises. mruby counts arguments from zero.
-        (unsafe { sys::mrb_get_argc(self.as_ptr()) }) as usize
+        self.argv().len()
     }
 
-    /// Read the call frame's positional arguments as a copy of their
-    /// own, the companion to `Mrb::argc`. The copy holds exactly `argc`
-    /// values and stays valid whatever the body re-enters: the values
-    /// are the frame's, kept alive for the whole call. Splat arguments
-    /// appear expanded, as the count read sees them. An empty argument
-    /// list yields an empty copy. Total: it never fails.
-    #[inline]
+    /// Read the call frame's arguments as a copy of their own, the
+    /// companion to `Mrb::argc`: the positionals, then a non-empty keyword
+    /// hash as one trailing value. The copy stays valid whatever the body
+    /// re-enters — the values are the frame's, kept alive for the whole
+    /// call. An empty argument list yields an empty copy. Total: it never
+    /// fails, and a later read sees the frame unchanged.
     pub fn argv(&self) -> Vec<Value> {
-        // SAFETY: the view is copied before anything can re-enter.
-        unsafe { self.argv_unchecked() }.to_vec()
-    }
-
-    /// Read the call frame's positional arguments as a zero-copy view
-    /// of the live frame — `Mrb::argv` without its copy.
-    ///
-    /// # Safety
-    ///
-    /// The view must not be held across a VM re-entry: a funcall or an
-    /// allocation can grow the value stack, which moves it and leaves
-    /// the view dangling.
-    #[inline]
-    pub unsafe fn argv_unchecked(&self) -> &[Value] {
-        // SAFETY: `self` is alive by the `&self` borrow. `mrb_get_argv`
-        // returns a pointer to `mrb_get_argc` consecutive `mrb_value`s
-        // in the current call frame; both reads derive their length and
-        // pointer from the same callinfo so they agree. `slice_from_argv`
-        // folds the `argc == 0` case into an empty slice without forming
-        // one from the pointer.
-        let argv = unsafe { sys::mrb_get_argv(self.as_ptr()) };
-        let argc = unsafe { sys::mrb_get_argc(self.as_ptr()) };
-        slice_from_argv(argv, argc)
+        let call = crate::scan_args::read_call(self, true);
+        let mut args = call.positionals;
+        if let Some(keywords) = call.keywords.filter(|keywords| !keywords.is_empty(self)) {
+            args.push(keywords.as_value());
+        }
+        args
     }
 }
 

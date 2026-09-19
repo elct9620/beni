@@ -304,3 +304,102 @@ fn argv_copy_survives_vm_reentry() {
 
     assert_eq!(got.to_string(&mrb), "alpha");
 }
+
+fn eval(mrb: &Mrb, source: &str) -> Value {
+    mrb.load_string(source.as_bytes())
+        .unwrap_or_else(|err| panic!("{source} raised: {}", err.message(mrb)))
+}
+
+#[test]
+fn the_count_holds_a_non_empty_keyword_hash_as_one_trailing_positional() {
+    use beni::{FromValue, Module};
+
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"argc_report", beni::method!(argc_report, -1))
+        .expect("registering the bridge must succeed");
+    let count = |source: &str| i32::from_value(eval(&mrb, source));
+
+    assert_eq!(count("argc_report(1, a: 2)"), Some(2));
+    assert_eq!(count("argc_report(1, {a: 2})"), Some(2));
+    assert_eq!(count("argc_report(1, **{})"), Some(1));
+    // Below, at, and past the fifteen positionals mruby packs into one
+    // array, the keyword hash still counts once.
+    assert_eq!(count("argc_report(*(1..13), a: 1)"), Some(14));
+    assert_eq!(count("argc_report(*(1..14), a: 1)"), Some(15));
+    assert_eq!(count("argc_report(*(1..15), a: 1)"), Some(16));
+}
+
+// The argument array rendered, so its order and last value show.
+fn argv_inspect(mrb: &Mrb, _self: Value) -> Value {
+    mrb.ary_new_from_values(&mrb.argv()).as_value()
+}
+
+#[test]
+fn the_argument_array_ends_with_the_keyword_hash() {
+    use beni::Module;
+
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"argv_inspect", beni::method!(argv_inspect, -1))
+        .expect("registering the bridge must succeed");
+
+    assert_eq!(
+        eval(&mrb, "argv_inspect(1, a: 2)").inspect(&mrb),
+        "[1, {a: 2}]"
+    );
+    assert_eq!(
+        eval(&mrb, "argv_inspect(*(1..15), a: 1)").inspect(&mrb),
+        "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, {a: 1}]"
+    );
+}
+
+// [count, keyword bucket size, count] around a keyword read.
+fn count_around_a_keyword_read(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let before = mrb.argc() as i32;
+    let bucket = scan_args::<(), (), Array, (), beni::Hash, ()>(mrb)?.keywords;
+    let after = mrb.argc() as i32;
+    Ok(mrb
+        .ary_new_from_values(&[
+            before.into_value(mrb),
+            (bucket.len(mrb) as i32).into_value(mrb),
+            after.into_value(mrb),
+        ])
+        .as_value())
+}
+
+// [splat size, count] after a read that folds the keywords in.
+fn count_after_a_folding_read(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+    let splat = scan_args::<(), (), Array, (), (), ()>(mrb)?.splat;
+    Ok(mrb
+        .ary_new_from_values(&[
+            (splat.len() as i32).into_value(mrb),
+            (mrb.argc() as i32).into_value(mrb),
+        ])
+        .as_value())
+}
+
+#[test]
+fn the_count_is_the_same_whatever_read_ran_and_changes_no_later_read() {
+    use beni::Module;
+
+    let mrb = open_mrb();
+    let object = mrb.object_class();
+    object
+        .define_method(
+            &mrb,
+            c"around",
+            beni::method!(count_around_a_keyword_read, -1),
+        )
+        .expect("registering the bridge must succeed");
+    object
+        .define_method(
+            &mrb,
+            c"after_fold",
+            beni::method!(count_after_a_folding_read, -1),
+        )
+        .expect("registering the bridge must succeed");
+
+    assert_eq!(eval(&mrb, "around(1, a: 2)").inspect(&mrb), "[2, 1, 2]");
+    assert_eq!(eval(&mrb, "after_fold(1, a: 2)").inspect(&mrb), "[2, 2]");
+}

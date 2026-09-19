@@ -122,10 +122,10 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_gc_register` | fn | ✅ | ✅ | `Mrb::gc_register_forever` — root a value for the interpreter's remaining lifetime. Only the never-released shape graduates: mruby's registry is keyed by value, so a removal drops every root over it, and a shape that never removes cannot drop another holder's (the releasable shape is the GcRoot extension) |
 | `mrb_gc_unregister` | fn | ✅ | 🚫 | declined: removes a root by value, so it drops every registration of that value at once (`vendor/mruby/src/gc.c:537-553`) — no typed shape can release one holder's root without releasing another's. The releasable root is the GcRoot extension, whose slot supplies the identity this call lacks; the never-released half is `Mrb::gc_register_forever` |
 | `mrb_get_arg1` | fn | ✅ | ✅ | `Mrb::arg1` — the single required argument, or the keyword hash when the call passed keywords alone; any other count comes back as the `ArgumentError` `Err` |
-| `mrb_get_argc` | fn | ✅ | ✅ | `Mrb::argc` |
+| `mrb_get_argc` | fn | ✅ | ✅ | `Mrb::argc` — the call's argument count, a non-empty keyword hash counted as one trailing positional as magnus's argument slice holds it; the positionals alone are a `scan_args` splat beside its keyword part |
 | `mrb_get_args` | fn | ✅ | ✅ | scan_args — the magnus-shaped frame read; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol |
 | `mrb_get_args_a` | fn | ✅ | ❌ |  |
-| `mrb_get_argv` | fn | ✅ | ✅ | `Mrb::argv` — a copy of the call frame's positional arguments, valid across a VM re-entry, the companion to `Mrb::argc`; `Mrb::argv_unchecked` is the zero-copy view of the same frame |
+| `mrb_get_argv` | fn | ✅ | ✅ | `Mrb::argv` — a copy of the call's arguments, valid across a VM re-entry, the companion to `Mrb::argc`, a non-empty keyword hash its last value |
 | `mrb_get_mid` | fn | ✅ | ❌ |  |
 | `mrb_include_module` | fn | ✅ | ✅ | `Module::include_module` |
 | `mrb_incremental_gc` | fn | ✅ | ✅ | `Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive) |
