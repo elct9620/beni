@@ -195,6 +195,11 @@ pub use typed_data::{RTypedData, TypedData};
 /// #[beni::wrap(class = "Po\0int")]
 /// struct Point;
 /// ```
+///
+/// ```compile_fail
+/// #[beni::wrap(class = "Point", name = "Po\0int")]
+/// struct Point;
+/// ```
 pub use beni_macros::wrap;
 
 /// ```
@@ -219,6 +224,18 @@ pub use beni_macros::wrap;
 ///     #[beni(class = "Circle", mark)]
 ///     Circle,
 /// }
+/// ```
+///
+/// ```compile_fail
+/// #[derive(beni::TypedData)]
+/// struct Shape;
+/// ```
+///
+/// ```compile_fail
+/// #[derive(beni::TypedData)]
+/// #[beni(class = "Shape")]
+/// #[beni(name = "Shape")]
+/// struct Shape;
 /// ```
 pub use beni_macros::TypedData;
 pub use value::cstr_ptr;
