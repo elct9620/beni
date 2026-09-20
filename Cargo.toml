@@ -19,7 +19,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "0.17.0"
+version = "0.18.0"
 edition = "2021"
 # The first release where a panic reaching an `extern "C"` boundary
 # aborts instead of being undefined behavior, which the trampolines under

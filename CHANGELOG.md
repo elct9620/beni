@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.0](https://github.com/elct9620/beni/compare/v0.17.0...v0.18.0) (2026-09-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni-macros:** a type implemented by `#[beni::wrap]` or `#[derive(TypedData)]` names no class until `TypedData::mark_carriers` has run for it in that interpreter. Embedders call it while their gems install; naming a class before that panics and says so.
+
+### Features
+
+* **beni-macros:** resolve a wrapped type's class when its carriers are marked ([260ffe4](https://github.com/elct9620/beni/commit/260ffe4edb432e0545b55a572e45db484a4f0125))
+* **beni:** hold a TypedData type's carrier classes in the interpreter ([a491a68](https://github.com/elct9620/beni/commit/a491a683b92a0066f97b1f54804ee491451c7ec0))
+
 ## [0.17.0](https://github.com/elct9620/beni/compare/v0.16.0...v0.17.0) (2026-09-19)
 
 
