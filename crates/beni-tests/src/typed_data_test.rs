@@ -27,6 +27,8 @@ fn define_marked(mrb: &Mrb, name: &core::ffi::CStr) -> RClass {
 fn define_point(mrb: &Mrb) -> RClass {
     define_marked(mrb, c"BeniOther");
     let class = define_marked(mrb, c"BeniPoint");
+    Point::mark_carriers(mrb).expect("marking the point's carrier must succeed");
+    Other::mark_carriers(mrb).expect("marking the other carrier must succeed");
     class
         .define_method(mrb, c"x", beni::method!(point_x, 0))
         .expect("registering x must succeed");
@@ -284,6 +286,7 @@ fn counter_bump(_mrb: &Mrb, rb_self: &Counter) -> i32 {
 fn define_counter(mrb: &Mrb) {
     use beni::typed_data::Dup;
     let class = define_marked(mrb, c"BeniCounter");
+    Counter::mark_carriers(mrb).expect("marking the counter's carrier must succeed");
     class
         .define_method(mrb, c"n", beni::method!(counter_n, 0))
         .expect("registering n must succeed");

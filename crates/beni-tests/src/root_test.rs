@@ -1,5 +1,5 @@
 use crate::support::open_mrb;
-use beni::{Mrb, RClass, ReprValue, TryConvert};
+use beni::{Mrb, RClass, ReprValue, TryConvert, TypedData};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload whose `Drop` records that the collector reclaimed its
@@ -47,22 +47,20 @@ impl Drop for SharedProbe {
 }
 
 /// A class whose instances carry a data payload, defined under a
-/// name of its own so the probes cannot collide.
-fn carrier(mrb: &Mrb, name: &'static core::ffi::CStr) -> RClass {
-    let class = mrb
-        .define_class(name, mrb.object_class())
+/// name of its own so the probes cannot collide and marked as the
+/// probe type's carrier.
+fn carrier<T: TypedData>(mrb: &Mrb, name: &'static core::ffi::CStr) -> RClass {
+    mrb.define_class(name, mrb.object_class())
         .expect("defining the carrier class must succeed");
-    class
-        .set_instance_data_tt(mrb)
-        .expect("marking an ordinary class must succeed");
-    class
+    T::mark_carriers(mrb).expect("marking an ordinary class must succeed");
+    T::class(mrb)
 }
 
 #[test]
 fn a_registered_value_survives_collection() {
     ROOTED_DROPS.store(0, Ordering::SeqCst);
     let mrb = open_mrb();
-    let class = carrier(&mrb, c"BeniRootedHolder");
+    let class = carrier::<RootedProbe>(&mrb, c"BeniRootedHolder");
 
     {
         // The wrap leaves the carrier in the arena, so the scope's
@@ -92,7 +90,7 @@ fn a_registered_value_survives_collection() {
 fn an_unregistered_value_is_reclaimed_by_the_same_collection() {
     LOOSE_DROPS.store(0, Ordering::SeqCst);
     let mrb = open_mrb();
-    let class = carrier(&mrb, c"BeniLooseHolder");
+    let class = carrier::<LooseProbe>(&mrb, c"BeniLooseHolder");
 
     {
         let scope = mrb.arena_scope();
@@ -113,7 +111,7 @@ fn an_unregistered_value_is_reclaimed_by_the_same_collection() {
 fn a_guard_holds_its_value_until_it_is_dropped() {
     GUARDED_DROPS.store(0, Ordering::SeqCst);
     let mrb = open_mrb();
-    let class = carrier(&mrb, c"BeniGuardedHolder");
+    let class = carrier::<GuardedProbe>(&mrb, c"BeniGuardedHolder");
 
     let root = {
         let scope = mrb.arena_scope();
@@ -149,7 +147,7 @@ fn a_guard_holds_its_value_until_it_is_dropped() {
 fn roots_over_one_value_release_independently() {
     SHARED_DROPS.store(0, Ordering::SeqCst);
     let mrb = open_mrb();
-    let class = carrier(&mrb, c"BeniSharedHolder");
+    let class = carrier::<SharedProbe>(&mrb, c"BeniSharedHolder");
 
     let survivor = {
         let scope = mrb.arena_scope();

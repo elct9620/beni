@@ -37,9 +37,10 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let name = name.unwrap_or_else(|| class.clone());
 
     let ident = &input.ident;
-    let fetch_class = resolve_class(&class);
+    let read_class = read_carrier(&class)?;
     let name = Literal::c_string(&CString::new(name.value()).expect("checked NUL-free"));
     let class_for = class_for(&input.data)?;
+    let mark_carriers = mark_carriers(&class, &input.data)?;
     reject_field_attributes(&input.data)?;
 
     // Every class the implementation names is marked as it is named,
@@ -47,7 +48,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     Ok(quote! {
         unsafe impl ::beni::TypedData for #ident {
             fn class(mrb: &::beni::Mrb) -> ::beni::RClass {
-                #fetch_class
+                #read_class
             }
 
             fn data_type() -> &'static ::beni::DataType<Self> {
@@ -55,27 +56,55 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 &DATA_TYPE
             }
 
+            fn mark_carriers(mrb: &::beni::Mrb) -> ::core::result::Result<(), ::beni::Error> {
+                #mark_carriers
+                ::core::result::Result::Ok(())
+            }
+
             #class_for
         }
     })
 }
 
-/// Resolve `path` from `Object` in the interpreter at hand and prepare
-/// it to carry data. Nothing is cached: one process may run several
-/// interpreters, each with its own class.
-fn resolve_class(path: &LitStr) -> TokenStream {
-    quote! {{
-        let path = #path;
-        let class = ::beni::ReprValue::as_value(mrb.object_class())
-            .funcall(mrb, c"const_get", &[::beni::ReprValue::as_value(mrb.str_new(path.as_bytes()))])
-            .and_then(|value| <::beni::RClass as ::beni::TryConvert>::try_convert(value, mrb))
-            .unwrap_or_else(|err| panic!("{path} does not name a class: {}", err.message(mrb)));
-        class
-            .set_instance_data_tt(mrb)
-            .unwrap_or_else(|err| panic!("{path} cannot carry Rust data: {}", err.message(mrb)));
-        class.undef_default_alloc_func(mrb);
-        class
-    }}
+/// Read the class `path` was marked as in the interpreter at hand.
+/// Nothing resolves here: the path resolved when the type's carriers
+/// were marked, so what a Ruby program binds over it reaches no wrap.
+fn read_carrier(path: &LitStr) -> Result<TokenStream, Error> {
+    let text = path.value();
+    let literal = carrier_path(path)?;
+    Ok(quote! {
+        mrb.carrier(#literal).unwrap_or_else(|| panic!(
+            "{} was never marked as a carrier class in this interpreter; \
+             call <Self as ::beni::TypedData>::mark_carriers while the gem installs",
+            #text,
+        ))
+    })
+}
+
+/// Mark every class this implementation names — the type's own and
+/// each variant's — so naming one afterwards reads a prepared class.
+fn mark_carriers(class: &LitStr, data: &Data) -> Result<TokenStream, Error> {
+    let mut paths = vec![carrier_path(class)?];
+    if let Data::Enum(data) = data {
+        for variant in &data.variants {
+            if let Some(path) = variant_class(variant)? {
+                paths.push(carrier_path(&path)?);
+            }
+        }
+    }
+    Ok(quote! { #(mrb.mark_carrier(#paths)?;)* })
+}
+
+/// A class path as the C string keying it, rejecting a path holding a
+/// segment no constant fetch could resolve.
+fn carrier_path(path: &LitStr) -> Result<Literal, Error> {
+    let text = path.value();
+    if text.split("::").any(str::is_empty) {
+        return Err(Error::new(path.span(), "class path holds an empty segment"));
+    }
+    Ok(Literal::c_string(
+        &CString::new(text).expect("checked NUL-free"),
+    ))
 }
 
 /// `class_for` answering each variant's own class, for an enum whose
@@ -86,23 +115,12 @@ fn class_for(data: &Data) -> Result<TokenStream, Error> {
     };
     let mut arms = Vec::new();
     for variant in &data.variants {
-        let Some(attr) = beni_attribute(&variant.attrs)? else {
+        let Some(class) = variant_class(variant)? else {
             continue;
         };
-        let mut class = None;
-        attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("class") {
-                class = Some(nul_free(meta.value()?.parse()?)?);
-                Ok(())
-            } else {
-                Err(unsupported(&meta, "`class`"))
-            }
-        })?;
-        let class =
-            class.ok_or_else(|| Error::new(attr.span(), "missing attribute: `class = ...`"))?;
         let ident = &variant.ident;
-        let fetch_class = resolve_class(&class);
-        arms.push(quote! { Self::#ident { .. } => #fetch_class });
+        let read_class = read_carrier(&class)?;
+        arms.push(quote! { Self::#ident { .. } => #read_class });
     }
     if arms.is_empty() {
         return Ok(TokenStream::new());
@@ -116,6 +134,26 @@ fn class_for(data: &Data) -> Result<TokenStream, Error> {
             }
         }
     })
+}
+
+/// The class path one enum variant names, and nothing when it carries
+/// no `#[beni]` attribute.
+fn variant_class(variant: &syn::Variant) -> Result<Option<LitStr>, Error> {
+    let Some(attr) = beni_attribute(&variant.attrs)? else {
+        return Ok(None);
+    };
+    let mut class = None;
+    attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("class") {
+            class = Some(nul_free(meta.value()?.parse()?)?);
+            Ok(())
+        } else {
+            Err(unsupported(&meta, "`class`"))
+        }
+    })?;
+    class
+        .ok_or_else(|| Error::new(attr.span(), "missing attribute: `class = ...`"))
+        .map(Some)
 }
 
 /// A field takes no `#[beni]` attribute.

@@ -196,6 +196,11 @@ pub use typed_data::{RTypedData, TypedData};
 /// ```
 ///
 /// ```compile_fail
+/// #[beni::wrap(class = "Geometry::")]
+/// struct Point;
+/// ```
+///
+/// ```compile_fail
 /// #[beni::wrap(class = "Point", name = "Po\0int")]
 /// struct Point;
 /// ```

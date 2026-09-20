@@ -24,6 +24,9 @@ struct Stringly;
 #[beni::wrap(class = "BeniWrapBase")]
 struct Based;
 
+#[beni::wrap(class = "BeniWrapUnmarked")]
+struct Unmarked;
+
 #[derive(beni::TypedData)]
 #[beni(class = "BeniWrapShape")]
 enum Shape {
@@ -55,6 +58,7 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 fn a_nested_path_names_its_class_and_prepares_it_to_carry_data() {
     let mrb = open_mrb();
     define(&mrb, b"module BeniWrapOuter; class Inner; end; end");
+    Nested::mark_carriers(&mrb).expect("the path names a class");
 
     let wrapped = mrb.wrap(Nested);
 
@@ -73,6 +77,8 @@ fn a_nested_path_names_its_class_and_prepares_it_to_carry_data() {
 fn the_data_type_is_named_after_the_class_unless_named_otherwise() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniWrapDefaultName; end");
+    CustomName::mark_carriers(&mrb).expect("the path names a class");
+    DefaultName::mark_carriers(&mrb).expect("the path names a class");
 
     let custom = mrb.wrap(CustomName).as_value();
     let default = mrb.wrap(DefaultName).as_value();
@@ -86,26 +92,22 @@ fn the_data_type_is_named_after_the_class_unless_named_otherwise() {
 }
 
 #[test]
-fn a_path_naming_no_class_panics() {
+fn a_path_naming_no_class_surfaces_an_error() {
     let mrb = open_mrb();
     define(&mrb, b"BeniWrapMissing = 1");
 
-    let payload = catch_unwind(AssertUnwindSafe(|| mrb.wrap(Missing)))
-        .err()
-        .unwrap();
+    let err = Missing::mark_carriers(&mrb).expect_err("the path names no class");
 
-    assert!(panic_message(payload).starts_with("BeniWrapMissing does not name a class"));
+    assert_eq!(err.message(&mrb), "1 is not a class");
 }
 
 #[test]
-fn a_class_refusing_the_mark_panics() {
+fn a_class_refusing_the_mark_surfaces_an_error() {
     let mrb = open_mrb();
 
-    let payload = catch_unwind(AssertUnwindSafe(|| mrb.wrap(Stringly)))
-        .err()
-        .unwrap();
+    let err = Stringly::mark_carriers(&mrb).expect_err("a string's layout refuses the mark");
 
-    assert!(panic_message(payload).starts_with("String cannot carry Rust data"));
+    assert!(err.message(&mrb).contains("carry Rust data"));
     assert!(
         mrb.load_string(b"String.new").is_ok(),
         "a refused class keeps its allocator"
@@ -116,6 +118,7 @@ fn a_class_refusing_the_mark_panics() {
 fn each_variant_wraps_as_its_own_class_or_the_types() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniWrapShape; class Circle < self; end; end");
+    Shape::mark_carriers(&mrb).expect("both paths name classes");
 
     let circle = mrb.wrap(Shape::Circle).as_value();
     let square = mrb.wrap(Shape::Square).as_value();
@@ -132,6 +135,7 @@ fn a_subclass_defined_before_the_class_is_named_cannot_be_wrapped_into() {
         b"class BeniWrapBase; end; class BeniWrapEarly < BeniWrapBase; end",
     );
     let early = class(&mrb, "BeniWrapEarly");
+    Based::mark_carriers(&mrb).expect("the path names a class");
 
     let wrapped = catch_unwind(AssertUnwindSafe(|| mrb.wrap_as(Based, early)));
 
@@ -142,7 +146,7 @@ fn a_subclass_defined_before_the_class_is_named_cannot_be_wrapped_into() {
 fn a_subclass_defined_after_the_class_is_named_carries_data() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniWrapBase; end");
-    Based::class(&mrb);
+    Based::mark_carriers(&mrb).expect("the path names a class");
     define(&mrb, b"class BeniWrapLate < BeniWrapBase; end");
     let late = class(&mrb, "BeniWrapLate");
 
@@ -157,6 +161,8 @@ fn each_interpreter_resolves_its_own_class() {
     let second = open_mrb();
     define(&first, b"module BeniWrapOuter; class Inner; end; end");
     define(&second, b"module BeniWrapOuter; class Inner; end; end");
+    Nested::mark_carriers(&first).expect("the path names a class");
+    Nested::mark_carriers(&second).expect("the path names a class");
 
     let in_first = first.wrap(Nested);
     let in_second = second.wrap(Nested);
@@ -167,4 +173,21 @@ fn each_interpreter_resolves_its_own_class() {
     assert!(in_second
         .as_value()
         .is_kind_of(&second, class(&second, "BeniWrapOuter::Inner")));
+}
+
+#[test]
+fn naming_a_class_whose_carriers_are_unmarked_panics() {
+    let mrb = open_mrb();
+    define(&mrb, b"class BeniWrapUnmarked; end");
+
+    let payload = catch_unwind(AssertUnwindSafe(|| mrb.wrap(Unmarked)))
+        .err()
+        .unwrap();
+
+    let message = panic_message(payload);
+    assert!(message.starts_with("BeniWrapUnmarked was never marked as a carrier class"));
+    assert!(
+        message.contains("mark_carriers"),
+        "the panic names what would have marked it: {message}"
+    );
 }
