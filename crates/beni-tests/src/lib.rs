@@ -9,6 +9,7 @@ mod support;
 mod arena_test;
 mod args_test;
 mod array_test;
+mod carrier_test;
 mod ccontext_test;
 mod class_test;
 mod convert_test;

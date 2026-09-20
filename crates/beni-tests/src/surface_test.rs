@@ -271,6 +271,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::ary_new_from_values;
     let _ = Mrb::assoc_new;
     let _ = Mrb::block_given;
+    let _ = Mrb::carrier;
     let _ = Mrb::class_defined::<&core::ffi::CStr>;
     let _ = Mrb::class_new;
     let _ = Mrb::exc_get::<&core::ffi::CStr>;
@@ -284,6 +285,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::intern;
     let _ = Mrb::intern_check;
     let _ = Mrb::intern_static;
+    let _ = Mrb::mark_carrier;
     let _ = Mrb::module_new;
     let _ = Mrb::str_new_static;
     let _ = Mrb::sym_dump;

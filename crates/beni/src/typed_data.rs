@@ -46,8 +46,10 @@ use core::ops::Deref;
 /// # Safety
 ///
 /// Every class `class` and `class_for` name must be marked through
-/// `RClass::set_instance_data_tt`, so a wrap allocates a data carrier
-/// rather than raising; `class_for` names `class` or a subclass of it.
+/// `RClass::set_instance_data_tt` before a value wraps into it, so a
+/// wrap allocates a data carrier rather than raising; `mark_carriers`
+/// is where an implementation does that marking. `class_for` names
+/// `class` or a subclass of it.
 pub unsafe trait TypedData: Send + Sized + 'static {
     /// The class a value of this type wraps as, and the class a
     /// conversion failure names.
@@ -61,6 +63,21 @@ pub unsafe trait TypedData: Send + Sized + 'static {
     fn class_for(mrb: &Mrb, value: &Self) -> RClass {
         let _ = value;
         Self::class(mrb)
+    }
+
+    /// Prepare every class this type names in `mrb` to carry Rust
+    /// data: marked as a carrier, its default allocator undefined.
+    /// This is how an implementation keeps the trait's contract, and
+    /// the embedder calls it once per interpreter while its gems
+    /// install, before any Ruby program runs. Preparing the class
+    /// `class` answers is what an implementation written by hand
+    /// needs; the `wrap` and `TypedData` macros prepare each class
+    /// they name and hold it in the interpreter's carrier record.
+    fn mark_carriers(mrb: &Mrb) -> Result<(), Error> {
+        let class = Self::class(mrb);
+        class.set_instance_data_tt(mrb)?;
+        class.undef_default_alloc_func(mrb);
+        Ok(())
     }
 }
 

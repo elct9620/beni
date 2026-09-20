@@ -40,6 +40,7 @@
 //!   * `load` — RITE bytecode loaders
 //!   * `protect` — closure-based `mrb_protect_error`
 //!   * `root` — GC roots outliving the frame that made the value
+//!   * `carrier` — the class each `TypedData` class path was marked as
 //!   * `user_data` — the one slot of embedder data the owner installs
 //!
 //! Splitting per concern keeps each file's surface small and the
@@ -47,6 +48,7 @@
 
 pub mod arena;
 pub mod args;
+pub mod carrier;
 pub mod define;
 pub mod factory;
 pub mod load;
