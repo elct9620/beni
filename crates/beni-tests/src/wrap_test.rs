@@ -191,3 +191,55 @@ fn naming_a_class_whose_carriers_are_unmarked_panics() {
         "the panic names what would have marked it: {message}"
     );
 }
+
+#[test]
+fn a_program_redefining_const_get_names_no_carrier_class() {
+    let mrb = open_mrb();
+    define(&mrb, b"class BeniWrapDefaultName; end");
+    DefaultName::mark_carriers(&mrb).expect("the path names a class");
+    define(
+        &mrb,
+        b"class BeniWrapImpostor; end; def Object.const_get(name); BeniWrapImpostor; end",
+    );
+
+    let wrapped = mrb.wrap(DefaultName);
+
+    assert_eq!(wrapped.as_value().classname(&mrb), "BeniWrapDefaultName");
+}
+
+#[test]
+fn a_program_binding_over_the_path_names_no_carrier_class() {
+    let mrb = open_mrb();
+    define(&mrb, b"class BeniWrapDefaultName; end");
+    DefaultName::mark_carriers(&mrb).expect("the path names a class");
+    define(
+        &mrb,
+        b"Object.const_set(:BeniWrapDefaultName, Class.new); Object.const_set(:BeniWrapBase, 1)",
+    );
+
+    let wrapped = mrb.wrap(DefaultName);
+
+    assert_eq!(wrapped.as_value().classname(&mrb), "BeniWrapDefaultName");
+    assert!(
+        mrb.load_string(b"BeniWrapDefaultName.new").is_ok(),
+        "the class the program bound is its own, and keeps its allocator"
+    );
+}
+
+#[test]
+fn no_named_class_allocates_an_empty_carrier_after_marking() {
+    let mrb = open_mrb();
+    define(&mrb, b"class BeniWrapShape; class Circle < self; end; end");
+
+    Shape::mark_carriers(&mrb).expect("both paths name classes");
+
+    for src in [
+        &b"BeniWrapShape.allocate"[..],
+        b"BeniWrapShape::Circle.allocate",
+    ] {
+        let err = mrb
+            .load_string(src)
+            .expect_err("no program allocates an empty carrier");
+        assert!(err.message(&mrb).starts_with("allocator undefined for"));
+    }
+}
