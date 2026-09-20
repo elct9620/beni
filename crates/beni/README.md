@@ -15,7 +15,8 @@ surface, this crate owns every abstraction above it.
   seam, `TryConvert` being the one a method's receiver and arguments cross
 - `TypedData` — a Rust type carried as an mruby object's payload, read
   back as `&T` or `typed_data::Obj<T>`; `#[beni::wrap]` and
-  `#[derive(beni::TypedData)]` implement it from the class it wraps as
+  `#[derive(beni::TypedData)]` implement it from the class it wraps as,
+  which `mark_carriers` prepares from the gem's `init`
 - `method!` — registers a typed Rust function as an mruby method,
   with argument conversion and a sealed panic boundary
 - `beni::sys` — raw-FFI escape hatch carrying all of `beni-sys`, with

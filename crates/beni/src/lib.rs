@@ -123,15 +123,30 @@ pub use typed_data::{RTypedData, TypedData};
 /// ```
 ///
 /// `class` is a constant path from `Object` — `"Geometry::Point"` names
-/// a nested class — resolved in the interpreter at hand each time the
-/// type names it, and marked to carry data with its default allocator
-/// undefined as it is. A path naming no class, or a class that refuses
-/// the mark, panics. `name` names the data type and defaults to `class`.
+/// a nested class, and a path holding an empty segment is a compile
+/// error. `name` names the data type and defaults to `class`.
+///
+/// `TypedData::mark_carriers` resolves the path, marks the class to
+/// carry data with its default allocator undefined, and holds it in the
+/// interpreter's carrier record; it answers an `Err` for a path naming
+/// no class or a class refusing the mark. Every later naming reads that
+/// record, so what a Ruby program binds over the path reaches no wrap.
+/// Call it from the gem's `init`, for each interpreter, before any Ruby
+/// program runs — naming a class the record does not hold panics.
+///
+/// ```
+/// # use beni::{Error, Mrb, TypedData};
+/// # #[beni::wrap(class = "Point")]
+/// # struct Point { x: i32 }
+/// fn init(mrb: &Mrb) -> Result<(), Error> {
+///     mrb.define_class(c"Point", mrb.object_class())?;
+///     Point::mark_carriers(mrb)
+/// }
+/// ```
 ///
 /// mruby hands a class its superclass's mark and allocator state when
-/// the class is defined, so a subclass Ruby defines before the type
-/// first names its class carries neither, and wrapping into it panics.
-/// Call `TypedData::class` before Ruby code subclasses the type's class.
+/// the class is defined, so a subclass Ruby defines before the type's
+/// carriers are marked carries neither, and wrapping into it panics.
 ///
 /// The attributes magnus accepts beyond `class` and `name` are GC and
 /// Ractor hints mruby's data type has no counterpart for, and are
