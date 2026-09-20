@@ -654,7 +654,7 @@ raise/return contract:
 | Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
 | Interns a name, creating its symbol — a C-string, byte-slice, String-value, or static-buffer intern, or a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (an `ArgumentError`) | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
-| Marks a class so its instances carry Rust data | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`) | `Result` |
+| Marks a class so its instances carry Rust data, or prepares a `TypedData` type's carrier classes in an interpreter | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`); preparing also when a class path resolves to no class, or to a value that is not a class | `Result` |
 | Reads a data carrier's payload through an `RTypedData` handle, or copies a carrier through `typed_data::Dup`'s `clone` | the carrier holds no payload or one of another data type (a `TypeError`); `clone` also when it is passed an argument (an `ArgumentError`) or the copy's `initialize_copy` raises | `Result` |
 | Reads the call's arguments by shape — a scan read or the single-argument read in a method registered for any arity, or a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or a keyword no list names when the read collects no rest; a scan read of an array-handle splat and an optional block alone fits every call | `Result` |
 | Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, the context's filename is too long to be a symbol, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
@@ -936,9 +936,11 @@ its key can surface.
   drops the payload — and the class its values wrap as, optionally choosing a
   class per value, which is then that class or a subclass of it. The
   implementer upholds the trait's contract: every class it names is marked to
-  carry data, as below — by hand, or by the macros below, which uphold it
-  themselves. A data type belongs to one Rust type, so a carrier of `T`'s data
-  type holds a `T`.
+  carry data, as below, before a value wraps into it. `TypedData`'s
+  `mark_carriers` marks, for one interpreter, the class the implementation's
+  own `class` answers; the macros below replace it with one preparing every
+  class they name. A data type belongs to one Rust type, so a carrier of `T`'s
+  data type holds a `T`.
 - A class is marked so its instances are data carriers holding Rust data, and
   a class defined from a marked superclass is marked too. Marking is fallible:
   only a class whose instances are plain objects or data carriers accepts the
@@ -987,29 +989,45 @@ its key can surface.
   attribute, mirroring `magnus`'s `wrap` and `TypedData` derive. The two
   generate the same implementation, and the derive takes no companion derive,
   `beni` carrying no `DataTypeFunctions`. `class` is required: a constant path
-  resolved from `Object` as `Object.const_get` resolves one, so
-  `"Outer::Inner"` names a nested class. `name` is the data type's name and
+  whose segments are fetched one after another, each as a constant of the one
+  before it and the first as a constant of `Object`, so `"Outer::Inner"` names
+  a nested class. A segment is fetched as the typed surface fetches any
+  constant — a `const_missing` hook stands in for a segment nothing is bound
+  under — and no `const_get` method takes part, so a program defining one
+  changes nothing a path resolves to. `name` is the data type's name and
   defaults to the `class` path. An enum variant carrying
   `#[beni(class = "…")]` wraps as that class — the type's class or a subclass
   of it — and every other variant as the type's class.
-- A class the generated implementation names is resolved in the interpreter at
-  hand whenever it is named, never carried from one interpreter to another, and
-  each time it is marked to carry data and has its default allocator undefined,
-  which is how the macros uphold the `TypedData` contract. Naming a class
-  panics when its path does not resolve to a class — it names no constant, a
-  `const_missing` hook raises, or the constant is not a class — or when the
-  class refuses the mark.
+- `TypedData::mark_carriers` prepares every class a generated implementation
+  names — the type's own and each enum variant's — in the interpreter at hand:
+  it resolves the path, marks the class to carry data, undefines the class's
+  default allocator, and holds the class in the interpreter's carrier record
+  under that path. This is how the macros uphold the `TypedData` contract. It
+  surfaces an `Err` when a path resolves to no class, resolves to a value that
+  is not a class, or names a class that refuses the mark. Marking a path the record already holds resolves
+  it again and replaces what it holds.
+- A carrier record is kept inside the interpreter holding it and keeps its
+  class reachable for as long as that interpreter lives. It is named as no Ruby
+  global variable, so no guest program reads or writes it. No class crosses
+  from one interpreter to another, and each interpreter is marked on its own.
+- A generated `TypedData::class`, and the class a generated enum variant
+  names, answer the class the carrier record holds for the path. A path the
+  record does not hold panics, naming the `mark_carriers` call that puts it
+  there. Wrapping resolves no constant and dispatches no Ruby method, so what a
+  Ruby program binds over a path changes no class a value wraps into.
+- The embedder calls `mark_carriers` for each type in each interpreter while
+  installing its gems, before any Ruby program runs, so every path resolves
+  against the classes the embedder defined.
 - The macros accept `class` and `name` on the type and `class` on an enum
   variant, each a string holding no NUL byte. Every other attribute — `magnus`'s `mark`, `size`, `compact`,
   `free_immediately`, `wb_protected`, `frozen_shareable`, `unsafe_generics`,
   and `opaque_attr_reader` included — is a compile error, as is a type with
   generic parameters or lifetimes.
 - mruby hands a class its superclass's mark and allocator state when the class
-  is defined, so a class defined from the type's class before the type first
-  names it carries neither, and wrapping into it breaks the contract as an
-  unmarked class does. The macros' documentation directs a consumer to have
-  the type name its class — through `TypedData::class` — before Ruby code
-  defines subclasses of it.
+  is defined, so a class defined from the type's class before `mark_carriers`
+  marks it carries neither, and wrapping into it breaks the contract as an
+  unmarked class does. Marking while gems install precedes every class a Ruby
+  program defines, so each subclass a program defines carries both.
 
 #### Garbage collection
 
@@ -1359,9 +1377,10 @@ The `compiler` capability feature carries everything in this section.
 | A name of `UINT16_MAX` bytes or more given to a creating intern, to a string's coercion to a symbol, or as a symbol-or-name key | surfaced as a Rust `Err` carrying the `ArgumentError`, never unwinds across FFI; an operation that reports no failure answers instead as it does for a name nothing is bound under — a predicate `false`, a read `nil`, a removal a no-op |
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A `TypedData` value wrapped as an instance of a class that cannot carry data — one never marked, breaking the `TypedData` contract | the payload not yet handed to a carrier is reclaimed, never leaked, and the wrap panics; nothing unwinds across FFI |
-| A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — whose path does not resolve to a class, or whose class refuses the mark | panics; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
+| A `TypedData` type's carriers marked in an interpreter where a path resolves to no class, resolves to a value that is not a class, or names a class that refuses the mark | surfaced as a Rust `Err`; whichever classes it marked before the failure stay marked and held |
+| A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — whose path the interpreter's carrier record does not hold | panics, naming the `mark_carriers` call that records it; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
 | Ruby's `new` or `allocate` on a class whose default allocator is undefined | raises mruby's `TypeError` "allocator undefined for *class*"; reached through the typed surface, surfaced as a Rust `Err` |
-| A `wrap` or `TypedData` derive missing `class`, given an attribute the macros do not accept or a value holding a NUL byte, or applied to a type with generic parameters or lifetimes | a compile error naming the offending attribute, value, or generics; nothing is generated |
+| A `wrap` or `TypedData` derive missing `class`, given an attribute the macros do not accept, a value holding a NUL byte, or a `class` path holding an empty segment, or applied to a type with generic parameters or lifetimes | a compile error naming the offending attribute, value, or generics; nothing is generated |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
@@ -1395,6 +1414,7 @@ The `compiler` capability feature carries everything in this section.
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
 | exception class | `Exception` itself or an ordinary class descending from it — never a singleton class — so every instance it allocates is an exception; the class an `ExceptionClass` handle names |
+| carrier record | one interpreter's record of the class each `class` path of a macro-implemented `TypedData` type was marked as; `mark_carriers` writes it and every naming of such a class reads it |
 | plain object | an instance in the ordinary object layout `Object` and `BasicObject` give their instances, rather than a built-in type's own layout (an exception, a string, a number, …) or a data carrier's; a class allocates its instances in the layout its superclass allocated in when the class was defined |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
