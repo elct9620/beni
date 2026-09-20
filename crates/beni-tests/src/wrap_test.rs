@@ -212,10 +212,7 @@ fn a_program_binding_over_the_path_names_no_carrier_class() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniWrapDefaultName; end");
     DefaultName::mark_carriers(&mrb).expect("the path names a class");
-    define(
-        &mrb,
-        b"Object.const_set(:BeniWrapDefaultName, Class.new); Object.const_set(:BeniWrapBase, 1)",
-    );
+    define(&mrb, b"Object.const_set(:BeniWrapDefaultName, Class.new)");
 
     let wrapped = mrb.wrap(DefaultName);
 
@@ -242,4 +239,16 @@ fn no_named_class_allocates_an_empty_carrier_after_marking() {
             .expect_err("no program allocates an empty carrier");
         assert!(err.message(&mrb).starts_with("allocator undefined for"));
     }
+}
+
+#[test]
+fn a_program_binding_a_non_class_over_the_path_still_wraps() {
+    let mrb = open_mrb();
+    define(&mrb, b"class BeniWrapBase; end");
+    Based::mark_carriers(&mrb).expect("the path names a class");
+    define(&mrb, b"Object.const_set(:BeniWrapBase, 1)");
+
+    let wrapped = mrb.wrap(Based);
+
+    assert_eq!(wrapped.as_value().classname(&mrb), "BeniWrapBase");
 }
