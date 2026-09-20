@@ -27,7 +27,7 @@ surface, this crate owns every abstraction above it.
 <!-- x-release-please-start-version -->
 ```toml
 [dependencies]
-beni = "0.16.0"
+beni = "0.17.0"
 ```
 <!-- x-release-please-end -->
 
@@ -39,7 +39,7 @@ precompiled bytecode needs no compiler and stays.
 <!-- x-release-please-start-version -->
 ```toml
 [dependencies]
-beni = { version = "0.16.0", default-features = false }
+beni = { version = "0.17.0", default-features = false }
 ```
 <!-- x-release-please-end -->
 
