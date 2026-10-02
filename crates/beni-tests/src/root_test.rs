@@ -176,3 +176,51 @@ fn roots_over_one_value_release_independently() {
         "the value is reclaimed once the last root is released"
     );
 }
+
+static HIDDEN_DROPS: AtomicUsize = AtomicUsize::new(0);
+
+#[beni::wrap(class = "BeniHiddenHolder", name = "BeniHiddenProbe")]
+struct HiddenProbe;
+impl Drop for HiddenProbe {
+    fn drop(&mut self) {
+        HIDDEN_DROPS.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[test]
+fn a_hidden_instance_variable_holds_its_value_until_overwritten() {
+    HIDDEN_DROPS.store(0, Ordering::SeqCst);
+    let mrb = open_mrb();
+    let class = carrier::<HiddenProbe>(&mrb, c"BeniHiddenHolder");
+    // The holder is itself a carrier, the place a payload keeps a value.
+    let holder = mrb.wrap_as(HiddenProbe, class).as_value();
+    let _root = mrb
+        .gc_root(holder)
+        .expect("rooting the holder must succeed");
+
+    {
+        let scope = mrb.arena_scope();
+        let obj = mrb.wrap_as(HiddenProbe, class).as_value();
+        holder
+            .iv_set(&mrb, "held", obj)
+            .expect("a plain object takes a hidden instance variable");
+        drop(scope);
+    }
+
+    mrb.full_gc();
+    assert_eq!(
+        HIDDEN_DROPS.load(Ordering::SeqCst),
+        0,
+        "a hidden instance variable must hold its value across a full collection"
+    );
+
+    holder
+        .iv_set(&mrb, "held", beni::Value::nil())
+        .expect("overwriting the hidden instance variable must succeed");
+    mrb.full_gc();
+    assert_eq!(
+        HIDDEN_DROPS.load(Ordering::SeqCst),
+        1,
+        "overwriting the variable must let the next collection reclaim the value"
+    );
+}
