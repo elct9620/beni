@@ -517,6 +517,7 @@ declined:
   mrb_obj_alloc: "allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `Mrb::wrap_as`"
   mrb_free_context: "releases a `struct mrb_context*` — VM-internal, the same call-frame machinery whose indices stay in `sys`; `Mrb::drop` releases the interpreter and every context it owns"
   mrb_iclass_p: "tests for the include-class tag, which no value a typed caller holds carries — mruby keeps include classes internal, filtering them out of `ObjectSpace` (`vendor/mruby/mrbgems/mruby-objectspace/src/mruby_objectspace.c:131-135`) and answering the included module in their place from `Module#ancestors` (`vendor/mruby/src/class.c:2245-2246`)"
+  mrb_cptr_value: "boxes a bare `void*` into a value — Principle 11: a raw pointer crossing into the typed domain, and reading it back answers the same untyped pointer, so no typed shape carries more than the raw call. mruby uses it as the context an `mrb_ensure` callback reads (`vendor/mruby/mrbgems/mruby-socket/src/socket.c:222`), which a Rust closure carries; Rust data an object owns crosses through `TypedData`"
 conditional:
   mrb_bigint_p: "`MRB_USE_BIGINT` — without it `vendor/mruby/include/mruby/value.h:322` expands the macro to `FALSE`; beni's pinned ABI sets only `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`"
   mrb_locale_from_utf8: "`_WIN32` — `vendor/mruby/include/mruby.h:1248` makes it an identity macro off Windows, where there is no encoding to convert"
