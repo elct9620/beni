@@ -197,7 +197,8 @@ impl RClass {
     pub fn set_instance_inline_tt<T: InlineStruct>(self, mrb: &Mrb) -> Result<(), Error> {
         let tt = crate::class::instance_tt(self.as_internal());
         let plain = self.as_value().is_class() && tt == sys::MRB_TT_OBJECT;
-        if !plain && !(tt == sys::MRB_TT_ISTRUCT && belongs_to::<T>(mrb, self)) {
+        let own = tt == sys::MRB_TT_ISTRUCT && belongs_to::<T>(mrb, self);
+        if !(plain || own) {
             return Err(crate::try_convert::type_error(
                 mrb,
                 &format!(
