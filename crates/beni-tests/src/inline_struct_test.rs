@@ -219,3 +219,140 @@ fn a_subclass_defined_after_the_mark_belongs_to_the_type() {
         .expect_err("a subclass does not belong to another type");
     assert_eq!(exception(&mrb, err).0, "TypeError");
 }
+
+#[beni::wrap(class = "BeniPoint2D", inline)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(C)]
+struct Point2D {
+    x: f64,
+    y: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable, beni::InlineStruct)]
+#[beni(class = "BeniSize2D", name = "Size2D")]
+#[repr(C)]
+struct Size2D {
+    w: f32,
+    h: f32,
+}
+
+fn point_create(_mrb: &Mrb, _class: Value, x: f64, y: f64) -> Point2D {
+    Point2D { x, y }
+}
+
+fn point_plus(_mrb: &Mrb, rb_self: Point2D, other: Point2D) -> Point2D {
+    Point2D {
+        x: rb_self.x + other.x,
+        y: rb_self.y + other.y,
+    }
+}
+
+// Read back whole, so the reading converts under either float width.
+fn point_x(_mrb: &Mrb, rb_self: Point2D) -> i32 {
+    rb_self.x as i32
+}
+
+fn point_set_x(mrb: &Mrb, rb_self: Inline<Point2D>, x: f64) -> Result<Value, Error> {
+    rb_self.set(mrb, Point2D { x, ..rb_self.get() })?;
+    Ok(Value::nil())
+}
+
+fn define_point(mrb: &Mrb) {
+    let class = define(mrb, c"BeniPoint2D");
+    Point2D::mark_carriers(mrb).expect("marking an ordinary class must succeed");
+    class
+        .define_singleton_method(mrb, c"create", beni::method!(point_create, 2))
+        .expect("registering create must succeed");
+    class
+        .define_method(mrb, c"+", beni::method!(point_plus, 1))
+        .expect("registering + must succeed");
+    class
+        .define_method(mrb, c"x", beni::method!(point_x, 0))
+        .expect("registering x must succeed");
+    class
+        .define_method(mrb, c"x=", beni::method!(point_set_x, 1))
+        .expect("registering x= must succeed");
+}
+
+#[test]
+fn a_wrapped_inline_struct_crosses_ruby_by_value() {
+    let mrb = open_mrb();
+    define_point(&mrb);
+
+    let sum = mrb
+        .load_string(b"a = BeniPoint2D.create(1.5, 2.0); b = a + a; a.x = 10.0; [a.x, b.x]")
+        .expect("the program runs");
+
+    let got = Vec::<i32>::try_convert(sum, &mrb).expect("an array of integers");
+    assert_eq!(got, [10, 3], "a copy keeps its own payload");
+}
+
+#[test]
+fn a_returned_value_and_its_conversion_round_trip() {
+    let mrb = open_mrb();
+    define_point(&mrb);
+
+    let value = Point2D { x: -1.0, y: 0.5 }.into_value(&mrb);
+
+    assert_eq!(value.classname(&mrb), "BeniPoint2D");
+    assert_eq!(
+        Point2D::try_convert(value, &mrb).expect("its own value converts back"),
+        Point2D { x: -1.0, y: 0.5 }
+    );
+}
+
+#[test]
+fn a_frozen_receiver_refuses_a_setter_from_ruby() {
+    let mrb = open_mrb();
+    define_point(&mrb);
+
+    let err = mrb
+        .load_string(b"p = BeniPoint2D.create(1.0, 1.0).freeze; p.x = 2.0")
+        .expect_err("a frozen inline struct refuses a new payload");
+
+    assert_eq!(exception(&mrb, err).0, "FrozenError");
+}
+
+#[test]
+fn the_derive_names_the_type_by_its_name_attribute() {
+    let mrb = open_mrb();
+    define_point(&mrb);
+    define(&mrb, c"BeniSize2D");
+    Size2D::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
+    let size = Size2D { w: 2.0, h: 3.0 }.into_value(&mrb);
+
+    let err = Point2D::try_convert(size, &mrb).expect_err("another type's value does not convert");
+    assert_eq!(
+        exception(&mrb, err).1,
+        "wrong argument type BeniSize2D (expected BeniPoint2D)"
+    );
+    let err = Size2D::try_convert(Value::nil(), &mrb).expect_err("nil does not convert");
+    assert_eq!(
+        exception(&mrb, err).1,
+        "wrong argument type nil (expected Size2D)"
+    );
+}
+
+#[test]
+#[should_panic(expected = "never marked as a carrier class")]
+fn naming_an_unmarked_class_panics_naming_mark_carriers() {
+    let mrb = open_mrb();
+    define(&mrb, c"BeniPoint2D");
+
+    let _ = Point2D { x: 0.0, y: 0.0 }.into_value(&mrb);
+}
+
+#[test]
+fn a_path_bound_to_another_class_after_marking_reaches_no_wrap() {
+    let mrb = open_mrb();
+    define_point(&mrb);
+    mrb.load_string(b"Object.send(:remove_const, :BeniPoint2D); class BeniPoint2D; end")
+        .expect("rebinding the constant runs");
+
+    let value = Point2D { x: 1.0, y: 2.0 }.into_value(&mrb);
+
+    assert!(
+        Point2D::try_convert(value, &mrb).is_ok(),
+        "the wrap reaches the class the record holds"
+    );
+}

@@ -78,8 +78,9 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
              Tarball}                       wrap_static_fns (single C TU) ·
                                             links = "mruby" (one linker)
 
-                                          beni-macros  wrap / TypedData
-                                            derive, re-exported by beni
+                                          beni-macros  wrap / TypedData /
+                                            InlineStruct derive,
+                                            re-exported by beni
 
                                           beni-tests  publish = false; the
                                             typed suite run from consumer
@@ -109,7 +110,7 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
 | Config generation | `lib/beni/build_config.rb` | Copies the staged upstream default (see Principle 4); `build_config/mruby.rb` is the repo's own validation config. |
 | Archive discovery / ABI alignment | `crates/beni-sys/build.rs` | The file-top comment is the authoritative mode/contract description. |
 | Typed wrapper | `crates/beni/src/lib.rs` | Module-level doc carries the L0–L2 tier map. |
-| Wrapper macros | `crates/beni-macros/src/typed_data.rs` | `wrap` / `TypedData` derive expansion; the tested docs and compile-fail cases sit on the re-exports in `crates/beni/src/lib.rs`. |
+| Wrapper macros | `crates/beni-macros/src/typed_data.rs`, `inline_struct.rs` | `wrap` / `TypedData` / `InlineStruct` derive expansion; the tested docs and compile-fail cases sit on the re-exports in `crates/beni/src/lib.rs`. |
 | Typed wrapper's tests | `crates/beni-tests/src/*_test.rs` | Consumer position: public paths only, always against a staged archive. `surface_test.rs` names every inherent pub fn and applies every re-exported macro from outside, so a dropped re-export breaks it; `api:surface` keeps that list and the crate's surface in step. Reached by `rake rust:test`, not by a bare `cargo test`. |
 | Consumer scenarios | `test/scenarios/*/Rakefile` | Each documents the consumer path it pins; harness contract is `scenario:setup` → `beni:build` → `scenario:verify`. Read the headers to see which postures are already covered before adding one. |
 | Verification chain | `tasks/rust.rake`, `tasks/docs.rake` | Header lists every leg of `rust:verify` and what it is for; the documentation bindings are generated rather than tracked, so `docs.rake` is where that contract lives. |

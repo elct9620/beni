@@ -17,6 +17,9 @@ surface, this crate owns every abstraction above it.
   back as `&T` or `typed_data::Obj<T>`; `#[beni::wrap]` and
   `#[derive(beni::TypedData)]` implement it from the class it wraps as,
   which `mark_carriers` prepares from the gem's `init`
+- `InlineStruct` — a `bytemuck::Pod` struct stored inside the object,
+  copied in and out through `Inline<T>`; derived as
+  `#[derive(beni::InlineStruct)]` or `#[beni::wrap(..., inline)]`
 - `method!` — registers a typed Rust function as an mruby method,
   with argument conversion and a sealed panic boundary
 - `beni::sys` — raw-FFI escape hatch carrying all of `beni-sys`, with

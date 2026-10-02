@@ -20,7 +20,7 @@ All four packages release in lockstep under a single version.
 | `beni` gem | rubygems.org | Rake tasks + DSL config that download mruby and build the archive |
 | `beni-sys` crate | crates.io | bindgen FFI surface over the mruby C API |
 | `beni` crate | crates.io | safe typed wrapper over `beni-sys`, aligned with magnus idioms |
-| `beni-macros` crate | crates.io | the `beni` crate's `wrap` and `TypedData` macros, used through `beni` |
+| `beni-macros` crate | crates.io | the `beni` crate's `wrap`, `TypedData`, and `InlineStruct` macros, used through `beni` |
 
 ## Getting started
 

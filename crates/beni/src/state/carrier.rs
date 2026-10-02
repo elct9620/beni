@@ -43,6 +43,20 @@ impl Mrb {
         Ok(class)
     }
 
+    /// As `mark_carrier`, preparing the class `path` names so its
+    /// instances are inline structs of `T` rather than data carriers.
+    pub fn mark_inline_carrier<T: crate::InlineStruct>(
+        &self,
+        path: &'static CStr,
+    ) -> Result<RClass, Error> {
+        let class = self.resolve_carrier(path)?;
+        class.set_instance_inline_tt::<T>(self)?;
+        class.undef_default_alloc_func(self);
+        let record = self.carrier_record()?;
+        record.set(self, self.carrier_key(path)?, class.as_value())?;
+        Ok(class)
+    }
+
     /// The class this interpreter's carrier record holds for `path`,
     /// and nothing when `mark_carrier` has put none there.
     pub fn carrier(&self, path: &'static CStr) -> Option<RClass> {

@@ -104,6 +104,12 @@ fn full_api_surface_is_reachable_from_outside() {
         struct Derived;
         let _ = Mrb::wrap::<Wrapped>;
         let _ = Mrb::wrap::<Derived>;
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, beni::InlineStruct)]
+        #[beni(class = "Inlined")]
+        #[repr(C)]
+        struct Inlined(u32);
+        let _ = Inline::<Inlined>::new;
+        let _ = Mrb::mark_inline_carrier::<Inlined>;
     }
     let _ = DataType::<i32>::new;
     {

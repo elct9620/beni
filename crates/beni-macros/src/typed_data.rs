@@ -1,14 +1,35 @@
 use proc_macro2::{Literal, TokenStream};
 use quote::{quote, ToTokens};
 use std::ffi::CString;
-use syn::{spanned::Spanned, Attribute, Data, DeriveInput, Error, Field, LitStr};
+use syn::parse::Parser;
+use syn::punctuated::Punctuated;
+use syn::{spanned::Spanned, Attribute, Data, DeriveInput, Error, Field, LitStr, Meta, Token};
 
 pub fn expand_wrap(attrs: TokenStream, item: TokenStream) -> TokenStream {
+    let (derive, attrs) = match inline_requested(attrs.clone()) {
+        Some(rest) => (quote!(::beni::InlineStruct), rest),
+        None => (quote!(::beni::TypedData), attrs),
+    };
     quote! {
-        #[derive(::beni::TypedData)]
+        #[derive(#derive)]
         #[beni(#attrs)]
         #item
     }
+}
+
+/// The arguments left once a bare `inline` is taken out of them, and
+/// nothing when `inline` is absent. Arguments that do not parse go on
+/// to the derive untouched, which reports them.
+fn inline_requested(attrs: TokenStream) -> Option<TokenStream> {
+    let parser = Punctuated::<Meta, Token![,]>::parse_terminated;
+    let metas = parser.parse2(attrs).ok()?;
+    let (inline, rest): (Vec<_>, Vec<_>) = metas
+        .into_iter()
+        .partition(|meta| matches!(meta, Meta::Path(path) if path.is_ident("inline")));
+    if inline.is_empty() {
+        return None;
+    }
+    Some(quote!(#(#rest),*))
 }
 
 pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
@@ -21,24 +42,10 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         ));
     }
 
-    let mut class = None;
-    let mut name = None;
-    attr.parse_nested_meta(|meta| {
-        if meta.path.is_ident("class") {
-            class = Some(nul_free(meta.value()?.parse()?)?);
-        } else if meta.path.is_ident("name") {
-            name = Some(nul_free(meta.value()?.parse()?)?);
-        } else {
-            return Err(unsupported(&meta, "`class` and `name`"));
-        }
-        Ok(())
-    })?;
-    let class = class.ok_or_else(|| Error::new(attr.span(), "missing attribute: `class = ...`"))?;
-    let name = name.unwrap_or_else(|| class.clone());
+    let (class, name) = class_and_name(attr)?;
 
     let ident = &input.ident;
-    let read_class = read_carrier(&class)?;
-    let name = Literal::c_string(&CString::new(name.value()).expect("checked NUL-free"));
+    let read_class = read_carrier(&class, "TypedData")?;
     let class_for = class_for(&input.data)?;
     let mark_carriers = mark_carriers(&class, &input.data)?;
     reject_field_attributes(&input.data)?;
@@ -66,18 +73,39 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     })
 }
 
+/// The `class` and `name` a type-level `#[beni]` attribute gives, `name`
+/// defaulting to `class`, as the C string the descriptor carries.
+pub fn class_and_name(attr: &Attribute) -> Result<(LitStr, Literal), Error> {
+    let mut class = None;
+    let mut name = None;
+    attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("class") {
+            class = Some(nul_free(meta.value()?.parse()?)?);
+        } else if meta.path.is_ident("name") {
+            name = Some(nul_free(meta.value()?.parse()?)?);
+        } else {
+            return Err(unsupported(&meta, "`class` and `name`"));
+        }
+        Ok(())
+    })?;
+    let class = class.ok_or_else(|| Error::new(attr.span(), "missing attribute: `class = ...`"))?;
+    let name = name.unwrap_or_else(|| class.clone());
+    let name = Literal::c_string(&CString::new(name.value()).expect("checked NUL-free"));
+    Ok((class, name))
+}
+
 /// Read the class `path` was marked as in the interpreter at hand.
 /// Nothing resolves here: the path resolved when the type's carriers
 /// were marked, so what a Ruby program binds over it reaches no wrap.
-fn read_carrier(path: &LitStr) -> Result<TokenStream, Error> {
+pub fn read_carrier(path: &LitStr, trait_name: &str) -> Result<TokenStream, Error> {
     let text = path.value();
     let literal = carrier_path(path)?;
+    let message = format!(
+        "{{}} was never marked as a carrier class in this interpreter; \
+         call <Self as ::beni::{trait_name}>::mark_carriers while the gem installs"
+    );
     Ok(quote! {
-        mrb.carrier(#literal).unwrap_or_else(|| panic!(
-            "{} was never marked as a carrier class in this interpreter; \
-             call <Self as ::beni::TypedData>::mark_carriers while the gem installs",
-            #text,
-        ))
+        mrb.carrier(#literal).unwrap_or_else(|| panic!(#message, #text))
     })
 }
 
@@ -97,7 +125,7 @@ fn mark_carriers(class: &LitStr, data: &Data) -> Result<TokenStream, Error> {
 
 /// A class path as the C string keying it, rejecting a path holding a
 /// segment no constant fetch could resolve.
-fn carrier_path(path: &LitStr) -> Result<Literal, Error> {
+pub fn carrier_path(path: &LitStr) -> Result<Literal, Error> {
     let text = path.value();
     if text.split("::").any(str::is_empty) {
         return Err(Error::new(path.span(), "class path holds an empty segment"));
@@ -119,7 +147,7 @@ fn class_for(data: &Data) -> Result<TokenStream, Error> {
             continue;
         };
         let ident = &variant.ident;
-        let read_class = read_carrier(&class)?;
+        let read_class = read_carrier(&class, "TypedData")?;
         arms.push(quote! { Self::#ident { .. } => #read_class });
     }
     if arms.is_empty() {
@@ -157,7 +185,7 @@ fn variant_class(variant: &syn::Variant) -> Result<Option<LitStr>, Error> {
 }
 
 /// A field takes no `#[beni]` attribute.
-fn reject_field_attributes(data: &Data) -> Result<(), Error> {
+pub fn reject_field_attributes(data: &Data) -> Result<(), Error> {
     let mut fields: Box<dyn Iterator<Item = &Field>> = match data {
         Data::Struct(data) => Box::new(data.fields.iter()),
         Data::Enum(data) => Box::new(data.variants.iter().flat_map(|v| v.fields.iter())),
@@ -169,7 +197,7 @@ fn reject_field_attributes(data: &Data) -> Result<(), Error> {
     }
 }
 
-fn beni_attribute(attrs: &[Attribute]) -> Result<Option<&Attribute>, Error> {
+pub fn beni_attribute(attrs: &[Attribute]) -> Result<Option<&Attribute>, Error> {
     let mut found = attrs.iter().filter(|attr| attr.path().is_ident("beni"));
     let first = found.next();
     if let Some(duplicate) = found.next() {

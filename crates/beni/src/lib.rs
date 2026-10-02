@@ -222,6 +222,26 @@ pub use typed_data::{RTypedData, TypedData};
 /// #[beni::wrap(class = "Point", name = "Po\0int")]
 /// struct Point;
 /// ```
+///
+/// With `inline`, the struct is stored inside the object as an inline
+/// struct instead: `wrap` derives `InlineStruct`, which needs a
+/// `bytemuck::Pod` type. Only `wrap` takes `inline`:
+///
+/// ```
+/// #[beni::wrap(class = "Vector2D", inline)]
+/// #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+/// #[repr(C)]
+/// struct Vector2D {
+///     x: f64,
+///     y: f64,
+/// }
+/// ```
+///
+/// ```compile_fail
+/// #[derive(beni::TypedData)]
+/// #[beni(class = "Point", inline)]
+/// struct Point;
+/// ```
 pub use beni_macros::wrap;
 
 /// ```
@@ -260,6 +280,57 @@ pub use beni_macros::wrap;
 /// struct Shape;
 /// ```
 pub use beni_macros::TypedData;
+
+/// ```
+/// #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, beni::InlineStruct)]
+/// #[beni(class = "Vector2D")]
+/// #[repr(C)]
+/// struct Vector2D {
+///     x: f64,
+///     y: f64,
+/// }
+/// ```
+///
+/// Implements `InlineStruct` and the by-value `TryConvert` / `IntoValue`
+/// for a plain-data struct; `class` and `name` read as `wrap` reads them.
+/// A type that is not `bytemuck::Pod`, outgrows three pointer widths, is
+/// not a struct, or is generic does not compile, nor does any attribute
+/// beyond `class` and `name`:
+///
+/// ```compile_fail
+/// #[derive(beni::InlineStruct)]
+/// #[beni(class = "Plain")]
+/// struct Plain(u32);
+/// ```
+///
+/// ```compile_fail
+/// #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, beni::InlineStruct)]
+/// #[beni(class = "Wide")]
+/// #[repr(C)]
+/// struct Wide([usize; 4]);
+/// ```
+///
+/// ```compile_fail
+/// #[derive(Clone, Copy, beni::InlineStruct)]
+/// #[beni(class = "Turn")]
+/// #[repr(u32)]
+/// enum Turn { Left, Right }
+/// ```
+///
+/// ```compile_fail
+/// #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, beni::InlineStruct)]
+/// #[beni(class = "Pair")]
+/// #[repr(C)]
+/// struct Pair<T: bytemuck::Pod>(T, T);
+/// ```
+///
+/// ```compile_fail
+/// #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, beni::InlineStruct)]
+/// #[beni(class = "Cell", inline)]
+/// #[repr(C)]
+/// struct Cell(u32);
+/// ```
+pub use beni_macros::InlineStruct;
 pub use value::cstr_ptr;
 pub use value::{Break, ReprValue, Value};
 

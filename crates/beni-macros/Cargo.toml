@@ -2,7 +2,8 @@
 #
 # A proc-macro crate can export nothing but macros, so they live here
 # and reach consumers through `beni`'s re-exports (`beni::wrap`,
-# `beni::TypedData`), as magnus-macros reaches them through `magnus`.
+# `beni::TypedData`, `beni::InlineStruct`), as magnus-macros reaches
+# them through `magnus`.
 # The expansions name `::beni` paths, so this crate never depends on it.
 
 [package]
