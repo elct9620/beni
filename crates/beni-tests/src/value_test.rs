@@ -1900,3 +1900,21 @@ fn classname_survives_a_gc_cycle() {
     mrb.full_gc();
     assert_eq!(name, "String");
 }
+
+#[test]
+fn tag_predicates_discriminate_a_c_pointer() {
+    let mrb = open_mrb();
+    let mut target = 0u8;
+    // SAFETY: the interpreter is live; boxing an address reads nothing.
+    let cptr = unsafe {
+        <Value as beni::sys::FromRawValue>::from_raw(beni::sys::mrb_cptr_value(
+            mrb.as_ptr(),
+            (&mut target as *mut u8).cast(),
+        ))
+    };
+
+    assert!(cptr.is_cptr());
+    assert!(!cptr.is_istruct() && !cptr.is_data());
+    assert!(!Value::nil().is_cptr());
+    assert!(!mrb.object_class().as_value().is_cptr());
+}

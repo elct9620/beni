@@ -987,6 +987,23 @@ impl Value {
         unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CDATA }
     }
 
+    /// TRUE when `self` carries `MRB_TT_ISTRUCT` — plain data stored
+    /// inside the object. See `Value::is_integer`. Pair with
+    /// `TryConvert` into `Inline<T>` for the type-checked read.
+    #[inline]
+    pub fn is_istruct(self) -> bool {
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_ISTRUCT }
+    }
+
+    /// TRUE when `self` carries `MRB_TT_CPTR` — a bare C pointer an
+    /// embedder or C gem boxed. See `Value::is_integer`.
+    #[inline]
+    pub fn is_cptr(self) -> bool {
+        // SAFETY: as `is_integer`.
+        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CPTR }
+    }
+
     /// TRUE when `self` carries `MRB_TT_STRING`. See `Value::is_integer`.
     /// Pair with `RString::as_bytes` for the byte-borrow path.
     #[inline]

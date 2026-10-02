@@ -100,6 +100,8 @@ typed:
   mrb_class_new_instance: "`RClass::obj_new` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed"
   mrb_class_p: "`Value::is_class`, via the value tag"
   mrb_data_p: "`Value::is_data`, via the value tag"
+  mrb_istruct_p: "`Value::is_istruct`, via the value tag"
+  mrb_cptr_p: "`Value::is_cptr`, via the value tag"
   mrb_exception_p: "`Value::is_exception`, via the value tag"
   mrb_float_p: "`Value::is_float`, via the value tag"
   mrb_hash_p: "`Value::is_hash`, via the value tag"

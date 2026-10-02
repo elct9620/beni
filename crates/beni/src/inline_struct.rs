@@ -233,9 +233,7 @@ impl<T> Fits<T> {
 
 impl<T: InlineStruct> TryConvert for Inline<T> {
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        // SAFETY: `mrb_type` is a pure predicate over the value tag.
-        let istruct = unsafe { sys::mrb_type(val.as_raw()) } == sys::MRB_TT_ISTRUCT;
-        if istruct && belongs_to::<T>(mrb, val.class(mrb)) {
+        if val.is_istruct() && belongs_to::<T>(mrb, val.class(mrb)) {
             return Ok(Self {
                 value: val,
                 _marker: PhantomData,

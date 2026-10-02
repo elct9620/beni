@@ -10,8 +10,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
 | function | 321 | 320 (100%) | 230 (72%) |
-| macro | 111 | 29 (26%) | 72 (65%) |
-| total | 432 | 349 (81%) | 302 (70%) |
+| macro | 111 | 29 (26%) | 74 (67%) |
+| total | 432 | 349 (81%) | 304 (70%) |
 
 ## mruby.h
 
@@ -482,7 +482,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_bool_value` | fn | ✅ | ✅ | `IntoValue for bool` — a Rust bool boxes to the true/false immediate (see convert extension) |
 | `mrb_break_p` | macro | ✅ | ✅ | `Value::as_break` |
 | `mrb_class_p` | macro | ❌ | ✅ | `Value::is_class`, via the value tag |
-| `mrb_cptr_p` | macro | ❌ | ❌ |  |
+| `mrb_cptr_p` | macro | ❌ | ✅ | `Value::is_cptr`, via the value tag |
 | `mrb_cptr_value` | fn | ✅ | 🚫 | declined: boxes a bare `void*` into a value — Principle 11: a raw pointer crossing into the typed domain, and reading it back answers the same untyped pointer, so no typed shape carries more than the raw call. mruby uses it as the context an `mrb_ensure` callback reads (`vendor/mruby/mrbgems/mruby-socket/src/socket.c:222`), which a Rust closure carries; Rust data an object owns crosses through `TypedData` |
 | `mrb_data_p` | macro | ❌ | ✅ | `Value::is_data`, via the value tag |
 | `mrb_env_p` | macro | ❌ | ❌ |  |
@@ -502,7 +502,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_int_read` | fn | ✅ | ❌ |  |
 | `mrb_int_value` | fn | ✅ | ✅ | `IntoValue` for a Rust integer — boxes every integer type the configured integer width holds, so the configured-width integer never reaches a signature (see convert extension) |
 | `mrb_integer_p` | macro | ❌ | ✅ | `Value::is_integer` — true for any Integer; the immediate-only `mrb_fixnum_p`, which diverges from this under word boxing, is intentionally not graduated |
-| `mrb_istruct_p` | macro | ❌ | ❌ |  |
+| `mrb_istruct_p` | macro | ❌ | ✅ | `Value::is_istruct`, via the value tag |
 | `mrb_module_p` | macro | ❌ | ✅ | `Value::is_module`, via the value tag |
 | `mrb_msvc_snprintf` | fn | ❌ | 🚫 | conditional: `_MSC_VER` — MSVC's `snprintf` shim, absent from every toolchain beni builds with |
 | `mrb_msvc_vsnprintf` | fn | ❌ | ❌ |  |

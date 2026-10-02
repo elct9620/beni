@@ -59,6 +59,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::is_sclass;
     let _ = Value::is_proc;
     let _ = Value::is_data;
+    let _ = Value::is_istruct;
+    let _ = Value::is_cptr;
     let _ = Value::is_string;
     let _ = Value::is_symbol;
     let _ = Value::unbox_integer;
