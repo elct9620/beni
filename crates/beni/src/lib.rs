@@ -29,6 +29,7 @@
 //!                      symbol / proc  (Id, Symbol / Proc newtypes)
 //!                      data           (DataType<T>, a carrier's data type)
 //!                      typed_data     (TypedData + RTypedData / Obj<T>)
+//!                      inline_struct  (InlineStruct + Inline<T>)
 //!                      ccontext       (Ccontext RAII)
 //!                      error / parse  (Error + ParseMessage — the shapes
 //!                                      a failure is reported in)
@@ -72,6 +73,7 @@ pub mod data;
 pub mod error;
 pub mod gem;
 pub mod hash;
+pub mod inline_struct;
 pub mod method;
 pub mod parse;
 pub mod proc;
@@ -105,6 +107,7 @@ pub use data::DataType;
 pub use error::Error;
 pub use gem::Gem;
 pub use hash::{ForEach, Hash};
+pub use inline_struct::{Inline, InlineStruct, InlineType};
 pub use method::{MethodDef, MethodReturn};
 pub use parse::ParseMessage;
 pub use proc::{DumpOptions, Proc};

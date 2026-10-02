@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 321 | 320 (100%) | 227 (71%) |
+| function | 321 | 320 (100%) | 230 (72%) |
 | macro | 111 | 29 (26%) | 72 (65%) |
-| total | 432 | 349 (81%) | 299 (69%) |
+| total | 432 | 349 (81%) | 302 (70%) |
 
 ## mruby.h
 
@@ -387,9 +387,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_istruct_copy` | fn | ✅ | ❌ |  |
-| `mrb_istruct_ptr` | fn | ✅ | ❌ |  |
-| `mrb_istruct_size` | fn | ✅ | ❌ |  |
+| `mrb_istruct_copy` | fn | ✅ | ✅ | subsumed: `Inline::set` with `Inline::get` — the payload copied between two inline structs of the same type, whose layout the type already carries |
+| `mrb_istruct_ptr` | fn | ✅ | ✅ | `Inline::get` and `Inline::set` — read and replace the payload by copy, the only access to it the typed surface hands out |
+| `mrb_istruct_size` | fn | ✅ | ✅ | `InlineStruct` — the payload bound a type must fit, held at compile time |
 ## mruby/numeric.h
 
 | Symbol | Kind | sys | typed | Note |

@@ -141,6 +141,8 @@ typed:
   mrb_data_check_get_ptr: "`TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — the type-checked read of a carrier's payload"
   mrb_data_check_type: "`TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — a mismatch surfaces the `TypeError` this check raises, protected into an `Err`"
   mrb_data_init: "`typed_data::Dup::clone` — installs a clone of the payload into the bare carrier `mrb_obj_clone` made, the one install on the typed surface"
+  mrb_istruct_ptr: "`Inline::get` and `Inline::set` — read and replace the payload by copy, the only access to it the typed surface hands out"
+  mrb_istruct_size: "`InlineStruct` — the payload bound a type must fit, held at compile time"
   mrb_data_object_alloc: "`Mrb::wrap_as`, and `wrap` / `obj_wrap` / `obj_wrap_as` through it — protected, so an unmarked class, which breaks `TypedData`'s contract, reclaims the box and panics rather than raising across the boundary"
   mrb_define_alias: "`Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id`"
   mrb_define_alias_id: "`Module::alias_method` with `Id` keys (the symbol-or-name key, both names keyed independently)"
@@ -463,6 +465,7 @@ get_args_formats:
   "!": { status: covered, via: "scan_args + FromValue<Option<T>> — nil reads as None, any other value by T's rule" }
   "+": { status: covered, via: "scan_args + Value::check_frozen" }
 subsumed:
+  mrb_istruct_copy: "`Inline::set` with `Inline::get` — the payload copied between two inline structs of the same type, whose layout the type already carries"
   mrb_funcall: "`Value::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"
   mrb_funcall_id: "`Value::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"
   mrb_yield: "`Proc::call` — the one-argument form of `mrb_yield_argv` (`vendor/mruby/src/vm.c:1328` passes `1, &arg` to the same `yield_with_attr`); a Rust slice of one carries it"

@@ -57,6 +57,28 @@ fn described(val: Value, mrb: &Mrb) -> String {
     }
 }
 
+/// The `TypeError` mruby's `mrb_check_type` raises for a value of the
+/// wrong type, naming the value as that check names it.
+pub(crate) fn wrong_argument_type(val: Value, mrb: &Mrb, expected: &str) -> Error {
+    // SAFETY: `mrb_type` is a pure predicate over the value tag.
+    let immediate = unsafe { beni_sys::mrb_type(val.0) } <= beni_sys::MRB_TT_CPTR;
+    let named = if val.is_nil() {
+        "nil".to_owned()
+    } else if val.is_integer() {
+        "Integer".to_owned()
+    } else if val.is_symbol() {
+        "Symbol".to_owned()
+    } else if immediate {
+        val.to_string(mrb)
+    } else {
+        val.classname(mrb)
+    };
+    type_error(
+        mrb,
+        &format!("wrong argument type {named} (expected {expected})"),
+    )
+}
+
 /// The `TypeError` mruby raises for a value its `target` class does not
 /// convert.
 pub(crate) fn not_convertible(val: Value, mrb: &Mrb, target: &str) -> Error {

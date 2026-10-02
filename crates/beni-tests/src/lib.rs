@@ -19,6 +19,9 @@ mod error_test;
 mod factory_test;
 mod gem_test;
 mod hash_test;
+// Two `f64`s outgrow a 32-bit target's inline-struct payload.
+#[cfg(target_pointer_width = "64")]
+mod inline_struct_test;
 mod load_test;
 mod method_test;
 mod proc_test;

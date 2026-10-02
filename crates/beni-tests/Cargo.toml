@@ -45,4 +45,7 @@ bytes = ["beni/bytes", "dep:bytes"]
 
 [dependencies]
 beni = { path = "../beni" }
+# `bytemuck` — the `Pod` derive an `InlineStruct` payload needs, as a
+# consumer writes it.
+bytemuck = { version = "1", features = ["derive"] }
 bytes = { version = "1", optional = true }

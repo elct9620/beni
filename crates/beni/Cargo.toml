@@ -64,3 +64,11 @@ beni-sys = { path = "../beni-sys", version = "0.18.0" }
 # crate root as `beni::wrap` and `beni::TypedData`.
 beni-macros = { path = "../beni-macros", version = "0.18.0" }
 bytes = { version = "1", optional = true }
+# `bytemuck` — `Pod` bounds `InlineStruct`: a payload mruby stores
+# inside the object holds plain data alone, so a core capability
+# depends on it in every build rather than behind a feature.
+bytemuck = { version = "1", default-features = false }
+
+[dev-dependencies]
+# The `Pod` derive the `InlineStruct` documentation examples write.
+bytemuck = { version = "1", features = ["derive"] }

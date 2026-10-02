@@ -338,6 +338,14 @@ mrb_instance_tt_func(struct RClass *c)
   return MRB_INSTANCE_TT(c);
 }
 
+/* The C pointer a `MRB_TT_CPTR` value carries. Counterpart to the
+ * `mrb_cptr(o)` macro, whose expansion differs per boxing mode. */
+static inline void *
+mrb_cptr_func(mrb_value o)
+{
+  return mrb_cptr(o);
+}
+
 /* Undefine a class's default allocator. Counterpart to the
  * `MRB_UNDEF_ALLOCATOR(c)` macro in <mruby/class.h>, which sets the
  * class's `MRB_FL_UNDEF_ALLOCATE` flag bit that bindgen cannot expand.

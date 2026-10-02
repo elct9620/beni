@@ -106,6 +106,26 @@ fn full_api_surface_is_reachable_from_outside() {
         let _ = Mrb::wrap::<Derived>;
     }
     let _ = DataType::<i32>::new;
+    {
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        #[repr(C)]
+        struct Packed(u32);
+        static PACKED: InlineType<Packed> = InlineType::new(c"Packed");
+        // SAFETY: never wrapped; named only for its paths.
+        unsafe impl InlineStruct for Packed {
+            fn class(mrb: &Mrb) -> RClass {
+                mrb.object_class()
+            }
+            fn inline_type() -> &'static InlineType<Self> {
+                &PACKED
+            }
+        }
+        let _ = Inline::<Packed>::new;
+        let _ = Inline::<Packed>::get;
+        let _ = Inline::<Packed>::set;
+        let _ = RClass::set_instance_inline_tt::<Packed>;
+    }
+    let _ = InlineType::<i32>::new;
     let _ = ExceptionClass::as_r_class;
     let _ = ExceptionClass::raise;
     let _ = ExceptionClass::exc_new;
