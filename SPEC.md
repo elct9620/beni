@@ -965,7 +965,10 @@ its key can surface.
   payload and panics rather than raising across the boundary. The mruby
   garbage collector owns a wrapped payload, releasing it when its carrier is
   collected — on whichever thread reaches the interpreter, so a type is
-  `TypedData` only if it can cross threads.
+  `TypedData` only if it can cross threads. The collector never traces into a
+  payload, so a value a payload keeps past the frame that stored it stays valid
+  only through one of the GC validity rule's exemptions: a hidden instance
+  variable of its carrier, or a root.
 - A wrapped payload reads back as `&T` through the `TryConvert` rule for
   `&T` — a method takes its receiver or an argument that way — through an
   `RTypedData` handle's read, which answers that rule's `Result`, and through
@@ -1235,9 +1238,11 @@ The `compiler` capability feature carries everything in this section.
   holds: a value that crossed out to Rust — created or read — is not used
   after the innermost arena scope open as it crossed out ends, nor after the
   C frame it crossed out in returns to mruby, and a survivor carried out
-  through `keep` counts as crossing out where its scope was opened. A rooted
-  value is exempt for as long as its root lives, which is what lets a value
-  outlive the frame that made it.
+  through `keep` counts as crossing out where its scope was opened. A value is
+  exempt while something keeps it reachable for the collector, which is what
+  lets a value outlive the frame that made it: a root, for as long as the root
+  lives, and a hidden instance variable, for as long as the object holding it
+  stays reachable and the variable keeps that value.
   The type system does not enforce the rule; the consumer upholds it.
 - The typed and raw domains meet asymmetrically. A typed form answers the
   raw form it carries — a value handle its value, an `Id` its interned id —
@@ -1415,6 +1420,7 @@ The `compiler` capability feature carries everything in this section.
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
 | exception class | `Exception` itself or an ordinary class descending from it — never a singleton class — so every instance it allocates is an exception; the class an `ExceptionClass` handle names |
 | carrier record | one interpreter's record of the class each `class` path of a macro-implemented `TypedData` type was marked as; `mark_carriers` writes it and every naming of such a class reads it |
+| hidden instance variable | an instance variable whose name does not begin with `@`, which no Ruby program can read, write, list, or remove; only a caller of the embedder API reaches it |
 | plain object | an instance in the ordinary object layout `Object` and `BasicObject` give their instances, rather than a built-in type's own layout (an exception, a string, a number, …) or a data carrier's; a class allocates its instances in the layout its superclass allocated in when the class was defined |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
