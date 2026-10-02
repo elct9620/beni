@@ -31,6 +31,7 @@
 #include <mruby/error.h>
 #include <mruby/hash.h>
 #include <mruby/irep.h>
+#include <mruby/istruct.h>
 #include <mruby/numeric.h>
 #include <mruby/proc.h>
 #include <mruby/range.h>

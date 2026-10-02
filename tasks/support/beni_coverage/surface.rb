@@ -21,6 +21,7 @@ module BeniCoverage
       mruby/gc.h
       mruby/hash.h
       mruby/irep.h
+      mruby/istruct.h
       mruby/numeric.h
       mruby/proc.h
       mruby/range.h
