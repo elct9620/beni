@@ -356,3 +356,12 @@ fn a_path_bound_to_another_class_after_marking_reaches_no_wrap() {
         "the wrap reaches the class the record holds"
     );
 }
+
+#[test]
+#[should_panic(expected = "does not belong to Vector2D")]
+fn wrapping_into_a_class_never_marked_for_the_type_panics() {
+    let mrb = open_mrb();
+    define(&mrb, c"BeniVector2D");
+
+    let _ = Inline::new(&mrb, Vector2D { x: 0.0, y: 0.0 });
+}
