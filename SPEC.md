@@ -290,7 +290,9 @@ Selection, checksums, and cross-compile activation:
 - A dependency feature is the second axis beside capability: it carries the
   conversions to a third-party Rust crate's types, gated as `magnus` gates the
   same integration. It is disabled by default, and like a capability feature it
-  only adds surface.
+  only adds surface. A third-party trait that bounds a core capability is no
+  dependency feature: `bytemuck`, whose `Pod` bounds `InlineStruct`, is a
+  dependency of every build.
 - `bytes` is a dependency feature carrying the `bytes` crate's `Bytes`: a
   string handle reads its bytes as a `Bytes`, `TryConvert` converts a String
   into one, and `IntoValue` copies one into a new String, mirroring `magnus`'s
@@ -310,6 +312,7 @@ arguments cross, mirroring `magnus`'s `TryConvert`:
 | `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`bool`, or a Rust integer or float the rows below admit) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` / `RTypedData` / `Obj<T>` — yields the value naming that same object, and an `Id` boxes into the symbol value it names, raising nothing and running no Ruby |
 | `IntoValue` for a Rust integer | Rust integer → Integer `Value` | a Rust integer type converts only where every value it holds fits the configured integer width, so the conversion stays total: `i8` / `i16` / `i32` / `u8` / `u16` under every width, `u32` / `i64` under a 64-bit width, `isize` where the cargo target's pointer width is no wider than the configured integer width; every other integer type — `u64`, `usize`, `i128`, `u128`, and a `u32` / `i64` / `isize` the width does not fit — has no conversion and fails to compile |
 | `IntoValue` for a typed data value | `T: TypedData` → data carrier `Value` | wraps the value as a new instance of the class its type names for it, as `obj_wrap` does; total for every type that keeps the `TypedData` contract |
+| `IntoValue` for an inline struct | `Inline<T>`, or a `T` the `InlineStruct` macros implement → inline struct `Value` | the handle answers its own value; a value wraps as a new instance of its type's class, as `Inline::new` does; total for every type that keeps the `InlineStruct` contract |
 | `IntoValue` for `Bytes`, with the `bytes` feature | `Bytes` → String `Value` | copies the bytes into a new String |
 | `IntoValue` for a Rust float | Rust float → Float `Value` | a Rust float type converts only where every value it holds fits the configured float width, so the conversion stays total: `f32` under every width, `f64` under a 64-bit width; an `f64` under a 32-bit width has no conversion and fails to compile |
 | `FromValue` → `Value` | `Value` → `Value` | identity — the value itself; total, never rejects |
@@ -331,6 +334,7 @@ arguments cross, mirroring `magnus`'s `TryConvert`:
 | `TryConvert` → `HashMap<K, V>` / `BTreeMap<K, V>` | `Value` → Rust map | converts a Hash, each key and value by its own type's rule, surfacing the first `Err`; *target* is `Hash` |
 | `TryConvert` → `RTypedData` | `Value` → typed handle | converts any data carrier, holding a payload or not; any other value surfaces the `TypeError` "wrong argument type *value* (expected C data)", *value* named as mruby's own type check names it |
 | `TryConvert` → `&T` / `Obj<T>` for `T: TypedData` | `Value` → reference to the payload, or typed handle | converts a data carrier holding a payload of `T`'s data type, and surfaces the `TypeError` mruby's own data-type check raises otherwise: "wrong argument type *value* (expected C data)" for a value that is no data carrier, "wrong argument type *name* (expected *T name*)" for a carrier of another data type, *name* that data type's name, and "uninitialized *class* (expected *T name*)" for a carrier holding no payload, *class* the carrier's class; *T name* is the name `T`'s data type declares. The reference borrows the payload for as long as its carrier stays reachable |
+| `TryConvert` → `Inline<T>`, or a `T` the `InlineStruct` macros implement, for `T: InlineStruct` | `Value` → typed handle, or a copy of the payload | converts an inline struct whose class belongs to `T`; any other value surfaces the `TypeError` "wrong argument type *value* (expected *T name*)", *value* named as mruby's own type check names it and *T name* the name `T` declares |
 
 A sequence or map target holds any element type `TryConvert` converts to, a
 `Value` or typed handle included: each element crosses out to Rust and stays
@@ -656,6 +660,7 @@ raise/return contract:
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
 | Marks a class so its instances carry Rust data, or prepares a `TypedData` type's carrier classes in an interpreter | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`); preparing also when a class path resolves to no class, or to a value that is not a class | `Result` |
 | Reads a data carrier's payload through an `RTypedData` handle, or copies a carrier through `typed_data::Dup`'s `clone` | the carrier holds no payload or one of another data type (a `TypeError`); `clone` also when it is passed an argument (an `ArgumentError`) or the copy's `initialize_copy` raises | `Result` |
+| Prepares an `InlineStruct` type's class in an interpreter, converts a value to an inline struct of a type, or replaces an inline struct's payload | preparing: the class's instances are not plain objects and the class does not belong to the same type (a `TypeError`), or the class path resolves to no class or to a value that is not a class; converting: the value is no inline struct of the type (a `TypeError`); replacing: the receiver is frozen (a `FrozenError`) | `Result` |
 | Reads the call's arguments by shape — a scan read or the single-argument read in a method registered for any arity, or a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or a keyword no list names when the read collects no rest; a scan read of an array-handle splat and an optional block alone fits every call | `Result` |
 | Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, the context's filename is too long to be a symbol, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
 | Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
@@ -1031,6 +1036,48 @@ its key can surface.
   marks it carries neither, and wrapping into it breaks the contract as an
   unmarked class does. Marking while gems install precedes every class a Ruby
   program defines, so each subclass a program defines carries both.
+- A Rust value also backs an mruby object as an inline struct (`ISTRUCT`),
+  mruby's layout for plain data stored inside the object itself. A Rust type
+  opts in by implementing the `unsafe` `InlineStruct` trait, which requires
+  `bytemuck::Pod` and `Send`: it names the class its values wrap as and the
+  name diagnostics show for it, and `InlineStruct::mark_carriers` prepares that
+  class in one interpreter. A type whose size exceeds three pointer widths, or
+  whose alignment exceeds one, does not compile as an `InlineStruct`. `Pod`
+  admits no `Value` or typed handle, so an inline struct holds no value: the
+  collector never traces its payload, and it has no instance variables.
+- `mark_carriers` resolves the class path as the `TypedData` macros resolve
+  theirs, marks the class so its instances are inline structs, undefines its
+  default allocator, and holds the class in the interpreter's carrier record
+  together with the type it belongs to. A class belongs to an `InlineStruct`
+  type when the nearest class in its ancestry the record holds — the class
+  itself or a superclass — is held for that type. Only a class whose instances
+  are plain objects, or a class belonging to the same type, accepts the mark;
+  any other class refuses it with a `TypeError` and stays unmarked, an
+  inline-struct class mruby or a C gem defined included. It surfaces an `Err`
+  when the path resolves to no class or to a value that is not a class.
+- An inline struct converts back only to the type its class belongs to: a value
+  converts to `T` when it is an inline struct whose class belongs to `T`, and
+  any other value surfaces the `TypeError` "wrong argument type *value*
+  (expected *T name*)", *value* named as mruby's own type check names it.
+- `Inline<T>` is the typed handle over an inline struct of `T`, mirroring
+  `Obj<T>`: `Inline::new` wraps a value as a new instance of the type's class,
+  `get` answers a copy of the payload, and `set` replaces the whole payload or,
+  on a frozen receiver, surfaces the `FrozenError` mruby raises and leaves the
+  payload unchanged. Nothing hands out a reference into the payload. Wrapping
+  into a class that does not belong to the type breaks the trait's contract,
+  and the wrap panics rather than raising across the boundary.
+- mruby's `dup` and `clone` of an inline struct copy its payload, so a copy
+  converts as the original does. Ruby's `new` and `allocate` raise as for any
+  class whose allocator is undefined, so a type defines the constructor its
+  Ruby callers use.
+- `#[derive(beni::InlineStruct)]` with a `#[beni(class = "…")]` attribute, and
+  `#[beni::wrap(class = "…", inline)]`, implement `InlineStruct` for a struct,
+  taking `class` and `name` as the `TypedData` macros take them. A type they
+  implement it for also converts by value: `TryConvert` answers a copy of the
+  payload, and `IntoValue` wraps the value as `Inline::new` does. They reject
+  an enum, a union, a type with generic parameters or lifetimes, and every
+  attribute but `class`, `name`, and `inline`, at compile time; `inline` is
+  accepted by `wrap` alone.
 
 #### Garbage collection
 
@@ -1383,9 +1430,13 @@ The `compiler` capability feature carries everything in this section.
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A `TypedData` value wrapped as an instance of a class that cannot carry data — one never marked, breaking the `TypedData` contract | the payload not yet handed to a carrier is reclaimed, never leaked, and the wrap panics; nothing unwinds across FFI |
 | A `TypedData` type's carriers marked in an interpreter where a path resolves to no class, resolves to a value that is not a class, or names a class that refuses the mark | surfaced as a Rust `Err`; whichever classes it marked before the failure stay marked and held |
+| An `InlineStruct` type's class marked in an interpreter where the path resolves to no class or to a value that is not a class, or names a class whose instances are not plain objects and that does not belong to the same type | surfaced as a Rust `Err`; the class stays unmarked |
+| An `InlineStruct` value wrapped as an instance of a class that does not belong to its type, breaking the `InlineStruct` contract | the wrap panics; nothing unwinds across FFI |
+| A value converted to an inline struct of a type it is not, or an inline struct's payload replaced while it is frozen | surfaced as a Rust `Err` carrying the `TypeError` or `FrozenError`, never unwinds across FFI |
 | A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — whose path the interpreter's carrier record does not hold | panics, naming the `mark_carriers` call that records it; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
 | Ruby's `new` or `allocate` on a class whose default allocator is undefined | raises mruby's `TypeError` "allocator undefined for *class*"; reached through the typed surface, surfaced as a Rust `Err` |
 | A `wrap` or `TypedData` derive missing `class`, given an attribute the macros do not accept, a value holding a NUL byte, or a `class` path holding an empty segment, or applied to a type with generic parameters or lifetimes | a compile error naming the offending attribute, value, or generics; nothing is generated |
+| An `InlineStruct` derive or `wrap(inline)` applied to an enum, a union, or a type with generic parameters or lifetimes, given an attribute it does not accept, or applied to a type that is not `bytemuck::Pod` or exceeds three pointer widths in size or one in alignment | a compile error; nothing usable is generated |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
@@ -1419,7 +1470,8 @@ The `compiler` capability feature carries everything in this section.
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
 | exception class | `Exception` itself or an ordinary class descending from it — never a singleton class — so every instance it allocates is an exception; the class an `ExceptionClass` handle names |
-| carrier record | one interpreter's record of the class each `class` path of a macro-implemented `TypedData` type was marked as; `mark_carriers` writes it and every naming of such a class reads it |
+| carrier record | one interpreter's record of the class each `class` path of a macro-implemented `TypedData` type was marked as, and of each class an `InlineStruct` type was marked as together with the type it belongs to; `mark_carriers` writes it and every naming of such a class, and every conversion to an inline struct, reads it |
+| inline struct | an object in mruby's `ISTRUCT` layout, holding up to three pointer widths of plain data inside the object itself — no heap payload, no release hook, no instance variables |
 | hidden instance variable | an instance variable whose name does not begin with `@`, which no Ruby program can read, write, list, or remove; only a caller of the embedder API reaches it |
 | plain object | an instance in the ordinary object layout `Object` and `BasicObject` give their instances, rather than a built-in type's own layout (an exception, a string, a number, …) or a data carrier's; a class allocates its instances in the layout its superclass allocated in when the class was defined |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
