@@ -359,14 +359,6 @@ Float's value, a parsed float, a numeric conversion's result — is `f64`, which
 holds every configured float width, so those signatures too read the same under
 each. The crate takes each configured width from its own metadata alone.
 
-A value also converts to an `RString` handle by the same String type tag, but
-surfacing the mismatch as an `Err` rather than rejecting to `None`: it succeeds
-with the handle on a String tag and surfaces a `TypeError` on any other tag. It
-runs no user Ruby — it dispatches no `to_str` — so it is the raising counterpart
-to the `FromValue` → `RString` downcast, not the dispatching `to_s` string
-coercion. The downcast suits a handler that treats a non-String as absent; the
-raising form suits one that requires a String argument and rejects anything else.
-
 Type discrimination is the typed handle's `FromValue` downcast, magnus's
 `from_value`: every type tag a value a typed caller holds can carry, the break
 tag aside, converts into a handle, which accepts precisely what the table names
@@ -449,39 +441,15 @@ when the bytes are not a valid float. This parse anchors on mruby's own
 `mrb_str_to_dbl`; it is the strict counterpart of Ruby's lenient `String#to_f`,
 which never raises.
 
-The inverse direction renders an Integer value to a new `RString` in a given
-radix, the way Ruby's `Integer#to_s(base)` does — `12345` to `"3039"` in base 16.
-The radix is one of 2 through 36; a radix outside that domain surfaces an `Err`,
-the `ArgumentError` mruby raises. The render guards its receiver on the Integer
-tag rather than trusting it, so a non-Integer value surfaces an `Err` carrying a
-`TypeError` instead of reading a malformed value. magnus offers no direct radix
-render, so this anchors on mruby's own `mrb_integer_to_str`.
+An `Integer` handle renders to a new `RString` in a given radix, the way Ruby's
+`Integer#to_s(base)` does — `12345` to `"3039"` in base 16. The radix is one of
+2 through 36; a radix outside that domain surfaces an `Err`, the `ArgumentError`
+mruby raises. Mirrors mruby's `mrb_integer_to_str`.
 
-A Float value converts to the Integer value it truncates toward zero, the way
-Ruby's `Float#to_i` / `Float#to_int` core does — `3.9` to `3`, `-3.9` to `-3`.
-The conversion guards its receiver on the Float tag, so a non-Float value
-surfaces an `Err` carrying a `TypeError`; an infinite or NaN float has no integer
-and surfaces an `Err` carrying a `RangeError`. This stays in mruby's value domain
-— a Float value to an Integer value, not a value to a Rust scalar — and anchors
-on mruby's own `mrb_float_to_integer`.
-
-A value also coerces by numeric type to an `Integer` value or a `Float` value,
-each staying in mruby's value domain rather than reading out a Rust scalar. The
-Integer coercion takes an `Integer` unchanged and converts a `Float` to the
-Integer it truncates toward zero; the Float coercion takes a `Float` unchanged
-and widens an `Integer`. Both surface an `Err` carrying a `TypeError` for a value
-of any non-numeric type — and the Integer coercion, going through the same Float
-truncation, surfaces an `Err` carrying a `RangeError` for an infinite or NaN
-`Float`. They coerce between the numeric types, unlike the exact-tag `FromValue`
--> integer / float downcasts, which reject any other tag outright; and they run
-no user Ruby — they dispatch no `to_int` or `to_f`. The Integer coercion also
-narrows an arbitrary-width Integer to one that fits the configured integer width,
-mruby's distinction between the two; under beni's pinned word-boxing config every
-Integer already fits, so the narrowing never changes the result. magnus offers no
-numeric-tag coercion — its conversions either downcast on the exact tag or
-dispatch the full Ruby `to_int` / `to_f` protocol — so these anchor on mruby's own
-`mrb_ensure_int_type` (over `mrb_ensure_integer_type`, which the width narrowing
-wraps) and `mrb_ensure_float_type`.
+A `Float` handle converts to the `Integer` it truncates toward zero, the way
+Ruby's `Float#to_i` does — `3.9` to `3`, `-3.9` to `-3`; an infinite or NaN
+float has no integer and surfaces an `Err` carrying a `RangeError`. Mirrors
+mruby's `mrb_float_to_integer`.
 
 Two numeric values add, subtract, or multiply into a new numeric value, the way
 Ruby's `+`, `-`, and `*` do on `Integer` and `Float` — `2 + 3` to `5`, `2 + 3.5`
@@ -672,9 +640,9 @@ raise/return contract:
 | Mutates a receiver — array append/remove/extend/replace/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment and removal, class-variable assignment, constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables; a class-variable assignment also when the receiver is not a class or module; a constant assignment or removal also when the receiver is not a class or module | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, a `<=>` comparison, an object `dup` / `clone` or string coercion, a splat coercion to an array running a non-array's `to_a`, an array join rendering each element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the receiver is not a class or module or the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` (a `<=>` comparison yields nothing when the two values are incomparable) |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the receiver is not a class or module, or the name resolves to no class variable | `Result` |
-| Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `RArray` / `RHash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
+| Converts or computes without dispatching — a `TryConvert` conversion, a Float to the Integer it truncates, or an arithmetic of two numeric values (add / subtract / multiply) | a `TryConvert` mismatch, as its rule names; either operand of an arithmetic is non-numeric (a `TypeError`); an infinite / NaN float converts to integer (a `RangeError`); an integer arithmetic exceeds the configured integer width (a `RangeError`) | `Result` |
 | Interns a name, creating its symbol — a C-string, byte-slice, String-value, or static-buffer intern, or a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (an `ArgumentError`) | `Result` |
-| Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
+| Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
 | Marks a class so its instances carry Rust data, or prepares a `TypedData` type's carrier classes in an interpreter | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`); preparing also when a class path resolves to no class, or to a value that is not a class | `Result` |
 | Reads a data carrier's payload through an `RTypedData` handle, or copies a carrier through `typed_data::Dup`'s `clone` | the carrier holds no payload or one of another data type (a `TypeError`); `clone` also when it is passed an argument (an `ArgumentError`) or the copy's `initialize_copy` raises | `Result` |
 | Prepares an `InlineStruct` type's class in an interpreter, converts a value to an inline struct of a type, or replaces an inline struct's payload | preparing: the class's instances are not plain objects and the class does not belong to the same type (a `TypeError`), or the class path resolves to no class or to a value that is not a class; converting: the value is no inline struct of the type (a `TypeError`); replacing: the receiver is frozen (a `FrozenError`) | `Result` |
