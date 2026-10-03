@@ -23,7 +23,7 @@ next run starts from a shorter list.
 
 The repo can measure what is *not bound yet*. It cannot measure what *should be bound*.
 
-That second question is answered by SPEC.md and CLAUDE.md, and they outrank the
+That second question is answered by SPEC.md, and it outranks the
 measurement whenever the two disagree. Nearly every candidate a survey produces is a
 deliberate decision rather than a defect — a symbol that stays in `sys` because no
 wrapper can encode its invariant is *correctly* absent, however often mrbgems call it.
@@ -38,7 +38,7 @@ what the measurement ought to be. The argument selects one; absent an argument, 
 
 | Lens | Survey command | Design authority |
 |---|---|---|
-| `api-coverage` (default) | `bundle exec rake "api:priority[40]"` | SPEC.md · CLAUDE.md Principle 11 · `.api_coverage.yml` |
+| `api-coverage` (default) | `bundle exec rake "api:priority[40]"` | SPEC.md · its graduation rule · `.api_coverage.yml` |
 
 Two things about the `api:*` family are easy to get wrong:
 
@@ -84,10 +84,10 @@ needs those sentences more than the fix does.
 1. **SPEC.md** — the source of truth. A behaviour SPEC describes but the crates lack is an
    implementation bug, and a real gap. SPEC's silence is not permission to build: it is
    the signal to extend SPEC first.
-2. **CLAUDE.md Principle 11** — the graduation bar. An operation reaches the typed surface
-   only when the wrapper can encode its invariant as a lifetime, a carrier, or a runtime
-   check. A value that is VM-internal with no shape to add belongs in `sys` and is not a
-   gap.
+2. **SPEC's graduation rule** ("Graduation, safety, and coverage") — the bar. An operation
+   reaches the typed surface only when the wrapper can encode its invariant as a lifetime,
+   a carrier, or a runtime check, and magnus gives it no `unsafe` form. A value that is
+   VM-internal with no shape to add belongs in `sys` and is not a gap.
 3. **`.api_coverage.yml`** — the manifest records, per symbol, that it is
    graduated (`typed`), covered by an item that subsumes it (`subsumed`), kept off
    the typed surface for want of a shape (`declined`), or absent from this ABI
@@ -222,7 +222,7 @@ Gate: `bundle exec rake` <green|red> · Survey: <N> candidates · Eligible: <N>
 | Candidate | Verdict | Settled by |
 |---|---|---|
 | `mrb_foo_bar` | taken | SPEC.md §… "the wrapper reads it through a carrier" — described, not implemented |
-| `mrb_ci_baz` | declined | Principle 11 — call-frame index, no carrier to add |
+| `mrb_ci_baz` | declined | graduation rule — call-frame index, no carrier to add |
 | `mrb_win_thing` | conditional | `_WIN32` — `mruby.h:1248` makes it an identity macro elsewhere |
 | `mrb_bar_argv` | subsumed | `Value::bar` — the slice carries the count the C form spells out |
 | `mrb_baz` | awaiting a carrier | a borrow carrier could encode it; stays owed, recorded nowhere |

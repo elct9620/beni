@@ -6,7 +6,7 @@
       "id": 0,
       "name": "gate-decision-vs-defect",
       "prompt": "我們接下來該把哪個 mruby C API 升級到 typed beni 面？先不要寫任何 code —— 把 api:priority 排在前面的幾個符號各自是真的覆蓋缺口、還是刻意留在 sys 的設計決定，分別講清楚並附上判斷依據。",
-      "expected_output": "A candidate table where the majority of high-frequency symbols are classified as deliberate decisions citing CLAUDE.md Principle 11 (allocator and raw-pointer accessors such as mrb_free / mrb_malloc / RARRAY_PTR have no invariant a wrapper can encode), not as gaps to fix. Frequency must be stated as ranking only, never as eligibility. No files written, no branch, no PR.",
+      "expected_output": "A candidate table where the majority of high-frequency symbols are classified as deliberate decisions citing SPEC's graduation rule (allocator and raw-pointer accessors such as mrb_free / mrb_malloc / RARRAY_PTR have no invariant a wrapper can encode), not as gaps to fix. Frequency must be stated as ranking only, never as eligibility. No files written, no branch, no PR.",
       "files": [],
       "assertions": []
     },

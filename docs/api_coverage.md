@@ -141,7 +141,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_intern_str` | fn | ✅ | ✅ | `Mrb::intern_str` |
 | `mrb_locale_free` | macro | ❌ | 🚫 | conditional: `_WIN32` — see `mrb_locale_from_utf8` |
 | `mrb_locale_from_utf8` | fn | ❌ | 🚫 | conditional: `_WIN32` — `vendor/mruby/include/mruby.h:1248` makes it an identity macro off Windows, where there is no encoding to convert |
-| `mrb_malloc` | fn | ✅ | 🚫 | declined: VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `TypedData`'s wraps are the graduated seam between the two |
+| `mrb_malloc` | fn | ✅ | 🚫 | declined: VM allocator — the graduation rule: a Rust consumer owns memory through Rust's allocator, and `TypedData`'s wraps are the graduated seam between the two |
 | `mrb_malloc_simple` | fn | ✅ | 🚫 | declined: VM allocator, the non-raising variant — see `mrb_malloc` |
 | `mrb_method_cache_clear` | fn | ✅ | ❌ |  |
 | `mrb_module_get` | fn | ✅ | ✅ | `Mrb::module_get` with a name key — interns and routes through `mrb_module_get_id` |
@@ -460,7 +460,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_str_modify_keep_ascii` | fn | ✅ | ❌ |  |
 | `mrb_str_new_capa` | fn | ✅ | ✅ | `Mrb::str_new_capa` |
 | `mrb_str_plus` | fn | ✅ | ✅ | `RString::plus` |
-| `mrb_str_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RString*` — Principle 11: beni's `RString` is `#[repr(transparent)]` over `Value`, not a struct pointer, so there is no typed shape to add |
+| `mrb_str_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RString*` — the graduation rule: beni's `RString` is `#[repr(transparent)]` over `Value`, not a struct pointer, so there is no typed shape to add |
 | `mrb_str_resize` | fn | ✅ | ✅ | `RString::resize` |
 | `mrb_str_strlen` | macro | ❌ | ❌ |  |
 | `mrb_str_substr` | fn | ✅ | ✅ | `RString::substr` |
@@ -483,7 +483,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_break_p` | macro | ✅ | ✅ | `Value::as_break` |
 | `mrb_class_p` | macro | ❌ | ✅ | `RClass::from_value` with `RClass::is_singleton` false — the downcast accepts the class and singleton-class tags alike |
 | `mrb_cptr_p` | macro | ❌ | ✅ | `RCptr::from_value`, the downcast reading the value tag |
-| `mrb_cptr_value` | fn | ✅ | 🚫 | declined: boxes a bare `void*` into a value — Principle 11: a raw pointer crossing into the typed domain, and reading it back answers the same untyped pointer, so no typed shape carries more than the raw call. mruby uses it as the context an `mrb_ensure` callback reads (`vendor/mruby/mrbgems/mruby-socket/src/socket.c:222`), which a Rust closure carries; Rust data an object owns crosses through `TypedData` |
+| `mrb_cptr_value` | fn | ✅ | 🚫 | declined: boxes a bare `void*` into a value — the graduation rule: a raw pointer crossing into the typed domain, and reading it back answers the same untyped pointer, so no typed shape carries more than the raw call. mruby uses it as the context an `mrb_ensure` callback reads (`vendor/mruby/mrbgems/mruby-socket/src/socket.c:222`), which a Rust closure carries; Rust data an object owns crosses through `TypedData` |
 | `mrb_data_p` | macro | ❌ | ✅ | `RTypedData::from_value`, the downcast reading the value tag |
 | `mrb_env_p` | macro | ❌ | 🚫 | declined: tests for the environment tag, which only the VM's captured local-variable frames carry (`vendor/mruby/src/gc.c:568`) — see `mrb_iclass_p` |
 | `mrb_exception_p` | macro | ❌ | ✅ | `Exception::from_value`, the downcast reading the value tag |
