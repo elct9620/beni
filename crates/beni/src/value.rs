@@ -278,32 +278,20 @@ impl Value {
 
     /// Render this Integer value to a new `RString` in `base`, the way
     /// Ruby's `Integer#to_s(base)` does — `12345` to `"3039"` in base 16.
-    /// `base` is 2 through 36; a base outside that domain raises
-    /// `ArgumentError`. The render guards its receiver on the Integer tag
-    /// rather than trusting it, raising `TypeError` for any other tag so a
-    /// non-Integer never reaches `mrb_integer_to_str`'s unchecked unbox.
-    /// Both raises run under exception protection, so either surfaces as `Err`
-    /// rather than long-jumping. magnus offers no direct radix render, so
-    /// this anchors on mruby's own `mrb_integer_to_str`.
+    /// Surfaces an `Err` carrying a `TypeError` for a receiver of any other
+    /// type, and one carrying an `ArgumentError` for a `base` outside 2
+    /// through 36. Mirrors mruby's `mrb_integer_to_str`.
     #[inline]
     pub fn int_to_str(self, mrb: &Mrb, base: i32) -> Result<crate::RString, Error> {
+        // `mrb_integer_to_str` unboxes its receiver without a tag check,
+        // so a non-Integer is rejected here rather than coerced.
+        if self.tag() != sys::MRB_TT_INTEGER {
+            return Err(crate::try_convert::type_error(
+                mrb,
+                "no implicit conversion to Integer",
+            ));
+        }
         mrb.protect(|mrb| {
-            if self.tag() != sys::MRB_TT_INTEGER {
-                // SAFETY: `mrb` is alive inside the protect frame;
-                // `TypeError` is a core class so the lookup cannot fail;
-                // `mrb_raise` long-jumps to the protect frame. The guard
-                // is strict — a Float is rejected, not coerced — because
-                // `mrb_integer_to_str` unboxes its receiver without a tag
-                // check.
-                unsafe {
-                    let typeerr = sys::mrb_class_get(mrb.as_ptr(), c"TypeError".as_ptr());
-                    sys::mrb_raise(
-                        mrb.as_ptr(),
-                        typeerr,
-                        c"no implicit conversion to Integer".as_ptr(),
-                    );
-                }
-            }
             // SAFETY: `self` is Integer-tagged past the guard; `mrb` is
             // alive inside the protect frame. `mrb_integer_to_str` raises
             // `ArgumentError` on a base outside 2 through 36 — caught by
