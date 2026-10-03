@@ -27,6 +27,8 @@
 //!                      array / hash   (typed factories on top of Value)
 //!                      string / range (RString / Range newtypes)
 //!                      symbol / proc  (Id, Symbol / Proc newtypes)
+//!                      tagged         (handles a value converts into
+//!                                      by its type tag alone)
 //!                      data           (DataType<T>, a carrier's data type)
 //!                      typed_data     (TypedData + RTypedData / Obj<T>)
 //!                      inline_struct  (InlineStruct + Inline<T>)
@@ -89,6 +91,7 @@ pub mod state;
 pub mod string;
 pub mod symbol;
 pub mod sys;
+pub mod tagged;
 pub mod try_convert;
 pub mod typed_data;
 pub mod value;
@@ -114,6 +117,10 @@ pub use proc::{DumpOptions, Proc};
 pub use range::{Range, RangeBegLen};
 pub use string::RString;
 pub use symbol::{Id, IntoId, Symbol};
+pub use tagged::{
+    Exception, Fiber, Float, Integer, Qfalse, Qnil, Qtrue, Qundef, RComplex, RCptr, RInlineStruct,
+    RObject, RRational, RSet, RStruct,
+};
 pub use try_convert::TryConvert;
 pub use typed_data::{RTypedData, TypedData};
 

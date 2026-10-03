@@ -1918,3 +1918,21 @@ fn tag_predicates_discriminate_a_c_pointer() {
     assert!(!Value::nil().is_cptr());
     assert!(!mrb.object_class().as_value().is_cptr());
 }
+
+#[test]
+fn a_boxed_c_pointer_converts_into_rcptr_alone() {
+    let mrb = open_mrb();
+    let mut target = 0u8;
+    // SAFETY: the interpreter is live; boxing an address reads nothing.
+    let cptr = unsafe {
+        <Value as beni::sys::FromRawValue>::from_raw(beni::sys::mrb_cptr_value(
+            mrb.as_ptr(),
+            (&mut target as *mut u8).cast(),
+        ))
+    };
+
+    assert!(beni::RCptr::from_value(cptr).is_some());
+    assert!(beni::RInlineStruct::from_value(cptr).is_none());
+    assert!(beni::RCptr::from_value(Value::nil()).is_none());
+    assert!(beni::RCptr::from_value(mrb.object_class().as_value()).is_none());
+}

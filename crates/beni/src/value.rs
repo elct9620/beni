@@ -863,6 +863,15 @@ impl Value {
         })
     }
 
+    /// The type tag `self` carries, read through mruby's `mrb_type` —
+    /// what every handle's downcast discriminates on.
+    #[inline]
+    pub(crate) fn tag(self) -> sys::mrb_vtype {
+        // SAFETY: mrb_type is a pure read of the value tag and does not
+        // touch `mrb_state`.
+        unsafe { sys::mrb_type(self.0) }
+    }
+
     /// TRUE when `self` is `nil`. Pure tag predicate via mruby's
     /// `mrb_nil_p(v)`, reached through bindgen's static-fn trampoline
     /// — the `wrapper.h` shim wraps the macro so the C compiler reads

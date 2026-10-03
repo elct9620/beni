@@ -10,7 +10,8 @@
 //! surface replaces a payload once a carrier holds one.
 
 use crate::{
-    sys::AsRawValue, DataType, Error, IntoValue, Mrb, RClass, ReprValue, TryConvert, Value,
+    sys::AsRawValue, DataType, Error, FromValue, IntoValue, Mrb, RClass, ReprValue, TryConvert,
+    Value,
 };
 use beni_sys as sys;
 use core::marker::PhantomData;
@@ -302,6 +303,13 @@ fn payload<T: TypedData>(val: Value, mrb: &Mrb) -> Result<*const T, Error> {
             T::data_type().name()
         ),
     ))
+}
+
+impl FromValue for RTypedData {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        (value.tag() == sys::MRB_TT_CDATA).then_some(RTypedData(value))
+    }
 }
 
 impl TryConvert for RTypedData {

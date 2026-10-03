@@ -75,6 +75,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::respond_to::<&core::ffi::CStr>;
     let _ = Value::as_break;
     let _ = Break::value;
+    let _ = RClass::is_singleton;
     let _ = RClass::real;
     let _ = RClass::obj_new;
     let _ = RClass::set_instance_data_tt;

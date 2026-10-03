@@ -387,3 +387,14 @@ fn clone_takes_no_arguments() {
         other => panic!("an argument raises ArgumentError, got {other}"),
     }
 }
+
+#[test]
+fn a_data_carrier_converts_into_rtypeddata_and_any_other_value_does_not() {
+    let mrb = open_mrb();
+    define_point(&mrb);
+    let carrier = mrb.obj_wrap(Point { x: 1 }).as_value();
+
+    assert!(RTypedData::from_value(carrier).is_some());
+    assert!(RTypedData::from_value(mrb.str_new(b"s").as_value()).is_none());
+    assert!(RTypedData::from_value(Value::nil()).is_none());
+}

@@ -381,3 +381,18 @@ fn the_istruct_predicate_holds_for_an_inline_struct_alone() {
     assert!(!plain.is_istruct());
     assert!(!Value::nil().is_istruct());
 }
+
+#[test]
+fn an_inline_struct_of_any_type_converts_into_rinlinestruct() {
+    let mrb = open_mrb();
+    prepared(&mrb);
+    let inline = Inline::new(&mrb, Vector2D { x: 0.0, y: 0.0 }).as_value();
+    let plain = mrb
+        .object_class()
+        .obj_new(&mrb, &[])
+        .expect("an Object constructs");
+
+    assert!(beni::RInlineStruct::from_value(inline).is_some());
+    assert!(beni::RInlineStruct::from_value(plain).is_none());
+    assert!(beni::RTypedData::from_value(inline).is_none());
+}

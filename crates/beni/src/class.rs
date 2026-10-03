@@ -244,6 +244,15 @@ impl RClass {
         self.0
     }
 
+    /// Whether this handle names a singleton class rather than an
+    /// ordinary one — the distinction `RClass::from_value` accepts both
+    /// sides of. Answers without the `mruby-class-ext` gem that carries
+    /// Ruby's `singleton_class?`.
+    #[inline]
+    pub fn is_singleton(self) -> bool {
+        crate::ReprValue::as_value(self).tag() == sys::MRB_TT_SCLASS
+    }
+
     /// `mrb_class_real(self)` — resolve this handle to its real class,
     /// skipping the singleton-class and include-class links a `super`
     /// chain threads through, and yielding the first user-facing class.
