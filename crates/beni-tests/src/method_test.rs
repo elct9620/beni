@@ -2,7 +2,7 @@ use beni::prelude::*;
 use beni::{Error, FromValue, IntoValue, Mrb, RString, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::support::open_mrb;
+use crate::support::{open_mrb, Is};
 use beni::Module;
 
 static TYPE_ERROR_BODY_RAN: AtomicBool = AtomicBool::new(false);
@@ -394,7 +394,10 @@ fn a_returned_handle_reaches_ruby_as_the_object_it_names() {
             "`{probe}` must not raise: {}",
             mrb.pending_exc().to_string(&mrb)
         );
-        assert!(got.is_true(), "`{probe}` must answer the same object");
+        assert!(
+            got.is::<beni::Qtrue>(),
+            "`{probe}` must answer the same object"
+        );
     }
 }
 

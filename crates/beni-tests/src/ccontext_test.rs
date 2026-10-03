@@ -1,4 +1,4 @@
-use crate::support::open_mrb;
+use crate::support::{open_mrb, Is};
 use beni::{Ccontext, Error, FromValue, Module, Mrb, Value};
 
 #[test]
@@ -173,7 +173,10 @@ fn compile_yields_a_program_that_has_not_run_yet() {
         .call(&mrb, &[])
         .unwrap_or_else(|_| panic!("the program must run when called"));
     assert_eq!(i32::from_value(got), Some(7));
-    assert!(mrb.gv_get(ran).is_true(), "calling runs the program");
+    assert!(
+        mrb.gv_get(ran).is::<beni::Qtrue>(),
+        "calling runs the program"
+    );
 }
 
 #[test]

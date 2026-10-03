@@ -1,4 +1,4 @@
-use crate::support::open_mrb;
+use crate::support::{open_mrb, Is};
 use beni::scan_args::scan_args;
 use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, RArray, Symbol, Value};
 
@@ -140,7 +140,10 @@ fn assert_exception_survives_a_collection(mrb: &Mrb, err: &Error) {
         panic!("the error must carry an exception, got {err:?}")
     };
     mrb.full_gc();
-    assert!(exc.is_exception(), "the collection reclaimed the exception");
+    assert!(
+        exc.is::<beni::Exception>(),
+        "the collection reclaimed the exception"
+    );
 }
 
 #[test]

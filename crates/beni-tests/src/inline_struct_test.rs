@@ -367,22 +367,6 @@ fn wrapping_into_a_class_never_marked_for_the_type_panics() {
 }
 
 #[test]
-fn the_istruct_predicate_holds_for_an_inline_struct_alone() {
-    let mrb = open_mrb();
-    prepared(&mrb);
-    let inline = Inline::new(&mrb, Vector2D { x: 0.0, y: 0.0 }).as_value();
-    let plain = mrb
-        .object_class()
-        .obj_new(&mrb, &[])
-        .expect("an Object constructs");
-
-    assert!(inline.is_istruct());
-    assert!(!inline.is_data() && !inline.is_cptr());
-    assert!(!plain.is_istruct());
-    assert!(!Value::nil().is_istruct());
-}
-
-#[test]
 fn an_inline_struct_of_any_type_converts_into_rinlinestruct() {
     let mrb = open_mrb();
     prepared(&mrb);

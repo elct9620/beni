@@ -1,4 +1,4 @@
-use crate::support::open_mrb;
+use crate::support::{open_mrb, Is};
 use beni::prelude::*;
 use beni::{FromValue, IntoValue, TypedData};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -199,7 +199,9 @@ fn marking_refuses_an_exception_class_so_its_instances_stay_exceptions() {
         assert_mark_refused(&mrb, err);
         let still = <beni::ExceptionClass as beni::FromValue>::from_value(class.as_value())
             .expect("the refused class is still an exception class");
-        assert!(still.exc_new(&mrb, "still an exception").is_exception());
+        assert!(still
+            .exc_new(&mrb, "still an exception")
+            .is::<beni::Exception>());
     }
 }
 
@@ -236,7 +238,7 @@ fn marking_refuses_every_built_in_layout_so_its_instances_keep_it() {
         String::from_value(mrb.str_new(b"box").as_value()),
         Some("box".to_string())
     );
-    assert!(1.5f32.into_value(&mrb).is_float());
+    assert!(1.5f32.into_value(&mrb).is::<beni::Float>());
     let joined = mrb
         .load_string(b"BeniDataRefusedString.new('abc') + 'def'")
         .expect("the subclass still builds strings");

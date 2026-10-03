@@ -256,6 +256,17 @@ macro_rules! class_backed_repr {
 
 class_backed_repr!(crate::RClass, crate::RModule, crate::ExceptionClass);
 
+/// The crate's own tag checks, one per tag a handle's downcast or an
+/// internal guard reads; a consumer discriminates through the handles.
+macro_rules! tag_predicates {
+    ($($name:ident => $tag:ident),* $(,)?) => {$(
+        #[inline]
+        pub(crate) fn $name(self) -> bool {
+            self.tag() == sys::$tag
+        }
+    )*};
+}
+
 impl Value {
     /// Wrap a raw `mrb_value` the caller has established this VM
     /// produced. The public crossing is `sys::FromRawValue::from_raw`,
@@ -895,157 +906,20 @@ impl Value {
         unsafe { sys::mrb_test_func(self.0) }
     }
 
-    /// TRUE when `self` is exactly Ruby `true`. See `Value::is_nil` for
-    /// the boxing-config routing.
-    #[inline]
-    pub fn is_true(self) -> bool {
-        // SAFETY: mrb_true_p is a pure predicate over the value tag and
-        // does not touch `mrb_state`.
-        unsafe { sys::mrb_true_p_func(self.0) }
-    }
-
-    /// TRUE when `self` is exactly Ruby `false` — `nil` is excluded.
-    /// `nil` and `false` share the `MRB_TT_FALSE` tag under some boxing
-    /// modes, so this must route through mruby's `mrb_false_p` shim
-    /// rather than a tag test, which would misread `nil`.
-    #[inline]
-    pub fn is_false(self) -> bool {
-        // SAFETY: mrb_false_p is a pure predicate over the value tag and
-        // does not touch `mrb_state`.
-        unsafe { sys::mrb_false_p_func(self.0) }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_INTEGER`. Pure tag predicate
-    /// via mruby's `mrb_type` (`MRB_INLINE`), reached through
-    /// bindgen's static-fn trampoline. Pair with
-    /// `Value::unbox_integer` for the direct-unbox path.
-    #[inline]
-    pub fn is_integer(self) -> bool {
-        // SAFETY: mrb_type is a pure predicate over the value tag and
-        // does not touch `mrb_state`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_INTEGER }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_FLOAT`. See `Value::is_integer`.
-    /// Pair with `Value::unbox_float`.
-    #[inline]
-    pub fn is_float(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_FLOAT }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_ARRAY`. See `Value::is_integer`.
-    /// Pair with `RArray::from_value_unchecked` for the direct-wrap path.
-    #[inline]
-    pub fn is_array(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_ARRAY }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_HASH`. See `Value::is_integer`.
-    /// Pair with `RHash::from_value_unchecked` for the direct-wrap path.
-    #[inline]
-    pub fn is_hash(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_HASH }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_CLASS` — the class tag only;
-    /// modules (`MRB_TT_MODULE`) and singleton classes
-    /// (`MRB_TT_SCLASS`) carry their own tags. See `Value::is_integer`.
-    /// Pair with `RClass::from_value` for the typed handle.
-    #[inline]
-    pub fn is_class(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CLASS }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_SCLASS` — a singleton class,
-    /// the tag `Value::singleton_class` yields for an ordinary object.
-    /// `RClass`'s downcast accepts it alongside `Value::is_class`. See
-    /// `Value::is_integer`.
-    #[inline]
-    pub fn is_sclass(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_SCLASS }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_MODULE` — the module tag only;
-    /// classes (`MRB_TT_CLASS`) are excluded, the complement of
-    /// `Value::is_class`. See `Value::is_integer`.
-    #[inline]
-    pub fn is_module(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_MODULE }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_PROC`. See `Value::is_integer`.
-    /// Pair with `Proc::from_value_unchecked` for the direct-wrap path.
-    #[inline]
-    pub fn is_proc(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_PROC }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_CDATA` — a Rust value wrapped
-    /// as `TypedData`. See `Value::is_integer`. Pair with `TryConvert`
-    /// into `&T` for the type-checked extraction path.
-    #[inline]
-    pub fn is_data(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CDATA }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_ISTRUCT` — plain data stored
-    /// inside the object. See `Value::is_integer`. Pair with
-    /// `TryConvert` into `Inline<T>` for the type-checked read.
-    #[inline]
-    pub fn is_istruct(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_ISTRUCT }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_CPTR` — a bare C pointer an
-    /// embedder or C gem boxed. See `Value::is_integer`.
-    #[inline]
-    pub fn is_cptr(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_CPTR }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_STRING`. See `Value::is_integer`.
-    /// Pair with `RString::as_bytes` for the byte-borrow path.
-    #[inline]
-    pub fn is_string(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_STRING }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_SYMBOL`. See `Value::is_integer`.
-    /// Pair with `Symbol::from_value` for the checked downcast path.
-    #[inline]
-    pub fn is_symbol(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_SYMBOL }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_RANGE`. See `Value::is_integer`.
-    /// No typed handle binds this tag yet, so the predicate stands alone.
-    #[inline]
-    pub fn is_range(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_RANGE }
-    }
-
-    /// TRUE when `self` carries `MRB_TT_EXCEPTION` — the exception-object
-    /// tag, the type every `raise`d value carries; an arbitrary class that
-    /// merely descends from `Exception` is not yet an instance and reads
-    /// FALSE. See `Value::is_integer`. No typed handle binds this tag yet,
-    /// so the predicate stands alone.
-    #[inline]
-    pub fn is_exception(self) -> bool {
-        // SAFETY: as `is_integer`.
-        unsafe { sys::mrb_type(self.0) == sys::MRB_TT_EXCEPTION }
+    tag_predicates! {
+        is_integer => MRB_TT_INTEGER,
+        is_float => MRB_TT_FLOAT,
+        is_array => MRB_TT_ARRAY,
+        is_hash => MRB_TT_HASH,
+        is_class => MRB_TT_CLASS,
+        is_sclass => MRB_TT_SCLASS,
+        is_module => MRB_TT_MODULE,
+        is_proc => MRB_TT_PROC,
+        is_data => MRB_TT_CDATA,
+        is_istruct => MRB_TT_ISTRUCT,
+        is_string => MRB_TT_STRING,
+        is_symbol => MRB_TT_SYMBOL,
+        is_range => MRB_TT_RANGE,
     }
 
     /// View `self` as a typed `Break` when it carries mruby's break
@@ -1068,8 +942,9 @@ impl Value {
     ///
     /// # Safety
     ///
-    /// Caller must have confirmed Integer-tagging via
-    /// `Value::is_integer`; calling on a non-Integer is undefined
+    /// `self` must carry the fixed-width Integer tag (`MRB_TT_INTEGER`)
+    /// — an `Integer` downcast also accepts the arbitrary-width tag, which
+    /// this unbox cannot read; calling on any other value is undefined
     /// behaviour per mruby's macro contract.
     #[inline]
     pub unsafe fn unbox_integer(self) -> i64 {
@@ -1277,7 +1152,7 @@ impl Value {
     /// receiver family that owns constants and class variables, the
     /// same set mruby's own constant accessors accept.
     fn is_class_or_module(self) -> bool {
-        // SAFETY: as `is_integer`.
+        // SAFETY: mrb_type is a pure read of the value tag.
         matches!(
             unsafe { sys::mrb_type(self.0) },
             sys::MRB_TT_CLASS | sys::MRB_TT_MODULE | sys::MRB_TT_SCLASS

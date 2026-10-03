@@ -1,5 +1,4 @@
-use crate::support::OwnedBytes;
-use crate::support::{open_mrb, same_object};
+use crate::support::{open_mrb, same_object, Is, OwnedBytes};
 use beni::prelude::*;
 use beni::{ExceptionClass, FromValue, IntoValue, RArray, RClass, RHash, RModule, RString, Value};
 
@@ -126,18 +125,19 @@ fn container_downcast_includes_subclass_instances() {
 }
 
 #[test]
-fn class_family_downcasts_agree_with_their_predicates() {
+fn class_family_downcasts_accept_exactly_their_own_tags() {
     let mrb = open_mrb();
     let cxt = beni::Ccontext::new(&mrb, c"convert_test.rb")
         .expect("allocating the compile context must succeed");
 
-    for source in [
-        &b"String"[..],
-        b"'beni'.singleton_class",
-        b"Kernel",
-        b"'beni'",
-        b"42",
-        b"nil",
+    // (source, converts into a class handle, converts into a module handle)
+    for (source, class, module) in [
+        (&b"String"[..], true, false),
+        (b"'beni'.singleton_class", true, false),
+        (b"Kernel", false, true),
+        (b"'beni'", false, false),
+        (b"42", false, false),
+        (b"nil", false, false),
     ] {
         let value = cxt
             .load_nstring(source)
@@ -148,20 +148,9 @@ fn class_family_downcasts_agree_with_their_predicates() {
             mrb.pending_exc().to_string(&mrb)
         );
 
-        // The class handle converts on the class and the singleton-class
-        // tags, the module handle on the module tag, and on nothing else.
-        assert_eq!(
-            RClass::from_value(value).is_some(),
-            value.is_class() || value.is_sclass(),
-            "{}",
-            String::from_utf8_lossy(source)
-        );
-        assert_eq!(
-            RModule::from_value(value).is_some(),
-            value.is_module(),
-            "{}",
-            String::from_utf8_lossy(source)
-        );
+        let label = String::from_utf8_lossy(source);
+        assert_eq!(RClass::from_value(value).is_some(), class, "{label}");
+        assert_eq!(RModule::from_value(value).is_some(), module, "{label}");
     }
 }
 
@@ -361,7 +350,7 @@ fn an_f32_converts_under_every_configured_float_width() {
     // under both; the value reads back through `f64`, which holds
     // every width in the other direction.
     let boxed = 1.5f32.into_value(&mrb);
-    assert!(boxed.is_float());
+    assert!(boxed.is::<beni::Float>());
     assert_eq!(f64::from_value(boxed), Some(1.5));
 }
 

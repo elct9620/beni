@@ -27,3 +27,15 @@ impl OwnedBytes for RString {
         Vec::<u8>::from_value(self.as_value()).expect("a string handle is String-tagged")
     }
 }
+
+/// Whether a value converts into the handle `T` — a downcast's answer to
+/// "what type is this?", read postfix in an assertion.
+pub trait Is {
+    fn is<T: FromValue>(self) -> bool;
+}
+
+impl Is for beni::Value {
+    fn is<T: FromValue>(self) -> bool {
+        T::from_value(self).is_some()
+    }
+}

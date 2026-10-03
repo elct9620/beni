@@ -1,4 +1,4 @@
-use crate::support::open_mrb;
+use crate::support::{open_mrb, Is};
 use beni::prelude::*;
 use beni::scan_args::scan_args;
 use beni::{Error, IntoValue, Mrb, RArray, Value};
@@ -40,7 +40,7 @@ fn a_splat_reads_the_argc_mruby_writes() {
         .funcall(&mrb, c"rest_count", &args)
         .expect("the bridge must not raise");
 
-    assert!(count.is_integer(), "bridge must return an Integer");
+    assert!(count.is::<beni::Integer>(), "bridge must return an Integer");
     assert_eq!(unsafe { count.unbox_integer() }, 3);
 }
 

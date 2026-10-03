@@ -1,5 +1,4 @@
-use crate::support::OwnedBytes;
-use crate::support::{open_mrb, same_object};
+use crate::support::{open_mrb, same_object, Is, OwnedBytes};
 use beni::prelude::*;
 use beni::scan_args::scan_args;
 use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, RArray, Symbol, Value};
@@ -164,17 +163,17 @@ fn funcall_with_block_surfaces_a_raised_exception_as_err() {
 }
 
 #[test]
-fn is_string_discriminates_the_string_tag() {
+fn the_string_downcast_discriminates_the_string_tag() {
     let mrb = open_mrb();
 
-    assert!(mrb.str_new(b"x").as_value().is_string());
+    assert!(mrb.str_new(b"x").as_value().is::<beni::RString>());
     // A non-String tag — and an immediate — both reject.
-    assert!(!42i32.into_value(&mrb).is_string());
-    assert!(!Value::nil().is_string());
+    assert!(!42i32.into_value(&mrb).is::<beni::RString>());
+    assert!(!Value::nil().is::<beni::RString>());
 }
 
 #[test]
-fn tag_predicates_discriminate_module_range_and_exception() {
+fn handle_downcasts_discriminate_module_range_and_exception() {
     let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"tag_pred_test.rb").expect("allocating the context must succeed");
@@ -194,35 +193,32 @@ fn tag_predicates_discriminate_module_range_and_exception() {
         mrb.pending_exc().to_string(&mrb)
     );
 
-    // Each predicate holds for exactly its own tag.
-    assert!(module.is_module());
-    assert!(range.is_range());
-    assert!(exception.is_exception());
+    // Each handle accepts exactly its own tag.
+    assert!(module.is::<beni::RModule>());
+    assert!(range.is::<beni::Range>());
+    assert!(exception.is::<beni::Exception>());
 
-    // A class is not a module: is_class and is_module split the
+    // A class is not a module: the class and module handles split the
     // class-family tags, and neither claims the other's value.
     let class = cxt
         .load_nstring(b"String")
         .expect("the test source must compile and run");
-    assert!(class.is_class());
-    assert!(!class.is_module());
-    assert!(!module.is_class());
+    assert!(class.is::<beni::RClass>());
+    assert!(!class.is::<beni::RModule>());
+    assert!(!module.is::<beni::RClass>());
 
-    // A singleton class carries its own tag, claimed by neither.
+    // A singleton class converts into a class handle, never a module's.
     let singleton = cxt
         .load_nstring(b"'beni'.singleton_class")
         .expect("the test source must compile and run");
-    assert!(singleton.is_sclass());
-    assert!(!singleton.is_class());
-    assert!(!singleton.is_module());
-    assert!(!class.is_sclass());
-    assert!(!module.is_sclass());
+    assert!(singleton.is::<beni::RClass>());
+    assert!(!singleton.is::<beni::RModule>());
 
-    // No predicate claims an unrelated tag, nor an immediate.
-    assert!(!range.is_module());
-    assert!(!exception.is_range());
-    assert!(!42i32.into_value(&mrb).is_exception());
-    assert!(!Value::nil().is_module());
+    // No handle claims an unrelated tag, nor an immediate.
+    assert!(!range.is::<beni::RModule>());
+    assert!(!exception.is::<beni::Range>());
+    assert!(!42i32.into_value(&mrb).is::<beni::Exception>());
+    assert!(!Value::nil().is::<beni::RModule>());
 }
 
 #[test]
@@ -516,7 +512,7 @@ fn obj_as_string_coerces_through_to_s() {
     let coerced = already
         .obj_as_string(&mrb)
         .expect("a string coerces without raising");
-    assert!(coerced.is_string());
+    assert!(coerced.is::<beni::RString>());
     assert!(already.obj_equal(&mrb, coerced));
 
     // A non-string coerces through its `to_s`.
@@ -524,7 +520,7 @@ fn obj_as_string_coerces_through_to_s() {
         .into_value(&mrb)
         .obj_as_string(&mrb)
         .expect("to_s of an integer does not raise")
-        .is_string());
+        .is::<beni::RString>());
 }
 
 #[test]
@@ -684,23 +680,6 @@ fn ensure_hash_returns_the_handle_or_raises_by_tag() {
         }
         _ => panic!("a non-Hash value surfaces a TypeError Err"),
     }
-}
-
-#[test]
-fn bool_predicates_separate_true_false_and_nil() {
-    // The immediate singletons need a live VM to have been captured,
-    // even though the predicates themselves take no `Mrb`.
-    let _mrb = open_mrb();
-
-    // `is_true` / `is_false` are exact: each admits only its own
-    // singleton. The load-bearing case is that `nil` — which shares
-    // the false tag under some boxing modes — is neither.
-    assert!(Value::true_().is_true());
-    assert!(!Value::true_().is_false());
-    assert!(Value::false_().is_false());
-    assert!(!Value::false_().is_true());
-    assert!(!Value::nil().is_true());
-    assert!(!Value::nil().is_false());
 }
 
 #[test]
@@ -1496,7 +1475,7 @@ fn ensure_int_coerces_by_numeric_type_or_raises() {
         .into_value(&mrb)
         .ensure_int(&mrb)
         .expect("an Integer coerces without raising");
-    assert!(same.is_integer());
+    assert!(same.is::<beni::Integer>());
     assert_eq!(i32::from_value(same), Some(5));
 
     // A Float coerces by truncating toward zero, like Ruby's
@@ -1505,7 +1484,7 @@ fn ensure_int_coerces_by_numeric_type_or_raises() {
         .into_value(&mrb)
         .ensure_int(&mrb)
         .expect("a Float coerces by truncation");
-    assert!(truncated.is_integer());
+    assert!(truncated.is::<beni::Integer>());
     assert_eq!(i32::from_value(truncated), Some(-3));
 
     // An infinite or NaN Float has no integer; mruby raises RangeError,
@@ -1534,7 +1513,7 @@ fn ensure_float_coerces_by_numeric_type_or_raises() {
         .into_value(&mrb)
         .ensure_float(&mrb)
         .expect("a Float coerces without raising");
-    assert!(same.is_float());
+    assert!(same.is::<beni::Float>());
     assert_eq!(f64::from_value(same), Some(2.5));
 
     // An Integer widens to a Float — the cross-numeric case.
@@ -1542,7 +1521,7 @@ fn ensure_float_coerces_by_numeric_type_or_raises() {
         .into_value(&mrb)
         .ensure_float(&mrb)
         .expect("an Integer widens to a Float");
-    assert!(widened.is_float());
+    assert!(widened.is::<beni::Float>());
     assert_eq!(f64::from_value(widened), Some(7.0));
 
     // A non-numeric value raises the genuine TypeError class rather than
@@ -1899,24 +1878,6 @@ fn classname_survives_a_gc_cycle() {
     let name = mrb.str_new(b"hello").as_value().classname(&mrb);
     mrb.full_gc();
     assert_eq!(name, "String");
-}
-
-#[test]
-fn tag_predicates_discriminate_a_c_pointer() {
-    let mrb = open_mrb();
-    let mut target = 0u8;
-    // SAFETY: the interpreter is live; boxing an address reads nothing.
-    let cptr = unsafe {
-        <Value as beni::sys::FromRawValue>::from_raw(beni::sys::mrb_cptr_value(
-            mrb.as_ptr(),
-            (&mut target as *mut u8).cast(),
-        ))
-    };
-
-    assert!(cptr.is_cptr());
-    assert!(!cptr.is_istruct() && !cptr.is_data());
-    assert!(!Value::nil().is_cptr());
-    assert!(!mrb.object_class().as_value().is_cptr());
 }
 
 #[test]

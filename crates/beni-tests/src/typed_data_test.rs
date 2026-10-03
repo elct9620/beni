@@ -1,4 +1,4 @@
-use crate::support::open_mrb;
+use crate::support::{open_mrb, Is};
 use beni::prelude::*;
 use beni::typed_data::Obj;
 use beni::{
@@ -71,7 +71,7 @@ fn a_wrapped_value_reads_back_through_each_handle() {
 
     let obj = mrb.obj_wrap(Point { x: 7 });
     assert_eq!(obj.x, 7, "Obj<T> dereferences to the payload");
-    assert!(obj.as_value().is_data());
+    assert!(obj.as_value().is::<beni::RTypedData>());
 
     let untyped = mrb.wrap(Point { x: 8 });
     let got: &Point = untyped.get(&mrb).expect("the matching data type reads");
@@ -102,7 +102,7 @@ fn a_method_takes_its_receiver_and_returns_a_payload_as_typed_data() {
     let same = point
         .funcall(&mrb, c"same?", &[point])
         .expect("Obj<T> converts receiver and argument");
-    assert!(same.is_true());
+    assert!(same.is::<beni::Qtrue>());
 }
 
 #[test]
@@ -156,7 +156,7 @@ fn a_duplicated_carrier_holds_no_payload() {
     let copy = point
         .funcall(&mrb, c"dup", &[])
         .expect("mruby's dup copies the object");
-    assert!(copy.is_data());
+    assert!(copy.is::<beni::RTypedData>());
     assert!(
         RTypedData::try_convert(copy, &mrb).is_ok(),
         "a bare carrier is still a data carrier"
@@ -355,7 +355,7 @@ fn clone_keeps_singleton_and_frozen_state_with_a_copied_payload() {
     let frozen = copy
         .funcall(&mrb, c"frozen?", &[])
         .expect("frozen? answers");
-    assert!(frozen.is_true(), "clone keeps the frozen state");
+    assert!(frozen.is::<beni::Qtrue>(), "clone keeps the frozen state");
     let mine = copy
         .funcall(&mrb, c"only_mine", &[])
         .expect("clone keeps the singleton class");

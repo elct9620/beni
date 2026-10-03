@@ -1,4 +1,4 @@
-use crate::support::{open_mrb, same_object};
+use crate::support::{open_mrb, same_object, Is};
 use beni::prelude::*;
 use beni::{FromValue, IntoValue, Module, Mrb, Value};
 
@@ -246,7 +246,7 @@ fn define_error_nests_under_a_namespace() {
         .define_error(&mrb, c"ParseError", runtime_error)
         .expect("defining the nested exception class must succeed");
     assert_eq!(nested.name(&mrb), "BeniErrors::ParseError");
-    assert!(nested.exc_new(&mrb, "nested").is_exception());
+    assert!(nested.exc_new(&mrb, "nested").is::<beni::Exception>());
 }
 
 #[test]
@@ -307,7 +307,7 @@ fn define_class_fetches_a_prepended_class_as_itself() {
         .define_class(c"BeniPrepended", mrb.object_class())
         .expect("the same superclass must fetch the bound class");
     assert!(same_object(&mrb, fetched, before));
-    assert!(fetched.as_value().is_class());
+    assert!(fetched.as_value().is::<beni::RClass>());
 
     let ns = mrb
         .module_get(c"BeniPrependNs")
@@ -315,7 +315,7 @@ fn define_class_fetches_a_prepended_class_as_itself() {
     let inner = ns
         .define_class(&mrb, c"Inner", mrb.object_class())
         .expect("the same superclass must fetch the nested class");
-    assert!(inner.as_value().is_class());
+    assert!(inner.as_value().is::<beni::RClass>());
     let unchanged = mrb
         .load_string(b"BeniPrependNs::Inner.equal?($beni_inner_before)")
         .expect("reading the constant back must succeed");

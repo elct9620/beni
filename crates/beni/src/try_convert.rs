@@ -50,7 +50,8 @@ pub(crate) fn argument_error(mrb: &Mrb, msg: &str) -> Error {
 /// mruby's `%Y`: `nil`, `true`, or `false` itself, any other value its
 /// class.
 fn described(val: Value, mrb: &Mrb) -> String {
-    if val.is_nil() || val.is_true() || val.is_false() {
+    // `nil` and `false` share the false tag.
+    if matches!(val.tag(), beni_sys::MRB_TT_FALSE | beni_sys::MRB_TT_TRUE) {
         val.inspect(mrb)
     } else {
         val.classname(mrb)

@@ -2,7 +2,7 @@
 //! what each target converts, and the exception — class and wording
 //! mruby's own — every other value surfaces.
 
-use crate::support::open_mrb;
+use crate::support::{open_mrb, Is};
 use beni::{
     Error, ExceptionClass, Mrb, Proc, RArray, RClass, RHash, RModule, RString, Range, Symbol,
     TryConvert, Value,
@@ -275,7 +275,7 @@ fn bytes_convert_to_and_from_a_string() {
     let raw: &[u8] = b"a\0\xffz";
 
     let value = bytes::Bytes::from_static(raw).into_value(&mrb);
-    assert!(value.is_string(), "Bytes box into a String");
+    assert!(value.is::<beni::RString>(), "Bytes box into a String");
     let back = bytes::Bytes::try_convert(value, &mrb).expect("a String converts to Bytes");
     assert_eq!(&back[..], raw, "every byte survives the round trip");
 

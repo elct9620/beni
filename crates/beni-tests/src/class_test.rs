@@ -1,4 +1,4 @@
-use crate::support::{open_mrb, same_object};
+use crate::support::{open_mrb, same_object, Is};
 use beni::prelude::*;
 use beni::{Error, FromValue, IntoId, IntoValue, Module, Mrb, Object, RClass, Value};
 
@@ -568,7 +568,10 @@ fn define_const_binds_a_constant_readable_from_ruby() {
         "reading the constant must not raise: {}",
         mrb.pending_exc().to_string(&mrb)
     );
-    assert!(got.is_integer(), "the bound constant reads back as Integer");
+    assert!(
+        got.is::<beni::Integer>(),
+        "the bound constant reads back as Integer"
+    );
     assert_eq!(unsafe { got.unbox_integer() }, 42);
 }
 
