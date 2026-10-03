@@ -27,7 +27,9 @@ unless defined?(BeniBuildConfig)
 
     # Core-gem baseline shared by every config: mruby-compiler (the
     # wrapper's `mrb_load_nstring` needs it) plus the portable core
-    # extension gems. No I/O / network / process gems — those do not
+    # extension gems, including the ones whose objects carry their own
+    # type tag, so the typed suite holds a value of each such tag. No
+    # I/O / network / process gems — those do not
     # exist on wasm32-wasip1, and keeping every target's gem set
     # identical keeps the verified surface identical.
     MRBGEM_BASELINE = %w[
@@ -44,6 +46,10 @@ unless defined?(BeniBuildConfig)
       mruby-symbol-ext
       mruby-error
       mruby-metaprog
+      mruby-fiber
+      mruby-struct
+      mruby-set
+      mruby-complex
     ].freeze
   end
 end
