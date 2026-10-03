@@ -2,77 +2,63 @@
 
 ## Purpose
 
-Beni gives Rust developers a magnus-like experience for mruby: a Ruby gem
-manages the mruby build chain, and Rust crates expose a safe, typed API over
-the archive it builds.
+Beni gives Rust developers a magnus-like experience for mruby. A Ruby gem manages the mruby build chain; Rust crates expose a safe, typed API over the archive it builds.
+
+```
+beni gem ──builds──> archive ──exposed by──> Rust crates (safe, typed API)
+```
 
 ## Users
 
-- Rust developers who embed mruby and want typed, memory-safe APIs instead of
-  raw FFI.
-- Rakefile-based projects that need a reproducible mruby archive build wired
-  into their own build pipeline.
+Beni serves two kinds of user.
+
+| User | Need |
+|---|---|
+| Rust developers who embed mruby | typed, memory-safe APIs instead of raw FFI |
+| Rakefile-based projects | a reproducible mruby archive build wired into their own build pipeline |
 
 ## Impacts
 
-- A Rust project can depend on the `beni` crate and call mruby without
-  writing or maintaining FFI declarations by hand.
-- A Rust project can produce the archive via `rake beni:build` without
-  vendoring mruby source or scripting tarball downloads.
-- Once a target declaration references `wasi-sdk`, a build config
-  cross-compiles for wasm32-wasip1 with `conf.toolchain :wasi` — the
-  cross-compile settings ship with beni and update with it, instead of
-  living hand-maintained inside the consumer's config.
-- Under one installed beni release, the same `version`, `build_config`,
-  `target`, and `toolchain` declarations always build the same way: the
-  same toolchain versions, compile flags, and staged layout.
-- The documentation host renders the published crates without an archive,
-  so the typed surface can be read before a build chain exists to try it
-  against.
-- A Rust project that embeds mruby without compiling Ruby at run time drops
-  the surface that needs mruby's compiler gem by disabling default features,
-  rather than linking a compiler it never calls.
+Each row names a mechanism and its effect.
+
+| Mechanism | Effect |
+|---|---|
+| `beni` crate dependency | a Rust project calls mruby without writing or maintaining FFI declarations by hand |
+| `rake beni:build` | a Rust project produces the archive without vendoring mruby source or scripting tarball downloads |
+| `conf.toolchain :wasi` | once a target declaration references `wasi-sdk`, a build config cross-compiles for wasm32-wasip1 |
+| wasm32-wasip1 cross-compile settings | ship with beni and update with it, instead of living hand-maintained inside the consumer's config |
+| one installed beni release | the same `version`, `build_config`, `target`, and `toolchain` declarations always build the same way: same toolchain versions, compile flags, and staged layout |
+| documentation host | renders the published crates without an archive, so the typed surface can be read before a build chain exists to try it against |
+| disabling default features | a project embedding mruby without compiling Ruby at run time drops the surface that needs mruby's compiler gem, rather than linking a compiler it never calls |
 
 ## Success criteria
 
-- A fresh checkout running `rake beni:build` produces the archive and its
-  compile-flags sidecar at the staged path for every target the build
-  config defines.
-- A consumer's own cargo project, depending on the `beni` crate with
-  `BENI_VENDOR_DIR` pointing at that vendor tree, links the archive and runs a
-  Ruby surface it defined through `Mrb::open`.
-- The `beni` crate's behavior is verified from outside the crate, through its
-  public paths alone, so every export those paths cross — the `sys` escape
-  hatch among them — fails the suite the moment it stops being public.
-- The `beni` crate builds and links with its default features disabled
-  against an archive built without mruby's compiler gem, and none of the
-  compiler surface is reachable in that build.
-- Outside a documentation build, a build with no archive discovery
-  variable set fails on every cargo target, naming the variables archive
-  discovery consults.
-- A documentation build renders the typed surface with no archive present,
-  reading documentation bindings the published package carries and the
-  repository does not.
-- A `wasm32-wasip1` cross-build succeeds when a target declaration
-  references `wasi-sdk`, the build config defines a target cross-compiled
-  for wasm32, `MRUBY_LIB_DIR` names that target's staged path, and
-  `WASI_SDK_PATH` names the unpacked wasi-sdk root.
-- A cross-build for the other macOS architecture succeeds when the build
-  config defines a target cross-compiled for it and `MRUBY_LIB_DIR` names
-  that target's staged path.
+Beni succeeds when every condition yields its outcome.
+
+| Condition | Outcome |
+|---|---|
+| fresh checkout runs `rake beni:build` | the archive and its compile-flags sidecar sit at the staged path for every target the build config defines |
+| a consumer's own cargo project depends on the `beni` crate; `BENI_VENDOR_DIR` points at that vendor tree | it links the archive and runs a Ruby surface it defined through `Mrb::open` |
+| `beni` crate behavior | verified from outside the crate, through its public paths alone, so every export those paths cross — the `sys` escape hatch among them — fails the suite the moment it stops being public |
+| default features disabled; archive built without mruby's compiler gem | the `beni` crate builds and links; none of the compiler surface is reachable |
+| outside a documentation build; no archive discovery variable set | the build fails on every cargo target, naming the variables archive discovery consults |
+| documentation build; no archive present | renders the typed surface from documentation bindings the published package carries and the repository does not |
+| a target declaration references `wasi-sdk`; the build config defines a target cross-compiled for wasm32; `MRUBY_LIB_DIR` names that target's staged path; `WASI_SDK_PATH` names the unpacked wasi-sdk root | a `wasm32-wasip1` cross-build succeeds |
+| the build config defines a target cross-compiled for the other macOS architecture; `MRUBY_LIB_DIR` names that target's staged path | a cross-build for that architecture succeeds |
 
 ## Non-goals
 
-- Not a WebAssembly project — wasm32-wasip1 is a downstream verification
-  target only.
-- The gem does not embed mruby into Ruby programs; it only manages the
-  toolchain for Rust consumers.
-- No CRuby extension support — magnus and rb-sys own that boundary.
+Beni excludes the following scope.
+
+| Non-goal | Boundary |
+|---|---|
+| A WebAssembly project | wasm32-wasip1 is a downstream verification target only |
+| Embedding mruby into Ruby programs | the gem only manages the toolchain for Rust consumers |
+| CRuby extension support | magnus and rb-sys own that boundary |
 
 ## Packages
 
-One repository; the gem and the three published crates release in lockstep
-under a single version number.
+One repository; the gem and the three published crates release in lockstep under a single version number.
 
 | Package | Registry | Responsibility |
 |---|---|---|
@@ -82,13 +68,9 @@ under a single version number.
 | `beni-macros` crate | crates.io | the `beni` crate's attribute and derive macros, reached through the `beni` crate's re-exports as `magnus`'s are through `magnus` |
 | `beni-tests` crate | not published | the `beni` crate's behavior suite, held outside the crate so each test reaches it through public paths alone |
 
-Responsibility boundary: the gem stages toolchains and archives; `beni-sys`
-binds them; the `beni` crate is the only package consumers write Rust against,
-and `beni-macros` is reached through it — its macros are named through `beni`
-and expand to code against it.
-`beni-tests` ships to no one — it holds the `beni` crate's behavior from where
-a consumer stands. What no consumer can observe — an invariant internal to the
-crate — stays tested inside it.
+Responsibility boundary: the gem stages toolchains and archives; `beni-sys` binds them. The `beni` crate is the only package consumers write Rust against. `beni-macros` is reached through it: its macros are named through `beni` and expand to code against it.
+
+`beni-tests` ships to no one; it holds the `beni` crate's behavior from where a consumer stands. What no consumer can observe — an invariant internal to the crate — stays tested inside it.
 
 ## Features
 
@@ -115,13 +97,23 @@ Beni::Tasks.new do
 end
 ```
 
+#### Rakefile Settings
+
+Relative `vendor_dir` and `build_config` paths resolve against the Rakefile's working directory. For `vendor_dir`, an explicit declaration overrides `BENI_VENDOR_DIR`, which overrides the default.
+
 | Setting | Declared as | Default |
 |---|---|---|
-| `vendor_dir` | `vendor_dir <path>` — where toolchains unpack and mruby builds; relative paths resolve against the Rakefile's working directory | `vendor/` under the Rakefile's working directory. `BENI_VENDOR_DIR` env var overrides the default; an explicit declaration overrides the env var. |
+| `vendor_dir` | `vendor_dir <path>` — where toolchains unpack and mruby builds | `vendor/` under the Rakefile's working directory |
 | `version` | `version <string>` — the mruby release version to download | `"4.0.0"` |
-| `build_config` | `build_config <path>` — mruby build-config file path; relative paths resolve against the Rakefile's working directory | undeclared — mruby's untouched upstream default config |
-| targets | `target <name>`, optionally with a block of toolchain references — each declaration names one build target to verify, matching the `MRuby::Build.new(<name>)` names in the config; a build defined without a name is named `host` by mruby | `host` when no `target` declaration appears; any `target` declaration replaces the default — the declared set is the whole set |
-| toolchains | a block-less `toolchain <name>` inside a target block — a toolchain reference; `toolchain <name> do … end` at the top level carrying `version` and `sha256` — a toolchain definition | selection is reference-driven; every toolchain other than `mruby` defaults to its built-in pair |
+| `build_config` | `build_config <path>` — mruby build-config file path | undeclared — mruby's untouched upstream default config |
+| targets | target declaration, optionally with a block of toolchain references | `host` when no target declaration appears |
+| toolchains | toolchain reference inside a target block; toolchain definition at the top level | selection is reference-driven; every toolchain other than `mruby` defaults to its built-in pair |
+
+Target names match the `MRuby::Build.new(<name>)` names in the config; mruby names a build defined without a name `host`. Any target declaration replaces the `host` default; the declared set is the whole set.
+
+#### Task Outcomes
+
+Each task leaves this state.
 
 | Task | Outcome |
 |---|---|
@@ -132,238 +124,211 @@ end
 | `beni:vendor:clean` | unpacked toolchains removed, tarball cache kept |
 | `beni:vendor:clobber` | vendor tree removed entirely, tarball cache included |
 
-Behaviors:
+#### Behaviors
+
+The tasks keep these contracts.
 
 | Behavior | Contract |
 |---|---|
-| Version convergence | The vendor tree converges on each toolchain's selected version: a staged toolchain at any other version is replaced by `beni:vendor:setup`, and `beni:build` rebuilds the archives — a stale toolchain never survives a version change. |
-| Toolchain unpack | `beni:vendor:setup` unpacks toolchains from the tarball cache and downloads only the selected versions' tarballs the cache lacks; every tarball it unpacks — cached or freshly downloaded — must match its toolchain's selected checksum. |
-| Toolchain selection | Reference-driven: the selected set is every target declaration's toolchain references plus the transitive dependencies beni resolves automatically (referencing `wasi-sdk` implies `mruby`); `mruby` is always selected. A toolchain definition selects nothing by itself — a definition for a toolchain nothing references is inert. |
-| Build & verify | `beni:build` builds every target the build config defines, then verifies that each declared target produced its compile-flags sidecar and the archive that sidecar names; a target no `target` declaration names is not verified. The config owns the target definitions, and beni never reads it. |
-| Staged path | Toolchains unpack at their own names under the vendor tree (the mruby source at `mruby/`); each target's archive and its compile-flags sidecar stage at `mruby/build/<name>/lib/` — the staged path. |
-| Archive auto-discovery | The crates auto-discover one archive: the `host` build's, serving host cargo targets. An archive beyond `host` is never auto-discovered and is reachable only via `MRUBY_LIB_DIR`. |
+| Version convergence | The vendor tree converges on each toolchain's selected version: `beni:vendor:setup` replaces a staged toolchain at any other version, and `beni:build` rebuilds the archives; a stale toolchain never survives a version change. |
+| Toolchain unpack | `beni:vendor:setup` unpacks from the tarball cache, downloading only the selected versions' tarballs it lacks; every unpacked tarball, cached or fresh, must match its toolchain's selected checksum. |
+| Toolchain selection | The selected set is every target declaration's toolchain references plus the transitive dependencies beni resolves automatically (referencing `wasi-sdk` implies `mruby`); `mruby` is always selected. A toolchain definition selects nothing by itself; one for a toolchain nothing references is inert. |
+| Build & verify | `beni:build` builds every target the build config defines, then verifies each declared target produced its compile-flags sidecar and the archive that sidecar names; a target no `target` declaration names is not verified. The config owns the target definitions; beni never reads it. |
+| Staged path | Toolchains unpack at their own names under the vendor tree (the mruby source at `mruby/`); each target's archive and compile-flags sidecar stage at `mruby/build/<name>/lib/` — the staged path. |
+| Archive auto-discovery | The crates auto-discover only the `host` build's archive, serving host cargo targets; any other is reachable only via `MRUBY_LIB_DIR`. |
 | Compile-flags sidecar | Every build writes each archive's sidecar; it is the single ABI-alignment channel to the crates. |
 
-Selection, checksums, and cross-compile activation:
+#### Version Selection
 
-- `version` selects mruby; a toolchain definition never names `mruby`.
-  Every other toolchain's selected version and checksum default to its
-  built-in pair; a toolchain definition replaces both. A toolchain
-  released as one tarball per build platform downloads the build
-  platform's tarball: its built-in pair vendors one checksum per
-  tarball and the selected checksum is the downloaded tarball's; a
-  toolchain definition's single `sha256` becomes the selected checksum
-  on every build platform — it verifies only the tarball it names. A
-  built-in pair carrying no checksum for the build platform names the
-  toolchain and the platform and downloads nothing; no other
-  platform's checksum or tarball stands in for the missing one.
-  mruby's selected checksum is the one the installed release vendors
-  for the default `version`; for any other `version` it is the pin
-  that `version`'s first download establishes. The pin persists
-  alongside the tarball cache and shares its lifecycle; once
-  `beni:vendor:clobber` removes both, the next download establishes a
-  new pin.
-- Every `beni:vendor:setup` run with `wasi-sdk` selected writes the wasi
-  toolchain file into the staged mruby source, so a re-extracted tree
-  never lacks it. The file carries beni's wasm32-wasip1 cross-compile
-  settings; a build config activates them with `conf.toolchain :wasi`
-  inside its cross-build definition and needs no toolchain setup of its
-  own. The settings resolve the wasi-sdk root from `WASI_SDK_PATH` when
-  set, the vendor tree's unpacked `wasi-sdk` otherwise.
-- `beni:config` seeds customization: it writes a self-contained equivalent
-  of the configured `version`'s upstream default config to the path the
-  `build_config` declaration names. The generated file requires nothing from
-  beni at build time, builds without edits, and belongs to the consumer,
-  who edits it to define further targets — cross-compiled ones included;
-  beni never rewrites the file. Generation creates the target path's
-  missing parent directories and refuses to overwrite an existing file.
+`version` selects mruby; a toolchain definition never names `mruby`. Every other toolchain's selected version and checksum default to its built-in pair, and a toolchain definition replaces both. A toolchain released as one tarball per build platform downloads the build platform's tarball.
+
+| Source | Selected checksum |
+|---|---|
+| mruby, default `version` | the one the installed release vendors |
+| mruby, any other `version` | the pin that `version`'s first download establishes |
+| built-in pair | its checksum; per-platform: the downloaded tarball's |
+| toolchain definition | its single `sha256`, on every build platform |
+
+A per-platform built-in pair vendors one checksum per tarball; a toolchain definition's `sha256` verifies only the tarball it names. A built-in pair lacking the build platform's checksum names the toolchain and platform and downloads nothing. No other platform's checksum or tarball stands in. The mruby pin persists alongside the tarball cache and shares its lifecycle; once `beni:vendor:clobber` removes both, the next download establishes a new pin.
+
+#### Wasi Toolchain File
+
+The wasi toolchain file carries beni's wasm32-wasip1 cross-compile settings. A re-extracted tree never lacks it, and a build config using it needs no toolchain setup of its own.
+
+| Aspect | Contract |
+|---|---|
+| Written | into the staged mruby source by every `beni:vendor:setup` run selecting `wasi-sdk` |
+| Activation | `conf.toolchain :wasi` inside the build config's cross-build definition |
+| wasi-sdk root | `WASI_SDK_PATH` when set; otherwise the vendor tree's unpacked `wasi-sdk` |
+
+#### Config Generation
+
+`beni:config` seeds customization. It writes a self-contained equivalent of the configured `version`'s upstream default config to the `build_config` path.
+
+| Property | Contract |
+|---|---|
+| Dependencies | requires nothing from beni at build time |
+| Usability | builds without edits |
+| Ownership | the consumer's; edited to define further targets, cross-compiled ones included |
+| Rewrites | beni never rewrites the file |
+| Parent directories | missing ones are created |
+| Existing file | never overwritten; generation refuses |
 
 ### beni-sys crate — FFI surface
 
-- The compile-flags sidecar names the archive by its file name, the compiler that
-  built the archive, and the flags it was given; a flag holds only for that
-  compiler. The C shims compiled beside the bindings use that compiler with
-  those flags unchanged. Binding generation parses the headers with its own
-  toolchain, never that compiler, so it takes only the flags deciding what
-  the headers declare — macro definitions and removals, and the language
-  standard; the target, the sysroot, and the header tree are the crate's own.
-  The sidecar also names the libraries the archive needs linked, and those
-  are the ones linked. The crate follows the `-sys` crate convention.
-- mruby writes the sidecar in the form of the toolchain that built the
-  archive: the archive's file name, each library's name, and each compile
-  flag take that toolchain's form, and a GNU-style toolchain and MSVC differ
-  in all three. Each token is read for what it is rather than for one
-  toolchain's form of it — the archive is looked for in the directory
-  discovery resolved, under the file name the sidecar names it by; a library
-  is linked under the name its own token carries; and binding generation
-  receives the declaration flags in the form its own toolchain reads. A host
-  cargo target is served by an archive from any of mruby's host toolchains;
-  which one built it is the archive's to state.
-- One archive serves one cargo build target. Archive discovery is
-  environment-driven, highest precedence first; the highest-precedence
-  variable set is the sole source, never falling back to a lower one:
-  1. `MRUBY_LIB_DIR` — the `-sys` crate `*_LIB_DIR` convention — names the
-     directory containing the active target's archive and compile-flags
-     sidecar.
-  2. `BENI_VENDOR_DIR` names the vendor tree the gem populated; the crate
-     reads the `host` build's staged path and serves host cargo targets
-     only — a cross-compiled cargo target never reads the vendor tree and
-     requires `MRUBY_LIB_DIR`.
-  3. With neither variable set the build fails, naming the variables it
-     consults.
+#### Sidecar Reading
 
-  A documentation build runs no archive discovery, so an archive
-  discovery variable set in one changes nothing.
-- The supported cross targets are wasm32 and the other macOS
-  architecture — `x86_64-apple-darwin` from an `aarch64-apple-darwin`
-  host and the reverse; a build for any other cross-compiled cargo target
-  fails and names the unsupported target.
-- The macOS one selects no toolchain: the host compiler builds for either
-  macOS architecture. The sidecar does not record which architecture an
-  archive was built for, so `MRUBY_LIB_DIR` naming the other
-  architecture's archive resolves and fails at link.
-- wasm32 requires the wasi-sdk toolchain: `WASI_SDK_PATH` names its
-  unpacked root, defaulting to `/opt/wasi-sdk` when the variable is
-  unset. The sidecar records the toolchain root the archive was built
-  against, and the root in effect is that one: a build finding a
-  different root, or none recorded, fails naming what it has. One root
-  reached by two spellings is one root.
-- Builds against an archive at the supported mruby floor or above; one
-  below it fails the `beni-sys` build, named by the version its own
-  headers record, and an archive whose headers state no version fails the
-  same way. No upper bound is declared: the FFI surface is generated from
-  the discovered archive's own headers rather than declared per version,
-  so a release the crates have not been reconciled with is not refused —
-  what it changed surfaces as a compile failure, a symbol the wrapper
-  calls that the archive does not declare or a layout the crates pin.
-  Supported boxing configurations: word boxing. Supported language
-  standard: any under which mruby declares its never-returning
-  functions as never-returning — the standard in effect under each of
-  mruby's own toolchains, whether that toolchain sets one or takes its
-  compiler's default. A standard that loses that form leaves those
-  declarations in a shape the bindings do not carry, and the typed
-  wrapper's diverging raise does not compile. Binding generation parses
-  under the standard the sidecar names; where it names none, the archive
-  was built under its compiler's default, which binding generation's own
-  toolchain need not share, so it parses under a standard that keeps the
-  form rather than under that toolchain's default.
-- The crate publishes the configured integer width and the configured
-  float width to the crates that depend on it directly, as the
-  integer-width metadata and the float-width metadata, both read from the
-  bindings the build uses — the discovered archive's own, or the
-  documentation bindings in a documentation build. Bindings that declare
-  no integer width fail the build, as do bindings of an archive
-  configured outside what the crates support: one built without floating
-  point, or one whose GC arena has a fixed size.
-- A documentation build reads the documentation bindings and links
-  nothing, so the whole typed surface renders where no archive can be
-  staged. It serves host cargo targets only, and it is the one build
-  archive discovery does not run for; every other build generates its
-  bindings from the discovered archive's own headers.
+The crate follows the `-sys` crate convention. A compile-flags sidecar flag holds only for the compiler that built the archive.
+
+| Sidecar entry | Use |
+|---|---|
+| archive file name | archive looked up under it, in the directory discovery resolved |
+| compiler | compiles the C shims beside the bindings |
+| compile flags | given to that compiler for the C shims unchanged; binding generation takes only the declaration flags, in the form its own toolchain reads |
+| libraries the archive needs linked | the ones linked, each under the name its own token carries |
+
+Binding generation parses the headers with its own toolchain, never that compiler. It takes only the flags deciding what the headers declare: macro definitions and removals, and the language standard. The target, the sysroot, and the header tree are the crate's own.
+
+mruby writes the sidecar in the form of the toolchain that built the archive. The archive's file name, each library's name, and each compile flag take that form; a GNU-style toolchain and MSVC differ in all three. Each token is read for what it is rather than for one toolchain's form of it. A host cargo target is served by an archive from any of mruby's host toolchains; which one built it is the archive's to state.
+
+#### Archive Discovery
+
+One archive serves one cargo build target. Archive discovery is environment-driven, highest precedence first. The highest-precedence variable set is the sole source, never falling back to a lower one:
+
+1. `MRUBY_LIB_DIR` — the `-sys` crate `*_LIB_DIR` convention — names the directory containing the active target's archive and compile-flags sidecar.
+2. `BENI_VENDOR_DIR` names the vendor tree the gem populated. The crate reads the `host` build's staged path, serving host cargo targets only. A cross-compiled cargo target never reads the vendor tree and requires `MRUBY_LIB_DIR`.
+3. With neither variable set, the build fails, naming the variables it consults.
+
+A documentation build runs no archive discovery, so an archive discovery variable set in one changes nothing.
+
+#### Cross Targets
+
+The supported cross targets are wasm32 and the other macOS architecture. A build for any other cross-compiled cargo target fails and names the unsupported target.
+
+| Cross target | Toolchain |
+|---|---|
+| `x86_64-apple-darwin` from an `aarch64-apple-darwin` host, and the reverse | none — the host compiler builds either |
+| wasm32 | wasi-sdk, unpacked root `WASI_SDK_PATH`, default `/opt/wasi-sdk` |
+
+The sidecar does not record which macOS architecture an archive was built for. `MRUBY_LIB_DIR` naming the other architecture's archive resolves and fails at link.
+
+For wasm32, the sidecar records the toolchain root the archive was built against, and the root in effect is that one. A build finding a different root, or none recorded, fails naming what it has. One root reached by two spellings is one root.
+
+#### Version Bounds
+
+No upper bound is declared: the FFI surface is generated from the discovered archive's own headers rather than declared per version.
+
+| Archive | Outcome |
+|---|---|
+| at or above the supported mruby floor | builds |
+| below the floor | the `beni-sys` build fails, named by the version its own headers record |
+| headers state no version | fails the same way |
+| a release the crates have not reconciled with | not refused; its changes surface as compile failures |
+
+Such a compile failure is a symbol the wrapper calls that the archive does not declare, or a layout the crates pin.
+
+#### Supported Configurations
+
+The crate supports these configurations.
+
+| Configuration | Supported |
+|---|---|
+| boxing | word boxing |
+| language standard | any under which mruby declares its never-returning functions as never-returning |
+
+That is the standard in effect under each of mruby's own toolchains, whether set or the compiler's default. A standard losing that form leaves those declarations in a shape the bindings do not carry, and the typed wrapper's diverging raise does not compile. Binding generation parses under the standard the sidecar names. Where it names none, the archive was built under its compiler's default, which binding generation's own toolchain need not share. Binding generation then parses under a standard that keeps the form, not under that toolchain's default.
+
+#### Width Metadata
+
+The crate publishes the configured integer width and the configured float width to its direct dependents, as the integer-width metadata and the float-width metadata. Both are read from the bindings the build uses: the discovered archive's own, or the documentation bindings in a documentation build.
+
+The build fails for bindings that declare no integer width, and for bindings of an archive configured outside what the crates support:
+
+| Unsupported archive configuration |
+|---|
+| built without floating point |
+| a GC arena of fixed size |
+
+#### Documentation Build
+
+A documentation build renders the whole typed surface where no archive can be staged. Every other build generates its bindings from the discovered archive's own headers.
+
+| Aspect | Documentation build |
+|---|---|
+| Bindings | the documentation bindings |
+| Linking | none |
+| Cargo targets | host only |
+| Archive discovery | does not run; an archive discovery variable set changes nothing |
 
 ### beni crate — typed wrapper
 
 #### Cargo features
 
-- The surface a consumer gets by default is mruby's core capability plus every
-  capability feature. A capability mruby keeps in a gem rather than its core is
-  carried by a capability feature, so a consumer who never wanted that gem can
-  drop the surface that needs it and still have a crate that builds.
-- A capability feature answers whether a consumer wants the capability, not
-  whether the archive in front of the crate carries it. The crate reads no gem
-  inventory and adapts to no archive: the consumer's declaration settles which
-  surface exists, and an archive that does not carry what the declaration names
-  is the consumer's to reconcile.
-- Enabling a capability feature only adds surface. No combination of features
-  removes or replaces an item another combination carries, and that holds inside
-  a type as well as across the crate: the error a fallible operation answers has
-  one shape in every build, so a consumer matching on it writes the same match
-  whatever they enabled. A feature carries operations, never the shapes their
-  results are reported in.
-- `compiler` is a capability feature, enabled by default, carrying what mruby's
-  compiler gem defines: the compile context and the loads that compile Ruby
-  source into the running interpreter. It carries the compiler gem's function
-  surface exactly — loading precompiled bytecode needs no compiler and stays
-  outside it — and the parse message a compile failure is reported in stays
-  outside it too, being one of those shapes. Disabling default features is how a
-  consumer that never compiles Ruby at run time says so.
-- A dependency feature is the second axis beside capability: it carries the
-  conversions to a third-party Rust crate's types, gated as `magnus` gates the
-  same integration. It is disabled by default, and like a capability feature it
-  only adds surface. A third-party trait that bounds a core capability is no
-  dependency feature: `bytemuck`, whose `Pod` bounds `InlineStruct`, is a
-  dependency of every build.
-- `bytes` is a dependency feature carrying the `bytes` crate's `Bytes`: a
-  string handle reads its bytes as a `Bytes`, `TryConvert` converts a String
-  into one, and `IntoValue` copies one into a new String, mirroring `magnus`'s
-  `RString::to_bytes` and the conversions its `bytes` feature carries.
+The surface a consumer gets by default is mruby's core capability plus every
+capability feature. Features fall on two axes:
+
+| Axis | Carries | Default |
+|---|---|---|
+| capability feature | a capability mruby keeps in a gem rather than its core | enabled |
+| dependency feature | conversions to a third-party Rust crate's types, gated as `magnus` gates the same integration | disabled |
+
+Enabling any feature only adds surface. No combination of features removes or
+replaces an item another combination carries, across the crate and inside a
+type alike. A feature carries operations, never the shapes their results are
+reported in. So the error a fallible operation answers has one shape in every
+build, and a consumer matching on it writes the same match whatever they enabled.
+
+##### Capability features
+
+A consumer who never wanted the gem behind a capability feature can drop the
+surface that needs it and still have a crate that builds. The feature answers whether a consumer wants the
+capability, not whether the archive in front of the crate carries it:
+
+| Rule | Effect |
+|---|---|
+| gem inventory | the crate reads none and adapts to no archive |
+| which surface exists | the consumer's declaration settles it |
+| archive lacks what the declaration names | the consumer's to reconcile |
+
+`compiler` is a capability feature, enabled by default. It carries exactly the
+function surface mruby's compiler gem defines: the compile context and the loads
+that compile Ruby source into the running interpreter. Loading precompiled
+bytecode needs no compiler and stays outside it. The parse message a compile
+failure is reported in stays outside it too, being a result shape. Disabling
+default features is how a consumer that never compiles Ruby at run time says so.
+
+##### Dependency features
+
+A third-party trait that bounds a core capability is no dependency feature:
+`bytemuck`, whose `Pod` bounds `InlineStruct`, is a dependency of every build.
+
+`bytes` is a dependency feature carrying the `bytes` crate's `Bytes`, mirroring
+`magnus`'s `RString::to_bytes` and the conversions its `bytes` feature carries:
+
+| Operation | Effect |
+|---|---|
+| string handle read | reads its bytes as a `Bytes` |
+| `TryConvert` | converts a String into a `Bytes` |
+| `IntoValue` | copies a `Bytes` into a new String |
 
 #### Handle, values, and conversions
 
 The crate owns every Rust-level abstraction over the C API: an RAII interpreter
 handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes, and class and module
-definition. Three typed conversions cross the Rust/Ruby boundary — `IntoValue`
-out of Rust, the `FromValue` downcast that reads a value only as what its type
-tag already is, and `TryConvert`, the conversion a method's receiver and
-arguments cross, mirroring `magnus`'s `TryConvert`:
+definition. Three typed conversions cross the Rust/Ruby boundary:
 
-| Conversion | Direction | Rule |
-|---|---|---|
-| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`bool`, or a Rust integer or float the rows below admit) boxes into its Ruby value, and each typed handle on a Ruby value — every handle the type-discrimination table below names except `Qundef`, and `Obj<T>` — yields that same value, and an `Id` boxes into the symbol value it names, raising nothing and running no Ruby |
-| `IntoValue` for a Rust integer | Rust integer → Integer `Value` | a Rust integer type converts only where every value it holds fits the configured integer width, so the conversion stays total: `i8` / `i16` / `i32` / `u8` / `u16` under every width, `u32` / `i64` under a 64-bit width, `isize` where the cargo target's pointer width is no wider than the configured integer width; every other integer type — `u64`, `usize`, `i128`, `u128`, and a `u32` / `i64` / `isize` the width does not fit — has no conversion and fails to compile |
-| `IntoValue` for a typed data value | `T: TypedData` → data carrier `Value` | wraps the value as a new instance of the class its type names for it, as `obj_wrap` does; total for every type that keeps the `TypedData` contract |
-| `IntoValue` for an inline struct | `Inline<T>`, or a `T` the `InlineStruct` macros implement → inline struct `Value` | the handle answers its own value; a value wraps as a new instance of its type's class, as `Inline::new` does; total for every type that keeps the `InlineStruct` contract |
-| `IntoValue` for `Bytes`, with the `bytes` feature | `Bytes` → String `Value` | copies the bytes into a new String |
-| `IntoValue` for a Rust float | Rust float → Float `Value` | a Rust float type converts only where every value it holds fits the configured float width, so the conversion stays total: `f32` under every width, `f64` under a 64-bit width; an `f64` under a 32-bit width has no conversion and fails to compile |
-| `FromValue` → `Value` | `Value` → `Value` | identity — the value itself; total, never rejects |
-| `FromValue` → a typed handle | `Value` → typed handle | converts what the type-discrimination table below names for the handle; any other value rejects |
-| `FromValue` → `bool` | `Value` → `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true`; total, never rejects |
-| `FromValue` → `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64` / `isize` / `usize` | `Value` → Rust integer | converts an Integer that fits the configured integer width, never a Float; the target takes the Integer when its value lies within the target's own range and rejects it otherwise — `i64` holds every such Integer, and an unsigned target rejects every negative one; any other value rejects, an arbitrary-width Integer beyond the configured width included; every target listed converts under every configured integer width |
-| `FromValue` → a Rust float | `Value` → Rust float | converts a Float, never an Integer; a float target converts only where it holds every value the configured float width does: `f64` under every width, `f32` under a 32-bit width; an `f32` under a 64-bit width has no conversion and fails to compile; any other value rejects |
-| `FromValue` → `Option<T>` | `Value` → `Option<T>` | `nil` to `None`; any other value converts by `T`'s rule to `Some`, rejecting what `T` rejects |
-| `TryConvert` | `Value` → Rust value or typed handle | answers the converted value, or an `Err` carrying the exception mruby raises for the same mismatch, worded as mruby words it; runs no user Ruby. Each rule below names what converts; every other value surfaces the `TypeError` "*value* cannot be converted to *target*", *value* naming the value's class — or `nil`, `true`, or `false` itself — and *target* the Ruby class the rule converts from |
-| `TryConvert` → `Value` / `bool` / `Option<T>` | `Value` → the same | as the `FromValue` rule for each; `Option<T>` answers `T`'s `Err` where `T` rejects |
-| `TryConvert` → `RString` / `RArray` / `RHash` / `Symbol` / `Range` / `RClass` / `RModule` / `ExceptionClass` | `Value` → typed handle | converts what the `FromValue` downcast converts and nothing more — mruby has no implicit `to_str`, `to_ary`, or `to_hash` conversion; *target* is the handle's Ruby class. A class, module, or exception-class handle surfaces instead the `TypeError` "*value* is not a class", "*value* is not a module", or "*value* is not a class inheriting Exception", *value* the inspected form, as mruby words a class or module mismatch |
-| `TryConvert` → `Proc` | `Value` → `Proc` | converts a `Proc` alone and dispatches no `to_proc`, mruby converting to a `Proc` only a block being passed; any other value surfaces the `TypeError` "wrong argument type *class* (expected Proc)" |
-| `TryConvert` → `i8` / `i16` / `i32` / `i64` / `i128` / `u8` / `u16` / `u32` / `u64` / `u128` / `isize` / `usize` | `Value` → Rust integer | converts an Integer, or a Float truncated toward zero, as mruby's own C-method arguments do; an infinite or NaN Float, and an arbitrary-width Integer beyond the configured integer width, surface the `RangeError` mruby raises for each, and an Integer within that width but outside the target's own range the `RangeError` "*value* out of range", *value* its inspected form; *target* is `Integer` |
-| `TryConvert` → a non-zero Rust integer | `Value` → `NonZeroI8` … `NonZeroUsize` | converts as its integer does; zero surfaces the `ArgumentError` "value must be non-zero" |
-| `TryConvert` → `f64` / `f32` | `Value` → Rust float | converts a Float, or an Integer widened, as mruby's own C-method arguments do; `nil` surfaces the `TypeError` "can't convert nil into Float" mruby raises; *target* is `Float`. Both targets convert under every configured float width, an `f32` narrowing a wider Float to its nearest `f32`, a magnitude beyond `f32` becoming an infinity |
-| `TryConvert` → `Integer` / `Float` | `Value` → typed handle | converts what the `FromValue` downcast converts, and any other numeric value to the number mruby's own numeric coercion yields — an `Integer` handle takes a Float truncated toward zero and keeps an arbitrary-width Integer whole, a `Float` handle widens an Integer — mirroring `magnus`'s conversions through `to_int` and `to_f` without dispatching either. An `Integer` handle surfaces the `RangeError` mruby raises for an infinite or NaN Float; a `Float` handle surfaces the `TypeError` "can't convert nil into Float" for `nil`; *target* is `Integer` or `Float` |
-| `TryConvert` → `String` / `char` / `PathBuf` | `Value` → Rust text | converts a String's bytes: `String` UTF-8 bytes, `char` UTF-8 bytes holding exactly one character, `PathBuf` any bytes on a Unix target and UTF-8 bytes on any other. Bytes that are not UTF-8 where UTF-8 is required surface the `ArgumentError` "invalid UTF-8 byte sequence"; a string of any other length than one character surfaces the `TypeError` with *target* `char`. No path protocol applies — mruby has no `to_path`; *target* is `String` |
-| `TryConvert` → `Bytes`, with the `bytes` feature | `Value` → Rust bytes | converts a String's bytes, any bytes; *target* is `String` |
-| `TryConvert` → `Vec<T>` / `[T; N]` / a tuple of 1 to 12 elements | `Value` → Rust sequence | converts an Array, each element by its own type's rule, surfacing the first element's `Err`; a fixed-length target converts an Array of exactly its length and surfaces the `TypeError` "expected Array of length *N*" for any other; *target* is `Array` |
-| `TryConvert` → `HashMap<K, V>` / `BTreeMap<K, V>` | `Value` → Rust map | converts a Hash, each key and value by its own type's rule, surfacing the first `Err`; *target* is `Hash` |
-| `TryConvert` → `RTypedData` | `Value` → typed handle | converts any data carrier, holding a payload or not; any other value surfaces the `TypeError` "wrong argument type *value* (expected C data)", *value* named as mruby's own type check names it |
-| `TryConvert` → `Qnil` / `Qtrue` / `Qfalse` / `Exception` / `RObject` / `Fiber` / `RStruct` / `RSet` / `RRational` / `RComplex` / `RInlineStruct` / `RCptr` | `Value` → typed handle | converts what the `FromValue` downcast converts and nothing more — an `Exception` handle dispatches no `exception`; any other value surfaces the `TypeError` "wrong argument type *value* (expected *name*)", *value* named as mruby's own type check names it and *name* the name that check gives the handle's type tag — `Exception`, `Object`, `Fiber`, `Struct`, `Set`, `Rational`, `Complex`, `istruct`, or `cptr` — and, for `Qnil` / `Qtrue` / `Qfalse`, `NilClass` / `TrueClass` / `FalseClass`. `Qundef` has no `TryConvert` |
-| `TryConvert` → `&T` / `Obj<T>` for `T: TypedData` | `Value` → reference to the payload, or typed handle | converts a data carrier holding a payload of `T`'s data type, and surfaces the `TypeError` mruby's own data-type check raises otherwise: "wrong argument type *value* (expected C data)" for a value that is no data carrier, "wrong argument type *name* (expected *T name*)" for a carrier of another data type, *name* that data type's name, and "uninitialized *class* (expected *T name*)" for a carrier holding no payload, *class* the carrier's class; *T name* is the name `T`'s data type declares. The reference borrows the payload for as long as its carrier stays reachable |
-| `TryConvert` → `Inline<T>`, or a `T` the `InlineStruct` macros implement, for `T: InlineStruct` | `Value` → typed handle, or a copy of the payload | converts an inline struct whose class belongs to `T`; any other value surfaces the `TypeError` "wrong argument type *value* (expected *T name*)", *value* named as mruby's own type check names it and *T name* the name `T` declares |
+| Conversion | Role |
+|---|---|
+| `IntoValue` | out of Rust |
+| `FromValue` | the downcast that reads a value only as what its type tag already is |
+| `TryConvert` | the conversion a method's receiver and arguments cross, mirroring `magnus`'s `TryConvert` |
 
-A sequence or map target holds any element type `TryConvert` converts to, a
-`Value` or typed handle included: each element crosses out to Rust and stays
-reachable as the Garbage collection section promises for every value that does,
-wherever the Rust side stores it.
-
-Integer quantities cross the typed surface as Rust's own integer types, never as
-the configured-width integer the raw bindings declare, so a signature reads the
-same under every configured integer width. An index or offset mruby counts back
-from the end when it is negative is `isize`; every other count, length, or offset
-— one mruby never computes with as a negative value, whether it rejects a
-negative one or cannot be handed one — is `usize`. An index, offset, or length
-beyond what the configured integer width holds stands for the width's minimum
-or maximum it exceeds, so it never wraps onto an in-range position. An integer mruby produces — an Integer's value, a parsed integer, an
-object identifier — is `i64`, which holds every configured width.
-
-Float quantities cross the same way — as Rust's own float types, never as the
-configured-width float the raw bindings declare. A float mruby produces — a
-Float's value, a parsed float, a numeric conversion's result — is `f64`, which
-holds every configured float width, so those signatures too read the same under
-each. The crate takes each configured width from its own metadata alone.
+##### Type discrimination
 
 Type discrimination is the typed handle's `FromValue` downcast, magnus's
-`from_value`: every type tag a value a typed caller holds can carry, the break
-tag aside, converts into a handle, which accepts precisely what the table names
-and rejects every other value. A value also answers whether it is `nil`
-(`ReprValue::is_nil`, as magnus's does); no other per-type predicate exists.
+`from_value`. Every type tag a value a typed caller holds can carry, the break
+tag aside, converts into a handle. A handle accepts precisely what this table
+names and rejects every other value:
 
 | Handle | Accepts |
 |---|---|
@@ -384,29 +349,236 @@ and rejects every other value. A value also answers whether it is `nil`
 | `RCptr` | a bare C pointer a C extension boxed |
 
 The include-class, environment, freed-slot, and backtrace tags stay inside the
-VM and carry no handle; the break tag is read through `ReprValue::as_break`. A class
-handle answers whether it names a singleton class (`RClass::is_singleton`).
+VM and carry no handle. The break tag is read through `ReprValue::as_break`. A
+value answers whether it is `nil` (`ReprValue::is_nil`, as magnus's does); no
+other per-type predicate exists. A class handle answers whether it names a
+singleton class (`RClass::is_singleton`).
 
-An `Integer` handle reads out as an `i64`, mirroring `magnus`'s
-`Integer::to_i64`: a fixed-width Integer always fits, and an arbitrary-width
-Integer beyond the configured integer width surfaces the `RangeError` mruby
-raises. A `Float` handle reads out as an `f64`, mirroring `magnus`'s
-`Float::to_f64`; the read is total.
+##### Numeric handle reads
+
+Numeric handles read out as Rust numbers, mirroring `magnus`:
+
+| Handle | Reads out as | Mirrors |
+|---|---|---|
+| `Integer` | `i64` | `Integer::to_i64` |
+| `Float` | `f64` | `Float::to_f64` |
+
+A fixed-width Integer always fits. An arbitrary-width Integer beyond the
+configured integer width surfaces the `RangeError` mruby raises. The `Float`
+read is total.
+
+##### IntoValue rules
+
+`IntoValue` converts a Rust value or typed handle into a `Value`. Each row is
+total — cannot fail — where its last column says. The rows marked "always" also
+raise nothing and run no Ruby:
+
+| Source | Result | Total |
+|---|---|---|
+| `Value` | passes through unchanged | always |
+| a scalar: `bool`, or a Rust integer or float the width rules admit | boxes into its Ruby value | always |
+| a typed handle on a Ruby value: every Type discrimination handle except `Qundef`, and `Obj<T>` | yields that same value | always |
+| `Id` | boxes into the symbol value it names | always |
+| `T: TypedData` | a data carrier: a new instance of the class its type names for it, as `obj_wrap` does | for every type keeping the `TypedData` contract |
+| `Inline<T>` | the handle's own value, an inline struct | for every type keeping the `InlineStruct` contract |
+| a `T` the `InlineStruct` macros implement | a new instance of its type's class, as `Inline::new` does | for every type keeping the `InlineStruct` contract |
+| `Bytes`, with the `bytes` feature | a copy of the bytes in a new String | — |
+
+A Rust number type converts into an Integer or Float `Value` only where every
+value it holds fits the configured integer width or configured float width, so
+the conversion stays total:
+
+| Rust type | Converts under |
+|---|---|
+| `i8` / `i16` / `i32` / `u8` / `u16` | every configured integer width |
+| `u32` / `i64` | a 64-bit configured integer width |
+| `isize` | a configured integer width no narrower than the cargo target's pointer width |
+| `f32` | every configured float width |
+| `f64` | a 64-bit configured float width |
+
+Every other integer type — `u64`, `usize`, `i128`, `u128`, and a `u32` / `i64`
+/ `isize` the width does not fit — has no conversion and fails to compile. So
+does an `f64` under a 32-bit width.
+
+##### FromValue rules
+
+`FromValue` converts a `Value` by the target's rule:
+
+| Target | Converts | Otherwise |
+|---|---|---|
+| `Value` | identity — the value itself | total, never rejects |
+| a typed handle | what the Type discrimination table names for the handle | rejects |
+| `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true` | total, never rejects |
+| `Option<T>` | `nil` to `None`; any other value by `T`'s rule to `Some` | rejects what `T` rejects |
+| `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64` / `isize` / `usize` | an Integer that fits the configured integer width and lies within the target's own range | rejects |
+| a Rust float | a Float | rejects |
+
+An integer target never takes a Float. `i64` holds every Integer that fits the
+configured integer width, and an unsigned target rejects every negative one. An
+arbitrary-width Integer beyond the configured width rejects. Every integer
+target listed converts under every configured integer width.
+
+A float target never takes an Integer. It converts only where it holds every
+value the configured float width does: `f64` under every width, `f32` under a
+32-bit width. An `f32` under a 64-bit width has no conversion and fails to
+compile.
+
+##### TryConvert contract
+
+`TryConvert` answers the converted value, or an `Err` carrying the exception
+mruby raises for the same mismatch, worded as mruby words it. It runs no user
+Ruby. Each rule names what converts. Every other value surfaces the `TypeError`
+"*value* cannot be converted to *target*", unless the rule names another error:
+
+| Placeholder | Names |
+|---|---|
+| *value* | the value's class — or `nil`, `true`, or `false` itself |
+| *target* | the Ruby class the rule converts from |
+
+##### TryConvert handles
+
+The handle targets below convert what the `FromValue` downcast converts and nothing more:
+
+| Target | Converts | Error for any other value |
+|---|---|---|
+| `Value` / `bool` / `Option<T>` | as the `FromValue` rule for each | `Option<T>` answers `T`'s `Err` where `T` rejects |
+| `RString` / `RArray` / `RHash` / `Symbol` / `Range` | downcast only | default `TypeError`; *target* is the handle's Ruby class |
+| `RClass` / `RModule` / `ExceptionClass` | downcast only | `TypeError` "*value* is not a class", "*value* is not a module", or "*value* is not a class inheriting Exception" |
+| `Proc` | a `Proc` alone | `TypeError` "wrong argument type *class* (expected Proc)" |
+| `Qnil` / `Qtrue` / `Qfalse` / `Exception` / `RObject` / `Fiber` / `RStruct` / `RSet` / `RRational` / `RComplex` / `RInlineStruct` / `RCptr` | downcast only | `TypeError` "wrong argument type *value* (expected *name*)" |
+
+mruby has no implicit `to_str`, `to_ary`, or `to_hash` conversion. A class,
+module, or exception-class handle's *value* is the inspected form, as mruby
+words a class or module mismatch. `Proc` dispatches no `to_proc`; mruby
+converts to a `Proc` only a block being passed. An `Exception` handle dispatches
+no `exception`. `Qundef` has no `TryConvert`.
+
+In "wrong argument type *value* (expected *name*)", *value* is named as mruby's
+own type check names it. *name* is the name that check gives the handle's type
+tag — `Exception`, `Object`, `Fiber`, `Struct`, `Set`, `Rational`, `Complex`,
+`istruct`, or `cptr` — and, for `Qnil` / `Qtrue` / `Qfalse`, `NilClass` /
+`TrueClass` / `FalseClass`.
+
+##### TryConvert numbers
+
+Rust integer and float targets convert as mruby's own C-method arguments do; the `Integer` and `Float` handles convert as the paragraph after this table says:
+
+| Target | Converts | *target* |
+|---|---|---|
+| `i8` / `i16` / `i32` / `i64` / `i128` / `u8` / `u16` / `u32` / `u64` / `u128` / `isize` / `usize` | an Integer, or a Float truncated toward zero | `Integer` |
+| a non-zero Rust integer, `NonZeroI8` … `NonZeroUsize` | as its integer does | as its integer |
+| `f64` / `f32` | a Float, or an Integer widened | `Float` |
+| `Integer` handle | the downcast, a Float truncated toward zero, an arbitrary-width Integer kept whole | `Integer` |
+| `Float` handle | the downcast, an Integer widened | `Float` |
+
+The `Integer` and `Float` handles take any non-downcast numeric value as the
+number mruby's own numeric coercion yields. This mirrors `magnus`'s conversions
+through `to_int` and `to_f` without dispatching either. `f64` and `f32` convert
+under every configured float width. An `f32` narrows a wider Float to its
+nearest `f32`, and a magnitude beyond `f32` becomes an infinity.
+
+| Target | Value | Error |
+|---|---|---|
+| Rust integer, `Integer` handle | an infinite or NaN Float | the `RangeError` mruby raises |
+| Rust integer | an arbitrary-width Integer beyond the configured integer width | the `RangeError` mruby raises |
+| Rust integer | an Integer within that width, outside the target's own range | `RangeError` "*value* out of range", *value* its inspected form |
+| non-zero Rust integer | zero | `ArgumentError` "value must be non-zero" |
+| `f64` / `f32`, `Float` handle | `nil` | `TypeError` "can't convert nil into Float", as mruby raises |
+
+##### TryConvert text and collections
+
+Text targets convert a String's bytes; sequence and map targets convert each
+element by its own type's rule:
+
+| Target | Converts | *target* |
+|---|---|---|
+| `String` | UTF-8 bytes | `String` |
+| `char` | UTF-8 bytes holding exactly one character | `String` |
+| `PathBuf` | any bytes on a Unix target, UTF-8 bytes on any other | `String` |
+| `Bytes`, with the `bytes` feature | any bytes | `String` |
+| `Vec<T>` / `[T; N]` / a tuple of 1 to 12 elements | an Array | `Array` |
+| `HashMap<K, V>` / `BTreeMap<K, V>` | a Hash, each key and value | `Hash` |
+
+Bytes that are not UTF-8 where UTF-8 is required surface the `ArgumentError`
+"invalid UTF-8 byte sequence". For `char`, a string of any other length than one
+character surfaces the `TypeError` with *target* `char`. No path protocol
+applies — mruby has no `to_path`.
+
+A sequence surfaces the first element's `Err`, a map the first `Err`. A
+fixed-length target converts an Array of exactly its length, and surfaces the
+`TypeError` "expected Array of length *N*" for any other. A sequence or map
+target holds any element type `TryConvert` converts to, a `Value` or typed
+handle included. Each element crosses out to Rust and stays reachable as the
+Garbage collection section promises for every value that does, wherever the
+Rust side stores it.
+
+##### TryConvert data
+
+Data targets convert a data carrier or an inline struct:
+
+| Target | Converts | Result |
+|---|---|---|
+| `RTypedData` | any data carrier, holding a payload or not | typed handle |
+| `&T` / `Obj<T>` for `T: TypedData` | a data carrier holding a payload of `T`'s data type | reference to the payload, or typed handle |
+| `Inline<T>`, or a `T` the `InlineStruct` macros implement, for `T: InlineStruct` | an inline struct whose class belongs to `T` | typed handle, or a copy of the payload |
+
+Every other value surfaces a `TypeError`. For `&T` / `Obj<T>` it is the one
+mruby's own data-type check raises:
+
+| Target | Value | `TypeError` message |
+|---|---|---|
+| `RTypedData`, `&T` / `Obj<T>` | no data carrier | "wrong argument type *value* (expected C data)" |
+| `&T` / `Obj<T>` | a carrier of another data type | "wrong argument type *name* (expected *T name*)" |
+| `&T` / `Obj<T>` | a carrier holding no payload | "uninitialized *class* (expected *T name*)" |
+| `Inline<T>` / `T: InlineStruct` | any other value | "wrong argument type *value* (expected *T name*)" |
+
+For `RTypedData` and the inline struct targets, *value* is named as mruby's own
+type check names it. *name* is the other data type's name and *class* the
+carrier's class. *T name* is the name `T`'s data type declares, or for an
+inline struct target the name `T` declares. The reference borrows the payload
+for as long as its carrier stays reachable.
+
+##### Numeric quantities
+
+Integer and float quantities cross the typed surface as Rust's own types, never
+as the configured-width integer or float the raw bindings declare:
+
+| Quantity | Rust type |
+|---|---|
+| an index or offset mruby counts back from the end when it is negative | `isize` |
+| every other count, length, or offset — one mruby never computes with as a negative value, whether it rejects a negative one or cannot be handed one | `usize` |
+| an integer mruby produces — an Integer's value, a parsed integer, an object identifier | `i64`, holding every configured integer width |
+| a float mruby produces — a Float's value, a parsed float, a numeric conversion's result | `f64`, holding every configured float width |
+
+So a signature reads the same under every configured integer width and every
+configured float width. An index, offset, or length beyond what the configured
+integer width holds stands for the width's minimum or maximum it exceeds, so it
+never wraps onto an in-range position. The crate takes each configured width
+from its own metadata alone.
 
 #### Strings
 
-Rust bytes convert to a new mruby string, returned as a typed `RString`; a
-string also constructs empty with a preallocated capacity, the buffer Ruby's
-`String.new(capacity:)` reserves for appends that follow. A string also
-constructs over a borrowed static buffer without copying its bytes — the no-copy
-counterpart of the copying conversion, where the string aliases the caller's
-bytes instead of owning a copy. The borrowed buffer must stay valid for the whole
-run of the program (a `'static` requirement the construction enforces, making a
-dangling alias impossible), since mruby never frees it; mruby treats such a string
-copy-on-write, so an in-place append or resize reallocates first and then behaves
-like any other string. magnus has no direct analogue, so this construction anchors
-on mruby's own `mrb_str_new_static`, with `mrb_str_new_lit` the convenience that
-borrows a string literal. From an mruby string Rust reads the bytes these ways:
+Rust bytes convert to a new mruby string, returned as a typed `RString`. A
+string constructs three ways:
+
+| Construction | Result |
+|---|---|
+| copying | a new string owning a copy of Rust bytes |
+| with capacity | an empty string with a preallocated buffer, as Ruby's `String.new(capacity:)` reserves for appends that follow |
+| borrowed static | a string aliasing a borrowed static buffer, without copying its bytes |
+
+The borrowed static construction is the no-copy counterpart of the copying
+conversion. The buffer must stay valid for the whole run of the program, since
+mruby never frees it. The construction enforces this as a `'static` requirement,
+making a dangling alias impossible. mruby treats such a string copy-on-write: an
+in-place append or resize reallocates first, then behaves like any other string.
+magnus has no direct analogue, so this construction anchors on mruby's own
+`mrb_str_new_static`, with `mrb_str_new_lit` the convenience that borrows a
+string literal.
+
+##### Byte Reads
+
+Rust reads an mruby string's bytes these ways. The reads below never raise.
 
 | Read | Yields | Rejects |
 |---|---|---|
@@ -415,246 +587,340 @@ borrows a string literal. From an mruby string Rust reads the bytes these ways:
 | owned `Vec<u8>` | arbitrary bytes | a non-string tag |
 | owned `Bytes`, read from a string handle with the `bytes` feature | arbitrary bytes | — |
 
-The reads above never raise. Mirroring `magnus`'s `RString::to_string` and
-`to_char`, a string handle also reads its bytes as an owned `String` that
-surfaces an `Err`, the `ArgumentError` "invalid UTF-8 byte sequence", for bytes
-that are not UTF-8, and as a `char` that surfaces the same `Err` for such bytes
-and a `TypeError` for a string holding other than exactly one character — the
-reads the `String` and `char` `TryConvert` rules make. Rust also reads the bytes
-two more fallible ways. It reads them as a NUL-terminated C-string view — the
-bytes guaranteed to end in a `\0`, suitable for a C boundary — which surfaces an `Err`, the `ArgumentError`
-mruby raises, when the bytes contain an embedded NUL, because a C string cannot
-carry an embedded NUL. magnus offers no direct C-string accessor, so the read
-anchors on mruby's own `mrb_string_cstr`. It also parses the bytes to an integer
-in a given radix — a strict parse that rejects any non-integer input rather than
-stopping at the first invalid character — which surfaces an `Err`, the
-`ArgumentError` mruby raises, when the bytes are not a valid integer in that
-radix. The radix is one of 2 through 36, or 0 to auto-detect a leading base
-prefix (`0x`, `0b`, `0o`), the same radixes Ruby's `String#to_i` accepts; a radix
-outside that domain is itself invalid input and surfaces the same `Err`. This
-parse anchors on mruby's own `mrb_str_to_integer`; it is the strict counterpart
-of Ruby's lenient `String#to_i`, which never raises. A lenient sibling reads the
-same radixes the way Ruby's `String#to_i` itself does: it consumes the leading
-integer and ignores any trailing characters, yielding `0` when no integer begins
-the bytes rather than rejecting them, so it returns the best-effort value directly
-without an `Err` for malformed content. A radix outside the 2-through-36 / 0-prefix
-domain is still rejected — the one input the lenient read cannot interpret — and
-surfaces an `Err` carrying the same `ArgumentError`. This sibling anchors on mruby's
-own `mrb_str_to_inum`. It likewise parses the bytes
-to a float — a strict parse that rejects any non-float input rather than ignoring
-trailing characters — which surfaces an `Err`, the `ArgumentError` mruby raises,
-when the bytes are not a valid float. This parse anchors on mruby's own
-`mrb_str_to_dbl`; it is the strict counterpart of Ruby's lenient `String#to_f`,
-which never raises.
+##### Fallible Reads
 
-An `Integer` handle renders to a new `RString` in a given radix, the way Ruby's
-`Integer#to_s(base)` does — `12345` to `"3039"` in base 16. The radix is one of
-2 through 36; a radix outside that domain surfaces an `Err`, the `ArgumentError`
-mruby raises. Mirrors mruby's `mrb_integer_to_str`.
+A string handle also reads its bytes in ways that surface an `Err`:
 
-A `Float` handle converts to the `Integer` it truncates toward zero, the way
-Ruby's `Float#to_i` does — `3.9` to `3`, `-3.9` to `-3`; an infinite or NaN
-float has no integer and surfaces an `Err` carrying a `RangeError`. Mirrors
-mruby's `mrb_float_to_integer`.
+| Read | Yields | `Err` when |
+|---|---|---|
+| owned `String` | the bytes | bytes not UTF-8: the `ArgumentError` "invalid UTF-8 byte sequence" |
+| `char` | the one character | bytes not UTF-8: the same `Err`; other than exactly one character: a `TypeError` |
+| NUL-terminated C-string view | the bytes, guaranteed to end in a `\0`, suitable for a C boundary | an embedded NUL: the `ArgumentError` mruby raises |
+
+The `String` and `char` reads mirror `magnus`'s `RString::to_string` and
+`to_char`, the reads the `String` and `char` `TryConvert` rules make. A C string
+cannot carry an embedded NUL. magnus offers no direct C-string accessor, so that
+read anchors on mruby's own `mrb_string_cstr`.
+
+##### Numeric Parses
+
+Rust also parses a string's bytes to a number. Each `Err` carries the
+`ArgumentError` mruby raises.
+
+| Parse | Yields | `Err` when | Anchor |
+|---|---|---|---|
+| strict integer | the integer in a given radix | bytes not a valid integer in that radix; invalid radix | `mrb_str_to_integer` |
+| lenient integer | the leading integer, ignoring trailing characters; `0` when no integer begins the bytes | invalid radix only | `mrb_str_to_inum` |
+| strict float | the float | bytes not a valid float | `mrb_str_to_dbl` |
+
+The radix is one of 2 through 36, or 0 to auto-detect a leading base prefix
+(`0x`, `0b`, `0o`) — the radixes Ruby's `String#to_i` accepts. A radix outside
+that domain is invalid input for both integer parses. The lenient parse cannot
+interpret it either, and surfaces an `Err` carrying the same `ArgumentError`.
+
+The strict integer parse rejects any non-integer input rather than stopping at
+the first invalid character. It is the strict counterpart of Ruby's lenient
+`String#to_i`, which never raises. The lenient parse reads the way `String#to_i`
+itself does. It returns the best-effort value directly, without an `Err` for
+malformed content. The strict float parse rejects any non-float input rather
+than ignoring trailing characters. It is the strict counterpart of Ruby's lenient
+`String#to_f`, which never raises.
+
+##### Numeric Conversions
+
+An `Integer` handle and a `Float` handle convert as follows.
+
+| Conversion | Example | `Err` when | Mirrors |
+|---|---|---|---|
+| `Integer` to a new `RString` in a given radix, as Ruby's `Integer#to_s(base)` | `12345` to `"3039"` in base 16 | radix outside 2 through 36: the `ArgumentError` mruby raises | `mrb_integer_to_str` |
+| `Float` to the `Integer` it truncates toward zero, as Ruby's `Float#to_i` | `3.9` to `3`, `-3.9` to `-3` | infinite or NaN float, which has no integer: a `RangeError` | `mrb_float_to_integer` |
+
+##### Numeric Arithmetic
 
 Two numeric values add, subtract, or multiply into a new numeric value, the way
 Ruby's `+`, `-`, and `*` do on `Integer` and `Float` — `2 + 3` to `5`, `2 + 3.5`
-to `5.5`. The result stays in mruby's value domain, an `Integer` when both
-operands are integers and the result fits the configured integer width, a `Float`
-when either operand is a float — the mixed case widens the integer operand. Each
-operation dispatches its receiver on the numeric tag rather than trusting it, so a
-non-numeric left operand surfaces an `Err` carrying a `TypeError`, and a
-non-numeric right operand likewise surfaces an `Err` carrying a `TypeError`.
-Integer arithmetic that exceeds the configured integer width surfaces an `Err`
-carrying a `RangeError`. magnus
-offers no mruby-native arithmetic — its `coerce_bin` routes through the full Ruby
-coercion protocol with no mruby counterpart — so these anchor on mruby's own
-`mrb_num_add` / `mrb_num_sub` / `mrb_num_mul`.
+to `5.5`. The result stays in mruby's value domain:
 
-A registered method grows an `RString` in place by appending Rust bytes,
-appending another mruby string's bytes, or appending a NUL-terminated C string's
-bytes — its content up to the terminating NUL, the C-boundary counterpart of the
-byte append, anchored on mruby's own `mrb_str_cat_cstr` — the way Ruby's
-`String#<<` extends its receiver. It also appends any value coerced to a string,
-the way Ruby's `String#concat` accepts a non-string argument — the dispatching
-counterpart to the byte and string appends. Beyond reading and appending, a
-string duplicates into an independent copy (Ruby's `String#dup`). It tests
-another for byte equality (Ruby's `String#==`) and orders against another by byte
-content (Ruby's `String#<=>`) — total reads that dispatch nothing and never
-raise. It also interns its own bytes into the typed `Symbol` they name, creating
-that symbol when it does not yet exist (Ruby's `String#intern`), dispatching
-nothing; like every creating intern, it surfaces an `Err` for bytes too long to
-name a symbol. It also concatenates with another string
-into a new string (Ruby's `String#+`), anchored on mruby's own `mrb_str_plus`:
-the result is a freshly allocated string holding both operands' bytes, and
-neither operand is mutated — the non-mutating counterpart of the in-place append,
-which grows its receiver. With both operands already strings it dispatches
-nothing and never raises, returning the new string directly rather than a
-fallible result. A registered method also resizes a string's
-length in place — truncating, or extending with undefined trailing bytes — and
-reads a substring by character range, yielding the substring or nothing when the
-range falls outside the string. It also searches for a substring, yielding the
-byte index of the first match at or after a start offset, or nothing when the
-substring is absent — a total read that dispatches nothing and never raises. A
-negative offset counts from the string's end, an offset past the end finds
-nothing, and an empty substring is found at the offset itself.
+| Operands | Result |
+|---|---|
+| both integers, result fits the configured integer width | an `Integer` |
+| either operand a float | a `Float`; the integer operand widens |
+| integer arithmetic exceeding the configured integer width | an `Err` carrying a `RangeError` |
+| non-numeric left operand | an `Err` carrying a `TypeError` |
+| non-numeric right operand | an `Err` carrying a `TypeError` |
+
+Each operation dispatches its receiver on the numeric tag rather than trusting
+it. magnus offers no mruby-native arithmetic — its `coerce_bin` routes through
+the full Ruby coercion protocol with no mruby counterpart. These operations
+anchor on mruby's own `mrb_num_add` / `mrb_num_sub` / `mrb_num_mul`.
+
+##### String Appends
+
+A registered method grows an `RString` in place, the way Ruby's `String#<<`
+extends its receiver, by appending:
+
+| Append | Source |
+|---|---|
+| bytes | Rust bytes |
+| string | another mruby string's bytes |
+| C string | a NUL-terminated C string's content up to the terminating NUL |
+| coerced value | any value coerced to a string, as Ruby's `String#concat` accepts a non-string argument |
+
+The C-string append is the C-boundary counterpart of the byte append, anchored on
+mruby's own `mrb_str_cat_cstr`. The coerced append is the dispatching
+counterpart to the byte and string appends.
+
+##### String Operations
+
+Beyond reading and appending, a string offers these operations:
+
+| Operation | Ruby | Result |
+|---|---|---|
+| duplicate | `String#dup` | an independent copy |
+| byte equality against another | `String#==` | total read; dispatches nothing, never raises |
+| byte-content order against another | `String#<=>` | total read; dispatches nothing, never raises |
+| intern own bytes | `String#intern` | the typed `Symbol` they name |
+| concatenate with another string | `String#+` | a new string |
+
+The intern creates the symbol when it does not yet exist, and dispatches nothing.
+Like every creating intern, it surfaces an `Err` for bytes too long to name a
+symbol.
+
+The concatenation anchors on mruby's own `mrb_str_plus`. The result is a freshly
+allocated string holding both operands' bytes, and neither operand is mutated.
+It is the non-mutating counterpart of the in-place append, which grows its
+receiver. With both operands already strings, it dispatches nothing and never
+raises, returning the new string directly rather than a fallible result.
+
+##### Resize and Search
+
+A registered method also resizes and reads a string:
+
+| Operation | Result |
+|---|---|
+| resize length in place | truncates, or extends with undefined trailing bytes |
+| substring by character range | the substring, or nothing when the range falls outside the string |
+| search for a substring | the first match's byte index at or after a start offset; nothing when absent |
+
+The search is a total read that dispatches nothing and never raises. A negative
+offset counts from the string's end. An offset past the end finds nothing. An
+empty substring is found at the offset itself.
 
 #### Symbols
 
 An interned id crosses the typed surface as the typed `Id`, and a symbol value
-as the typed `Symbol` — `magnus`'s split: `Id` carries the id itself, which is
-not a value, and `Symbol` is the handle on the symbol value that boxes it. Each
-converts into the other safely; the conversion dispatches nothing, never raises,
-and needs no interpreter. A signature taking or yielding a name reads the same
-whatever the raw bindings call the interned id, and `Id` is where the raw id
-itself crosses: a raw id reifies into an `Id`, and an `Id` reads its raw id
-back out — the seam a consumer working below the typed surface hands an id to
-`beni::sys` through and takes one back from.
+as the typed `Symbol` — `magnus`'s split:
 
-Reading the id out is safe and reifying one is `unsafe`, like every crossing
-into the typed domain, and what a wrongly reified id costs is concrete: the
-name reification below answers an id naming no symbol with a value carrying no
-String, and hands that back as one.
+| Type | Carries |
+|---|---|
+| `Id` | the id itself, which is not a value |
+| `Symbol` | the handle on the symbol value that boxes the id |
 
-The Rust-side name reaches
-the intern as a NUL-terminated C string, as a borrowed byte slice carried with its
-own length, or as the bytes of an mruby String value. The length-carrying byte
-slice is the general form — it interns the exact bytes the slice spans, so a name
-that embeds a NUL or is not NUL-terminated interns whole, where the C-string form
-would stop at the first NUL. A name also interns over a borrowed static buffer
-without copying its bytes — the no-copy counterpart of the copying interns, where
-the interned name aliases the caller's bytes instead of owning a copy; the
-borrowed buffer must stay valid for the whole run of the program (a `'static`
-requirement the intern enforces), since mruby keeps the pointer and never frees
-it. This intern anchors on mruby's own `mrb_intern_static`, with `mrb_intern_lit`
-the convenience that borrows a string literal.
+Each converts into the other safely. The conversion dispatches nothing, never
+raises, and needs no interpreter. A signature taking or yielding a name reads
+the same whatever the raw bindings call the interned id.
 
-Those interns yield the `Id` the name interns to, as `magnus`'s `intern` does,
-create the symbol when none exists yet, and dispatch nothing.
-Each surfaces an `Err` carrying the `ArgumentError` mruby raises for a name of
-`UINT16_MAX` bytes or more — a name too long to be a symbol — and interns every
-shorter name. A name also checks for
-an already-interned `Id` without creating one: the bytes resolve to the
-id they name when mruby has interned it before, and to nothing when no such
-symbol exists. The check dispatches nothing and never raises.
+`Id` is where the raw id itself crosses: a raw id reifies into an `Id`, and an
+`Id` reads its raw id back out. This is the seam a consumer working below the
+typed surface hands an id to `beni::sys` through and takes one back from.
+Reading the id out is safe. Reifying one is `unsafe`, like every crossing into
+the typed domain. A wrongly reified id has a concrete cost: the name reification
+below answers an id naming no symbol with a value carrying no String, and hands
+that back as one.
 
-An `Id` compares and hashes by the id it is. Interning is canonical, so two ids
-are equal exactly when they name the same bytes, and an `Id` keys a Rust-side
-map. A `Symbol` compares by the id it boxes, against another `Symbol`, and a
-`Symbol` and an `Id` compare against each other the same way; a `Symbol` keys
-no map itself — the equality and hashing `magnus`
-gives the two. All of them are total, dispatch nothing, and never raise.
+##### Name Interning
 
-Where those interns take Rust bytes, an existing mruby value also coerces into a
-typed `Symbol`: a symbol value yields its own id; a string value interns its
-contents, surfacing the creating interns' `Err` when they are too long to be a
-symbol; any other value surfaces an `Err` — the `TypeError` mruby raises for a
-value that is neither a symbol nor a string. The coercion dispatches no
-user Ruby; it follows the raise/return contract like the other converting
-operations.
+The Rust-side name reaches the intern in these forms:
 
-Beyond the id, a symbol
-reads its name three ways, each copying the name out into an owned Rust value —
-all non-dispatching reads that never raise, each yielding nothing when mruby has
-no name for the id. mruby has no storage a short symbol name can be borrowed
-from stably: a short name unpacks into a buffer that the next name read
-overwrites, so the typed surface copies the name out rather than aliasing it.
+| Name form | Interns |
+|---|---|
+| NUL-terminated C string | the bytes up to the first NUL |
+| borrowed byte slice carried with its own length | the exact bytes the slice spans |
+| mruby String value | its bytes |
+| borrowed static buffer | the caller's bytes, aliased without copying |
+
+The length-carrying byte slice is the general form. A name that embeds a NUL or
+is not NUL-terminated interns whole, where the C-string form would stop at the
+first NUL.
+
+The static intern is the no-copy counterpart of the copying interns: the
+interned name aliases the caller's bytes instead of owning a copy. The borrowed
+buffer must stay valid for the whole run of the program, a `'static` requirement
+the intern enforces, since mruby keeps the pointer and never frees it. This
+intern anchors on mruby's own `mrb_intern_static`, with `mrb_intern_lit` the
+convenience that borrows a string literal.
+
+##### Intern Outcomes
+
+The interns and the existence check behave as follows. None dispatches.
+
+| Operation | Yields | `Err` |
+|---|---|---|
+| intern | the `Id` the name interns to, creating the symbol when none exists yet | the `ArgumentError` mruby raises for a name of `UINT16_MAX` bytes or more |
+| existence check | the already-interned `Id`, or nothing when no such symbol exists | never raises |
+
+The interns mirror `magnus`'s `intern`. A name of `UINT16_MAX` bytes or more is
+too long to be a symbol; every shorter name interns. The existence check
+resolves the bytes to the id they name when mruby has interned it before, and
+never creates one.
+
+##### Id Equality
+
+An `Id` and a `Symbol` compare and hash as follows — the equality and hashing
+`magnus` gives the two:
+
+| Pair | Compares by | Hashing |
+|---|---|---|
+| `Id` with `Id` | the id it is | hashes by the id; keys a Rust-side map |
+| `Symbol` with `Symbol` | the id it boxes | keys no map itself |
+| `Symbol` with `Id` | the id | — |
+
+Interning is canonical, so two ids are equal exactly when they name the same
+bytes. All of them are total, dispatch nothing, and never raise.
+
+##### Value Coercion
+
+Where the interns take Rust bytes, an existing mruby value also coerces into a
+typed `Symbol`:
+
+| Value | Result |
+|---|---|
+| symbol | its own id |
+| string | its contents interned; the creating interns' `Err` when too long to be a symbol |
+| any other | an `Err`: the `TypeError` mruby raises for a non-symbol, non-string |
+
+The coercion dispatches no user Ruby. It follows the raise/return contract like
+the other converting operations.
+
+##### Name Reads
+
+Beyond the id, a symbol reads its name three ways, each copying the name out
+into an owned Rust value. All are non-dispatching reads that never raise, each
+yielding nothing when mruby has no name for the id.
 
 | Read | Yields |
 |---|---|
-| name as owned UTF-8 string | the name as UTF-8, escaped to its quoted dump form when it carries an embedded NUL |
+| name as owned UTF-8 string | the UTF-8 name, escaped to its quoted dump form when it embeds a NUL |
 | name as owned bytes | the raw name bytes with their true length, embedded NUL bytes included and unescaped |
 | dump form | the name's symbol-literal representation, quoted and escaped when the name is not a plain identifier — Ruby's `Symbol#inspect` without the leading colon |
 
+mruby has no storage a short symbol name can be borrowed from stably: a short
+name unpacks into a buffer that the next name read overwrites. The typed surface
+therefore copies the name out rather than aliasing it.
+
 A symbol also reifies its name as an mruby String value, the way Ruby's
-`Symbol#to_s` does: where the three reads above produce owned Rust values (a
-string or bytes), this produces a distinct, mutable mruby `RString` value whose
-bytes are the symbol's name (unfrozen, unlike `Symbol#name`). Like the others it
-dispatches nothing and never raises.
+`Symbol#to_s` does. Unlike the three reads, it produces a distinct, mutable
+mruby `RString` value whose bytes are the symbol's name — unfrozen, unlike
+`Symbol#name`. Like the others, it dispatches nothing and never raises.
 
 #### Ranges
 
-A Range constructs from a begin value, an end value, and an exclusive-end flag,
-mirroring Ruby's `Range.new(begin, end, exclusive)`; it surfaces an `Err` when
-the two bounds cannot be compared — the `ArgumentError` mruby raises for a bad
-range. A Range reads its begin value, its end value, and whether it excludes its
-end — three non-dispatching reads that never raise.
+A Range constructs and reads its parts as follows:
+
+| Operation | Result |
+|---|---|
+| construct from begin value, end value, exclusive-end flag | a Range, mirroring Ruby's `Range.new(begin, end, exclusive)` |
+| construct with bounds that cannot be compared | an `Err` — the `ArgumentError` mruby raises for a bad range |
+| read begin value, end value, or whether it excludes its end | three non-dispatching reads that never raise |
+
+##### Slice Computation
 
 Given a collection length, a Range computes the normalized slice it covers of a
-collection that long — the primitive behind slicing a collection by a Range, the
-way Ruby's `Array#[range]` / `String#[range]` resolve a Range index. The result
-is one of three outcomes the caller distinguishes: an in-range slice carrying a
-begin offset and a selected length, both non-negative — an end that falls before
-the begin selects a length of zero; out-of-range, when the begin offset falls
-before the collection start; or a mismatch, when the receiver is not a Range. A
-negative begin or end counts back from the collection length, and a missing begin
-or end stands in for the collection's first or last index. The begin offset and
-selected length are meaningful only on the in-range outcome; the out-of-range and
-mismatch outcomes carry no offsets. A truncation flag governs the over-long
-range: when set, a begin offset past the collection length is also out-of-range
-and an end past the length is clamped to it; when clear, the end is taken as
-given and a slice that runs past the collection length is reported in-range with
-whatever length the bounds yield. This computation runs no user Ruby and does not dispatch, so it
-surfaces an `Err` carrying a `TypeError` only when a present (non-missing) bound
-is neither an integer nor integer-convertible — the same `TypeError` mruby's
-implicit integer coercion raises; the three outcomes are returns, not errors.
+collection that long. This is the primitive behind slicing a collection by a
+Range, the way Ruby's `Array#[range]` / `String#[range]` resolve a Range index.
+The caller distinguishes three outcomes:
+
+| Outcome | When | Carries |
+|---|---|---|
+| in-range | — | a begin offset and a selected length, both non-negative |
+| out-of-range | the begin offset falls before the collection start | no offsets |
+| mismatch | the receiver is not a Range | no offsets |
+
+The begin offset and selected length are meaningful only on the in-range
+outcome. Bounds resolve as follows:
+
+| Bound | Treatment |
+|---|---|
+| negative begin or end | counts back from the collection length |
+| missing begin or end | stands in for the collection's first or last index |
+| end before the begin | selects a length of zero |
+
+A truncation flag governs the over-long range:
+
+| Flag | Over-long range |
+|---|---|
+| set | a begin offset past the collection length is also out-of-range; an end past the length is clamped to it |
+| clear | the end is taken as given; a slice running past the collection length is reported in-range with whatever length the bounds yield |
+
+##### Slice Errors
+
+The computation runs no user Ruby and does not dispatch. The three outcomes are
+returns, not errors:
+
+| Case | Result |
+|---|---|
+| a present (non-missing) bound neither an integer nor integer-convertible | an `Err` carrying a `TypeError` — the same `TypeError` mruby's implicit integer coercion raises |
+| any other input | one of the three outcomes |
+
 magnus exposes the same primitive as its `Range::beg_len`, which collapses
 out-of-range and mismatch into one `Err` because CRuby's own primitive raises on
-both; mruby returns the three-way outcome instead, and the typed surface
+both. mruby returns the three-way outcome instead, and the typed surface
 preserves all three.
 
 #### Errors and the raise/return contract
 
-A registered method raises its own exception: it builds one
-from an exception-class handle and a message — the message either Rust bytes copied into
-a fresh string, or an existing mruby `RString` value carried as-is without a
-Rust-side copy — or, when validating its own argument count, from a given count
-and the expected minimum and maximum, yielding the canonical `ArgumentError`
-("wrong number of arguments (given N, expected …)") mruby itself produces. Either
-way it returns the exception as an `Err`, which reaches the method's Ruby caller
-as an mruby exception like any other `Err`. Building the exception
-neither raises nor runs user Ruby: the handle names a class whose instances are
-exceptions, and the `RString`-valued form is statically a string, so neither
-has a type to reject.
+A registered method raises its own exception by building one and returning it as an `Err`. The `Err` reaches the method's Ruby caller as an mruby exception like any other `Err`.
 
-An `Err` answers whether the exception it carries is an instance of a given
-class or module, walking the ancestry as Ruby's `is_a?` does; a parse failure, a
-panic, and a break object carry no exception and answer no. Rescuing by class
-is a `match` on that answer and cleanup is the code after the operation, so the
-typed surface carries no `begin`/`rescue` or `begin`/`ensure` combinator.
+| Built from | Message |
+|---|---|
+| exception-class handle and Rust bytes | the bytes, copied into a fresh string |
+| exception-class handle and an existing mruby `RString` value | the value, carried as-is without a Rust-side copy |
+| a given count and the expected minimum and maximum, when validating its own argument count | the canonical `ArgumentError` ("wrong number of arguments (given N, expected …)") mruby itself produces |
 
-`beni::sys` carries every raw binding, the conversions between a typed form and
-its raw one — the safe read of a value or interned id out of it and the
-`unsafe` crossing back in — and two helpers for code working below the typed
-surface:
+Building the exception neither raises nor runs user Ruby. The handle names a class whose instances are exceptions, and the `RString`-valued form is statically a string, so neither has a type to reject.
 
-- `sys::protect` runs a body inside mruby's protected frame and answers its
-  value; an exception a raw binding raises there surfaces as an `Err` carrying
-  it. The raise leaves the frames it crosses without returning through them,
-  and whether their destructors run on the way is not guaranteed, so the code
-  making that raw call keeps its own frames free of anything that could need
-  dropping; a panic in the body aborts the process.
-- `sys::catch_unwind` surfaces a panic in its closure as an `Err` carrying the
-  panic's message — the boundary a Rust closure handed to mruby as a C callback
-  needs.
+##### Exception matching
 
-Every mutating or dispatching operation across the typed surface follows one
-raise/return contract:
+An `Err` answers whether the exception it carries is an instance of a given class or module, walking the ancestry as Ruby's `is_a?` does.
+
+| `Err` carries | Answer |
+|---|---|
+| an exception | Ruby's `is_a?` against the class or module |
+| a parse failure, a panic, or a break object | no — it carries no exception |
+
+Rescuing by class is a `match` on that answer, and cleanup is the code after the operation. So the typed surface carries no `begin`/`rescue` or `begin`/`ensure` combinator.
+
+##### Raw helpers
+
+`beni::sys` carries every raw binding and the conversions between a typed form and its raw one. These are the safe read of a value or interned id out of it, and the `unsafe` crossing back in. It also carries two helpers for code working below the typed surface:
+
+| Helper | Behavior |
+|---|---|
+| `sys::protect` | runs a body inside mruby's protected frame and answers its value |
+| `sys::catch_unwind` | surfaces a panic in its closure as an `Err` carrying the panic's message |
+
+Under `sys::protect`, an exception a raw binding raises surfaces as an `Err` carrying it. The raise leaves the frames it crosses without returning through them. Whether their destructors run on the way is not guaranteed. So the code making that raw call keeps its own frames free of anything that could need dropping. A panic in the body aborts the process.
+
+`sys::catch_unwind` is the boundary a Rust closure handed to mruby as a C callback needs.
+
+##### Contract table
+
+Every mutating or dispatching operation across the typed surface follows one raise/return contract:
 
 | Operation kind | Surfaces `Err` | Returns |
 |---|---|---|
-| Mutates a receiver — array append/remove/extend/replace/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment and removal, class-variable assignment, constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows | `Result` |
-| Dispatches Ruby — a method call, `==` / `eql?`, a `<=>` comparison, an object `dup` or string coercion, a splat coercion to an array running a non-array's `to_a`, an array join rendering each element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` (a `<=>` comparison yields nothing when the two values are incomparable) |
-| Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
-| Converts or computes without dispatching — a `TryConvert` conversion, an instance-variable read converted to a requested type, an Integer read out as `i64`, a Float to the Integer it truncates, or an arithmetic of two numeric values (add / subtract / multiply) | a `TryConvert` mismatch, as its rule names; an arbitrary-width Integer beyond the configured integer width read out (a `RangeError`); either operand of an arithmetic is non-numeric (a `TypeError`); an infinite / NaN float converts to integer (a `RangeError`); an integer arithmetic exceeds the configured integer width (a `RangeError`) | `Result` |
-| Interns a name, creating its symbol — a C-string, byte-slice, String-value, or static-buffer intern, or a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (an `ArgumentError`) | `Result` |
-| Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading an instance-variable holder's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); mruby gives the object no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
-| Marks a class so its instances carry Rust data, or prepares a `TypedData` type's carrier classes in an interpreter | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`); preparing also when a class path resolves to no class, or to a value that is not a class | `Result` |
-| Reads a data carrier's payload through an `RTypedData` handle, or copies a carrier through `typed_data::Dup`'s `clone` | the carrier holds no payload or one of another data type (a `TypeError`); `clone` also when it is passed an argument (an `ArgumentError`) or the copy's `initialize_copy` raises | `Result` |
-| Prepares an `InlineStruct` type's class in an interpreter, converts a value to an inline struct of a type, or replaces an inline struct's payload | preparing: the class's instances are not plain objects and the class does not belong to the same type (a `TypeError`), or the class path resolves to no class or to a value that is not a class; converting: the value is no inline struct of the type (a `TypeError`); replacing: the receiver is frozen (a `FrozenError`) | `Result` |
-| Reads the call's arguments by shape — a scan read or the single-argument read in a method registered for any arity, or a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or a keyword no list names when the read collects no rest; a scan read of an array-handle splat and an optional block alone fits every call | `Result` |
-| Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, the context's filename is too long to be a symbol, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
-| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type downcast, `nil` test | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
+| Mutates a receiver: array append / remove / extend / replace / clear; array indexed write and resize; hash assign / delete / merge / clear; string append and resize; instance-variable assignment and removal; class-variable assignment; constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range (a negative index past the beginning, or one too large); a string resize also when the requested length is negative or overflows | `Result` |
+| Dispatches Ruby: a method call; `==` / `eql?`; a `<=>` comparison; an object `dup`; string coercion; a splat coercion to an array running a non-array's `to_a`; an array join rendering each element via `to_s`; an instance construction running `initialize`; a constant fetch running a `const_missing` hook; a constant assignment running a `const_added` hook; a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`; a hash read running a `default` lookup for an absent key; a range construction comparing its two bounds | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result`; a `<=>` comparison yields nothing when the two values are incomparable |
+| Reads a named variable that raises on absence: a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
+| Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read converted to a requested type; an Integer read out as `i64`; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an arbitrary-width Integer beyond the configured integer width read out (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width (`RangeError`) | `Result` |
+| Interns a name, creating its symbol: a C-string, byte-slice, String-value, or static-buffer intern; a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (`ArgumentError`) | `Result` |
+| Reads or renders without dispatching but can still raise: a string's NUL-terminated C-string view; a strict parse of a string to an integer in a given radix, or to a float; rendering an integer to a string in a given radix; computing a Range's normalized slice of a collection length; reading an instance-variable holder's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36; a Range slice's present bound is neither an integer nor integer-convertible (`TypeError`); mruby gives the object no singleton class (`TypeError`) | `Result`; a Range slice that does not raise returns its three-way outcome: in-range with begin offset and length, out-of-range, or a non-Range mismatch |
+| Marks a class so its instances carry Rust data; prepares a `TypedData` type's carrier classes in an interpreter | the class's instances are neither plain objects nor data carriers: a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (`TypeError`); preparing also when a class path resolves to no class, or to a value that is not a class | `Result` |
+| Reads a data carrier's payload through an `RTypedData` handle; copies a carrier through `typed_data::Dup`'s `clone` | the carrier holds no payload, or one of another data type (`TypeError`); `clone` also when it is passed an argument (`ArgumentError`) or the copy's `initialize_copy` raises | `Result` |
+| Prepares an `InlineStruct` type's class in an interpreter; converts a value to an inline struct of a type; replaces an inline struct's payload | preparing: the class's instances are not plain objects and the class does not belong to the same type (`TypeError`), or the class path resolves to no class or to a value that is not a class; converting: the value is no inline struct of the type (`TypeError`); replacing: the receiver is frozen (`FrozenError`) | `Result` |
+| Reads the call's arguments by shape: a scan read or the single-argument read in a method registered for any arity; a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals; an argument or keyword value of the wrong type; a missing required block; a missing required keyword; a keyword no list names when the read collects no rest. A scan read of an array-handle splat and an optional block alone fits every call | `Result` |
+| Compiles and runs Ruby source, under a caller's compile context or one borrowed for the load | the source does not parse; the context's filename is too long to be a symbol; a codegen step fails; the program raises while it runs | `Result`; a parse failure carries a parse message, every other failure carries the exception |
+| Reads or examines without dispatching: indexed read; keys; values; size; emptiness; container duplication; substring read by character range; substring search by byte index; byte comparison; symbol name and dump reads; range begin / end / exclusive-end reads; instance-variable, class-variable, and constant presence; `respond_to?`; `equal?`; `is_a?`; `instance_of?`; class; type downcast; `nil` test | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
 
@@ -662,27 +928,69 @@ The typed array carries Ruby `Array`'s surface:
 
 | Operation | Behavior |
 |---|---|
-| construct | empty, with a preallocated capacity, from a slice of values, or as a pair holding two given values |
+| construct | empty, with a preallocated capacity, from a slice of values, or as a pair of two given values |
 | append | add a value to the end |
 | indexed read | the element, or `nil` when the index is out of range |
-| index walk | visit the elements from first to last, each read as the indexed read does — the element, or `nil` — dispatching no Ruby `#each`, over a length fixed when the walk begins. An element appended past that length is not visited, a position the array no longer reaches reads `nil`, and a position whose element changed reads its current value: a live walk, not a content snapshot — capturing the elements as they stand requires duplicating the array first. Dispatches no Ruby and surfaces no `Err` |
+| index walk | visit the elements from first to last |
 | indexed write | Ruby's `ary[i] = v`, growing with `nil` to reach past the end |
-| resize | set the length — growing with `nil` to reach a longer length, truncating to a shorter one |
+| resize | set the length: grow with `nil` to a longer length, truncate to a shorter one |
 | remove | take a value from either end |
 | extend | append another array's elements |
-| replace | make its contents a copy of another array's, in place — the receiver is mutated to hold those elements, not returned as a new array |
-| splice | replace a subsequence in place, Ruby's `ary[head, len] = rpl` — remove the `len` elements starting at `head` and put the replacement in their place; the primitive behind indexed assignment, insertion, and deletion. A `head` past the end grows the array with `nil` to reach it; a negative `head` counts from the tail. An array replacement splices in its elements, any other value is inserted as the single element it is, and an absent replacement deletes without inserting; the available run is truncated when `len` overshoots the tail. Surfaces an `Err` when the receiver is frozen, when `head` reaches past the beginning, or when `head` and `len` together overshoot the maximum array size |
-| join | the elements rendered into one string, separated by a given separator — each element's `to_s` runs and a raise inside it surfaces as an `Err`; an absent separator concatenates the renderings with nothing between them |
+| replace | mutate the receiver in place to hold a copy of another array's elements, not a new array |
+| splice | replace a subsequence in place |
+| join | render the elements into one string |
 | clear | empty it |
 | duplicate | copy it |
-| convert to a Rust sequence | the elements, each converted through `TryConvert`, as a Rust vector, or as a fixed-length Rust array when the array holds exactly that many elements — mirroring `magnus`'s `RArray::to_vec` and `to_array`; surfaces the first element's `Err`, or the `TypeError` "expected Array of length *N*" for a fixed-length read of any other length |
+| convert to a Rust sequence | each element through `TryConvert` |
 
-A typed hash constructs empty, or empty with a preallocated capacity that reserves room for the assignments that follow — the capacity is a hint, not content, and the hash starts empty. Beyond construction it carries Ruby `Hash`'s surface:
+##### Index walk
+
+The walk reads each element as the indexed read does — the element, or `nil`. It dispatches no Ruby `#each` and runs over a length fixed when the walk begins. It is a live walk, not a content snapshot:
+
+| Position during the walk | Read |
+|---|---|
+| an element appended past that length | not visited |
+| a position the array no longer reaches | `nil` |
+| a position whose element changed | its current value |
+
+Capturing the elements as they stand requires duplicating the array first. The walk dispatches no Ruby and surfaces no `Err`.
+
+##### Array splice
+
+Splice is Ruby's `ary[head, len] = rpl`: it removes the `len` elements starting at `head` and puts the replacement in their place. It is the primitive behind indexed assignment, insertion, and deletion.
+
+| Case | Behavior |
+|---|---|
+| `head` past the end | grows the array with `nil` to reach it |
+| negative `head` | counts from the tail |
+| array replacement | splices in its elements |
+| any other replacement value | inserted as the single element it is |
+| absent replacement | deletes without inserting |
+| `len` overshoots the tail | the available run is truncated |
+| receiver frozen | `Err` |
+| `head` reaches past the beginning | `Err` |
+| `head` and `len` together overshoot the maximum array size | `Err` |
+
+##### Join and conversion
+
+Join renders the elements into one string, separated by a given separator. Each element's `to_s` runs, and a raise inside it surfaces as an `Err`. An absent separator concatenates the renderings with nothing between them.
+
+Conversion to a Rust sequence converts each element through `TryConvert`, mirroring `magnus`'s `RArray::to_vec` and `to_array`:
+
+| Target | Condition | `Err` surfaced |
+|---|---|---|
+| a Rust vector | any length | the first element's `Err` |
+| a fixed-length Rust array | the array holds exactly that many elements | the first element's `Err` |
+| a fixed-length Rust array | any other length | `TypeError` "expected Array of length *N*" |
+
+##### Hash operations
+
+A typed hash constructs empty, or empty with a preallocated capacity. The capacity reserves room for the assignments that follow; it is a hint, not content, and the hash starts empty. Beyond construction it carries Ruby `Hash`'s surface:
 
 | Operation | Behavior |
 |---|---|
 | assign | set a key's value |
-| read | the value, or `nil` when the key is absent; surfaces an `Err` when a key's `hash` / `eql?` or an absent-key `default` lookup raises |
+| read | the value, or `nil` when the key is absent; `Err` when a key's `hash` / `eql?` or an absent-key `default` lookup raises |
 | fetch | the value, or a supplied default when the key is absent, like Ruby's `Hash#fetch(key, default)` |
 | key test | whether a key is present |
 | delete | remove a key, returning its former value |
@@ -691,8 +999,20 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | duplicate | copy it |
 | keys / values | read as typed arrays |
 | size / emptiness | the entry count, and whether it holds no entries |
-| convert to a Rust map | the pairs, each key and value converted through `TryConvert`, as a Rust hash map or ordered map — mirroring `magnus`'s `RHash::to_hash_map` and `to_btree_map`; surfaces the first `Err` |
-| iterate | visit each key-value pair in insertion order, handing both to a closure that signals whether to continue or stop — stopping ends the walk before the remaining pairs, returning a `Result`. The walk dispatches no Ruby of its own, but a closure that re-enters the VM to mutate the hash's table surfaces an `Err` carrying the `RuntimeError` mruby raises for the in-walk modification. A closure panic stops the walk and resurfaces on the Rust side once the walk unwinds, never crossing into mruby's frames |
+| convert to a Rust map | each key and value through `TryConvert`, as a Rust hash map or ordered map; surfaces the first `Err` |
+| iterate | visit each key-value pair in insertion order |
+
+The Rust map conversion mirrors `magnus`'s `RHash::to_hash_map` and `to_btree_map`.
+
+##### Hash iteration
+
+Iterate hands each key-value pair, in insertion order, to a closure that signals whether to continue or stop. It returns a `Result`. The walk dispatches no Ruby of its own.
+
+| Closure action | Outcome |
+|---|---|
+| stops | the walk ends before the remaining pairs |
+| re-enters the VM to mutate the hash's table | `Err` carrying the `RuntimeError` mruby raises for the in-walk modification |
+| panics | the walk stops; the panic resurfaces on the Rust side once the walk unwinds, never crossing into mruby's frames |
 
 #### Value operations
 
@@ -704,685 +1024,946 @@ Each operation is reached through the handle its receiver must be, as `magnus` p
 | instance-variable holder | instance variable, singleton class |
 | class or module handle | class variable, constant |
 
+##### Identity and type
+
+These operations test identity, equality, order, and type:
+
 | Operation | Semantics |
 |---|---|
 | `equal?` | object identity — the same object or not; a total predicate |
-| `object_id` | a unique integer identifier for the value; dispatches nothing and never raises, a total operation |
+| `object_id` | a unique integer identifier for the value; dispatches nothing, never raises; total |
 | `==` / `eql?` | Ruby value and hash-key equality; may run a user-defined `==` or `eql?` |
-| comparison | three-way order by Ruby's `<=>` — less, equal, or greater — yielding nothing when the two values are incomparable; may run a user-defined `<=>`, and a raise inside it surfaces as an `Err`. Distinct from equality: it ranks rather than tests sameness |
-| dispatch | call a Ruby method named by a symbol-or-name key with an argument slice, receiving its return value; or call it passing an explicit block — a typed `Proc` the method yields to — alongside the argument slice. The plain dispatch is the no-block call; a caller wanting no block uses it rather than passing a nil block |
-| inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect`, and a raise inside it yields an empty string |
-| default render | the value's default `to_s` form as a new string — `#<ClassName>` for an immediate, `#<ClassName:0x...>` for a heap object — built from the class name without dispatching the value's own `to_s`. Distinct from string coercion, which runs the receiver's `to_s`; runs no user Ruby and is total |
-| `dup` | copy the object, running its `initialize_copy` — the copy is unfrozen and carries no singleton class; an immediate returns itself; may raise |
-| string coercion | the value as a string — itself when already a string, otherwise its `to_s`; may raise when `to_s` does not return a string |
-| arithmetic | add, subtract, or multiply two numeric values into a new numeric value, Ruby's `+` / `-` / `*` on `Integer` and `Float` — an `Integer` when both operands are integers and the result fits the configured integer width, a `Float` when either operand is a float. Surfaces an `Err` carrying a `TypeError` when either operand is non-numeric, or a `RangeError` when an integer arithmetic exceeds the configured integer width. Stays in mruby's value domain; runs no user Ruby |
-| splat coercion | the value spread to a new typed `RArray`, Ruby's `*` coercion: an array yields a copy of itself; a non-array that responds to `to_a` runs it, taking the result when it is an array and wrapping the value in a one-element array when `to_a` returns `nil`; a value that answers no `to_a` wraps in a one-element array. Surfaces an `Err` when `to_a` raises or returns a non-array non-`nil` value. Unlike the tag-coercion to an `RArray` handle, which dispatches nothing and takes only an already-array-tagged value, this runs `to_a` and always yields an array |
+| comparison | three-way order by Ruby's `<=>`: less, equal, or greater |
 | `is_a?` | an instance of a given class or module, walking the ancestry as Ruby's `is_a?` does |
-| `instance_of?` | a direct instance of a given class or module — only the class the value belongs to matches, so neither a superclass nor a module ever does |
+| `instance_of?` | a direct instance of a given class or module |
 | class | the class the value belongs to |
-| singleton class | the holder's own singleton class, Ruby's `singleton_class` — the per-instance eigenclass that holds methods defined on that one object, distinct from the regular class the holder shares with its peers; created on first read and stable across re-reads of the same object. Runs no user Ruby, and surfaces an `Err` carrying a `TypeError` only where mruby gives the object no singleton class |
-| freeze | freeze the value in place |
-| frozen check | a precondition guard that surfaces an `Err` when the value is frozen — an immediate counts as frozen — and `Ok` otherwise; runs no user Ruby |
-| instance variable | read a named instance variable through `TryConvert` into a requested type — `nil` when unset — assign any `IntoValue` value in place, test its presence, remove one and yield its former value, or iterate over every set instance variable; the read surfaces only its key's or its conversion's `Err` and the presence test never raises; the assignment surfaces an `Err` when the holder is frozen; the removal yields the former value, distinguishes an absent variable from one removed while holding `nil`, and surfaces an `Err` only when the holder is frozen; the iteration hands each set variable's name as a typed symbol and its value to a closure that signals whether to continue or stop — stopping ends the iteration before the remaining variables — visiting the variables and the values they held when the iteration began, so a closure that assigns, removes, or adds the holder's instance variables changes the holder but never the visited set; visiting nothing for a holder that holds no instance variables, dispatching no Ruby and surfacing no `Err`; a closure panic ends the iteration before the remaining variables and resurfaces on the Rust side, never crossing into mruby's frames |
-| class variable | read a named class variable through `TryConvert` into a requested type, walking the ancestry, assign any `IntoValue` value in place, or test its presence walking the ancestry; the read surfaces an `Err` when the name resolves to no class variable or the value does not convert, the assignment surfaces an `Err` when the receiver is frozen, and the presence test is a total predicate that never raises |
-| constant | fetch a named constant through `TryConvert` into a requested type, assign any `IntoValue` value in place, test its presence walking the ancestry, test its presence directly on the receiver alone, or remove one; the fetch surfaces an `Err` when the name resolves to no constant, its `const_missing` hook raises, or the value does not convert, the assignment surfaces an `Err` when the receiver is frozen or its `const_added` hook raises; the removal discards the former value, treats an absent constant as a no-op rather than an error, and surfaces an `Err` when the receiver is frozen; both presence tests are total predicates that never raise, and the direct test answers true only for the receiver's own constant — never one inherited from an ancestor |
 | `respond_to?` | whether the value answers to a named method; a total predicate |
 
-A global variable belongs to the interpreter rather than to any value, so it
-reads, assigns, and removes on the live `Mrb` handle, symbol-or-name keyed. An
-unset global reads as `nil`, removing one is a no-op, and neither dispatches Ruby
-nor raises; the assignment reports no failure of its own, carrying only the one
-its key can surface.
+A comparison yields nothing when the two values are incomparable. It may run a user-defined `<=>`, and a raise inside it surfaces as an `Err`. It is distinct from equality: it ranks rather than tests sameness.
+
+For `instance_of?`, only the class the value belongs to matches, so neither a superclass nor a module ever does.
+
+##### Dispatch and rendering
+
+These operations call, render, copy, or freeze a value:
+
+| Operation | Semantics |
+|---|---|
+| dispatch | call a Ruby method named by a symbol-or-name key with an argument slice, receiving its return value |
+| inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect` |
+| default render | the value's default `to_s` form as a new string; runs no user Ruby and is total |
+| `dup` | copy the object, running its `initialize_copy`; may raise |
+| string coercion | itself when already a string, otherwise its `to_s` |
+| freeze | freeze the value in place |
+| frozen check | `Err` when the value is frozen, `Ok` otherwise; runs no user Ruby |
+
+Dispatch can also pass an explicit block — a typed `Proc` the method yields to — alongside the argument slice. The plain dispatch is the no-block call; a caller wanting no block uses it rather than passing a nil block.
+
+A raise inside `inspect` yields an empty string. Default render gives `#<ClassName>` for an immediate and `#<ClassName:0x...>` for a heap object. It builds from the class name without dispatching the value's own `to_s`, unlike string coercion, which runs the receiver's `to_s`.
+
+A `dup` copy is unfrozen and carries no singleton class; an immediate returns itself. String coercion may raise when `to_s` does not return a string. The frozen check is a precondition guard, and an immediate counts as frozen.
+
+##### Arithmetic
+
+Arithmetic adds, subtracts, or multiplies two numeric values into a new numeric value — Ruby's `+` / `-` / `*` on `Integer` and `Float`. It stays in mruby's value domain and runs no user Ruby.
+
+| Operands | Result |
+|---|---|
+| both integers, result fits the configured integer width | an `Integer` |
+| either operand a float | a `Float` |
+| either operand non-numeric | `Err` carrying a `TypeError` |
+| integer arithmetic exceeds the configured integer width | `Err` carrying a `RangeError` |
+
+##### Splat coercion
+
+Splat coercion spreads the value to a new typed `RArray`, Ruby's `*` coercion:
+
+| Value | Result |
+|---|---|
+| an array | a copy of itself |
+| a non-array whose `to_a` returns an array | that array |
+| a non-array whose `to_a` returns `nil` | the value wrapped in a one-element array |
+| a value that answers no `to_a` | the value wrapped in a one-element array |
+| a non-array whose `to_a` raises or returns a non-array non-`nil` value | `Err` |
+
+The tag-coercion to an `RArray` handle dispatches nothing and takes only an already-array-tagged value. Splat coercion instead runs `to_a` and always yields an array.
+
+##### Singleton class
+
+The singleton class operation reads the holder's own singleton class, Ruby's `singleton_class`:
+
+| Property | Behavior |
+|---|---|
+| holds | methods defined on that one object — the per-instance eigenclass |
+| differs from | the regular class the holder shares with its peers |
+| creation | on first read; stable across re-reads of the same object |
+| failure | `Err` carrying a `TypeError` only where mruby gives the object no singleton class |
+
+It runs no user Ruby.
+
+##### Instance variables
+
+A holder's named instance variables support these operations:
+
+| Operation | Behavior | Surfaces `Err` |
+|---|---|---|
+| read | through `TryConvert` into a requested type; `nil` when unset | only its key's or its conversion's `Err` |
+| assign | any `IntoValue` value, in place | when the holder is frozen |
+| presence test | whether it is set | never raises |
+| remove | yields the former value; distinguishes an absent variable from one removed while holding `nil` | only when the holder is frozen |
+| iterate | every set instance variable | see below |
+
+The iteration hands each set variable's name as a typed symbol, and its value, to a closure that signals whether to continue or stop. Stopping ends the iteration before the remaining variables. It visits the variables and the values they held when the iteration began. A closure that assigns, removes, or adds the holder's instance variables changes the holder but never the visited set. The iteration dispatches no Ruby and surfaces no `Err`; for a holder that holds no instance variables, it visits nothing. A closure panic ends the iteration before the remaining variables and resurfaces on the Rust side, never crossing into mruby's frames.
+
+##### Class variables and constants
+
+A class or module handle's named class variables and constants support these operations:
+
+| Operation | Behavior | Surfaces `Err` |
+|---|---|---|
+| class-variable read | through `TryConvert` into a requested type, walking the ancestry | the name resolves to no class variable, or the value does not convert |
+| class-variable assign | any `IntoValue` value, in place | the receiver is frozen |
+| class-variable presence | walking the ancestry | never; a total predicate |
+| constant fetch | through `TryConvert` into a requested type | the name resolves to no constant, its `const_missing` hook raises, or the value does not convert |
+| constant assign | any `IntoValue` value, in place | the receiver is frozen, or its `const_added` hook raises |
+| constant presence | walking the ancestry | never; a total predicate |
+| direct constant presence | on the receiver alone; true only for the receiver's own constant, never one inherited from an ancestor | never; a total predicate |
+| constant removal | discards the former value; an absent constant is a no-op rather than an error | the receiver is frozen |
+
+##### Global variables
+
+A global variable belongs to the interpreter rather than to any value. So it reads, assigns, and removes on the live `Mrb` handle, symbol-or-name keyed:
+
+| Operation | Behavior |
+|---|---|
+| read | an unset global reads as `nil` |
+| remove | removing an unset global is a no-op |
+| assign | reports no failure of its own, carrying only the one its key can surface |
+
+Neither the read nor the removal dispatches Ruby or raises.
 
 #### Classes, modules, and methods
 
-- Class and module definition are methods on the live `Mrb` handle:
-  `define_class(name, superclass)` and `define_module(name)` return typed
-  `RClass` and `RModule` handles. Class definition — top-level on the `Mrb`
-  handle and within a namespace through the `Module` trait — under a name
-  the namespace itself already binds (a top-level constant, for top-level
-  definition) to an ordinary class — not a singleton class — whose superclass
-  is the one given yields that bound class itself, whatever modules are
-  prepended to it, and leaves the binding untouched; a Rust `Err` carrying a
-  `TypeError` surfaces when the name is bound to anything else, a class with a
-  different superclass included. Methods are registered on those handles
-  through the `Module` trait, and singleton methods on any instance-variable
-  holder through the `Object` trait (mirroring `magnus::Module` and
-  `magnus::Object`), accepting Rust closures whose receiver, arguments, and
-  return values cross the boundary through `IntoValue` / `TryConvert`; the `Module`
-  trait also binds constants, aliases existing methods, mixes another module
-  into the handle two ways — including it after the receiver in the ancestry
-  (Ruby's `Module#include`, the receiver's own methods win) and prepending it
-  ahead of the receiver (Ruby's `Module#prepend`, the module's methods override
-  the receiver's own) — undefines a method — Ruby's `Module#undef_method` —
-  marking the name as not defined on the handle even when an ancestor defines
-  it, with a singleton form on the `Object` trait that undefines a singleton
-  method — and removes
-  a method — Ruby's `Module#remove_method` — deleting the method's own
-  definition from the handle, distinct from undefinition in that it strips the
-  definition rather than masking ancestor lookups, so the name reverts to any
-  ancestor's method. A definition, registration, alias, module inclusion or
-  prepend, undefinition, or removal mruby rejects — including a cyclic include
-  or prepend, undefining a name absent from the handle and its ancestors, or
-  removing a name not defined directly on the handle — surfaces as a Rust
-  `Err`.
-- The live `Mrb` handle also creates an anonymous class — given a superclass —
-  and an anonymous module, mirroring `magnus`'s anonymous class and module
-  creation. The result is an unnamed `RClass` or `RModule` reachable only
-  through the returned handle, never registered under a name in any namespace;
-  it gains a name only when a consumer later binds it to a constant. Anonymous
-  class creation surfaces a Rust `Err` when mruby rejects the superclass — a
-  non-class, a singleton class, or `Class` itself; anonymous module creation
-  always succeeds.
-- Every operation keyed by a name — the definition of a class, module,
-  exception class, method, private method, module function, or class method;
-  the class/module and built-in exception-class lookups on `Mrb` and
-  the class/module lookups within a namespace; the instance-variable,
-  class-variable, constant, and global-variable operations; and method dispatch
-  and the `respond_to?` test on a value — accepts the
-  name as a symbol-or-name key, mirroring `magnus`'s `IntoId`: every key
-  resolves to the `Id` it names — a string key by interning, an
-  already-interned `Id` or `Symbol` key as the id it already is. A string key
-  reaches the intern either as a NUL-terminated C string, which keys on the
-  bytes before its first NUL, or as a Rust string, which keys on all of its
-  bytes. A key too long to intern names no symbol: an operation that can report
-  failure surfaces the intern's `Err` as its own without acting, and a total one
-  answers its own absent value — `false` from a predicate, `nil` from a read,
-  nothing done by a removal. A consumer
-  holding an `Id` or a `Symbol` reaches the operation without a redundant
-  intern; the result is identical to passing the equivalent name, since both
-  resolve to the same interned id. A method alias keys both the new and the
-  original name this way — each accepted as a symbol-or-name key independently.
-- An exception class has a typed handle of its own, `ExceptionClass` —
-  mirroring `magnus::ExceptionClass`. Building and raising an exception take
-  this handle rather than the general class handle. A built-in exception-class
-  lookup on `Mrb` yields one: it surfaces a Rust `Err` when the name resolves
-  to no constant, when the constant is not a class, and when the resolved class
-  is not an exception class. This is the typed path to a built-in exception
-  class — `RuntimeError`, `ArgumentError`, `TypeError` — for raising from
-  registered code. A consumer's own exception class is defined under a name
-  from an exception-class superclass — top-level on the `Mrb` handle and within
-  a namespace through the `Module` trait, symbol-or-name keyed — yielding the
-  handle directly, mirroring `magnus`'s `define_error`. A name already bound
-  resolves exactly as class definition resolves it — the bound ordinary class
-  itself when its superclass is the one given, an `Err` otherwise. The handle reaches
-  the rest of the class surface: it registers methods and binds constants
-  through the `Module` and `Object` traits, and yields the class handle for
-  any operation that takes one.
-- The class/module lookup family also answers, as a total boolean predicate,
-  whether a class or module is defined under a given name — top-level on the
-  `Mrb` handle and within a namespace through the `Module` trait, both
-  symbol-or-name keyed. Unlike the fetching lookups, the predicate never raises:
-  a name bound in that scope answers `true`, an unbound one — a name too long to
-  intern among them — `false` rather than surfacing an `Err`. It is the
-  precondition test a consumer runs before a fetching lookup that would
-  otherwise raise on a missing name.
-- A class handle resolves to its real class — its singleton-class and
-  include-class links skipped — yielding the first user-facing class in the
-  chain. A handle that is already a real class returns itself; the resolution
-  walks the class structure and never raises. This is the named normalization a
-  consumer reaches for after obtaining a handle that may be a singleton class
-  (through the singleton-class read or the class handle's downcast) or an
-  include class (through the raw FFI seam); the value-level "class the value
-  belongs to" already returns the real class, so it needs no separate
-  resolution. The raw class of a value before that normalization — which may be
-  a singleton or include class and demands VM-internal reasoning to use — stays
-  behind `beni::sys`.
-- A class or module handle reads its fully-qualified path — the namespace chain
-  leading to it, `A::B::C` for a class nested under modules `A` and `B`, the bare
-  name for a top-level handle. This is a total non-dispatching read that never
-  raises, the read a consumer reaches for to render a handle by its place in the
-  namespace. It yields nothing for an anonymous handle that has no place in any
-  namespace. The path is distinct from the handle's unqualified name read: the
-  name read always answers a name — synthesizing one for an anonymous handle —
-  whereas the path read answers the qualified path or nothing, never a
-  synthesized stand-in.
-- Every typed method registration, whatever its arity, hands the registered
-  Rust function its receiver converted through `TryConvert`, mirroring
-  `magnus`'s typed `self`: a function taking the receiver as a `Value` sees it
-  unchanged, and one taking a typed handle or a Rust value sees the receiver
-  converted by that type's rule. The receiver converts after a fixed-arity
-  registration's positional count is checked and before any argument converts,
-  so a call failing more than one of them raises the first failure in that
-  order; a receiver that fails the conversion raises its exception to the Ruby
-  caller before the body runs, as a failed argument does.
-- A method registered for any arity reads its own call frame instead of
-  receiving converted positionals: a scan read projects the frame into typed
-  parts, a single-argument read returns the one required argument, a count
-  read returns the number of arguments passed, and an argument-array read
-  returns them. The scan read and the single-argument read answer a `Result`:
-  a call that does not fit the read's shape — too few or too many
-  positionals, an argument of the wrong type, or a missing required block —
-  surfaces as an `Err` carrying the exception raised for the mismatch, and
-  nothing raises past the body, which decides how the failure leaves it. The
-  single-argument read's shape is exactly one positional, the keyword hash
-  standing in for it when the call passed keywords and no positional. The
-  count read and the argument-array read are total — they never fail, and
-  they change nothing a later read in the same call sees. Both count a
-  non-empty keyword hash the call passed as one trailing positional, whatever
-  read ran before them: the argument-array read hands back a copy of that
-  many values of its own, valid whatever the body re-enters, and empty for an
-  empty argument list.
-- The scan read mirrors `magnus`'s `scan_args`, reading the frame where magnus
-  reads an argument slice. It composes its shape from six parts, each declared
-  by the type it hands back and each absent when declared as `()`: required
-  positionals, optional positionals, a splat, trailing required positionals,
-  a keyword bucket, and a block, handed back separately so a body reads any
-  argument shape mruby accepts in one read. Each positional crosses through
-  `TryConvert`; an optional positional binds `Some` of its converted value when
-  the call supplies it and `None` when omitted; a trailing required positional
-  binds after the splat. The splat collects the remaining positionals either
-  as an array handle — valid for the whole call whatever the body re-enters —
-  or as a collection of values each converted through `TryConvert`. The block
-  part is either a block the call must pass, whose absence surfaces as an
-  `ArgumentError`, or an optional block that is `None` when no block was
-  passed; a scan read without a block part ignores a block the call passes.
-  The keyword bucket holds the call's keyword arguments apart from the
-  positionals: always a hash, empty rather than absent when the call passed
-  none, and never capturing an explicit positional hash the caller wrote —
-  that stays among the positionals. A scan read without a keyword part reads
-  a non-empty keyword hash as its last positional, and every later read in
-  the same call sees it there. A scan read whose only parts are an
-  array-handle splat and an optional block fits every call and always
-  answers `Ok`.
-- The named keyword read mirrors `magnus`'s `get_kwargs`: it takes a keyword
-  hash and two lists of symbol-or-name keys, the required keywords and the
-  optional ones, and hands back the required values, the optional values, and
-  a rest, each part declared by its type as the scan read's are. Each value
-  crosses through `TryConvert`; an optional keyword the hash lacks binds
-  `None`. The rest is either a new hash holding the keywords neither list
-  names, or absent, in which case a keyword neither list names surfaces as an
-  `ArgumentError`, as a required keyword the hash lacks does. The given hash
-  is left unchanged. A key list whose length differs from the count its part
-  declares is a programming error, and the read panics.
-- A typed method registration declares a fixed count of required positionals
-  and, after them, a count of optional positionals: each required positional
-  crosses through `TryConvert`, and each optional positional crosses as an
-  `Option` of its type — present in the call binds `Some` of the argument
-  converted through `TryConvert`, omitted binds `None`. Mirroring `magnus`'s
-  trailing-`Option` arguments, the optional slots are the trailing parameters
-  of the registered Rust function. The registration derives the argument-spec
-  aspec from the two counts: required-only declares the required aspec, and a
-  required-plus-optional declaration the required-and-optional aspec mruby
-  uses to accept the optional positionals while still requiring the leading
-  ones. A `TryConvert` failure on a
-  supplied argument — required or optional — raises its exception to the Ruby
-  caller before the body runs, as for the required-only form.
-- A typed method registration declares that it accepts a block: the block
-  crosses as an `Option<Proc>` trailing parameter on the registered Rust
-  function — present in the call binds `Some`, omitted binds `None`, since
-  mruby leaves the call's block slot nil when no block was passed. Mirroring
-  `magnus`'s `Option<Proc>` block argument, the block parameter follows the
-  required positionals. The registration derives its aspec by adding the
-  block flag to the required aspec — the argument-spec aspec mruby uses to
-  mark a method as block-accepting. The block parameter is the typed `Proc`
-  the consumer invokes through `Proc::call`; a method that takes a block needs
-  no `beni::sys` to receive it.
-- A registered method asks whether it was called with a block through a total
-  predicate on the `Mrb` handle, mirroring magnus's `Ruby::block_given_p`: it
-  reads the current call and answers `true` when a block was passed, `false`
-  otherwise. It never raises. The predicate is a plain boolean question about
-  the current call — it does not surface the call frame's block slot or any
-  other VM-internal structure to the caller.
-- Constructing an instance of a class handle runs Ruby's `Class.new` —
-  allocating the object and running its `initialize` with an argument slice; a
-  raising `initialize` surfaces as a Rust `Err`. Mirrors `magnus`'s
-  `Class::new_instance`.
-- A module function registers on a module handle in one call, becoming both a
-  private instance method — for a class that mixes the module in — and a
-  singleton method on the module object itself, the way `Math.sqrt` is callable
-  as `Math.sqrt` and as a bare helper inside an including class. Class methods
-  need no separate form: a singleton method defined on a class is its class
-  method, mirroring magnus.
-- A Rust-owned value backs an mruby object through the data-carrier
-  mechanism (`CDATA`), in `magnus`'s typed-data shape. A Rust type opts in by
-  implementing the `unsafe` `TypedData` trait: it names its data type — a
-  `'static` descriptor carrying the name mruby diagnostics show, whose release
-  drops the payload — and the class its values wrap as, optionally choosing a
-  class per value, which is then that class or a subclass of it. The
-  implementer upholds the trait's contract: every class it names is marked to
-  carry data, as below, before a value wraps into it. `TypedData`'s
-  `mark_carriers` marks, for one interpreter, the class the implementation's
-  own `class` answers; the macros below replace it with one preparing every
-  class they name. A data type belongs to one Rust type, so a carrier of `T`'s
-  data type holds a `T`.
-- A class is marked so its instances are data carriers holding Rust data, and
-  a class defined from a marked superclass is marked too. Marking is fallible:
-  only a class whose instances are plain objects or data carriers accepts the
-  mark. A singleton class, whose one instance is the object it belongs to, and
-  a class whose instances have a built-in layout of their own — an exception,
-  a string, an array, a hash, a range, a proc, a number, a class or module,
-  subclasses included — reject the mark with an `Err` carrying a `TypeError`
-  and stay unmarked, so every instance keeps the layout mruby's own methods
-  read.
-- A class's default allocator is undefined in one call, mirroring `magnus`'s
-  `undef_default_alloc_func`: afterwards Ruby's `new` and `allocate` on the
-  class, and on any class later defined from it, raise mruby's `TypeError`
-  "allocator undefined for *class*", while a wrap into it and a `dup` / `clone`
-  of one of its carriers still allocate. A singleton class, which Ruby never
-  allocates through, is left unchanged.
-- A `TypedData` value wraps as a new instance of the class its type names for
-  it, or of a given class — the type's class or a subclass of it, which a debug
-  build asserts — answered as an untyped `RTypedData` handle or a typed
-  `Obj<T>` handle, mirroring `magnus`'s `wrap` / `wrap_as` and `obj_wrap` /
-  `obj_wrap_as`. Wrapping does not fail for a type keeping its contract; a
-  class that cannot carry data breaks the contract, and the wrap reclaims the
-  payload and panics rather than raising across the boundary. The mruby
-  garbage collector owns a wrapped payload, releasing it when its carrier is
-  collected — on whichever thread reaches the interpreter, so a type is
-  `TypedData` only if it can cross threads. The collector never traces into a
-  payload, so a value a payload keeps past the frame that stored it stays valid
-  only through one of the GC validity rule's exemptions: a hidden instance
-  variable of its carrier, or a root.
-- A wrapped payload reads back as `&T` through the `TryConvert` rule for
-  `&T` — a method takes its receiver or an argument that way — through an
-  `RTypedData` handle's read, which answers that rule's `Result`, and through
-  an `Obj<T>` handle, which dereferences to the payload it was converted or
-  wrapped with. Nothing on the typed surface replaces or removes a payload
-  once a carrier holds one, so a reference stays valid for as long as its
-  carrier stays reachable.
-- mruby's `dup` and `clone` of a data carrier copy the object without its
-  payload, leaving a carrier that holds none and that converts to no `T`. A
-  type that is `TypedData` and `Clone` copies its payload through
-  `typed_data::Dup`, mirroring `magnus`'s: its `dup` answers a clone of the
-  receiver's payload, which a method returning it wraps as a new instance, and
-  its `clone` copies the receiver as mruby's `clone` does — its singleton
-  class and frozen state kept, its `initialize_copy` run — and installs a
-  clone of the payload into the copy, answering the copy as an `Obj<T>`.
-  `clone` takes no arguments, as mruby's own does not: an argument surfaces
-  the `ArgumentError` mruby raises for a wrong argument count, and a raising
-  `initialize_copy` surfaces as an `Err`.
-- `#[beni::wrap(class = "…")]` on a struct or enum implements `TypedData` for
-  it, as does `#[derive(beni::TypedData)]` with a `#[beni(class = "…")]`
-  attribute, mirroring `magnus`'s `wrap` and `TypedData` derive. The two
-  generate the same implementation, and the derive takes no companion derive,
-  `beni` carrying no `DataTypeFunctions`. `class` is required: a constant path
-  whose segments are fetched one after another, each as a constant of the one
-  before it and the first as a constant of `Object`, so `"Outer::Inner"` names
-  a nested class. A segment is fetched as the typed surface fetches any
-  constant — a `const_missing` hook stands in for a segment nothing is bound
-  under — and no `const_get` method takes part, so a program defining one
-  changes nothing a path resolves to. `name` is the data type's name and
-  defaults to the `class` path. An enum variant carrying
-  `#[beni(class = "…")]` wraps as that class — the type's class or a subclass
-  of it — and every other variant as the type's class.
-- `TypedData::mark_carriers` prepares every class a generated implementation
-  names — the type's own and each enum variant's — in the interpreter at hand:
-  it resolves the path, marks the class to carry data, undefines the class's
-  default allocator, and holds the class in the interpreter's carrier record
-  under that path. This is how the macros uphold the `TypedData` contract. It
-  surfaces an `Err` when a path resolves to no class, resolves to a value that
-  is not a class, or names a class that refuses the mark. Marking a path the record already holds resolves
-  it again and replaces what it holds.
-- A carrier record is kept inside the interpreter holding it and keeps its
-  class reachable for as long as that interpreter lives. It is named as no Ruby
-  global variable, so no guest program reads or writes it. No class crosses
-  from one interpreter to another, and each interpreter is marked on its own.
-- A generated `TypedData::class`, and the class a generated enum variant
-  names, answer the class the carrier record holds for the path. A path the
-  record does not hold panics, naming the `mark_carriers` call that puts it
-  there. Wrapping resolves no constant and dispatches no Ruby method, so what a
-  Ruby program binds over a path changes no class a value wraps into.
-- The embedder calls `mark_carriers` for each type in each interpreter while
-  installing its gems, before any Ruby program runs, so every path resolves
-  against the classes the embedder defined.
-- The macros accept `class` and `name` on the type and `class` on an enum
-  variant, each a string holding no NUL byte. Every other attribute — `magnus`'s `mark`, `size`, `compact`,
-  `free_immediately`, `wb_protected`, `frozen_shareable`, `unsafe_generics`,
-  and `opaque_attr_reader` included — is a compile error, as is a type with
-  generic parameters or lifetimes.
-- mruby hands a class its superclass's mark and allocator state when the class
-  is defined, so a class defined from the type's class before `mark_carriers`
-  marks it carries neither, and wrapping into it breaks the contract as an
-  unmarked class does. Marking while gems install precedes every class a Ruby
-  program defines, so each subclass a program defines carries both.
-- A Rust value also backs an mruby object as an inline struct (`ISTRUCT`),
-  mruby's layout for plain data stored inside the object itself. A Rust type
-  opts in by implementing the `unsafe` `InlineStruct` trait, which requires
-  `bytemuck::Pod` and `Send`: it names the class its values wrap as and the
-  name diagnostics show for it, and `InlineStruct::mark_carriers` prepares that
-  class in one interpreter. A type whose size exceeds three pointer widths, or
-  whose alignment exceeds one, does not compile as an `InlineStruct`. `Pod`
-  admits no `Value` or typed handle, so an inline struct holds no value: the
-  collector never traces its payload, and it has no instance variables.
-- `mark_carriers` resolves the class path as the `TypedData` macros resolve
-  theirs, marks the class so its instances are inline structs, undefines its
-  default allocator, and holds the class in the interpreter's carrier record
-  together with the type it belongs to. A class belongs to an `InlineStruct`
-  type when the nearest class in its ancestry the record holds — the class
-  itself or a superclass — is held for that type. Only a class whose instances
-  are plain objects, or a class belonging to the same type, accepts the mark;
-  any other class refuses it with a `TypeError` and stays unmarked, an
-  inline-struct class mruby or a C gem defined included. It surfaces an `Err`
-  when the path resolves to no class or to a value that is not a class.
-- An inline struct converts back only to the type its class belongs to: a value
-  converts to `T` when it is an inline struct whose class belongs to `T`, and
-  any other value surfaces the `TypeError` "wrong argument type *value*
-  (expected *T name*)", *value* named as mruby's own type check names it.
-- `Inline<T>` is the typed handle over an inline struct of `T`, mirroring
-  `Obj<T>`: `Inline::new` wraps a value as a new instance of the type's class,
-  `get` answers a copy of the payload, and `set` replaces the whole payload or,
-  on a frozen receiver, surfaces the `FrozenError` mruby raises and leaves the
-  payload unchanged. Nothing hands out a reference into the payload. Wrapping
-  into a class that does not belong to the type breaks the trait's contract,
-  and the wrap panics rather than raising across the boundary.
-- mruby's `dup` and `clone` of an inline struct copy its payload, so a copy
-  converts as the original does. Ruby's `new` and `allocate` raise as for any
-  class whose allocator is undefined, so a type defines the constructor its
-  Ruby callers use.
-- `#[derive(beni::InlineStruct)]` with a `#[beni(class = "…")]` attribute, and
-  `#[beni::wrap(class = "…", inline)]`, implement `InlineStruct` for a struct,
-  taking `class` and `name` as the `TypedData` macros take them. A type they
-  implement it for also converts by value: `TryConvert` answers a copy of the
-  payload, and `IntoValue` wraps the value as `Inline::new` does. They reject
-  an enum, a union, a type with generic parameters or lifetimes, and every
-  attribute but `class`, `name`, and `inline`, at compile time; `inline` is
-  accepted by `wrap` alone.
+##### Class definition
+
+Class and module definition are methods on the live `Mrb` handle: `define_class(name, superclass)` and `define_module(name)` return typed `RClass` and `RModule` handles. Class definition is top-level on the `Mrb` handle and within a namespace through the `Module` trait. A name the namespace itself already binds (a top-level constant, for top-level definition) resolves as follows.
+
+| Name already bound to | Result |
+|---|---|
+| an ordinary class (not a singleton class) whose superclass is the one given | that bound class itself, whatever modules are prepended to it; binding untouched |
+| anything else, a class with a different superclass included | Rust `Err` carrying a `TypeError` |
+
+##### Anonymous classes
+
+The live `Mrb` handle also creates an anonymous class, given a superclass, and an anonymous module, mirroring `magnus`'s anonymous class and module creation. The result is an unnamed `RClass` or `RModule`, reachable only through the returned handle and never registered under a name in any namespace. It gains a name only when a consumer later binds it to a constant.
+
+| Creation | Outcome |
+|---|---|
+| anonymous class | Rust `Err` when mruby rejects the superclass: a non-class, a singleton class, or `Class` itself |
+| anonymous module | always succeeds |
+
+##### Module trait operations
+
+Methods register on those handles through the `Module` trait, and singleton methods on any instance-variable holder through the `Object` trait, mirroring `magnus::Module` and `magnus::Object`. Both accept Rust closures whose receiver, arguments, and return values cross the boundary through `IntoValue` / `TryConvert`. The `Module` trait also performs these operations.
+
+| Operation | Effect |
+|---|---|
+| constant binding | binds a constant |
+| alias | aliases an existing method |
+| include (Ruby's `Module#include`) | mixes another module in after the receiver in the ancestry; the receiver's own methods win |
+| prepend (Ruby's `Module#prepend`) | mixes it in ahead of the receiver; the module's methods override the receiver's own |
+| undefine (Ruby's `Module#undef_method`) | marks the name as not defined on the handle, even when an ancestor defines it |
+| singleton undefine (`Object` trait) | undefines a singleton method |
+| remove (Ruby's `Module#remove_method`) | deletes the method's own definition from the handle; the name reverts to any ancestor's method |
+
+Removal strips the definition rather than masking ancestor lookups, which distinguishes it from undefinition. A definition, registration, alias, module inclusion or prepend, undefinition, or removal mruby rejects surfaces as a Rust `Err`. Rejections include a cyclic include or prepend and undefining a name absent from the handle and its ancestors. They also include removing a name not defined directly on the handle.
+
+##### Name keys
+
+Every operation keyed by a name accepts the name as a symbol-or-name key, mirroring `magnus`'s `IntoId`.
+
+| Family | Name-keyed operations |
+|---|---|
+| definition | class, module, exception class, method, private method, module function, class method |
+| lookup | class/module and built-in exception-class lookups on `Mrb`; class/module lookups within a namespace |
+| variables | instance-variable, class-variable, constant, and global-variable operations |
+| dispatch | method dispatch and the `respond_to?` test on a value |
+
+Every key resolves to the `Id` it names: a string key by interning, an already-interned `Id` or `Symbol` key as the id it already is. A string key reaches the intern as a NUL-terminated C string, keyed on the bytes before its first NUL, or as a Rust string, keyed on all of its bytes. A consumer holding an `Id` or a `Symbol` reaches the operation without a redundant intern. The result is identical to passing the equivalent name, since both resolve to the same interned id. A method alias keys the new and the original name this way, each independently.
+
+A key too long to intern names no symbol.
+
+| Operation | Outcome for a too-long key |
+|---|---|
+| one that can report failure | surfaces the intern's `Err` as its own, without acting |
+| total predicate | `false` |
+| total read | `nil` |
+| total removal | nothing done |
+
+##### Exception classes
+
+An exception class has a typed handle of its own, `ExceptionClass`, mirroring `magnus::ExceptionClass`. Building and raising an exception take this handle rather than the general class handle. A built-in exception-class lookup on `Mrb` yields one; it is the typed path to a built-in exception class (`RuntimeError`, `ArgumentError`, `TypeError`) for raising from registered code.
+
+| Built-in lookup finds | Result |
+|---|---|
+| no constant under the name | Rust `Err` |
+| a constant that is not a class | Rust `Err` |
+| a class that is not an exception class | Rust `Err` |
+| an exception class | `ExceptionClass` handle |
+
+A consumer's own exception class is defined under a name from an exception-class superclass, yielding the handle directly, mirroring `magnus`'s `define_error`. Definition is top-level on the `Mrb` handle and within a namespace through the `Module` trait, symbol-or-name keyed. A name already bound resolves exactly as class definition resolves it: the bound ordinary class itself when its superclass is the one given, an `Err` otherwise. The handle registers methods and binds constants through the `Module` and `Object` traits, and yields the class handle for any operation that takes one.
+
+##### Defined-name predicate
+
+The class/module lookup family also answers, as a total boolean predicate, whether a class or module is defined under a given name. It is top-level on the `Mrb` handle and within a namespace through the `Module` trait, both symbol-or-name keyed. Unlike the fetching lookups, the predicate never raises.
+
+| Name in that scope | Answer |
+|---|---|
+| bound | `true` |
+| unbound, a name too long to intern included | `false`, rather than an `Err` |
+
+It is the precondition test a consumer runs before a fetching lookup that would otherwise raise on a missing name.
+
+##### Real class resolution
+
+A class handle resolves to its real class: its singleton-class and include-class links are skipped, yielding the first user-facing class in the chain. A handle that is already a real class returns itself. The resolution walks the class structure and never raises. It is the named normalization a consumer reaches for after obtaining a handle that may not be a real class.
+
+| Handle obtained through | May be |
+|---|---|
+| the singleton-class read or the class handle's downcast | a singleton class |
+| the raw FFI seam | an include class |
+| the value-level "class the value belongs to" | already the real class; needs no separate resolution |
+
+The raw class of a value before that normalization may be a singleton or include class and demands VM-internal reasoning to use. It stays behind `beni::sys`.
+
+##### Qualified path read
+
+A class or module handle reads its fully-qualified path: the namespace chain leading to it. This is a total non-dispatching read that never raises. A consumer reaches for it to render a handle by its place in the namespace.
+
+| Handle | Path read |
+|---|---|
+| class nested under modules `A` and `B` | `A::B::C` |
+| top-level | the bare name |
+| anonymous, with no place in any namespace | nothing |
+
+The path is distinct from the handle's unqualified name read. The name read always answers a name, synthesizing one for an anonymous handle. The path read answers the qualified path or nothing, never a synthesized stand-in.
+
+##### Receiver conversion
+
+Every typed method registration, whatever its arity, hands the registered Rust function its receiver converted through `TryConvert`, mirroring `magnus`'s typed `self`. A function taking the receiver as a `Value` sees it unchanged. One taking a typed handle or a Rust value sees the receiver converted by that type's rule. A call failing more than one check raises the first failure in this order:
+
+1. A fixed-arity registration's positional count.
+2. The receiver's conversion.
+3. Each argument's conversion.
+
+A receiver that fails the conversion raises its exception to the Ruby caller before the body runs, as a failed argument does.
+
+##### Positional arguments
+
+A typed method registration declares a fixed count of required positionals and, after them, a count of optional positionals. Mirroring `magnus`'s trailing-`Option` arguments, the optional slots are the trailing parameters of the registered Rust function.
+
+| Positional | Crosses as |
+|---|---|
+| required | its type, through `TryConvert` |
+| optional, present in the call | `Some` of the argument converted through `TryConvert` |
+| optional, omitted | `None` |
+
+The registration derives the argument-spec aspec from the two counts.
+
+| Declaration | Derived aspec |
+|---|---|
+| required only | the required aspec |
+| required plus optional | the required-and-optional aspec, accepting the optionals while still requiring the leading ones |
+
+A `TryConvert` failure on a supplied argument, required or optional, raises its exception to the Ruby caller before the body runs, as for the required-only form.
+
+##### Block arguments
+
+A typed method registration declares that it accepts a block. The block crosses as an `Option<Proc>` trailing parameter following the required positionals, mirroring `magnus`'s `Option<Proc>` block argument. The registration derives its aspec by adding the block flag, the aspec mruby uses to mark a method block-accepting, to the required aspec. The parameter is the typed `Proc` the consumer invokes through `Proc::call`; receiving a block needs no `beni::sys`.
+
+A registered method asks whether it was called with a block through a total predicate on the `Mrb` handle, mirroring magnus's `Ruby::block_given_p`. It reads the current call and never raises. It is a plain boolean question: it surfaces neither the call frame's block slot nor any other VM-internal structure.
+
+| Call | Block parameter | Block-given predicate |
+|---|---|---|
+| passes a block | `Some` | `true` |
+| passes none (mruby leaves the block slot nil) | `None` | `false` |
+
+##### Call frame reads
+
+A method registered for any arity reads its own call frame instead of receiving converted positionals.
+
+| Read | Returns | Failure |
+|---|---|---|
+| scan read | the frame projected into typed parts | `Result` |
+| single-argument read | the one required argument | `Result` |
+| count read | the number of arguments passed | total |
+| argument-array read | the arguments | total |
+
+A call not fitting a `Result` read's shape surfaces as an `Err` carrying the exception raised for the mismatch. Mismatches are too few or too many positionals, an argument of the wrong type, or a missing required block. Nothing raises past the body, which decides how the failure leaves it. The single-argument read's shape is exactly one positional; the keyword hash stands in for it when the call passed keywords and no positional.
+
+The total reads never fail and change nothing a later read in the same call sees. Both count a non-empty keyword hash the call passed as one trailing positional, whatever read ran before them. The argument-array read hands back its own copy of that many values, valid whatever the body re-enters, and empty for an empty argument list.
+
+##### Scan read
+
+The scan read mirrors `magnus`'s `scan_args`, reading the frame where magnus reads an argument slice. It composes its shape from six parts, handed back separately so a body reads any argument shape mruby accepts in one read. Each part is declared by the type it hands back, and is absent when declared as `()`.
+
+| Part | Binds |
+|---|---|
+| required positionals | each through `TryConvert` |
+| optional positionals | `Some` of the converted value when supplied, `None` when omitted |
+| splat | the remaining positionals: an array handle, or values each through `TryConvert` |
+| trailing required positionals | after the splat, each through `TryConvert` |
+| keyword bucket | the call's keyword arguments, always as a hash |
+| block | a required block (absent: `ArgumentError`) or an optional one (absent: `None`) |
+
+An array-handle splat stays valid for the whole call, whatever the body re-enters. A scan read without a block part ignores a block the call passes. A scan read whose only parts are an array-handle splat and an optional block fits every call and always answers `Ok`.
+
+##### Scan read keywords
+
+The keyword bucket holds the call's keyword arguments apart from the positionals. Keywords land as follows.
+
+| Case | Outcome |
+|---|---|
+| call passed no keywords | the bucket is an empty hash, not absent |
+| explicit positional hash the caller wrote | never captured; stays among the positionals |
+| non-empty keyword hash, scan read without a keyword part | read as its last positional |
+
+Every later read in the same call sees that last positional there.
+
+##### Keyword read
+
+The named keyword read mirrors `magnus`'s `get_kwargs`. It takes a keyword hash and two lists of symbol-or-name keys: the required keywords and the optional ones. It hands back the required values, the optional values, and a rest, each part declared by its type as the scan read's are. Each value crosses through `TryConvert`, and the given hash is left unchanged.
+
+| Case | Outcome |
+|---|---|
+| optional keyword the hash lacks | binds `None` |
+| required keyword the hash lacks | `ArgumentError` |
+| keyword neither list names, rest declared | held in the rest, a new hash |
+| keyword neither list names, rest absent | `ArgumentError` |
+| key list length differs from its part's declared count | programming error; the read panics |
+
+##### Instance construction
+
+Constructing an instance of a class handle runs Ruby's `Class.new`: it allocates the object and runs its `initialize` with an argument slice. A raising `initialize` surfaces as a Rust `Err`. This mirrors `magnus`'s `Class::new_instance`.
+
+A module function registers on a module handle in one call and becomes two methods, the way `Math.sqrt` is callable both ways.
+
+| Becomes | Reached as |
+|---|---|
+| a private instance method | a bare helper inside a class that mixes the module in |
+| a singleton method on the module object | `Math.sqrt` |
+
+Class methods need no separate form: a singleton method defined on a class is its class method, mirroring magnus.
+
+##### Typed data contract
+
+A Rust-owned value backs an mruby object through the data-carrier mechanism (`CDATA`), in `magnus`'s typed-data shape. A Rust type opts in by implementing the `unsafe` `TypedData` trait.
+
+| Trait item | Meaning |
+|---|---|
+| data type | a `'static` descriptor carrying the name mruby diagnostics show; its release drops the payload |
+| class | the class its values wrap as, optionally per value: that class or a subclass |
+| `mark_carriers` | marks, for one interpreter, the class the implementation's own `class` answers |
+
+The implementer upholds the trait's contract: every class it names is marked to carry data, as below, before a value wraps into it. The macros below replace `mark_carriers` with one preparing every class they name. A data type belongs to one Rust type, so a carrier of `T`'s data type holds a `T`.
+
+##### Carrier marking
+
+A class is marked so its instances are data carriers holding Rust data, and a class defined from a marked superclass is marked too. Marking is fallible.
+
+| Class | Mark |
+|---|---|
+| instances are plain objects or data carriers | accepted |
+| a singleton class, whose one instance is the object it belongs to | `Err` carrying a `TypeError` |
+| instances have a built-in layout of their own | `Err` carrying a `TypeError` |
+
+Built-in layouts are an exception, a string, an array, a hash, a range, a proc, a number, and a class or module, subclasses included. A rejecting class stays unmarked, so every instance keeps the layout mruby's own methods read.
+
+##### Allocator undefinition
+
+A class's default allocator is undefined in one call, mirroring `magnus`'s `undef_default_alloc_func`. The effect covers the class and any class later defined from it. A singleton class, which Ruby never allocates through, is left unchanged.
+
+| Afterwards | Result |
+|---|---|
+| Ruby's `new` and `allocate` | mruby's `TypeError` "allocator undefined for *class*" |
+| a wrap into it | still allocates |
+| `dup` / `clone` of one of its carriers | still allocates |
+
+##### Typed data wrapping
+
+A `TypedData` value wraps as a new instance of the class its type names for it, or of a given class. A given class is the type's class or a subclass of it, which a debug build asserts. The result is an untyped `RTypedData` handle or a typed `Obj<T>` handle, mirroring `magnus`'s `wrap` / `wrap_as` and `obj_wrap` / `obj_wrap_as`.
+
+| Event | Behavior |
+|---|---|
+| wrap, type keeping its contract | does not fail |
+| wrap into a class that cannot carry data | contract broken: reclaims the payload and panics rather than raising across the boundary |
+| carrier collected | the collector releases the payload, on whichever thread reaches the interpreter |
+
+The mruby garbage collector owns a wrapped payload and releases it on whichever thread reaches the interpreter, so a type is `TypedData` only if it can cross threads. The collector never traces into a payload. A value a payload keeps past the frame that stored it stays valid only through a GC validity rule exemption. The exemptions are a hidden instance variable of its carrier, or a root.
+
+##### Payload access
+
+A wrapped payload reads back as `&T` through three paths.
+
+| Path | Answers |
+|---|---|
+| the `TryConvert` rule for `&T` (a method's receiver or argument) | `&T` |
+| an `RTypedData` handle's read | that rule's `Result` |
+| an `Obj<T>` handle | dereferences to the payload it was converted or wrapped with |
+
+Nothing on the typed surface replaces or removes a payload once a carrier holds one. A reference therefore stays valid for as long as its carrier stays reachable.
+
+##### Carrier copies
+
+mruby's `dup` and `clone` of a data carrier copy the object without its payload, leaving a carrier that holds none and converts to no `T`. A type that is `TypedData` and `Clone` copies its payload through `typed_data::Dup`, mirroring `magnus`'s.
+
+| Method | Behavior |
+|---|---|
+| `dup` | answers a clone of the receiver's payload |
+| `clone` | copies the receiver as mruby's `clone` does; answers the copy as `Obj<T>` |
+
+A method returning `dup`'s answer wraps it as a new instance. `clone` installs a clone of the payload into the copy. It keeps the receiver's singleton class and frozen state and runs its `initialize_copy`. It takes no arguments, as mruby's own does not: an argument surfaces the `ArgumentError` mruby raises for a wrong argument count. A raising `initialize_copy` surfaces as an `Err`.
+
+##### Typed data macros
+
+`#[beni::wrap(class = "…")]` on a struct or enum implements `TypedData` for it, as does `#[derive(beni::TypedData)]` with a `#[beni(class = "…")]` attribute. They mirror `magnus`'s `wrap` and `TypedData` derive and generate the same implementation. The derive takes no companion derive, `beni` carrying no `DataTypeFunctions`.
+
+| Attribute | On | Meaning |
+|---|---|---|
+| `class` (required) | the type | the constant path its values wrap as |
+| `name` | the type | the data type's name; defaults to the `class` path |
+| `class` | an enum variant | that variant wraps as this class: the type's class or a subclass |
+
+Every other enum variant wraps as the type's class. Each attribute is a string holding no NUL byte. Every other attribute is a compile error, `magnus`'s `mark`, `size`, `compact`, `free_immediately`, `wb_protected`, `frozen_shareable`, `unsafe_generics`, and `opaque_attr_reader` included. A type with generic parameters or lifetimes is a compile error too.
+
+##### Class path resolution
+
+A `class` path's segments are fetched one after another, so `"Outer::Inner"` names a nested class.
+
+| Segment | Fetched as |
+|---|---|
+| the first | a constant of `Object` |
+| each later one | a constant of the segment before it |
+| one nothing is bound under | a `const_missing` hook stands in |
+
+A segment is fetched as the typed surface fetches any constant. No `const_get` method takes part, so a program defining one changes nothing a path resolves to.
+
+##### Carrier preparation
+
+`TypedData::mark_carriers` prepares every class a generated implementation names, the type's own and each enum variant's, in the interpreter at hand. This is how the macros uphold the `TypedData` contract. For each class it does the following:
+
+1. Resolve the path.
+2. Mark the class to carry data.
+3. Undefine the class's default allocator.
+4. Hold the class in the interpreter's carrier record under that path.
+
+It surfaces an `Err` when a path resolves to no class, resolves to a value that is not a class, or names a class that refuses the mark. Marking a path the record already holds resolves it again and replaces what it holds. The embedder calls `mark_carriers` for each type in each interpreter while installing its gems, before any Ruby program runs, so every path resolves against the classes the embedder defined.
+
+mruby hands a class its superclass's mark and allocator state when the class is defined.
+
+| Class defined from the type's class | Carries |
+|---|---|
+| before `mark_carriers` marks it | neither; wrapping into it breaks the contract as an unmarked class does |
+| by a Ruby program | both, since marking while gems install precedes every class a Ruby program defines |
+
+##### Carrier record use
+
+A carrier record is kept inside the interpreter holding it and keeps its class reachable for as long as that interpreter lives. It is named as no Ruby global variable, so no guest program reads or writes it. No class crosses from one interpreter to another, and each interpreter is marked on its own.
+
+| Reader | Answers |
+|---|---|
+| a generated `TypedData::class` | the class the carrier record holds for the path |
+| a generated enum variant's class | the class the carrier record holds for the path |
+| either, for a path the record does not hold | panics, naming the `mark_carriers` call that puts it there |
+
+Wrapping resolves no constant and dispatches no Ruby method, so what a Ruby program binds over a path changes no class a value wraps into.
+
+##### Inline struct contract
+
+A Rust value also backs an mruby object as an inline struct (`ISTRUCT`), mruby's layout for plain data stored inside the object itself. A Rust type opts in by implementing the `unsafe` `InlineStruct` trait, which requires `bytemuck::Pod` and `Send`. The type names the class its values wrap as and the name diagnostics show for it. `InlineStruct::mark_carriers` prepares that class in one interpreter.
+
+| Constraint | Consequence |
+|---|---|
+| size exceeds three pointer widths | does not compile as an `InlineStruct` |
+| alignment exceeds one | does not compile as an `InlineStruct` |
+| `Pod` admits no `Value` or typed handle | holds no value; the collector never traces its payload; no instance variables |
+
+##### Inline struct marking
+
+`mark_carriers` resolves the class path as the `TypedData` macros resolve theirs, marks the class so its instances are inline structs, and undefines its default allocator. It holds the class in the interpreter's carrier record together with the type it belongs to. A class belongs to an `InlineStruct` type when the nearest class in its ancestry the record holds, the class itself or a superclass, is held for that type.
+
+| Class | Outcome |
+|---|---|
+| instances are plain objects | accepts the mark |
+| belongs to the same type | accepts the mark |
+| any other, an inline-struct class mruby or a C gem defined included | refuses with a `TypeError`; stays unmarked |
+| path resolves to no class, or to a non-class value | `Err` |
+
+##### Inline struct handle
+
+An inline struct converts back only to the type its class belongs to. A value converts to `T` when it is an inline struct whose class belongs to `T`. Any other value surfaces the `TypeError` "wrong argument type *value* (expected *T name*)", *value* named as mruby's own type check names it.
+
+`Inline<T>` is the typed handle over an inline struct of `T`, mirroring `Obj<T>`. Nothing hands out a reference into the payload.
+
+| Item | Behavior |
+|---|---|
+| `Inline::new` | wraps a value as a new instance of the type's class |
+| `get` | answers a copy of the payload |
+| `set` | replaces the whole payload |
+| `set` on a frozen receiver | surfaces mruby's `FrozenError`; payload unchanged |
+
+Wrapping into a class that does not belong to the type breaks the trait's contract, and the wrap panics rather than raising across the boundary. mruby's `dup` and `clone` of an inline struct copy its payload, so a copy converts as the original does. Ruby's `new` and `allocate` raise as for any class whose allocator is undefined, so a type defines the constructor its Ruby callers use.
+
+##### Inline struct macros
+
+`#[derive(beni::InlineStruct)]` with a `#[beni(class = "…")]` attribute, and `#[beni::wrap(class = "…", inline)]`, implement `InlineStruct` for a struct. They take `class` and `name` as the `TypedData` macros take them. A type they implement it for also converts by value.
+
+| Conversion | Behavior |
+|---|---|
+| `TryConvert` | answers a copy of the payload |
+| `IntoValue` | wraps the value as `Inline::new` does |
+
+They reject at compile time an enum, a union, a type with generic parameters or lifetimes, and every attribute but `class`, `name`, and `inline`. `inline` is accepted by `wrap` alone.
 
 #### Garbage collection
 
-- `Mrb::arena_scope` bounds GC arena growth across a region of Rust code:
-  values that cross out to Rust inside the scope stay reachable until the
-  scope ends, and the scope's end releases the arena protection taken inside
-  it. `keep` ends the scope and re-protects the one value it names; dropping
-  the scope ends it with no survivor. Arena protection reaches only as far
-  as the C frame that opened the scope; a value a Rust caller holds past that
-  frame needs a root.
-- A **root** keeps a value reachable independently of the arena and of any
-  Ruby reference to it. The typed surface carries two rooting shapes, which
-  differ in whether the root is ever released:
-  - `Mrb::gc_register_forever` roots a value for the interpreter's remaining
-    lifetime. The root is never released, so the value is never reclaimed —
-    the shape for a value an embedder holds as long as the VM itself, such as
-    a cached class handle. It returns nothing, and rooting an immediate value
-    is a no-op, immediates being values the collector never reclaims.
-  - `Mrb::gc_root` roots a value and answers a `GcRoot` guard that releases
-    that root when it is dropped. Each guard owns one root: dropping it
-    releases that root alone, so roots over the same value are independent
-    and no drop affects another. This is the shape for a value held across a
-    round trip out of the VM and released afterwards. The value stays rooted
-    while any `GcRoot` over it lives, and
-    is no longer rooted once the last one is dropped. Reachability from the
-    arena or from Ruby is a separate matter, and neither depends on a root.
-    Taking a root grows the record of roots, so it is fallible and answers a
-    `Result` — no root is taken when it fails. Releasing one cannot fail into
-    an unrooted value: where mruby refuses the release the value stays rooted
-    for the interpreter's remaining lifetime, so the failure a consumer can
-    meet is over-retention, never a value collected while still held.
-- Every value the typed surface hands to a Rust caller stays reachable from the
-  moment it crosses out until the innermost arena scope then open ends, and at
-  most until the C frame it crossed out in returns to mruby — one it creates,
-  one it reads out of an array, a hash, or a variable, a method's argument, and
-  an exception however that exception was produced — even after the object
-  that held it lets it go, so a caller renders an exception's message and
-  backtrace without rooting it first. A value held past that point needs a
-  root.
-- A consumer reaching mruby's own root registry through `beni::sys` owns an
-  invariant the typed shapes encode: that registry is keyed by value rather
-  than by registration, so removing a value removes every root over it and a
-  released root cannot be told from another holder's. `GcRoot` supplies the
-  per-root identity that makes independent release well defined.
-- Rooting keeps its record inside the interpreter, so a guest program that
-  enumerates globals sees one entry per rooting shape in use — mruby's own
-  for the never-released shape, beni's for the releasable one. Neither is
-  named as a Ruby global variable, so no guest program can read or write the
-  record; it is visible to enumeration alone.
-- `Mrb::full_gc` and `Mrb::incremental_gc` drive collection directly:
-  `full_gc` runs one complete collection cycle, `incremental_gc` advances
-  the collector by a single step. Both are total — they return nothing,
-  never raise, and are safe to call whenever the VM is alive (a disabled or
-  mid-collection collector ignores the request). This is the collection-timing
-  concern, distinct from arenas and roots: those govern which values stay
-  reachable, these methods govern when the collector reclaims the unreachable
-  rest. Both graduate because correct use needs no reasoning about VM internals.
-- `Mrb::gc_add_region` hands the collector a caller-owned byte buffer to carve
-  into heap pages, so objects can live in memory the caller placed rather than
-  only in pages the allocator hands out. It adds to the collector's pages
-  without capping them: once they are exhausted the collector grows through
-  the allocator as it otherwise would. The call takes the buffer by move for
-  the process's whole lifetime: the caller cannot reach it again, and the same
-  buffer cannot be handed over twice. mruby never frees it — the memory
-  outlives the interpreter. The call answers how many heap pages the buffer
-  yielded, which is zero when it is too small to hold one; alignment within
-  the buffer is the collector's concern, not the caller's.
+Arenas and roots govern which values stay reachable. Collection timing governs when the collector reclaims the unreachable rest.
+
+| Concern | Typed surface |
+|---|---|
+| Arena scope | `Mrb::arena_scope` |
+| Root | `Mrb::gc_register_forever`, `Mrb::gc_root` |
+| Collection timing | `Mrb::full_gc`, `Mrb::incremental_gc` |
+| Heap region | `Mrb::gc_add_region` |
+
+##### Arena scopes
+
+`Mrb::arena_scope` bounds GC arena growth across a region of Rust code. Values that cross out to Rust inside the scope stay reachable until the scope ends. The scope's end releases the arena protection taken inside it.
+
+| Scope ends by | Survivor |
+|---|---|
+| `keep` | the one value it names, re-protected |
+| dropping the scope | none |
+
+Arena protection reaches only as far as the C frame that opened the scope. A value a Rust caller holds past that frame needs a root.
+
+##### Handed-out values
+
+Every value the typed surface hands to a Rust caller stays reachable from the moment it crosses out. It stays reachable until the innermost arena scope then open ends. It stays reachable at most until the C frame it crossed out in returns to mruby. This holds even after the object that held it lets it go.
+
+| Value handed out | Origin |
+|---|---|
+| created | by the typed surface |
+| read out | of an array, a hash, or a variable |
+| argument | of a method |
+| exception | however it was produced |
+
+A caller therefore renders an exception's message and backtrace without rooting it first. A value held past that point needs a root.
+
+##### Roots
+
+A **root** keeps a value reachable independently of the arena and of any Ruby reference to it. The two rooting shapes differ in whether the root is ever released.
+
+| Shape | Answers | Root released |
+|---|---|---|
+| `Mrb::gc_register_forever` | nothing | never |
+| `Mrb::gc_root` | `Result` of a `GcRoot` guard | when that guard drops |
+
+`Mrb::gc_register_forever` roots a value for the interpreter's remaining lifetime, so the value is never reclaimed. It is the shape for a value an embedder holds as long as the VM itself, such as a cached class handle. Rooting an immediate value is a no-op, immediates being values the collector never reclaims.
+
+##### Releasable roots
+
+`Mrb::gc_root` is the shape for a value held across a round trip out of the VM and released afterwards.
+
+| Event | Effect |
+|---|---|
+| take fails | `Err`; no root taken |
+| drop one `GcRoot` | releases that root alone |
+| last `GcRoot` over the value drops | value no longer rooted |
+| mruby refuses a release | value rooted for the interpreter's remaining lifetime |
+
+Each guard owns one root, so roots over the same value are independent and no drop affects another. The value stays rooted while any `GcRoot` over it lives. Reachability from the arena or from Ruby is a separate matter, and neither depends on a root. Taking a root grows the record of roots, so it is fallible. Releasing one cannot fail into an unrooted value. The failure a consumer can meet is over-retention, never a value collected while still held.
+
+##### Root records
+
+Rooting keeps its record inside the interpreter. A guest program that enumerates globals sees one entry per rooting shape in use.
+
+| Rooting shape | Entry owner |
+|---|---|
+| never-released | mruby's own |
+| releasable | beni's |
+
+Neither entry is named as a Ruby global variable, so no guest program can read or write the record; it is visible to enumeration alone.
+
+A consumer reaching mruby's own root registry through `beni::sys` owns an invariant the typed shapes encode. That registry is keyed by value rather than by registration. Removing a value removes every root over it, and a released root cannot be told from another holder's. `GcRoot` supplies the per-root identity that makes independent release well defined.
+
+##### Collection timing
+
+`Mrb::full_gc` and `Mrb::incremental_gc` drive collection directly.
+
+| Method | Effect |
+|---|---|
+| `full_gc` | one complete collection cycle |
+| `incremental_gc` | advances the collector a single step |
+
+Both are total: they return nothing, never raise, and are safe to call whenever the VM is alive. A disabled or mid-collection collector ignores the request. Both graduate because correct use needs no reasoning about VM internals.
+
+##### Heap regions
+
+`Mrb::gc_add_region` hands the collector a caller-owned byte buffer to carve into heap pages. Objects can then live in memory the caller placed, not only in pages the allocator hands out.
+
+| Buffer | Answer |
+|---|---|
+| holds one page or more | number of heap pages yielded |
+| too small to hold one | zero |
+
+It adds to the collector's pages without capping them; once they are exhausted, the collector grows through the allocator as it otherwise would. The call takes the buffer by move for the process's whole lifetime. The caller cannot reach it again, and the same buffer cannot be handed over twice. mruby never frees it — the memory outlives the interpreter. Alignment within the buffer is the collector's concern, not the caller's.
 
 #### Gems and blocks
 
-- Provides the `Gem` trait — the unit of Ruby surface a Rust crate ships:
+The `Gem` trait is the unit of Ruby surface a Rust crate ships.
 
-  ```rust
-  trait Gem {
-      fn init(mrb: &Mrb) -> Result<(), Error>;
-  }
-  ```
+```rust
+trait Gem {
+    fn init(mrb: &Mrb) -> Result<(), Error>;
+}
+```
 
-  The embedder invokes each gem's `init` with the live interpreter handle
-  during interpreter setup; the gem defines its classes, modules, and methods
-  there. An `Err` from `init` aborts setup and surfaces to the embedder.
-- A typed `Proc` handle wraps an mruby block. `Proc::call` invokes it with
-  an argument slice under exception protection: the block's normal return is
-  the `Ok` value, and any non-local
-  exit — a raised exception, or a `break` / `return` object the block throws
-  — surfaces as a Rust `Err` instead of unwinding across FFI. `ReprValue::as_break`
-  views an escaped value as a typed `Break` when it carries mruby's break tag
-  and yields no view for any other tag; `Break` exposes the value the break
-  carries. Whether a break is a real `break`, a `return` aimed past a frame, or
-  a plain raise is the consumer's classification. The call-info frame indices
-  that distinguish those cases are mruby VM internals with no stable public
-  accessor; the typed surface does not expose them, so a consumer that must
-  classify reaches them through the `beni::sys` escape hatch.
-- A Proc answers its compiled form as a byte buffer of its own — the bytecode a
-  bytecode load reads back. A Proc backed by a C function has none, and a dump
-  mruby cannot complete produces none; both surface as a Rust `Err` carrying an
-  exception, as every other failure the typed surface reports does.
-- A dump carries the instructions alone. The line numbers a loaded program's
-  exceptions are backtraced from, and the local variable names, are each carried
-  only when the caller asks for that one.
+The embedder invokes each gem's `init` with the live interpreter handle during interpreter setup. The gem defines its classes, modules, and methods there. An `Err` from `init` aborts setup and surfaces to the embedder.
+
+##### Block calls
+
+A typed `Proc` handle wraps an mruby block. `Proc::call` invokes it with an argument slice under exception protection. A non-local exit surfaces as a Rust `Err` instead of unwinding across FFI.
+
+| Block exits by | `Proc::call` answers |
+|---|---|
+| normal return | `Ok` with the returned value |
+| a raised exception | `Err` |
+| a thrown `break` / `return` object | `Err` |
+
+`ReprValue::as_break` views an escaped value as a typed `Break` when it carries mruby's break tag, and yields no view for any other tag. `Break` exposes the value the break carries.
+
+Whether a break is a real `break`, a `return` aimed past a frame, or a plain raise is the consumer's classification. The call-info frame indices that distinguish those cases are mruby VM internals with no stable public accessor. The typed surface does not expose them, so a consumer that must classify reaches them through the `beni::sys` escape hatch.
+
+##### Proc dumps
+
+A Proc answers its compiled form as a byte buffer of its own — the bytecode a bytecode load reads back.
+
+| Proc or dump | Answer |
+|---|---|
+| backed by a C function | `Err` carrying an exception |
+| dump mruby cannot complete | `Err` carrying an exception |
+
+Both failures surface as every other failure the typed surface reports does. A dump carries the instructions alone. The line numbers a loaded program's exceptions are backtraced from, and the local variable names, are each carried only when the caller asks for that one.
 
 #### User data
 
-- An interpreter holds at most one piece of user data: a Rust value of any type
-  that can cross threads, kept in the auxiliary-data slot mruby's state carries
-  for an embedder. The interpreter drops the value it holds when it closes.
-- Any borrow of the interpreter reads the value — a gem's installation and a
-  registered method included — while only the handle's owner installs or takes
-  it. A read borrows the held value in place rather than copying it, and lasts
-  as long as the borrow of the interpreter it was read through.
-- Installing into a slot that already holds a value is refused: the offered
-  value is handed back and the held one stays in place, so replacing a value is
-  taking it first. Taking yields the held value and leaves the slot empty.
-- A read or a take names the type it expects. Naming a type other than the one
-  held, or reaching an empty slot, answers nothing, and a take that answers
-  nothing leaves the slot as it was.
-- mruby publishes no call for the slot, so it belongs to this surface: a write
-  to it through `beni::sys` is the writer's own unsafe act.
+An interpreter holds at most one piece of user data — a Rust value of any type that can cross threads — in the auxiliary-data slot mruby's state carries for an embedder. The interpreter drops the value it holds when it closes.
+
+| Operation | Who | Outcome |
+|---|---|---|
+| read | any borrow of the interpreter | borrows the held value in place |
+| install | only the handle's owner | refused when the slot holds a value |
+| take | only the handle's owner | yields the held value; slot left empty |
+
+Readers include a gem's installation and a registered method. A read lasts as long as the borrow of the interpreter it was read through. A refused install hands the offered value back and leaves the held one in place, so replacing a value is taking it first.
+
+A read or a take names the type it expects. Naming a type other than the one held, or reaching an empty slot, answers nothing. A take that answers nothing leaves the slot as it was.
+
+mruby publishes no call for the slot, so it belongs to this surface: a write to it through `beni::sys` is the writer's own unsafe act.
 
 #### Loading precompiled bytecode
 
 No part of this section is carried by the `compiler` capability feature.
 
-- Loading a precompiled bytecode blob runs the program at the interpreter's top
-  level and yields its result value as a Rust `Ok`. The blob is a byte slice
-  carrying its own length, and it is the form a Proc's dump answers.
-- A blob the interpreter cannot read as a program surfaces as a Rust `Err`
-  carrying a `ScriptError`, and nothing runs. The exception's message
-  distinguishes four conditions: a blob shorter than the format's header, a
-  header whose ident is not the format's, a format version the interpreter does
-  not read, and a body that fails validation.
-- An exception the loaded program raises while it runs surfaces as a Rust `Err`
-  carrying that exception, the pending exception cleared from the handle as it
-  crosses out — the contract a load under a compile context answers. Neither
-  failure carries an outcome of its own: both are the `Err` every fallible
-  operation on this surface answers with.
+Loading a precompiled bytecode blob runs the program at the interpreter's top level. The blob is a byte slice carrying its own length, and it is the form a Proc's dump answers.
+
+| Outcome | Answer |
+|---|---|
+| program runs | `Ok` with its result value |
+| blob unreadable as a program | `Err` carrying a `ScriptError`; nothing runs |
+| program raises while it runs | `Err` carrying that exception |
+
+The `ScriptError` message distinguishes four conditions:
+
+| Condition |
+|---|
+| blob shorter than the format's header |
+| header ident not the format's |
+| format version the interpreter does not read |
+| body fails validation |
+
+When the loaded program raises, the pending exception is cleared from the handle as it crosses out — the contract a load under a compile context answers. Neither failure carries an outcome of its own: both are the `Err` every fallible operation on this surface answers with.
 
 #### Compiling and running source
 
-The `compiler` capability feature carries everything in this section.
+The `compiler` capability feature carries everything in this section. Both operations take a slice of Ruby source under a compile context.
 
-- A compile context is created against a live interpreter with a filename and
-  released when it is dropped, never outliving that interpreter and staying on
-  the thread that made it. The filename is stamped onto everything compiled
-  through it, so the exceptions the compiled program raises carry a
-  source-line backtrace. The stamp is a symbol each load interns as it
-  compiles, so creating a context accepts any filename, and a filename of
-  `UINT16_MAX` bytes or more — too long to be a symbol — fails every load and
-  compile under that context with the creating interns' `ArgumentError`. One
-  context serves any number of loads and carries the top-level local variables
-  across them, so successive loads see each other's locals.
-- Compiling and running a slice of Ruby source under a context yields the
-  program's result value as a Rust `Ok`. The source is a byte slice carrying
-  its own length, so it needs no terminating NUL; the bytes need not be valid
-  UTF-8. Failures surface as a Rust `Err`, distinguished by what the error
-  carries rather than by the text of a message: source that does not parse
-  carries a parse message, while every other failure — a filename too long to
-  be a symbol, a codegen failure, or an exception raised while the program runs
-  — carries the exception, the pending exception cleared from the handle as it
-  crosses out. Only the exception carries a backtrace.
-- Compiling a slice of Ruby source under a context without running it yields the
-  compiled program as a typed `Proc`. Its failures surface as they do for a
-  load that runs — a parse failure carrying a parse message, a filename too long
-  to be a symbol or a codegen failure carrying the exception — so the two
-  operations differ in what they produce and in nothing else, the warnings the
-  context answers included. Whether an
-  operation stops before running is settled per operation and is never a state
-  the context keeps, so no load's meaning depends on what an earlier call left
-  behind.
-- A compiled program is invoked through `Proc::call` like any other block, and
-  invoking it runs the program at the interpreter's top level. It does not carry
-  the context's top-level local variables: those reach a program the context
-  itself runs, and a program the caller invokes starts without them. It is a
-  value like any other, so outliving the arena scope that produced it needs a
-  root.
-- A parse message carries one compiler diagnostic's line, column, and message
-  text, read through accessors rather than exposed as fields. Source that does
-  not parse surfaces the first diagnostic the compiler recorded; where the
-  compiler recorded none, the parse message carries zero line, zero column, and
-  empty text rather than reading a diagnostic that was never written.
-- A context answers the warnings the compiler produced for its most recent load
-  as parse messages. Warnings do not change a load's outcome: a load that
-  produces warnings and no error still yields its result value as `Ok`. A
-  context that has run no load, or whose most recent load produced no warning,
-  answers none.
-- The compiler's diagnostics never reach the process's standard error. The
-  returned parse message and the context's warnings are the only place they
-  surface, so where a diagnostic is written is the host's choice, not beni's.
-- `Mrb` compiles and runs a slice of Ruby source without being given a compile
-  context, borrowing an unnamed one for the load and releasing it when the load
-  returns. A failure surfaces exactly as it does under a caller's context: a
-  parse failure as a parse message, a codegen failure or a raise as the
-  exception. The borrowed context differs only where a context is the thing
-  that would carry the difference — it stamps no filename, so the program's
-  exceptions carry no source-line backtrace, and it is gone by the time the
-  load returns, so the warnings it captured go with it. A caller who wants
-  either holds a context of their own.
-- An error answers its backtrace as a list of rendered frames. An error
-  carrying no exception, and an exception holding no backtrace, answer an empty
-  list.
+| Operation | Success |
+|---|---|
+| compile and run | `Ok` with the program's result value |
+| compile without running | the compiled program as a typed `Proc` |
+
+##### Compile contexts
+
+A compile context is created against a live interpreter with a filename and released when it is dropped. It never outlives that interpreter and stays on the thread that made it.
+
+| Filename length | Creating the context | Every load and compile under it |
+|---|---|---|
+| under `UINT16_MAX` bytes | accepted | stamps the filename |
+| `UINT16_MAX` bytes or more | accepted | fails with the creating interns' `ArgumentError` |
+
+The filename is stamped onto everything compiled through it, so the exceptions the compiled program raises carry a source-line backtrace. The stamp is a symbol each load interns as it compiles, which is why creation accepts any filename. A filename of `UINT16_MAX` bytes or more is too long to be a symbol. One context serves any number of loads and carries the top-level local variables across them, so successive loads see each other's locals.
+
+##### Loads and compiles
+
+The source is a byte slice carrying its own length, so it needs no terminating NUL; the bytes need not be valid UTF-8. Failures surface as a Rust `Err`, distinguished by what the error carries rather than by the text of a message.
+
+| Failure | `Err` carries |
+|---|---|
+| source does not parse | a parse message |
+| filename too long to be a symbol | the exception |
+| codegen failure | the exception |
+| raise while the program runs | the exception |
+
+Every failure that carries the exception clears the pending exception from the handle as it crosses out. Only the exception carries a backtrace. The two operations differ in what they produce and in nothing else, the warnings the context answers included. Whether an operation stops before running is settled per operation and is never a state the context keeps. No load's meaning depends on what an earlier call left behind.
+
+##### Compiled programs
+
+A compiled program is invoked through `Proc::call` like any other block, and invoking it runs the program at the interpreter's top level.
+
+| Program | Context's top-level local variables |
+|---|---|
+| run by the context itself | reach it |
+| invoked by the caller | start without them |
+
+It is a value like any other, so outliving the arena scope that produced it needs a root.
+
+##### Parse messages
+
+A parse message carries one compiler diagnostic's line, column, and message text, read through accessors rather than exposed as fields.
+
+| Compiler recorded | Parse message for unparsable source |
+|---|---|
+| one or more diagnostics | the first one recorded |
+| none | zero line, zero column, empty text |
+
+The no-diagnostic case never reads a diagnostic that was never written.
+
+##### Warnings
+
+A context answers the warnings the compiler produced for its most recent load as parse messages. Warnings do not change a load's outcome: a load that produces warnings and no error still yields its result value as `Ok`.
+
+| Context state | Warnings answered |
+|---|---|
+| no load run | none |
+| most recent load produced none | none |
+| most recent load produced some | those, as parse messages |
+
+The compiler's diagnostics never reach the process's standard error. The returned parse message and the context's warnings are the only place they surface. Where a diagnostic is written is the host's choice, not beni's.
+
+##### Contextless loads
+
+`Mrb` compiles and runs a slice of Ruby source without being given a compile context. It borrows an unnamed one for the load and releases it when the load returns. A failure surfaces exactly as under a caller's context: a parse failure as a parse message, a codegen failure or a raise as the exception.
+
+| Context | Filename stamp | Captured warnings |
+|---|---|---|
+| caller's own | stamped; source-line backtrace | answered by the context |
+| borrowed | none; no source-line backtrace | gone when the load returns |
+
+The borrowed context differs only where a context is the thing that would carry the difference. A caller who wants either holds a context of their own.
+
+##### Backtraces
+
+An error answers its backtrace as a list of rendered frames.
+
+| Error | Backtrace |
+|---|---|
+| carries no exception | empty list |
+| exception holds no backtrace | empty list |
 
 #### Graduation, safety, and coverage
 
-- The safe API cannot cause undefined behavior while the GC validity rule
-  holds: a value that crossed out to Rust — created or read — is not used
-  after the innermost arena scope open as it crossed out ends, nor after the
-  C frame it crossed out in returns to mruby, and a survivor carried out
-  through `keep` counts as crossing out where its scope was opened. A value is
-  exempt while something keeps it reachable for the collector, which is what
-  lets a value outlive the frame that made it: a root, for as long as the root
-  lives, and a hidden instance variable, for as long as the object holding it
-  stays reachable and the variable keeps that value.
-  The type system does not enforce the rule; the consumer upholds it.
-- The typed and raw domains meet asymmetrically. A typed form answers the
-  raw form it carries — a value handle its value, an `Id` its interned id —
-  and that read is safe: what the caller then does with the raw form is a raw
-  call, already `unsafe` on its own account. Crossing the other way is
-  `unsafe`. Nothing about a raw value or id says it came from the interpreter
-  it will be used against, and the typed surface trusts what it is handed
-  rather than re-testing it, so a wrongly crossed one reaches operations that
-  read it as the thing it claims to be. This is `magnus`'s `rb_sys` asymmetry,
-  and both directions sit beside the raw bindings as they do there. A class
-  handle is a value handle like the others, as a class is in `magnus`: its raw
-  form is the value, the class pointer is what a raw binding unboxes from that
-  value, and a raw class pointer reaches the typed domain only boxed as a value
-  and through the checked downcast.
-- An interpreter crosses threads; it is never reached from two at once. One
-  thread hands an interpreter to another, and separate threads each hold their
-  own, but an interpreter is carried rather than shared: the typed surface
-  permits the move and refuses the share, and a consumer that wants two threads
-  to reach one interpreter supplies its own mutual exclusion. A guard that
-  borrows the interpreter — an arena scope, a root, a compile context — pins
-  both to the thread they were made on for as long as the guard lives. A typed
-  handle or `Id` crosses as freely as the interpreter does and means something only
-  against the interpreter that produced it; the type system does not enforce
-  that pairing, the consumer upholds it, as with the GC validity rule above.
-- A capability reaches the safe typed surface only when the wrapper can
-  encode its invariant — a lifetime, a carrier type, or a runtime check —
-  so a caller uses it without reasoning about mruby's VM internals, a
-  stronger bar than freedom from undefined behavior. An operation `magnus`
-  gives an `unsafe` form is `unsafe` here too, whether or not an invariant
-  could be encoded for it: the safe surface's shape is `magnus`'s, and one
-  a `magnus` consumer reaches for through `unsafe` is not one this surface
-  makes safe under the same name. Where the invariant is
-  not encodable, the honest form is `unsafe`: a typed `unsafe fn` on the
-  `beni` surface when a typed shape can still carry the value — one
-  caller-owned invariant left unencoded — otherwise a raw `beni::sys`
-  binding when the value is VM-internal with no typed shape to add
-  (call-info frame indices, VM-object internals), where a safe-looking
-  wrapper would misrepresent its sharpness. A capability unsafe only for
-  want of an unbuilt carrier graduates once the carrier exists, unlike one
-  permanently VM-internal. Closing a consumer's `beni::sys` use to zero is
-  not a goal; any unexposed C API stays reachable there.
-- mruby stages its whole include tree beside an archive, the header it marks as
-  internal to the library included, so what the crate can reach is wider than
-  what mruby publishes for an embedder. The typed surface follows what is
-  published and reaches past it only under this rule: an internal symbol is
-  admitted one at a time and never by taking its header in whole; it is admitted
-  only where no published symbol delivers the capability and the graduation rule
-  above can encode its invariants, so it lands on the safe typed surface rather
-  than beside it; and each admission records what settles it. An internal symbol
-  is admitted for the typed item that carries it and never on its own, so
-  nothing enters on the chance that a consumer might one day want it.
-- `docs/api_coverage.md` measures how far the typed surface has graduated
-  mruby's embedder API — the functions and macros an embedder calls across the
-  public embedder headers. A capability the typed surface graduates through a
-  Rust-native construct rather than the matching C symbol counts as covered
-  through that construct: a typed handle's downcast
-  read from the value tag covers the per-type `_p` macro it stands in for, and
-  a typed method definition's required and optional arity counts and its
-  block-accepting flag derive the argument-spec aspec it declares — the
-  required, the required-and-optional, the any-arguments, and the block aspecs.
-  `mrb_get_args` is one symbol whose format string is a vocabulary of argument
-  specifiers, so that vocabulary is measured as its own lens: every specifier
-  is covered through the typed surface — a part of the scan read, a read
-  composed with a conversion, the named keyword read, or the typed method
-  registration that declares it — and the lens records which surface covers
-  each one.
-- Symbols carrying the same capability are covered together. Where one C
-  symbol is defined as another, covering either covers both. Where two C
-  symbols differ only in what a Rust caller already expresses otherwise — a
-  length the byte slice carries, an argument count the slice carries — the
-  graduated item covers them both, recorded with what the Rust shape carries in
-  the C form's place. A symbol a graduated item cannot express is not covered
-  by it, however close their purposes.
-- API an embedder cannot call never enters the measure: what the headers publish
-  for an embedder is the whole of it, so a library-internal header's
-  declarations stay out however plainly they are staged, as do compile-time,
-  debug assertion, and internal helper macros. An internal symbol the admission
-  rule above lets through is recorded apart from the ratio rather than entering
-  it: it is neither embedder API nor API still owed. A symbol a capability
-  feature carries counts as covered and the measure names the feature; turning a
-  feature off subtracts nothing from the measure. What does enter the measure
-  leaves again only for a reason the measure records. Public API the
-  typed surface deliberately does not carry leaves as declined — what the
-  graduation rule above leaves in `beni::sys` for want of a typed shape to add,
-  named for the measure. A capability awaiting a carrier is not declined: it
-  stays in the measure as the work it is. API a build's ABI lacks
-  because a compile-time flag gates it leaves as flag-gated, and stays distinct
-  from declined because letting a consumer choose its ABI turns the flag-gated
-  set into work while the declined set stays declined. Each reason names what
-  settles it — a statement in this specification, the graduation rule above, or
-  the vendored source it reads from — so a classification can be reviewed
-  rather than taken on trust. What remains is the embedder API a build's ABI
-  intends to carry, so a fully graduated surface measures complete.
+##### GC Validity Rule
+
+The safe API cannot cause undefined behavior while the GC validity rule
+holds. A value that crossed out to Rust — created or read — is not used after
+either end below. A survivor carried out through `keep` counts as crossing
+out where its scope was opened.
+
+| End | Reached when |
+|---|---|
+| Arena scope | the innermost arena scope open as it crossed out ends |
+| C frame | the C frame it crossed out in returns to mruby |
+
+A value is exempt while something keeps it reachable for the collector, which
+lets it outlive the frame that made it. The type system does not enforce the
+rule; the consumer upholds it.
+
+| Kept reachable by | Exempt for as long as |
+|---|---|
+| a root | the root lives |
+| a hidden instance variable | the holding object stays reachable and the variable keeps that value |
+
+##### Domain Crossing
+
+The typed and raw domains meet asymmetrically. This is `magnus`'s `rb_sys`
+asymmetry, and both directions sit beside the raw bindings as they do there.
+
+| Direction | Form | Safety |
+|---|---|---|
+| typed → raw | a value handle answers its value, an `Id` its interned id | safe |
+| raw → typed | a raw value or id crosses in | `unsafe` |
+
+What the caller does with a raw form it read is a raw call, already `unsafe`
+on its own account. Nothing about a raw value or id says it came from the
+interpreter it will be used against. The typed surface trusts what it is
+handed rather than re-testing it, so a wrongly crossed one reaches operations
+that read it as the thing it claims to be.
+
+A class handle is a value handle like the others, as a class is in `magnus`.
+Its raw form is the value; the class pointer is what a raw binding unboxes
+from that value. A raw class pointer reaches the typed domain only boxed as a
+value and through the checked downcast.
+
+##### Thread Contract
+
+An interpreter crosses threads; it is never reached from two at once. It is
+carried rather than shared.
+
+| Use | Typed surface |
+|---|---|
+| one thread hands an interpreter to another | permits the move |
+| separate threads each hold their own | permits |
+| two threads reach one interpreter | refuses the share; the consumer supplies its own mutual exclusion |
+
+A guard that borrows the interpreter — an arena scope, a root, a compile
+context — pins both to the thread they were made on for as long as the guard
+lives. A typed handle or `Id` crosses as freely as the interpreter does and
+means something only against the interpreter that produced it. The type system
+does not enforce that pairing; the consumer upholds it, as with the GC
+validity rule above.
+
+##### Graduation Bar
+
+A capability reaches the safe typed surface only when the wrapper can encode
+its invariant — a lifetime, a carrier type, or a runtime check — so a caller
+uses it without reasoning about mruby's VM internals. This bar is stronger
+than freedom from undefined behavior.
+
+| Case | Form |
+|---|---|
+| invariant encodable and `magnus` gives no `unsafe` form | safe typed surface |
+| `magnus` gives an `unsafe` form | `unsafe`, encodable or not |
+| not encodable; a typed shape still carries the value | typed `unsafe fn` on the `beni` surface |
+| not encodable; VM-internal value, no typed shape to add | raw `beni::sys` binding |
+
+The safe surface's shape is `magnus`'s: one a `magnus` consumer reaches for
+through `unsafe` is not one this surface makes safe under the same name. A
+typed `unsafe fn` leaves one caller-owned invariant unencoded. VM-internal
+values include call-info frame indices and VM-object internals, where a
+safe-looking wrapper would misrepresent its sharpness. A capability unsafe
+only for want of an unbuilt carrier graduates once the carrier exists, unlike
+one permanently VM-internal. Closing a consumer's `beni::sys` use to zero is
+not a goal; any unexposed C API stays reachable there.
+
+##### Internal Symbol Admission
+
+mruby stages its whole include tree beside an archive, its library-internal
+header included, so what the crate can reach is wider than what mruby
+publishes for an embedder. The typed surface follows what is published and
+reaches past it only under this admission rule.
+
+| Aspect | An internal symbol is admitted |
+|---|---|
+| Granularity | one at a time, never by taking its header in whole |
+| Need | only where no published symbol delivers the capability |
+| Safety | only where the graduation rule above can encode its invariants |
+| Carrier | for the typed item that carries it, never on its own |
+| Record | with what settles it |
+
+An admitted symbol lands on the safe typed surface rather than beside it.
+Nothing enters on the chance that a consumer might one day want it.
+
+##### Coverage Measure
+
+`docs/api_coverage.md` measures how far the typed surface has graduated
+mruby's embedder API — the functions and macros an embedder calls across the
+public embedder headers. A capability the typed surface graduates through a
+Rust-native construct rather than the matching C symbol counts as covered
+through that construct.
+
+| Rust-native construct | Covers |
+|---|---|
+| a typed handle's downcast read from the value tag | the per-type `_p` macro it stands in for |
+| a typed method definition's required and optional arity counts and block-accepting flag | the argument-spec aspec it declares |
+
+The derived aspecs are the required, the required-and-optional, the
+any-arguments, and the block aspecs.
+
+`mrb_get_args` is one symbol whose format string is a vocabulary of argument
+specifiers, so that vocabulary is measured as its own lens. Every specifier
+is covered through the typed surface, and the lens records which surface
+covers each one.
+
+| Surface covering a specifier |
+|---|
+| a part of the scan read |
+| a read composed with a conversion |
+| the named keyword read |
+| the typed method registration that declares it |
+
+##### Shared Capability
+
+Symbols carrying the same capability are covered together.
+
+| C symbols | Coverage |
+|---|---|
+| one defined as another | covering either covers both |
+| two differing only in what a Rust caller already expresses otherwise | the graduated item covers both |
+| one a graduated item cannot express | not covered by it, however close their purposes |
+
+What a Rust caller already expresses otherwise is a length the byte slice
+carries or an argument count the slice carries. Such a pair is recorded with
+what the Rust shape carries in the C form's place.
+
+##### Measure Boundary
+
+API an embedder cannot call never enters the measure: what the headers publish
+for an embedder is the whole of it.
+
+| API | In the measure |
+|---|---|
+| a library-internal header's declarations | never, however plainly staged |
+| compile-time, debug assertion, and internal helper macros | never |
+| an internal symbol the admission rule above lets through | no; recorded apart from the ratio |
+| a symbol a capability feature carries | covered; the measure names the feature |
+
+An admitted internal symbol is neither embedder API nor API still owed.
+Turning a capability feature off subtracts nothing from the measure.
+
+##### Measure Exits
+
+What does enter the measure leaves again only for a reason the measure
+records.
+
+| API | Leaves as |
+|---|---|
+| public API the typed surface deliberately does not carry | declined |
+| a capability awaiting a carrier | does not leave; stays as the work it is |
+| API a build's ABI lacks because a compile-time flag gates it | flag-gated |
+
+Declined API is what the graduation rule above leaves in `beni::sys` for want
+of a typed shape to add, named for the measure. A capability awaiting a
+carrier is not declined. Flag-gated stays distinct from declined because
+letting a consumer choose its ABI turns the flag-gated set into work while the
+declined set stays declined.
+
+Each reason names what settles it — a statement in this specification, the
+graduation rule above, or the vendored source it reads from — so a
+classification can be reviewed rather than taken on trust. What remains is the
+embedder API a build's ABI intends to carry, so a fully graduated surface
+measures complete.
 
 ## Error scenarios
 
