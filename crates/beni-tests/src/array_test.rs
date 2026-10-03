@@ -18,14 +18,13 @@ fn push_and_entry_roundtrip_through_a_live_array() {
 }
 
 #[test]
-fn raw_entry_reads_nil_past_the_configured_width() {
+fn entry_reads_nil_past_the_configured_width() {
     let mrb = open_mrb();
     let ary = mrb.ary_new();
     ary.push(&mrb, 1i32.into_value(&mrb))
         .expect("push to a fresh array succeeds");
 
-    // SAFETY: `ary` is an Array, so its value is Array-tagged.
-    let past = unsafe { ary.as_value().ary_entry(&mrb, isize::MAX) };
+    let past = ary.entry(&mrb, isize::MAX);
 
     assert!(past.is_nil());
 }

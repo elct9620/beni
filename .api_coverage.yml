@@ -76,7 +76,7 @@ typed:
   mrb_ary_clear: RArray::clear
   mrb_ary_concat: RArray::concat
   mrb_ary_dup: RArray::dup
-  mrb_ary_entry: "`RArray::entry`, `Value::ary_entry`"
+  mrb_ary_entry: RArray::entry
   mrb_ary_join: RArray::join
   mrb_ary_new: Mrb::ary_new
   mrb_ary_new_capa: Mrb::ary_new_capa

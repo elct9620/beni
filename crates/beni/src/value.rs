@@ -710,25 +710,6 @@ impl Value {
         f
     }
 
-    /// `mrb_ary_entry(self, idx)` — read the element at `idx` from
-    /// `self` (which must be an Array `Value`), a negative `idx`
-    /// counting from the tail. An `idx` outside the array, the
-    /// configured integer width included, reads `nil`.
-    ///
-    /// # Safety
-    ///
-    /// `self` must be an Array-tagged `Value`. Out-of-range `idx`
-    /// returns `mrb_nil_value` rather than reading past the buffer;
-    /// passing a non-Array yields an undefined `Value`.
-    #[inline]
-    pub unsafe fn ary_entry(self, mrb: &Mrb, idx: isize) -> Value {
-        let Ok(idx) = sys::mrb_int::try_from(idx) else {
-            return Value::nil();
-        };
-        // SAFETY: forwarded from caller.
-        mrb.hold(Value(unsafe { sys::mrb_ary_entry(self.0, idx) }))
-    }
-
     // ----------------------------------------------------------------
     // Instance variable / constant / class variable accessors. The
     // mruby C API spells these as `mrb_iv_set` / `mrb_iv_get` /

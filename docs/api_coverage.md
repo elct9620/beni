@@ -239,7 +239,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_ary_clear` | fn | ✅ | ✅ | `RArray::clear` |
 | `mrb_ary_concat` | fn | ✅ | ✅ | `RArray::concat` |
 | `mrb_ary_dup` | fn | ✅ | ✅ | `RArray::dup` |
-| `mrb_ary_entry` | fn | ✅ | ✅ | `RArray::entry`, `Value::ary_entry` |
+| `mrb_ary_entry` | fn | ✅ | ✅ | `RArray::entry` |
 | `mrb_ary_join` | fn | ✅ | ✅ | `RArray::join` |
 | `mrb_ary_make_shared_copy` | fn | ✅ | ❌ |  |
 | `mrb_ary_modify` | fn | ✅ | ❌ |  |

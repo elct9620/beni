@@ -51,7 +51,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::to_string;
     let _ = Value::funcall::<&core::ffi::CStr>;
     let _ = Value::is_nil;
-    let _ = Value::ary_entry;
     let _ = Value::iv_set::<&core::ffi::CStr>;
     let _ = Value::iv_get::<&core::ffi::CStr>;
     let _ = Value::iv_defined::<&core::ffi::CStr>;
