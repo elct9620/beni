@@ -65,9 +65,9 @@ pub(crate) fn wrong_argument_type(val: Value, mrb: &Mrb, expected: &str) -> Erro
     let immediate = unsafe { beni_sys::mrb_type(val.0) } <= beni_sys::MRB_TT_CPTR;
     let named = if val.is_nil() {
         "nil".to_owned()
-    } else if val.is_integer() {
+    } else if val.tag() == beni_sys::MRB_TT_INTEGER {
         "Integer".to_owned()
-    } else if val.is_symbol() {
+    } else if val.tag() == beni_sys::MRB_TT_SYMBOL {
         "Symbol".to_owned()
     } else if immediate {
         val.to_string(mrb)

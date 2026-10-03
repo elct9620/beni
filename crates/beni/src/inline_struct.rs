@@ -196,7 +196,7 @@ impl RClass {
     /// any other refuses with a `TypeError` and stays unmarked.
     pub fn set_instance_inline_tt<T: InlineStruct>(self, mrb: &Mrb) -> Result<(), Error> {
         let tt = crate::class::instance_tt(self.as_internal());
-        let plain = self.as_value().is_class() && tt == sys::MRB_TT_OBJECT;
+        let plain = self.as_value().tag() == sys::MRB_TT_CLASS && tt == sys::MRB_TT_OBJECT;
         let own = tt == sys::MRB_TT_ISTRUCT && belongs_to::<T>(mrb, self);
         if !(plain || own) {
             return Err(crate::try_convert::type_error(
@@ -233,7 +233,7 @@ impl<T> Fits<T> {
 
 impl<T: InlineStruct> TryConvert for Inline<T> {
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        if val.is_istruct() && belongs_to::<T>(mrb, val.class(mrb)) {
+        if val.tag() == sys::MRB_TT_ISTRUCT && belongs_to::<T>(mrb, val.class(mrb)) {
             return Ok(Self {
                 value: val,
                 _marker: PhantomData,

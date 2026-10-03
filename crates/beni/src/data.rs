@@ -116,7 +116,7 @@ impl RClass {
         // The `&Mrb` borrow is what serializes this flag write: an
         // `RClass` crosses threads on its own, its interpreter does not.
         let _ = mrb;
-        if self.as_value().is_class() {
+        if self.as_value().tag() == sys::MRB_TT_CLASS {
             // SAFETY: `self` is a live plain class of the VM borrowed as
             // `mrb`, the one kind `MRB_UNDEF_ALLOCATOR` accepts; the shim
             // only sets a flag bit.

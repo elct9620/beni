@@ -211,17 +211,6 @@ macro_rules! class_backed_repr {
 
 class_backed_repr!(crate::RClass, crate::RModule, crate::ExceptionClass);
 
-/// The crate's own tag checks, one per tag a handle's downcast or an
-/// internal guard reads; a consumer discriminates through the handles.
-macro_rules! tag_predicates {
-    ($($name:ident => $tag:ident),* $(,)?) => {$(
-        #[inline]
-        pub(crate) fn $name(self) -> bool {
-            self.tag() == sys::$tag
-        }
-    )*};
-}
-
 impl Value {
     /// Wrap a raw `mrb_value` the caller has established this VM
     /// produced. The public crossing is `sys::FromRawValue::from_raw`,
@@ -299,7 +288,7 @@ impl Value {
     #[inline]
     pub fn int_to_str(self, mrb: &Mrb, base: i32) -> Result<crate::RString, Error> {
         mrb.protect(|mrb| {
-            if !self.is_integer() {
+            if self.tag() != sys::MRB_TT_INTEGER {
                 // SAFETY: `mrb` is alive inside the protect frame;
                 // `TypeError` is a core class so the lookup cannot fail;
                 // `mrb_raise` long-jumps to the protect frame. The guard
@@ -859,22 +848,6 @@ impl Value {
         // SAFETY: mrb_test is a pure predicate over the value tag and
         // does not touch `mrb_state`.
         unsafe { sys::mrb_test_func(self.0) }
-    }
-
-    tag_predicates! {
-        is_integer => MRB_TT_INTEGER,
-        is_float => MRB_TT_FLOAT,
-        is_array => MRB_TT_ARRAY,
-        is_hash => MRB_TT_HASH,
-        is_class => MRB_TT_CLASS,
-        is_sclass => MRB_TT_SCLASS,
-        is_module => MRB_TT_MODULE,
-        is_proc => MRB_TT_PROC,
-        is_data => MRB_TT_CDATA,
-        is_istruct => MRB_TT_ISTRUCT,
-        is_string => MRB_TT_STRING,
-        is_symbol => MRB_TT_SYMBOL,
-        is_range => MRB_TT_RANGE,
     }
 
     /// View `self` as a typed `Break` when it carries mruby's break

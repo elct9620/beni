@@ -314,7 +314,7 @@ impl FromValue for RTypedData {
 
 impl TryConvert for RTypedData {
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        if val.is_data() {
+        if val.tag() == sys::MRB_TT_CDATA {
             return Ok(RTypedData(val));
         }
         mrb.protect(|mrb| {

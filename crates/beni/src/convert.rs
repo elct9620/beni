@@ -5,10 +5,8 @@
 //! `IntoValue` mirrors magnus's `IntoValue` (Rust → value, infallible
 //! boxing), `FromValue` mirrors magnus's `from_value` (value → Rust,
 //! exact-tag downcast); the argument conversion, magnus's `TryConvert`,
-//! lives in `try_convert`. Both sit ON TOP of the unsafe tag primitives in
-//! `value.rs` (`mrb_int_value` / `is_integer` + `unbox_integer` / …):
-//! those primitives are the C-bind floor, these traits are the safe
-//! typed seam consumers call.
+//! lives in `try_convert`. Both are the safe seam over the tag checks and
+//! unchecked unboxing a conversion runs behind.
 //!
 //! Scope covers `Value` itself, the scalar leaf types (the Rust
 //! integers, `f64`, `bool`), an owned `String` or byte vector, the
@@ -295,8 +293,8 @@ impl<T: FromValue> FromValue for Option<T> {
 #[inline]
 fn integer(value: Value) -> Option<i64> {
     // SAFETY: the unbox precondition (MRB_TT_INTEGER tagging) is
-    // established by the `is_integer` guard it runs behind.
-    value.is_integer().then(|| unsafe { value.unbox_integer() })
+    // established by the tag check it runs behind.
+    (value.tag() == sys::MRB_TT_INTEGER).then(|| unsafe { value.unbox_integer() })
 }
 
 macro_rules! from_value_in_range {
@@ -323,8 +321,8 @@ impl FromValue for f64 {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the unbox precondition (MRB_TT_FLOAT tagging) is
-        // established by the `is_float` guard immediately before it.
-        value.is_float().then(|| unsafe { value.unbox_float() })
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_FLOAT).then(|| unsafe { value.unbox_float() })
     }
 }
 
@@ -352,10 +350,8 @@ impl FromValue for RArray {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the wrap precondition (MRB_TT_ARRAY tagging) is
-        // established by the `is_array` guard immediately before it.
-        value
-            .is_array()
-            .then(|| unsafe { RArray::from_value_unchecked(value) })
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_ARRAY).then(|| unsafe { RArray::from_value_unchecked(value) })
     }
 }
 
@@ -363,10 +359,8 @@ impl FromValue for RHash {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the wrap precondition (MRB_TT_HASH tagging) is
-        // established by the `is_hash` guard immediately before it.
-        value
-            .is_hash()
-            .then(|| unsafe { RHash::from_value_unchecked(value) })
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_HASH).then(|| unsafe { RHash::from_value_unchecked(value) })
     }
 }
 
@@ -377,7 +371,7 @@ impl FromValue for RClass {
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the unbox precondition (class or singleton-class
         // tagging) is established by the guard immediately before it.
-        (value.is_class() || value.is_sclass())
+        matches!(value.tag(), sys::MRB_TT_CLASS | sys::MRB_TT_SCLASS)
             .then(|| RClass::from_raw_unchecked(unsafe { value.as_class_ptr() }))
     }
 }
@@ -386,9 +380,8 @@ impl FromValue for RModule {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the unbox precondition (MRB_TT_MODULE tagging) is
-        // established by the `is_module` guard immediately before it.
-        value
-            .is_module()
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_MODULE)
             .then(|| RModule::from_raw_unchecked(unsafe { value.as_class_ptr() }))
     }
 }
@@ -398,11 +391,11 @@ impl FromValue for ExceptionClass {
     // exception class, which a singleton class never is.
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
-        if !value.is_class() {
+        if value.tag() != sys::MRB_TT_CLASS {
             return None;
         }
         // SAFETY: the unbox precondition (class tagging) is established
-        // by the `is_class` guard immediately above.
+        // by the tag check immediately above.
         let class = unsafe { value.as_class_ptr() };
         crate::class::is_exception_class(class).then(|| ExceptionClass::from_raw_unchecked(class))
     }
@@ -412,10 +405,8 @@ impl FromValue for Proc {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the wrap precondition (MRB_TT_PROC tagging) is
-        // established by the `is_proc` guard immediately before it.
-        value
-            .is_proc()
-            .then(|| unsafe { Proc::from_value_unchecked(value) })
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_PROC).then(|| unsafe { Proc::from_value_unchecked(value) })
     }
 }
 
@@ -423,10 +414,8 @@ impl FromValue for Symbol {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the wrap precondition (MRB_TT_SYMBOL tagging) is
-        // established by the `is_symbol` guard immediately before it.
-        value
-            .is_symbol()
-            .then(|| unsafe { Symbol::from_value_unchecked(value) })
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_SYMBOL).then(|| unsafe { Symbol::from_value_unchecked(value) })
     }
 }
 
@@ -434,10 +423,8 @@ impl FromValue for RString {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the wrap precondition (MRB_TT_STRING tagging) is
-        // established by the `is_string` guard immediately before it.
-        value
-            .is_string()
-            .then(|| unsafe { RString::from_value_unchecked(value) })
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_STRING).then(|| unsafe { RString::from_value_unchecked(value) })
     }
 }
 
@@ -445,10 +432,8 @@ impl FromValue for Range {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the wrap precondition (MRB_TT_RANGE tagging) is
-        // established by the `is_range` guard immediately before it.
-        value
-            .is_range()
-            .then(|| unsafe { Range::from_value_unchecked(value) })
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_RANGE).then(|| unsafe { Range::from_value_unchecked(value) })
     }
 }
 

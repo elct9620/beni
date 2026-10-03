@@ -198,7 +198,7 @@ pub(crate) fn bound_class(
                 &message,
             )))
         };
-        if !bound.is_class() {
+        if bound.tag() != sys::MRB_TT_CLASS {
             return type_error(format!("{name} is not a class"));
         }
         // SAFETY: the class tag was checked just above.
