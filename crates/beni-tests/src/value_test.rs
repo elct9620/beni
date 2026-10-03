@@ -1405,10 +1405,15 @@ fn int_to_str_rejects_a_non_integer_receiver() {
     // The guard is strict on the Integer tag: a Float is rejected with
     // TypeError, not coerced, because mrb_integer_to_str unboxes its
     // receiver without a tag check.
-    assert!(matches!(
-        1.5f32.into_value(&mrb).int_to_str(&mrb, 10),
-        Err(Error::Exception(_))
-    ));
+    let err = 1.5f32
+        .into_value(&mrb)
+        .int_to_str(&mrb, 10)
+        .err()
+        .expect("a Float receiver must be rejected");
+    let type_error = mrb.exc_get(c"TypeError").expect("a core exception class");
+    assert!(matches!(err, Error::Exception(_)));
+    assert!(err.is_kind_of(&mrb, type_error));
+    assert_eq!(err.message(&mrb), "no implicit conversion to Integer");
 }
 
 #[test]
