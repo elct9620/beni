@@ -283,56 +283,6 @@ impl Value {
         Self(unsafe { sys::mrb_float_value(mrb.as_ptr(), f) })
     }
 
-    /// Render this Integer value to a new `RString` in `base`, the way
-    /// Ruby's `Integer#to_s(base)` does — `12345` to `"3039"` in base 16.
-    /// Surfaces an `Err` carrying a `TypeError` for a receiver of any other
-    /// type, and one carrying an `ArgumentError` for a `base` outside 2
-    /// through 36. Mirrors mruby's `mrb_integer_to_str`.
-    #[inline]
-    pub fn int_to_str(self, mrb: &Mrb, base: i32) -> Result<crate::RString, Error> {
-        // `mrb_integer_to_str` unboxes its receiver without a tag check,
-        // so a non-Integer is rejected here rather than coerced.
-        if self.tag() != sys::MRB_TT_INTEGER {
-            return Err(crate::try_convert::type_error(
-                mrb,
-                "no implicit conversion to Integer",
-            ));
-        }
-        mrb.protect(|mrb| {
-            // SAFETY: `self` is Integer-tagged past the guard; `mrb` is
-            // alive inside the protect frame. `mrb_integer_to_str` raises
-            // `ArgumentError` on a base outside 2 through 36 — caught by
-            // `protect` into `Err` — and otherwise returns a String value.
-            let v = Value::from_raw_unchecked(unsafe {
-                sys::mrb_integer_to_str(mrb.as_ptr(), self.0, base as sys::mrb_int)
-            });
-            // SAFETY: a successful `mrb_integer_to_str` returns a
-            // String-tagged value, so the unchecked wrap accepts it.
-            unsafe { RString::from_value_unchecked(v) }
-        })
-    }
-
-    /// Convert this Float value to the Integer value it truncates toward
-    /// zero, the way Ruby's `Float#to_i` / `Float#to_int` core does — `3.9`
-    /// to `3`, `-3.9` to `-3`. The result stays an mruby `Value`, an Integer
-    /// in the VM's value domain, not a Rust scalar. `mrb_float_to_integer`
-    /// guards its own receiver on the Float tag, raising `TypeError` for any
-    /// other tag, and raises `RangeError` for an infinite or NaN float, which
-    /// has no integer; both raises run under exception protection, so either
-    /// surfaces as `Err` rather than long-jumping. magnus's `Float` exposes no
-    /// such conversion, so this anchors on mruby's own `mrb_float_to_integer`.
-    #[inline]
-    pub fn float_to_int(self, mrb: &Mrb) -> Result<Value, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `self`
-            // originates from the same VM. `mrb_float_to_integer` raises
-            // `TypeError` on a non-Float receiver and `RangeError` on an
-            // infinite or NaN float — both caught by `protect` into `Err`
-            // — and otherwise returns an Integer value.
-            Value(unsafe { sys::mrb_float_to_integer(mrb.as_ptr(), self.0) })
-        })
-    }
-
     /// Add `other` to `self`, Ruby's `+` on `Integer` and `Float` — `2 + 3`
     /// to `5`, `2 + 3.5` to `5.5`. The result stays an mruby `Value`: an
     /// Integer when both operands are integers and the result fits the
@@ -403,69 +353,13 @@ impl Value {
         })
     }
 
-    /// Coerce `self` to a typed `RString` handle by its String tag,
-    /// surfacing a non-String as an `Err` rather than rejecting it to
-    /// `None`: `Ok` with the handle when `self` is String-tagged, `Err`
-    /// carrying a `TypeError` for any other tag. It runs no user Ruby —
-    /// it dispatches no `to_str` — so it is the raising counterpart to
-    /// the `RString::from_value` downcast, not the dispatching `to_s`
-    /// coercion `Value::obj_as_string` performs. The `TypeError` it would
-    /// long-jump is caught by exception protection into the returned `Err`.
-    /// Suits a handler that requires a String argument and rejects
-    /// anything else; reach for the `FromValue` downcast instead when a
-    /// non-String should read as absent. Mirrors mruby's
-    /// `mrb_ensure_string_type`.
-    #[inline]
-    pub fn ensure_string(self, mrb: &Mrb) -> Result<crate::RString, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `self`
-            // originates from the same VM. `mrb_ensure_string_type`
-            // raises `TypeError` on a non-String tag — caught by
-            // `protect` into `Err` — and otherwise returns `self`
-            // unchanged.
-            let v = Value(unsafe { sys::mrb_ensure_string_type(mrb.as_ptr(), self.0) });
-            // SAFETY: a value returned without a raise passed `mrb_string_p` inside
-            // `mrb_ensure_string_type`, so it carries the String tag the
-            // unchecked wrap requires.
-            unsafe { RString::from_value_unchecked(v) }
-        })
-    }
-
-    /// Coerce `self` to a typed `RArray` handle by its Array tag,
-    /// surfacing a non-Array as an `Err` rather than rejecting it to
-    /// `None`: `Ok` with the handle when `self` is Array-tagged, `Err`
-    /// carrying a `TypeError` for any other tag. It runs no user Ruby —
-    /// it dispatches no `to_ary` — so it is the raising counterpart to
-    /// the `RArray::from_value` downcast. The `TypeError` it would
-    /// long-jump is caught by exception protection into the returned `Err`.
-    /// Suits a handler that requires an Array argument and rejects
-    /// anything else; reach for the `FromValue` downcast instead when a
-    /// non-Array should read as absent. Mirrors mruby's
-    /// `mrb_ensure_array_type`.
-    #[inline]
-    pub fn ensure_array(self, mrb: &Mrb) -> Result<crate::RArray, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `self`
-            // originates from the same VM. `mrb_ensure_array_type`
-            // raises `TypeError` on a non-Array tag — caught by
-            // `protect` into `Err` — and otherwise returns `self`
-            // unchanged.
-            let v = Value(unsafe { sys::mrb_ensure_array_type(mrb.as_ptr(), self.0) });
-            // SAFETY: a value returned without a raise passed `mrb_array_p` inside
-            // `mrb_ensure_array_type`, so it carries the Array tag the
-            // unchecked wrap requires.
-            unsafe { crate::RArray::from_value_unchecked(v) }
-        })
-    }
-
     /// Spread `self` into a new typed `RArray`, Ruby's `*` splat coercion:
     /// an array yields a copy of itself; a non-array that responds to
     /// `to_a` runs it, taking the result when it is an array and wrapping
     /// `self` in a one-element array when `to_a` returns `nil`; a value
     /// that answers no `to_a` wraps in a one-element array. It dispatches
-    /// `to_a` and always yields an array, so it is the dispatching
-    /// counterpart to `ensure_array`, which coerces by the Array tag alone
-    /// and takes only an already-array value. A `TypeError` mruby raises
+    /// `to_a` and always yields an array, unlike `RArray::try_convert`, which
+    /// takes only an already-array value. A `TypeError` mruby raises
     /// when `to_a` returns a non-array non-`nil` value, or a raise from
     /// `to_a` itself, is caught by exception protection into the returned `Err`.
     /// Mirrors mruby's `mrb_ary_splat`.
@@ -481,77 +375,6 @@ impl Value {
             // SAFETY: `mrb_ary_splat` always returns an Array-tagged value
             // when it returns, the tag the unchecked wrap requires.
             unsafe { crate::RArray::from_value_unchecked(v) }
-        })
-    }
-
-    /// Coerce `self` to a typed `RHash` handle by its Hash tag,
-    /// surfacing a non-Hash as an `Err` rather than rejecting it to
-    /// `None`: `Ok` with the handle when `self` is Hash-tagged, `Err`
-    /// carrying a `TypeError` for any other tag. It runs no user Ruby —
-    /// it dispatches no `to_hash` — so it is the raising counterpart to
-    /// the `RHash::from_value` downcast. The `TypeError` it would
-    /// long-jump is caught by exception protection into the returned `Err`.
-    /// Suits a handler that requires a Hash argument and rejects
-    /// anything else; reach for the `FromValue` downcast instead when a
-    /// non-Hash should read as absent. Mirrors mruby's
-    /// `mrb_ensure_hash_type`.
-    #[inline]
-    pub fn ensure_hash(self, mrb: &Mrb) -> Result<crate::RHash, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `self`
-            // originates from the same VM. `mrb_ensure_hash_type`
-            // raises `TypeError` on a non-Hash tag — caught by
-            // `protect` into `Err` — and otherwise returns `self`
-            // unchanged.
-            let v = Value(unsafe { sys::mrb_ensure_hash_type(mrb.as_ptr(), self.0) });
-            // SAFETY: a value returned without a raise passed `mrb_hash_p` inside
-            // `mrb_ensure_hash_type`, so it carries the Hash tag the
-            // unchecked wrap requires.
-            unsafe { crate::RHash::from_value_unchecked(v) }
-        })
-    }
-
-    /// Coerce `self` by numeric type to an Integer `Value`, staying in
-    /// mruby's value domain rather than reading out a Rust scalar: an
-    /// Integer returns unchanged, a Float truncates toward zero, and the
-    /// result narrows to one that fits the configured integer width. It
-    /// coerces between the numeric types, unlike the exact-tag
-    /// `i32::from_value` downcast, and the `Value::as_int` sibling reads the
-    /// same coercion out as a Rust `mrb_int`. It runs no user Ruby — it
-    /// dispatches no `to_int` — so the `TypeError` mruby raises for a
-    /// non-numeric value, or the `RangeError` it raises for an infinite or
-    /// NaN Float, is caught by exception protection into the returned `Err`.
-    /// Mirrors mruby's `mrb_ensure_int_type` (over `mrb_ensure_integer_type`,
-    /// which the width narrowing wraps).
-    #[inline]
-    pub fn ensure_int(self, mrb: &Mrb) -> Result<Value, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `self`
-            // originates from the same VM. `mrb_ensure_int_type` raises
-            // `TypeError` on a non-numeric value and `RangeError` on an
-            // infinite or NaN Float — both caught by `protect` into
-            // `Err` — and otherwise returns an Integer value.
-            Value(unsafe { sys::mrb_ensure_int_type(mrb.as_ptr(), self.0) })
-        })
-    }
-
-    /// Coerce `self` by numeric type to a Float `Value`, staying in mruby's
-    /// value domain rather than reading out a Rust scalar: a Float returns
-    /// unchanged and an Integer widens. It coerces between the numeric types,
-    /// unlike the exact-tag `f64::from_value` downcast, and the
-    /// `Value::as_float` sibling reads the same coercion out as a Rust
-    /// `mrb_float`. It runs no user Ruby — it dispatches no `to_f` — so the
-    /// `TypeError` mruby raises for a non-numeric value is caught by
-    /// exception protection into the returned `Err`. Mirrors mruby's
-    /// `mrb_ensure_float_type`.
-    #[inline]
-    pub fn ensure_float(self, mrb: &Mrb) -> Result<Value, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `self`
-            // originates from the same VM. `mrb_ensure_float_type` raises
-            // `TypeError` on a non-numeric value — caught by `protect`
-            // into `Err` — and otherwise returns a Float value.
-            Value(unsafe { sys::mrb_ensure_float_type(mrb.as_ptr(), self.0) })
         })
     }
 

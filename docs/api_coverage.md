@@ -86,12 +86,12 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_define_private_method_id` | fn | ✅ | ✅ | `Module::define_private_method` with an `Id` key (the symbol-or-name key) |
 | `mrb_define_singleton_method` | fn | ✅ | ✅ | `Object::define_singleton_method` with a name key — interns and routes through `mrb_define_singleton_method_id` |
 | `mrb_define_singleton_method_id` | fn | ✅ | ✅ | `Object::define_singleton_method` with an `Id` key (the symbol-or-name key) |
-| `mrb_ensure_array_type` | fn | ✅ | ✅ | `Value::ensure_array` — the raising Array-tag coercion to an `RArray` handle |
-| `mrb_ensure_float_type` | fn | ✅ | ✅ | `Value::ensure_float` — the raising numeric-tag coercion to a Float `Value` (Float unchanged, Integer widened); distinct from the exact-tag `FromValue` -> float downcast, which coerces nothing |
-| `mrb_ensure_hash_type` | fn | ✅ | ✅ | `Value::ensure_hash` — the raising Hash-tag coercion to an `RHash` handle |
-| `mrb_ensure_int_type` | fn | ✅ | ✅ | `Value::ensure_int` — the raising numeric-tag coercion to an Integer `Value` (Integer unchanged, Float truncated toward zero), narrowing to one that fits the configured integer width; distinct from the exact-tag `FromValue` -> integer downcast, which coerces nothing |
-| `mrb_ensure_integer_type` | fn | ✅ | ✅ | `Value::ensure_int` — the un-narrowed Integer coercion that `mrb_ensure_int_type` wraps; same raising numeric-tag coercion, surfaced through the single `Value::ensure_int` |
-| `mrb_ensure_string_type` | fn | ✅ | ✅ | `Value::ensure_string` — the raising String-tag coercion to an `RString` handle |
+| `mrb_ensure_array_type` | fn | ✅ | ✅ | `TryConvert` for `RArray` — the raising Array-tag conversion, as magnus routes `rb_check_array_type` through `TryConvert` |
+| `mrb_ensure_float_type` | fn | ✅ | ✅ | `TryConvert` for `Float` and the Rust floats — the numeric coercion, as magnus routes `rb_to_float` through `TryConvert` |
+| `mrb_ensure_hash_type` | fn | ✅ | ✅ | `TryConvert` for `RHash` — the raising Hash-tag conversion |
+| `mrb_ensure_int_type` | fn | ✅ | ✅ | `TryConvert` for the Rust integers — the numeric coercion narrowed to the configured integer width, read out as a Rust integer |
+| `mrb_ensure_integer_type` | fn | ✅ | ✅ | `TryConvert` for `Integer` — the un-narrowed numeric coercion, as magnus routes `rb_to_int` through `TryConvert` |
+| `mrb_ensure_string_type` | fn | ✅ | ✅ | `TryConvert` for `RString` — the raising String-tag conversion |
 | `mrb_eql` | fn | ✅ | ✅ | `Value::eql` |
 | `mrb_equal` | fn | ✅ | ✅ | `Value::equal` |
 | `mrb_exc_get` | macro | ❌ | ✅ | subsumed: `Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it |
@@ -254,7 +254,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_ary_resize` | fn | ✅ | ✅ | `RArray::resize` |
 | `mrb_ary_set` | fn | ✅ | ✅ | `RArray::store` |
 | `mrb_ary_shift` | fn | ✅ | ✅ | `RArray::shift` |
-| `mrb_ary_splat` | fn | ✅ | ✅ | `Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `RArray`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `RArray` downcast (the tag-test that reads a non-Array as absent) |
+| `mrb_ary_splat` | fn | ✅ | ✅ | `Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `RArray`; distinct from `TryConvert` for `RArray`, which takes only an Array |
 | `mrb_ary_splice` | fn | ✅ | ✅ | `RArray::splice` |
 | `mrb_ary_unshift` | fn | ✅ | ✅ | `RArray::unshift` |
 | `mrb_ary_value` | macro | ❌ | ✅ | defined as `mrb_obj_value` |
@@ -395,9 +395,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `mrb_fixnum_to_str` | macro | ❌ | ✅ | defined as `mrb_integer_to_str` |
-| `mrb_float_to_integer` | fn | ✅ | ✅ | `Value::float_to_int` — convert a Float value to the Integer value it truncates toward zero (Ruby's Float#to_i / Float#to_int); guards the Float tag (TypeError) and raises RangeError on an infinite or NaN float |
+| `mrb_float_to_integer` | fn | ✅ | ✅ | `Float::to_integer` — the Integer a Float truncates toward zero (Ruby's Float#to_i); raises RangeError on an infinite or NaN float |
 | `mrb_int_to_cstr` | fn | ✅ | ❌ |  |
-| `mrb_integer_to_str` | fn | ✅ | ✅ | `Value::int_to_str` — render an Integer value to an RString in a radix (Ruby's Integer#to_s(base)); guards the Integer tag (TypeError) and raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys` |
+| `mrb_integer_to_str` | fn | ✅ | ✅ | `Integer::to_r_string_radix` — render an Integer to an RString in a radix (Ruby's Integer#to_s(base)); raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys` |
 | `mrb_num_add` | fn | ✅ | ✅ | `Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width |
 | `mrb_num_minus` | macro | ❌ | ✅ | defined as `mrb_num_sub` |
 | `mrb_num_mul` | fn | ✅ | ✅ | `Value::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
@@ -561,15 +561,15 @@ covered (✅); the Via column names the surface that covers each one.
 |-----------|:-------:|-----|
 | `o` | ✅ | scan_args required / optional / trailing parts, or the typed method registration |
 | `C` | ✅ | scan_args + FromValue<RClass> / FromValue<RModule> |
-| `S` | ✅ | scan_args + FromValue<RString>, or Value::ensure_string |
-| `A` | ✅ | scan_args + FromValue<RArray> / Value::ensure_array |
-| `H` | ✅ | scan_args + FromValue<RHash> / Value::ensure_hash |
+| `S` | ✅ | scan_args + TryConvert<RString> |
+| `A` | ✅ | scan_args + TryConvert<RArray> |
+| `H` | ✅ | scan_args + TryConvert<RHash> |
 | `s` | ✅ | scan_args + FromValue<Vec<u8>> — a copy of the String argument's bytes |
 | `z` | ✅ | scan_args + RString::to_cstr |
 | `a` | ✅ | scan_args + RArray::entries |
 | `c` | ✅ | scan_args + FromValue<RClass> / FromValue<RModule> |
-| `f` | ✅ | scan_args + FromValue<f64> / Value::ensure_float |
-| `i` | ✅ | scan_args + FromValue<i32> / FromValue<i64> / Value::ensure_int |
+| `f` | ✅ | scan_args + TryConvert<f64> / TryConvert<Float> |
+| `i` | ✅ | scan_args + TryConvert<i64> / TryConvert<Integer> |
 | `b` | ✅ | scan_args + FromValue<bool> |
 | `n` | ✅ | scan_args + FromValue<Symbol> |
 | `d` | ✅ | scan_args + TryConvert for &T / Obj<T> |
@@ -598,7 +598,7 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `ArenaScope` | RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore` with a `mrb_gc_protect` keep — a safety guard with no single C API. |
 | `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, reached through `TypedData`, magnus's shape: a Rust type names its own `DataType` and class, so a wrap and a read take no descriptor. The class mark is a separate class-setup step (`RClass::set_instance_data_tt`) that magnus has no counterpart for, since mruby allocates a carrier only from a marked class; `TypedData`'s unsafe contract makes every class it names a marked one, which keeps wrapping infallible. The mark is refused unless the class allocates plain objects or is already a carrier, so no built-in layout is read as a carrier. The `DataType::dfree` release hook wraps the payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame of mruby's GC sweep, where unwinding is undefined. |
 | `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by exception protection (`mrb_protect_error`), which `sys::protect` offers a raw call. `Error::is_kind_of` asks the carried exception Ruby's `is_a?` (`mrb_obj_is_kind_of`). `Error::new` builds an exception error from a class and a message (via `ExceptionClass::exc_new`) for a handler to raise its own exception, and `Error::argnum` builds the canonical wrong-argument-count `ArgumentError` (via `mrb_argnum_error`) for a handler validating its own arity. |
-| `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `Value::funcall`, `Value::ensure_array`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
+| `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `Value::funcall`, `TryConvert` for `RArray`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
 | `ExceptionClass` | Typed handle on an exception class, magnus's `ExceptionClass`: only it builds or raises an exception, so `mrb_exc_new` / `mrb_exc_new_str` never meet a class whose instances are not exceptions. `Mrb::define_error` and `Module::define_error` compose `mrb_define_class_id` / `mrb_define_class_under_id` with an exception-class superclass. Binds no new C symbol. |
 | `GcRoot` | The releasable root: a guard holding one slot of a table the interpreter keeps, released when the guard drops. Binds no new C symbol — it composes the already-graduated array and global-variable primitives — because the C pair it would otherwise wrap cannot carry it: `mrb_gc_unregister` removes by value, so one holder's release would drop every other root over the same value. A slot is the per-root identity mruby's registry lacks, the same role the storage address plays for CRuby's `rb_gc_register_address`. Released slots go on an intrusive free list so a long-running consumer's table stops growing. A refused release leaves the value rooted for the interpreter's remaining lifetime — over-retention, never a value collected while a holder still names it. |
 | `Id` | The interned id as its own typed form, magnus's `Id`, beside the `Symbol` value handle: the two convert with `From`, boxing through `mrb_symbol_value` and unboxing through the `mrb_symbol` shim. It compares and hashes by the id — mruby publishes no C comparison to bind, interning being canonical — and a `Symbol` compares by the id it boxes. |

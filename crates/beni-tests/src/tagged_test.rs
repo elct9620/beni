@@ -1,12 +1,12 @@
-//! Type discrimination through the handles a value converts into by its
-//! tag alone: each accepts exactly the values its tag carries.
+//! The handles a value converts into by its tag alone: each accepts
+//! exactly the values its tag carries, as a downcast and as a method
+//! argument.
 
-use crate::support::open_mrb;
+use crate::support::{open_mrb, OwnedBytes};
 use beni::prelude::*;
-use beni::TryConvert;
 use beni::{
-    Exception, Fiber, Float, Integer, Mrb, Qfalse, Qnil, Qtrue, Qundef, RComplex, RObject,
-    RRational, RSet, RStruct, Value,
+    Exception, Fiber, Float, Integer, IntoValue, Mrb, Qfalse, Qnil, Qtrue, Qundef, RComplex,
+    RObject, RRational, RSet, RStruct, TryConvert, Value,
 };
 
 fn eval(mrb: &Mrb, source: &str) -> Value {
@@ -276,5 +276,93 @@ fn a_float_argument_widens_an_integer_as_mruby_does() {
     assert_eq!(
         rejection::<Float>(&mrb, "'abc'"),
         type_error("String cannot be converted to Float")
+    );
+}
+
+fn integer(mrb: &Mrb, n: i32) -> Integer {
+    Integer::from_value(n.into_value(mrb)).expect("an Integer")
+}
+
+fn float(mrb: &Mrb, f: f32) -> Float {
+    Float::from_value(f.into_value(mrb)).expect("a Float")
+}
+
+#[test]
+fn an_integer_renders_renders_in_base_ten_and_other_radixes() {
+    let mrb = open_mrb();
+
+    let n = integer(&mrb, 12345);
+    // Base 10 is the plain decimal rendering.
+    assert_eq!(
+        n.to_r_string_radix(&mrb, 10)
+            .expect("base 10 renders")
+            .owned_bytes(),
+        b"12345".to_vec()
+    );
+    // A non-decimal radix renders in that base, like Ruby's
+    // 12345.to_s(16) == "3039".
+    assert_eq!(
+        n.to_r_string_radix(&mrb, 16)
+            .expect("base 16 renders")
+            .owned_bytes(),
+        b"3039".to_vec()
+    );
+}
+
+#[test]
+fn an_integer_renders_surfaces_an_invalid_radix_as_err() {
+    let mrb = open_mrb();
+
+    // A radix outside 2 through 36 raises ArgumentError, caught into
+    // Err rather than long-jumping; the VM stays usable afterward.
+    assert!(matches!(
+        integer(&mrb, 12345i32).to_r_string_radix(&mrb, 1),
+        Err(beni::Error::Exception(_))
+    ));
+    assert_eq!(
+        integer(&mrb, 42i32)
+            .to_r_string_radix(&mrb, 10)
+            .expect("the VM survives the protected raise")
+            .owned_bytes(),
+        b"42".to_vec()
+    );
+}
+
+#[test]
+fn a_float_truncates_toward_zero() {
+    let mrb = open_mrb();
+
+    // A positive float truncates down, like Ruby's 3.9.to_i == 3.
+    let three = float(&mrb, 3.9f32).to_integer(&mrb).expect("3.9 converts");
+    assert_eq!(i32::from_value(three.as_value()), Some(3));
+    // A negative float truncates toward zero, like Ruby's -3.9.to_i == -3.
+    let neg_three = float(&mrb, -3.9f32)
+        .to_integer(&mrb)
+        .expect("-3.9 converts");
+    assert_eq!(i32::from_value(neg_three.as_value()), Some(-3));
+}
+
+#[test]
+fn a_float_surfaces_infinity_and_nan_as_err() {
+    let mrb = open_mrb();
+
+    // Infinity and NaN have no integer; mruby raises RangeError, caught
+    // into Err rather than long-jumping, and the VM stays usable after.
+    assert!(matches!(
+        float(&mrb, f32::INFINITY).to_integer(&mrb),
+        Err(beni::Error::Exception(_))
+    ));
+    assert!(matches!(
+        float(&mrb, f32::NAN).to_integer(&mrb),
+        Err(beni::Error::Exception(_))
+    ));
+    assert_eq!(
+        i32::from_value(
+            float(&mrb, 2.5f32)
+                .to_integer(&mrb)
+                .expect("the VM survives the protected raise")
+                .as_value()
+        ),
+        Some(2)
     );
 }

@@ -89,12 +89,11 @@ impl Error {
         let Error::Exception(exc) = self else {
             return Vec::new();
         };
-        // `ensure_array` rejects the `nil` an exception with no
-        // backtrace answers, so the absent case needs no test of its
-        // own.
+        // The conversion rejects the `nil` an exception with no backtrace
+        // answers, so the absent case needs no test of its own.
         let Ok(frames) = exc
             .funcall(mrb, c"backtrace", &[])
-            .and_then(|frames| frames.ensure_array(mrb))
+            .and_then(|frames| <crate::RArray as crate::TryConvert>::try_convert(frames, mrb))
         else {
             return Vec::new();
         };

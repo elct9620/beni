@@ -10,7 +10,7 @@ use crate::{
     sys::AsRawValue,
     try_convert::wrong_argument_type,
     value::{private, ReprValue},
-    Error, Mrb, TryConvert, Value,
+    Error, Mrb, RString, TryConvert, Value,
 };
 use beni_sys as sys;
 
@@ -197,6 +197,42 @@ impl TryConvert for Float {
             // otherwise answers a Float.
             Float(Value::from_raw_unchecked(unsafe {
                 sys::mrb_ensure_float_type(mrb.as_ptr(), val.as_raw())
+            }))
+        })
+    }
+}
+
+impl Integer {
+    /// Render to a new `RString` in `base`, the way Ruby's
+    /// `Integer#to_s(base)` does — `12345` to `"3039"` in base 16. Surfaces
+    /// an `Err` carrying an `ArgumentError` for a `base` outside 2 through
+    /// 36. Mirrors mruby's `mrb_integer_to_str`.
+    pub fn to_r_string_radix(self, mrb: &Mrb, base: i32) -> Result<RString, Error> {
+        mrb.protect(|mrb| {
+            // SAFETY: `self` is Integer-tagged by construction and `mrb` is
+            // alive inside the protect frame; an invalid `base` raises the
+            // `ArgumentError`, caught by `protect`.
+            let v = Value::from_raw_unchecked(unsafe {
+                sys::mrb_integer_to_str(mrb.as_ptr(), self.0.as_raw(), base as sys::mrb_int)
+            });
+            // SAFETY: a successful render answers a String.
+            unsafe { RString::from_value_unchecked(v) }
+        })
+    }
+}
+
+impl Float {
+    /// The `Integer` this float truncates toward zero, the way Ruby's
+    /// `Float#to_i` does — `3.9` to `3`, `-3.9` to `-3`. Surfaces an `Err`
+    /// carrying a `RangeError` for an infinite or NaN float. Mirrors
+    /// mruby's `mrb_float_to_integer`.
+    pub fn to_integer(self, mrb: &Mrb) -> Result<Integer, Error> {
+        mrb.protect(|mrb| {
+            // SAFETY: `self` is Float-tagged by construction and `mrb` is
+            // alive inside the protect frame; an infinite or NaN float
+            // raises the `RangeError`, caught by `protect`.
+            Integer(Value::from_raw_unchecked(unsafe {
+                sys::mrb_float_to_integer(mrb.as_ptr(), self.0.as_raw())
             }))
         })
     }
