@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.19.0](https://github.com/elct9620/beni/compare/v0.18.0...v0.19.0) (2026-10-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** `Module::define_const` is removed; call `const_set`. `Mrb::define_global_const` runs `Object`'s `const_added` hook and takes `(name: impl IntoId, val: impl IntoValue)`.
+* **beni:** `beni::class::Module` and `beni::class::Object` move to
+* **beni:** `Value::nil()`, `Value::true_()`, and `Value::false_()` are removed; call `beni::value::qnil()` (and `qtrue` / `qfalse`), passing the handle where an `IntoValue` or `ReprValue` is taken and `.as_value()` where a `Value` is.
+* **beni:** bring the traits into scope with `use beni::prelude::*`. `ivar_*` and `singleton_class` need an instance-variable holder handle (`RObject::from_value(v)` and the like) and `const_*` / `cvar_*` a class or module handle. `ivar_get`, `const_get`, and `cvar_get` take a target type (`ivar_get::<_, Value>`), and `ivar_get` surfaces a key that cannot be interned as an `Err` rather than reading `nil`.
+* **beni:** `beni::cstr!` and `beni::cstr_ptr` are removed; write a `c"..."` literal and call `.as_ptr()` on it.
+* **beni:** renamed — `Value::obj_as_string` to `to_r_string`; `iv_get` / `iv_set` / `iv_defined` / `iv_remove` / `each_iv` to `ivar_get` / `ivar_set` / `ivar_defined` / `ivar_remove` / `ivar_foreach`; `cv_get` / `cv_set` / `cv_defined` to `cvar_get` / `cvar_set` / `cvar_defined`; `obj_dup` to `dup`; `obj_equal` to `is_equal`; `RClass::obj_new` to `new_instance`; `Value::to_ary` to the associated `RArray::to_ary(value, mrb)`; `ExceptionClass::exc_new_str` to `new_str`, now answering an `Exception`. Removed from the public surface — `ExceptionClass::exc_new`, built through `Error::new` instead, and `Value::obj_clone`, dispatched as `clone` through `Value::funcall`.
+* **beni:** `Value::ary_entry` is removed — downcast with
+* **beni:** `Value::unbox_integer` and `Value::unbox_float` are no longer public — read through `Integer::from_value(v)?.to_i64(mrb)` or
+* **beni:** `Value::ensure_string`, `ensure_array`, `ensure_hash`, `ensure_int`, and `ensure_float` are removed — convert through `RString::try_convert(v, mrb)` and its siblings, `Integer::try_convert`, or `Float::try_convert`. `Value::int_to_str` is now
+* **beni:** `Value::is_true`, `is_false`, `is_integer`, `is_float`, `is_array`, `is_hash`, `is_class`, `is_sclass`, `is_module`, `is_proc`, `is_data`, `is_istruct`, `is_cptr`, `is_string`, `is_symbol`, `is_range` and `is_exception` are removed. Convert into the matching handle instead — `Qtrue::from_value(v)`, `Integer::from_value(v)`, `RArray::from_value(v)`, … — and read a singleton class through `RClass::is_singleton`.
+* **beni:** `beni::Array` is now `beni::RArray` and `beni::Hash` is now `beni::RHash`; their methods and conversions are unchanged.
+
+### Features
+
+* **beni-macros:** derive InlineStruct and wrap a struct inline ([72c8abb](https://github.com/elct9620/beni/commit/72c8abb143ff577d46eede6864d0a20912b9e8b4))
+* **beni-sys:** bind mruby's inline-struct header ([293271c](https://github.com/elct9620/beni/commit/293271cf4d91c31c802c686dc1e5a706065f54df))
+* **beni:** convert a value into a handle for every tag it can carry ([ddccea7](https://github.com/elct9620/beni/commit/ddccea7af2729b6d6fce6281a253081756f0c164))
+* **beni:** read an Integer or Float handle out as a Rust number ([8514850](https://github.com/elct9620/beni/commit/8514850fe646660a38e2e500cdf79a4e725e33d8))
+* **beni:** store plain Rust data inside mruby objects as inline structs ([2cbfb91](https://github.com/elct9620/beni/commit/2cbfb91e2229861f719035b8c8a57a24b88cc8a5))
+* **beni:** take a method argument as any tagged handle ([29d87f8](https://github.com/elct9620/beni/commit/29d87f89afaff29b219d7c0715101fe45947e7d2))
+
+
+### Bug Fixes
+
+* **beni:** answer the C-pointer and inline-struct tags with predicates ([db5362c](https://github.com/elct9620/beni/commit/db5362cfedb1dd7ffd7576fa7d79311e86154150))
+
+
+### Code Refactoring
+
+* **beni:** answer nil, true, and false through value::qnil and its kin ([5919ae0](https://github.com/elct9620/beni/commit/5919ae0aa2a6cbeb7847860114258d67e3bbfddc))
+* **beni:** bind a constant through const_set alone ([738997e](https://github.com/elct9620/beni/commit/738997e7f081b9dcbc65d52393988353b8241ffd))
+* **beni:** coerce a value's type through TryConvert alone ([eecd272](https://github.com/elct9620/beni/commit/eecd272472358153504b5cf30eaab0e102048da1))
+* **beni:** discriminate types only through handle downcasts ([d2615d3](https://github.com/elct9620/beni/commit/d2615d34f85a4d97380417388f7b693697e4871f))
+* **beni:** give the Module and Object traits their own modules ([ab75ec0](https://github.com/elct9620/beni/commit/ab75ec001f58656b1e3201cc1e5b1a861f8f7e14))
+* **beni:** name the array and hash handles RArray and RHash ([70fbca4](https://github.com/elct9620/beni/commit/70fbca43a005fe108a36b637a5b3afd811d980f8))
+* **beni:** name value operations as magnus names them ([f6717a6](https://github.com/elct9620/beni/commit/f6717a658833fb4b3a868ee479fc6bf19ae5d359))
+* **beni:** place value operations on the traits magnus places them on ([1b9ee3f](https://github.com/elct9620/beni/commit/1b9ee3fc1f1d0eccc014a70bea52631bf17c14ba))
+* **beni:** read an array element through the array handle alone ([2329fe2](https://github.com/elct9620/beni/commit/2329fe22ad90ecee25df5bbfe453a9c4e6fc3591))
+* **beni:** remove the cstr! macro and cstr_ptr ([c4cf56e](https://github.com/elct9620/beni/commit/c4cf56e654a3e2b7d4157fbe669d8b9250aae420))
+
 ## [0.18.0](https://github.com/elct9620/beni/compare/v0.17.0...v0.18.0) (2026-09-20)
 
 
