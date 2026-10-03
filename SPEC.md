@@ -309,21 +309,21 @@ arguments cross, mirroring `magnus`'s `TryConvert`:
 
 | Conversion | Direction | Rule |
 |---|---|---|
-| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`bool`, or a Rust integer or float the rows below admit) boxes into its Ruby value, and each typed handle on a Ruby object — `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` / `RTypedData` / `Obj<T>` — yields the value naming that same object, and an `Id` boxes into the symbol value it names, raising nothing and running no Ruby |
+| `IntoValue` | Rust value or typed handle → `Value` | total — cannot fail; a `Value` passes through unchanged, a scalar (`bool`, or a Rust integer or float the rows below admit) boxes into its Ruby value, and each typed handle on a Ruby value — every handle the type-discrimination table below names except `Qundef`, and `Obj<T>` — yields that same value, and an `Id` boxes into the symbol value it names, raising nothing and running no Ruby |
 | `IntoValue` for a Rust integer | Rust integer → Integer `Value` | a Rust integer type converts only where every value it holds fits the configured integer width, so the conversion stays total: `i8` / `i16` / `i32` / `u8` / `u16` under every width, `u32` / `i64` under a 64-bit width, `isize` where the cargo target's pointer width is no wider than the configured integer width; every other integer type — `u64`, `usize`, `i128`, `u128`, and a `u32` / `i64` / `isize` the width does not fit — has no conversion and fails to compile |
 | `IntoValue` for a typed data value | `T: TypedData` → data carrier `Value` | wraps the value as a new instance of the class its type names for it, as `obj_wrap` does; total for every type that keeps the `TypedData` contract |
 | `IntoValue` for an inline struct | `Inline<T>`, or a `T` the `InlineStruct` macros implement → inline struct `Value` | the handle answers its own value; a value wraps as a new instance of its type's class, as `Inline::new` does; total for every type that keeps the `InlineStruct` contract |
 | `IntoValue` for `Bytes`, with the `bytes` feature | `Bytes` → String `Value` | copies the bytes into a new String |
 | `IntoValue` for a Rust float | Rust float → Float `Value` | a Rust float type converts only where every value it holds fits the configured float width, so the conversion stays total: `f32` under every width, `f64` under a 64-bit width; an `f64` under a 32-bit width has no conversion and fails to compile |
 | `FromValue` → `Value` | `Value` → `Value` | identity — the value itself; total, never rejects |
-| `FromValue` → `RString` / `Array` / `Hash` / `RClass` / `RModule` / `ExceptionClass` / `Proc` / `Symbol` / `Range` | `Value` → typed handle | converts on the target's type tag, subclass instances included for strings and containers — a class handle converts on the class or the singleton-class tag, a module handle on the module tag, an exception-class handle on the class tag when that class is an exception class; any other value rejects |
+| `FromValue` → a typed handle | `Value` → typed handle | converts what the type-discrimination table below names for the handle; any other value rejects |
 | `FromValue` → `bool` | `Value` → `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true`; total, never rejects |
 | `FromValue` → `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64` / `isize` / `usize` | `Value` → Rust integer | converts an Integer that fits the configured integer width, never a Float; the target takes the Integer when its value lies within the target's own range and rejects it otherwise — `i64` holds every such Integer, and an unsigned target rejects every negative one; any other value rejects, an arbitrary-width Integer beyond the configured width included; every target listed converts under every configured integer width |
 | `FromValue` → a Rust float | `Value` → Rust float | converts a Float, never an Integer; a float target converts only where it holds every value the configured float width does: `f64` under every width, `f32` under a 32-bit width; an `f32` under a 64-bit width has no conversion and fails to compile; any other value rejects |
 | `FromValue` → `Option<T>` | `Value` → `Option<T>` | `nil` to `None`; any other value converts by `T`'s rule to `Some`, rejecting what `T` rejects |
 | `TryConvert` | `Value` → Rust value or typed handle | answers the converted value, or an `Err` carrying the exception mruby raises for the same mismatch, worded as mruby words it; runs no user Ruby. Each rule below names what converts; every other value surfaces the `TypeError` "*value* cannot be converted to *target*", *value* naming the value's class — or `nil`, `true`, or `false` itself — and *target* the Ruby class the rule converts from |
 | `TryConvert` → `Value` / `bool` / `Option<T>` | `Value` → the same | as the `FromValue` rule for each; `Option<T>` answers `T`'s `Err` where `T` rejects |
-| `TryConvert` → `RString` / `Array` / `Hash` / `Symbol` / `Range` / `RClass` / `RModule` / `ExceptionClass` | `Value` → typed handle | converts what the `FromValue` downcast converts and nothing more — mruby has no implicit `to_str`, `to_ary`, or `to_hash` conversion; *target* is the handle's Ruby class. A class, module, or exception-class handle surfaces instead the `TypeError` "*value* is not a class", "*value* is not a module", or "*value* is not a class inheriting Exception", *value* the inspected form, as mruby words a class or module mismatch |
+| `TryConvert` → `RString` / `RArray` / `RHash` / `Symbol` / `Range` / `RClass` / `RModule` / `ExceptionClass` | `Value` → typed handle | converts what the `FromValue` downcast converts and nothing more — mruby has no implicit `to_str`, `to_ary`, or `to_hash` conversion; *target* is the handle's Ruby class. A class, module, or exception-class handle surfaces instead the `TypeError` "*value* is not a class", "*value* is not a module", or "*value* is not a class inheriting Exception", *value* the inspected form, as mruby words a class or module mismatch |
 | `TryConvert` → `Proc` | `Value` → `Proc` | converts a `Proc` alone and dispatches no `to_proc`, mruby converting to a `Proc` only a block being passed; any other value surfaces the `TypeError` "wrong argument type *class* (expected Proc)" |
 | `TryConvert` → `i8` / `i16` / `i32` / `i64` / `i128` / `u8` / `u16` / `u32` / `u64` / `u128` / `isize` / `usize` | `Value` → Rust integer | converts an Integer, or a Float truncated toward zero, as mruby's own C-method arguments do; an infinite or NaN Float, and an arbitrary-width Integer beyond the configured integer width, surface the `RangeError` mruby raises for each, and an Integer within that width but outside the target's own range the `RangeError` "*value* out of range", *value* its inspected form; *target* is `Integer` |
 | `TryConvert` → a non-zero Rust integer | `Value` → `NonZeroI8` … `NonZeroUsize` | converts as its integer does; zero surfaces the `ArgumentError` "value must be non-zero" |
@@ -365,18 +365,33 @@ to the `FromValue` → `RString` downcast, not the dispatching `to_s` string
 coercion. The downcast suits a handler that treats a non-String as absent; the
 raising form suits one that requires a String argument and rejects anything else.
 
-Every type tag a value on the typed surface can carry also carries a
-per-type predicate (`Value::is_array`, `is_string`, `is_integer`, `is_sclass`,
-… — the analogue of mruby's `mrb_*_p` macros). A typed handle's `FromValue`
-downcast — magnus's `from_value` analogue — agrees exactly with the predicates
-of the tags it converts on: it accepts precisely the values one of those
-predicates holds for. The class predicate answers for the class tag alone and
-the singleton-class predicate for the singleton-class tag, so the class
-handle's downcast accepts what either one holds for. The exception-class handle
-is the one handle narrower than its tag: its downcast accepts precisely the
-values the class predicate holds for whose class is an exception class. The
-predicate answers "what type is this?"; the downcast hands back the handle to
-operate on it.
+Type discrimination is the typed handle's `FromValue` downcast, magnus's
+`from_value`: every type tag a value a typed caller holds can carry, the break
+tag aside, converts into a handle, which accepts precisely what the table names
+and rejects every other value. A value also answers whether it is `nil`
+(`Value::is_nil`, as magnus's does); no other per-type predicate exists.
+
+| Handle | Accepts |
+|---|---|
+| `Qnil` / `Qtrue` / `Qfalse` | `nil` / `true` / `false` |
+| `Qundef` | the undefined value no Ruby code can name; the handle never converts back into a value |
+| `Integer` | an Integer, of the fixed-width or the arbitrary-width tag |
+| `Float` / `Symbol` | a Float / a Symbol |
+| `RString` / `RArray` / `RHash` | a String / Array / Hash, subclass instances included |
+| `Range` / `Proc` | a Range / a Proc |
+| `RClass` | a class or a singleton class |
+| `RModule` | a module |
+| `ExceptionClass` | a class descending from `Exception` — the one handle narrower than its tag |
+| `Exception` | an exception object |
+| `RObject` | an ordinary object — what `Object.new` allocates, and `new` on any class whose instances no other row names |
+| `Fiber` / `RStruct` / `RSet` / `RComplex` / `RRational` | a Fiber / Struct / Set / Complex / Rational, from the gem defining each |
+| `RTypedData` | a data carrier, holding a payload or not |
+| `RInlineStruct` | an inline struct of any type |
+| `RCptr` | a bare C pointer a C extension boxed |
+
+The include-class, environment, freed-slot, and backtrace tags stay inside the
+VM and carry no handle; the break tag is read through `Value::as_break`. A class
+handle answers whether it names a singleton class (`RClass::is_singleton`).
 
 #### Strings
 
@@ -655,7 +670,7 @@ raise/return contract:
 | Mutates a receiver — array append/remove/extend/replace/clear, indexed write and resize, hash assign/delete/merge/clear, string append and resize, instance-variable assignment and removal, class-variable assignment, constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range — a negative index past the beginning, or one too large; a string resize also when the requested length is negative or overflows; an instance-variable assignment also when the receiver cannot hold instance variables; a class-variable assignment also when the receiver is not a class or module; a constant assignment or removal also when the receiver is not a class or module | `Result` |
 | Dispatches Ruby — a method call, `==` / `eql?`, a `<=>` comparison, an object `dup` / `clone` or string coercion, a splat coercion to an array running a non-array's `to_a`, an array join rendering each element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`, a hash read running a `default` lookup for an absent key, or a range construction comparing its two bounds | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the receiver is not a class or module or the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result` (a `<=>` comparison yields nothing when the two values are incomparable) |
 | Reads a named variable that raises on absence — a class-variable read, walking the ancestry | the receiver is not a class or module, or the name resolves to no class variable | `Result` |
-| Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `Array` / `Hash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
+| Converts or computes without dispatching — a numeric conversion across the numeric types, a Float value to the Integer value it truncates, an arithmetic of two numeric values (add / subtract / multiply), or coercing a value to an `RString` / `RArray` / `RHash` handle by its String / Array / Hash tag | the value is non-numeric (a non-Float receiver of the Float-to-Integer conversion, or either operand of an arithmetic, raises a `TypeError`), an infinite / NaN float converts to integer (a `RangeError`), or an integer arithmetic exceeds the configured integer width (a `RangeError`); the coerced value carries no String / Array / Hash tag | `Result` |
 | Interns a name, creating its symbol — a C-string, byte-slice, String-value, or static-buffer intern, or a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (an `ArgumentError`) | `Result` |
 | Reads or renders without dispatching but can still raise — a string's NUL-terminated C-string view, a strict parse of a string to an integer in a given radix or to a float, rendering an integer to a string in a given radix, computing a Range's normalized slice of a collection length, or reading a value's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36, or its receiver is not an Integer; a Range slice's present bound is neither an integer nor integer-convertible (a `TypeError`); the value is an immediate other than `nil` / `true` / `false` and has no singleton class (a `TypeError`) | `Result` (a Range slice that does not raise returns its three-way outcome — in-range with begin offset and length, out-of-range, or a non-Range mismatch) |
 | Marks a class so its instances carry Rust data, or prepares a `TypedData` type's carrier classes in an interpreter | the class's instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (a `TypeError`); preparing also when a class path resolves to no class, or to a value that is not a class | `Result` |
@@ -663,7 +678,7 @@ raise/return contract:
 | Prepares an `InlineStruct` type's class in an interpreter, converts a value to an inline struct of a type, or replaces an inline struct's payload | preparing: the class's instances are not plain objects and the class does not belong to the same type (a `TypeError`), or the class path resolves to no class or to a value that is not a class; converting: the value is no inline struct of the type (a `TypeError`); replacing: the receiver is frozen (a `FrozenError`) | `Result` |
 | Reads the call's arguments by shape — a scan read or the single-argument read in a method registered for any arity, or a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or a keyword no list names when the read collects no rest; a scan read of an array-handle splat and an optional block alone fits every call | `Result` |
 | Compiles and runs Ruby source — under a caller's compile context, or under one borrowed for the load | the source does not parse, the context's filename is too long to be a symbol, a codegen step fails, or the program raises while it runs | `Result` (a parse failure carries a parse message, every other failure carries the exception) |
-| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type predicate | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
+| Reads or examines without dispatching — indexed read, keys, values, size, emptiness, container duplication, substring read by character range, substring search by byte index, byte comparison, symbol name and dump reads, range begin / end / exclusive-end reads, instance-variable read and presence, class-variable presence, constant presence, `respond_to?`, `equal?`, `is_a?`, `instance_of?`, class, type downcast, `nil` test | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
 
@@ -718,7 +733,7 @@ A typed hash constructs empty, or empty with a preallocated capacity that reserv
 | string coercion | the value as a string — itself when already a string, otherwise its `to_s`; may raise when `to_s` does not return a string |
 | numeric conversion | the value as a Rust integer or float, converted across the numeric types — to integer, an Integer reads directly and a Float truncates; to float, a Float reads directly and an Integer widens; surfaces an `Err` when the value is non-numeric, or when an infinite or NaN float converts to integer. Runs no user Ruby. Unlike the exact-tag `FromValue` downcast, which rejects any other tag outright, this converts between numeric types |
 | arithmetic | add, subtract, or multiply two numeric values into a new numeric value, Ruby's `+` / `-` / `*` on `Integer` and `Float` — an `Integer` when both operands are integers and the result fits the configured integer width, a `Float` when either operand is a float. Surfaces an `Err` carrying a `TypeError` when either operand is non-numeric, or a `RangeError` when an integer arithmetic exceeds the configured integer width. Stays in mruby's value domain; runs no user Ruby |
-| splat coercion | the value spread to a new typed `Array`, Ruby's `*` coercion: an array yields a copy of itself; a non-array that responds to `to_a` runs it, taking the result when it is an array and wrapping the value in a one-element array when `to_a` returns `nil`; a value that answers no `to_a` wraps in a one-element array. Surfaces an `Err` when `to_a` raises or returns a non-array non-`nil` value. Unlike the tag-coercion to an `Array` handle, which dispatches nothing and takes only an already-array-tagged value, this runs `to_a` and always yields an array |
+| splat coercion | the value spread to a new typed `RArray`, Ruby's `*` coercion: an array yields a copy of itself; a non-array that responds to `to_a` runs it, taking the result when it is an array and wrapping the value in a one-element array when `to_a` returns `nil`; a value that answers no `to_a` wraps in a one-element array. Surfaces an `Err` when `to_a` raises or returns a non-array non-`nil` value. Unlike the tag-coercion to an `RArray` handle, which dispatches nothing and takes only an already-array-tagged value, this runs `to_a` and always yields an array |
 | `is_a?` | an instance of a given class or module, walking the ancestry as Ruby's `is_a?` does |
 | `instance_of?` | a direct instance of a given class or module — only the class the value belongs to matches, so neither a superclass nor a module ever does |
 | class | the class the value belongs to |
@@ -1345,7 +1360,7 @@ The `compiler` capability feature carries everything in this section.
   mruby's embedder API — the functions and macros an embedder calls across the
   public embedder headers. A capability the typed surface graduates through a
   Rust-native construct rather than the matching C symbol counts as covered
-  through that construct: a type predicate
+  through that construct: a typed handle's downcast
   read from the value tag covers the per-type `_p` macro it stands in for, and
   a typed method definition's required and optional arity counts and its
   block-accepting flag derive the argument-spec aspec it declares — the
