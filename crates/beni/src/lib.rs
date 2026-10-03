@@ -21,12 +21,13 @@
 //!
 //! L1  RAII / newtypes  state          (Mrb owning *mut mrb_state,
 //!                                      ArenaScope arena bracketing)
-//!                      value          (Value newtype + cstr! / cstr_ptr)
+//!                      value          (Value + ReprValue, the trait
+//!                                      every handle stands for one by)
 //!                      class          (RClass / RModule / ExceptionClass
 //!                                      handles + traits)
-//!                      array / hash   (typed factories on top of Value)
-//!                      string / range (RString / Range newtypes)
-//!                      symbol / proc  (Id, Symbol / Proc newtypes)
+//!                      array / hash   (RArray / RHash handles)
+//!                      string / range (RString / Range handles)
+//!                      symbol / proc  (Id, Symbol / Proc handles)
 //!                      tagged         (handles a value converts into
 //!                                      by its type tag alone)
 //!                      data           (DataType<T>, a carrier's data type)
@@ -61,11 +62,6 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 
-// Safe-layer modules. These hold the typed abstractions over the
-// bindgen FFI surface: `Mrb` / `Ccontext` RAII, typed `Value` /
-// `RClass` / `RModule` / `RArray` / `RHash` newtypes, and the `cstr!` / `cstr_ptr`
-// C-string helpers.
-
 pub mod array;
 #[cfg(feature = "compiler")]
 pub mod ccontext;
@@ -79,12 +75,6 @@ pub mod inline_struct;
 pub mod method;
 pub mod parse;
 pub mod proc;
-
-/// The traits whose methods the typed handles are used through, imported
-/// anonymously — magnus's `prelude`: `use beni::prelude::*;`.
-pub mod prelude {
-    pub use crate::{FromValue as _, Module as _, Object as _, ReprValue as _};
-}
 pub mod range;
 pub mod scan_args;
 pub mod state;
@@ -95,6 +85,12 @@ pub mod tagged;
 pub mod try_convert;
 pub mod typed_data;
 pub mod value;
+
+/// The traits whose methods the typed handles are used through, imported
+/// anonymously — magnus's `prelude`: `use beni::prelude::*;`.
+pub mod prelude {
+    pub use crate::{FromValue as _, Module as _, Object as _, ReprValue as _};
+}
 
 pub use state::arena::ArenaScope;
 pub use state::root::GcRoot;

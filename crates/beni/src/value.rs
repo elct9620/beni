@@ -1,44 +1,10 @@
-//! Typed `Value` newtype around the raw `mrb_value` FFI word-box.
+//! `Value`, the untyped handle on an mruby value, and `ReprValue`, the
+//! trait every typed handle (`RString`, `RArray`, `Integer`, …) stands
+//! for a `Value` through.
 //!
-//! ## Why a newtype
-//!
-//! Three reasons stack here:
-//!
-//! 1. **Orphan rule** — `mrb_value` is declared in `beni-sys` so the
-//!    FFI ABI stays accessible to other crates, which means no crate
-//!    downstream of it can attach inherent methods. Wrapping the type
-//!    here removes the extension-trait + per-call-site `use`
-//!    workaround that restriction otherwise forces.
-//! 2. **API surface clarity** — methods that operate on values
-//!    (classname, to_string, predicates, unboxers) become inherent
-//!    on `Value`, so the call shape is `val.classname(mrb)` rather
-//!    than splatting raw FFI calls.
-//! 3. **Migration anchor** — typed `Value` is the natural place to
-//!    later attach typed variants (`MString`, `MArray`, `MHash`) and
-//!    convert between them. Today no typed variants exist; the
-//!    newtype is the floor on which they can be added.
-//!
-//! ## ABI guarantee
-//!
-//! `Value` is `#[repr(transparent)]` over `mrb_value`. Under word
-//! boxing — mruby's fallback when a config names no boxing mode
-//! (`vendor/mruby/include/mrbconf.h:62-64`) — `mrb_value` is a single
-//! machine word (4 bytes on wasm32, 8 on 64-bit hosts); `Value` shares
-//! that layout and the C ABI. This matters at the `mrb_func_t` boundary:
-//! a bridge declared with `Value` parameters and return type
-//! produces the same function signature as one declared with
-//! `mrb_value`. Crossing through `sys::FromRawValue` and reading back
-//! through `sys::AsRawValue` is therefore a no-op at the codegen level.
-//!
-//! ## What lives next to `Value` here
-//!
-//!   * The `cstr!` macro and `cstr_ptr` helper — generic
-//!     NUL-terminated `*const c_char` plumbing; unchanged across
-//!     the `Value` introduction.
-//!   * The `Immediates` cache — `nil` / `true` / `false`
-//!     `mrb_value` snapshots captured once via the layout-safe C
-//!     shims, exposed through `Value::nil` / `Value::true_` /
-//!     `Value::false_`.
+//! `Value` is `#[repr(transparent)]` over `mrb_value`, so a method bridge
+//! declared with `Value` slots has the same C signature as one declared
+//! with `mrb_value`.
 
 use beni_sys as sys;
 
@@ -118,21 +84,10 @@ impl Immediates {
 // Value newtype.
 // --------------------------------------------------------------------
 
-/// Typed handle on a single mruby value. `#[repr(transparent)]` over
-/// `mrb_value` so the C ABI is preserved.
-///
-/// Construct via `sys::FromRawValue` (at FFI boundaries),
-/// `Value::nil` / `Value::true_` / `Value::false_` (immediates),
-/// `IntoValue` (a Rust integer, bool, or handle), or `Value::from_float`.
-/// Read the raw form back out through `sys::AsRawValue` for a raw call.
-///
-/// ## What is intentionally NOT here
-///
-/// No typed variants (`MString` / `MArray` / `MHash`). The
-/// `mrb_value` word-box ABI is small enough that we keep passing
-/// `Value` directly through the codebase. Typed variants can land
-/// later as `pub struct MString(Value)` newtypes if the call sites
-/// justify them.
+/// Handle on a single mruby value of any type. Obtained from `IntoValue`
+/// or a typed handle's `as_value`, and from a raw `mrb_value` through the
+/// `unsafe` `sys::FromRawValue`; `sys::AsRawValue` reads the raw form back
+/// out.
 ///
 /// ## ABI invariant
 ///
