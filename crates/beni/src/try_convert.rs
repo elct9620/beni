@@ -6,10 +6,7 @@
 //! conversion (`to_str`, `to_ary`, `to_proc`, `to_path`) mruby has none,
 //! so a handle converts on its type tag alone.
 
-use crate::{
-    method::core_exception, Error, ExceptionClass, FromValue, Mrb, Proc, RArray, RClass, RHash,
-    RModule, RString, Range, Symbol, Value,
-};
+use crate::{method::core_exception, Error, Mrb, RArray, RHash, RString, Value};
 use core::num::{
     NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
     NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize,
@@ -169,51 +166,20 @@ impl TryConvert for f32 {
     }
 }
 
+/// The `TryConvert` of a handle that converts on its tag alone, naming
+/// `$target` in mruby's conversion `TypeError`.
 macro_rules! try_convert_tagged {
-    ($($handle:ty => $target:literal),* $(,)?) => {$(
-        impl TryConvert for $handle {
+    ($handle:ty => $target:literal) => {
+        impl $crate::TryConvert for $handle {
             #[inline]
-            fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-                <$handle>::from_value(val).ok_or_else(|| not_convertible(val, mrb, $target))
+            fn try_convert(val: $crate::Value, mrb: &$crate::Mrb) -> Result<Self, $crate::Error> {
+                <$handle as $crate::FromValue>::from_value(val)
+                    .ok_or_else(|| $crate::try_convert::not_convertible(val, mrb, $target))
             }
         }
-    )*};
+    };
 }
-
-try_convert_tagged!(
-    RString => "String", RArray => "Array", RHash => "Hash", Symbol => "Symbol", Range => "Range",
-);
-
-macro_rules! try_convert_class {
-    ($($handle:ty => $kind:literal),* $(,)?) => {$(
-        impl TryConvert for $handle {
-            #[inline]
-            fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-                <$handle>::from_value(val).ok_or_else(|| {
-                    type_error(mrb, &format!("{} is not {}", val.inspect(mrb), $kind))
-                })
-            }
-        }
-    )*};
-}
-
-try_convert_class!(
-    RClass => "a class",
-    RModule => "a module",
-    ExceptionClass => "a class inheriting Exception",
-);
-
-impl TryConvert for Proc {
-    #[inline]
-    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        Proc::from_value(val).ok_or_else(|| {
-            type_error(
-                mrb,
-                &format!("wrong argument type {} (expected Proc)", val.classname(mrb)),
-            )
-        })
-    }
-}
+pub(crate) use try_convert_tagged;
 
 impl TryConvert for String {
     #[inline]

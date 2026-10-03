@@ -8,20 +8,12 @@
 //! lives in `try_convert`. Both are the safe seam over the tag checks and
 //! unchecked unboxing a conversion runs behind.
 //!
-//! Scope covers `Value` itself, the scalar leaf types (the Rust
-//! integers, `f64`, `bool`), an owned `String` or byte vector, the
-//! typed handles (`RString` / `RArray` / `RHash` / `RClass` / `RModule` /
-//! `ExceptionClass` / `Proc` / `Symbol` / `Range`), and an `Option` of
-//! any of them that reads `nil` as `None`: every handle converts into
-//! the value naming its object, and back through a checked downcast
-//! discriminated by the value's type tag — string and container
-//! subclass instances convert. Every conversion is by value, copying
-//! rather than borrowing VM storage.
+//! The traits and the conversions of `Value` itself, the Rust scalars,
+//! `String`, byte vectors, and `Option`, which reads `nil` as `None`. A
+//! typed handle's conversions sit beside the handle, and every conversion
+//! copies rather than borrowing VM storage.
 
-use crate::{
-    sys, ExceptionClass, Mrb, Proc, RArray, RClass, RHash, RModule, RString, Range, ReprValue,
-    Symbol, Value,
-};
+use crate::{sys, Mrb, RString, Value};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
@@ -191,78 +183,7 @@ impl IntoValue for bool {
 impl IntoValue for bytes::Bytes {
     #[inline]
     fn into_value(self, mrb: &Mrb) -> Value {
-        mrb.str_new(&self).as_value()
-    }
-}
-
-impl IntoValue for Symbol {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        self.as_value()
-    }
-}
-
-/// An `Id` boxes into the symbol value it names.
-impl IntoValue for crate::Id {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        Symbol::from(self).as_value()
-    }
-}
-
-impl IntoValue for RString {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        self.as_value()
-    }
-}
-
-impl IntoValue for RArray {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        self.as_value()
-    }
-}
-
-impl IntoValue for RHash {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        self.as_value()
-    }
-}
-
-impl IntoValue for Proc {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        self.as_value()
-    }
-}
-
-impl IntoValue for Range {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        self.as_value()
-    }
-}
-
-impl IntoValue for RClass {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        self.as_value()
-    }
-}
-
-impl IntoValue for RModule {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        self.as_value()
-    }
-}
-
-impl IntoValue for ExceptionClass {
-    #[inline]
-    fn into_value(self, _mrb: &Mrb) -> Value {
-        self.as_value()
+        crate::ReprValue::as_value(mrb.str_new(&self))
     }
 }
 
@@ -343,97 +264,6 @@ impl FromValue for bool {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         Some(value.to_bool())
-    }
-}
-
-impl FromValue for RArray {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the wrap precondition (MRB_TT_ARRAY tagging) is
-        // established by the tag check immediately before it.
-        (value.tag() == sys::MRB_TT_ARRAY).then(|| unsafe { RArray::from_value_unchecked(value) })
-    }
-}
-
-impl FromValue for RHash {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the wrap precondition (MRB_TT_HASH tagging) is
-        // established by the tag check immediately before it.
-        (value.tag() == sys::MRB_TT_HASH).then(|| unsafe { RHash::from_value_unchecked(value) })
-    }
-}
-
-impl FromValue for RClass {
-    // A singleton class is a class handle too — `Value::singleton_class`
-    // hands one out — so both class tags convert.
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the unbox precondition (class or singleton-class
-        // tagging) is established by the guard immediately before it.
-        matches!(value.tag(), sys::MRB_TT_CLASS | sys::MRB_TT_SCLASS)
-            .then(|| RClass::from_raw_unchecked(unsafe { value.as_class_ptr() }))
-    }
-}
-
-impl FromValue for RModule {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the unbox precondition (MRB_TT_MODULE tagging) is
-        // established by the tag check immediately before it.
-        (value.tag() == sys::MRB_TT_MODULE)
-            .then(|| RModule::from_raw_unchecked(unsafe { value.as_class_ptr() }))
-    }
-}
-
-impl FromValue for ExceptionClass {
-    // Narrower than its tag: a class converts only when it is an
-    // exception class, which a singleton class never is.
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        if value.tag() != sys::MRB_TT_CLASS {
-            return None;
-        }
-        // SAFETY: the unbox precondition (class tagging) is established
-        // by the tag check immediately above.
-        let class = unsafe { value.as_class_ptr() };
-        crate::class::is_exception_class(class).then(|| ExceptionClass::from_raw_unchecked(class))
-    }
-}
-
-impl FromValue for Proc {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the wrap precondition (MRB_TT_PROC tagging) is
-        // established by the tag check immediately before it.
-        (value.tag() == sys::MRB_TT_PROC).then(|| unsafe { Proc::from_value_unchecked(value) })
-    }
-}
-
-impl FromValue for Symbol {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the wrap precondition (MRB_TT_SYMBOL tagging) is
-        // established by the tag check immediately before it.
-        (value.tag() == sys::MRB_TT_SYMBOL).then(|| unsafe { Symbol::from_value_unchecked(value) })
-    }
-}
-
-impl FromValue for RString {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the wrap precondition (MRB_TT_STRING tagging) is
-        // established by the tag check immediately before it.
-        (value.tag() == sys::MRB_TT_STRING).then(|| unsafe { RString::from_value_unchecked(value) })
-    }
-}
-
-impl FromValue for Range {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the wrap precondition (MRB_TT_RANGE tagging) is
-        // established by the tag check immediately before it.
-        (value.tag() == sys::MRB_TT_RANGE).then(|| unsafe { Range::from_value_unchecked(value) })
     }
 }
 

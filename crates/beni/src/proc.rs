@@ -9,7 +9,8 @@
 //! Mirrors magnus's `block::Proc`: the protected `call` that yields to
 //! the block lives here.
 
-use crate::{sys::AsRawValue, Error, Mrb, Value};
+use crate::try_convert::type_error;
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, TryConvert, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Proc` (a block). `#[repr(transparent)]`
@@ -150,5 +151,28 @@ impl Proc {
             Ok(class) => Error::new(mrb, class, message),
             Err(err) => err,
         }
+    }
+}
+
+crate::value::value_backed_repr!(Proc);
+
+impl FromValue for Proc {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the wrap precondition (MRB_TT_PROC tagging) is
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_PROC).then(|| unsafe { Proc::from_value_unchecked(value) })
+    }
+}
+
+impl TryConvert for Proc {
+    #[inline]
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        Proc::from_value(val).ok_or_else(|| {
+            type_error(
+                mrb,
+                &format!("wrong argument type {} (expected Proc)", val.classname(mrb)),
+            )
+        })
     }
 }

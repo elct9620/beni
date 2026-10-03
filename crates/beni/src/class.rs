@@ -30,7 +30,9 @@
 //! surfaces as `Err(Error::Exception)` instead of long-jumping across
 //! Rust frames.
 
-use crate::{sys::AsRawValue, Error, IntoId, MethodDef, Mrb, RString, Value};
+use crate::{
+    sys::AsRawValue, Error, FromValue, IntoId, MethodDef, Mrb, RString, TryConvert, Value,
+};
 use beni_sys as sys;
 
 /// Typed handle on an mruby class. `#[repr(transparent)]` over
@@ -798,3 +800,65 @@ pub trait Object: private::ClassLike {
 impl Object for RClass {}
 impl Object for RModule {}
 impl Object for ExceptionClass {}
+
+crate::value::class_backed_repr!(RClass);
+crate::value::class_backed_repr!(RModule);
+crate::value::class_backed_repr!(ExceptionClass);
+
+impl FromValue for RClass {
+    // A singleton class is a class handle too — `Value::singleton_class`
+    // hands one out — so both class tags convert.
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the unbox precondition (class or singleton-class
+        // tagging) is established by the guard immediately before it.
+        matches!(value.tag(), sys::MRB_TT_CLASS | sys::MRB_TT_SCLASS)
+            .then(|| RClass::from_raw_unchecked(unsafe { value.as_class_ptr() }))
+    }
+}
+
+impl FromValue for RModule {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the unbox precondition (MRB_TT_MODULE tagging) is
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_MODULE)
+            .then(|| RModule::from_raw_unchecked(unsafe { value.as_class_ptr() }))
+    }
+}
+
+impl FromValue for ExceptionClass {
+    // Narrower than its tag: a class converts only when it is an
+    // exception class, which a singleton class never is.
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        if value.tag() != sys::MRB_TT_CLASS {
+            return None;
+        }
+        // SAFETY: the unbox precondition (class tagging) is established
+        // by the tag check immediately above.
+        let class = unsafe { value.as_class_ptr() };
+        crate::class::is_exception_class(class).then(|| ExceptionClass::from_raw_unchecked(class))
+    }
+}
+
+/// The `TryConvert` of a class handle, naming the kind of class it
+/// expects in the `TypeError`.
+macro_rules! try_convert_class {
+    ($($handle:ty => $kind:literal),* $(,)?) => {$(
+        impl TryConvert for $handle {
+            #[inline]
+            fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+                <$handle>::from_value(val).ok_or_else(|| {
+                    crate::try_convert::type_error(mrb, &format!("{} is not {}", val.inspect(mrb), $kind))
+                })
+            }
+        }
+    )*};
+}
+
+try_convert_class!(
+    RClass => "a class",
+    RModule => "a module",
+    ExceptionClass => "a class inheriting Exception",
+);

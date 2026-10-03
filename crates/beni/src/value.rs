@@ -155,61 +155,68 @@ impl private::ReprValue for Value {
     }
 }
 
-/// The handles that are a tagged `Value` underneath.
+/// The `ReprValue` and `IntoValue` of a handle that is a tagged `Value`
+/// underneath, invoked beside each handle's definition.
 macro_rules! value_backed_repr {
-    ($($handle:ty),*) => {$(
-        impl ReprValue for $handle {
+    ($handle:ty) => {
+        impl $crate::ReprValue for $handle {
             #[inline]
-            fn as_value(self) -> Value {
+            fn as_value(self) -> $crate::Value {
                 self.0
             }
         }
 
-        impl private::ReprValue for $handle {
+        impl $crate::value::private::ReprValue for $handle {
             #[inline]
-            unsafe fn from_value_unchecked(v: Value) -> Self {
+            unsafe fn from_value_unchecked(v: $crate::Value) -> Self {
                 // SAFETY: forwarded from the caller.
                 unsafe { <$handle>::from_value_unchecked(v) }
             }
         }
-    )*};
-}
 
-value_backed_repr!(
-    crate::RArray,
-    crate::RHash,
-    crate::Proc,
-    crate::Range,
-    crate::RString,
-    crate::Symbol
-);
-
-/// The class handles hold the `RClass *` itself, boxed with
-/// `mrb_obj_value` and recovered with the class-pointer unbox.
-macro_rules! class_backed_repr {
-    ($($handle:ty),*) => {$(
-        impl ReprValue for $handle {
+        impl $crate::IntoValue for $handle {
             #[inline]
-            fn as_value(self) -> Value {
+            fn into_value(self, _mrb: &$crate::Mrb) -> $crate::Value {
+                $crate::ReprValue::as_value(self)
+            }
+        }
+    };
+}
+pub(crate) use value_backed_repr;
+
+/// As `value_backed_repr!`, for the class handles: they hold the
+/// `RClass *` itself, boxed with `mrb_obj_value` and recovered with the
+/// class-pointer unbox.
+macro_rules! class_backed_repr {
+    ($handle:ty) => {
+        impl $crate::ReprValue for $handle {
+            #[inline]
+            fn as_value(self) -> $crate::Value {
                 // SAFETY: `mrb_obj_value` only boxes the pointer.
-                Value::from_raw_unchecked(unsafe {
-                    sys::mrb_obj_value(self.as_internal() as *mut core::ffi::c_void)
+                $crate::Value::from_raw_unchecked(unsafe {
+                    beni_sys::mrb_obj_value(self.as_internal() as *mut core::ffi::c_void)
                 })
             }
         }
 
-        impl private::ReprValue for $handle {
+        impl $crate::value::private::ReprValue for $handle {
             #[inline]
-            unsafe fn from_value_unchecked(v: Value) -> Self {
+            unsafe fn from_value_unchecked(v: $crate::Value) -> Self {
                 // SAFETY: `v` boxes a class pointer, by the caller's
                 // contract.
                 <$handle>::from_raw_unchecked(unsafe { v.as_class_ptr() })
             }
         }
-    )*};
-}
 
-class_backed_repr!(crate::RClass, crate::RModule, crate::ExceptionClass);
+        impl $crate::IntoValue for $handle {
+            #[inline]
+            fn into_value(self, _mrb: &$crate::Mrb) -> $crate::Value {
+                $crate::ReprValue::as_value(self)
+            }
+        }
+    };
+}
+pub(crate) use class_backed_repr;
 
 impl Value {
     /// Wrap a raw `mrb_value` the caller has established this VM

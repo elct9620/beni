@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_range.rs`: the `range_new` factory lives on
 //! `Mrb`, the begin / end / exclusive-end reads live here.
 
-use crate::{sys::AsRawValue, Error, Mrb, Value};
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, Value};
 use beni_sys as sys;
 
 /// The three-way outcome of `Range::beg_len` — the normalized slice a
@@ -160,3 +160,16 @@ impl Range {
         })
     }
 }
+
+crate::value::value_backed_repr!(Range);
+
+impl FromValue for Range {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the wrap precondition (MRB_TT_RANGE tagging) is
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_RANGE).then(|| unsafe { Range::from_value_unchecked(value) })
+    }
+}
+
+crate::try_convert::try_convert_tagged!(Range => "Range");

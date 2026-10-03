@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_hash.rs`: factories live on `Ruby` /
 //! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
 
-use crate::{sys::AsRawValue, Error, Mrb, RArray, TryConvert, Value};
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, RArray, TryConvert, Value};
 use beni_sys as sys;
 
 /// Signal an `RHash::each` closure returns to steer the walk. Mirrors
@@ -390,3 +390,16 @@ impl RHash {
             .collect()
     }
 }
+
+crate::value::value_backed_repr!(RHash);
+
+impl FromValue for RHash {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the wrap precondition (MRB_TT_HASH tagging) is
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_HASH).then(|| unsafe { RHash::from_value_unchecked(value) })
+    }
+}
+
+crate::try_convert::try_convert_tagged!(RHash => "Hash");

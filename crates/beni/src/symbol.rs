@@ -9,7 +9,7 @@
 //! `Symbol` downcast lives on `FromValue`, the boxing on `IntoValue`,
 //! alongside the other conversions.
 
-use crate::{sys::AsRawValue, Error, Mrb, Value};
+use crate::{sys::AsRawValue, Error, FromValue, IntoValue, Mrb, Value};
 use beni_sys as sys;
 
 /// An interned symbol id — magnus's `Id`. Compares and hashes by the id,
@@ -238,5 +238,26 @@ impl IntoId for Symbol {
     #[inline]
     fn into_id(self, _mrb: &Mrb) -> Result<Id, Error> {
         Ok(self.into())
+    }
+}
+
+crate::value::value_backed_repr!(Symbol);
+
+impl FromValue for Symbol {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the wrap precondition (MRB_TT_SYMBOL tagging) is
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_SYMBOL).then(|| unsafe { Symbol::from_value_unchecked(value) })
+    }
+}
+
+crate::try_convert::try_convert_tagged!(Symbol => "Symbol");
+
+/// An `Id` boxes into the symbol value it names.
+impl IntoValue for crate::Id {
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        Symbol::from(self).0
     }
 }

@@ -12,7 +12,7 @@
 //! the type itself stay there too (`Symbol::new`).
 
 use crate::try_convert::length_error;
-use crate::{sys::AsRawValue, Error, Mrb, RString, ReprValue, TryConvert, Value};
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, RString, ReprValue, TryConvert, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
@@ -376,3 +376,16 @@ impl Iterator for Entries<'_> {
 }
 
 impl ExactSizeIterator for Entries<'_> {}
+
+crate::value::value_backed_repr!(RArray);
+
+impl FromValue for RArray {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the wrap precondition (MRB_TT_ARRAY tagging) is
+        // established by the tag check immediately before it.
+        (value.tag() == sys::MRB_TT_ARRAY).then(|| unsafe { RArray::from_value_unchecked(value) })
+    }
+}
+
+crate::try_convert::try_convert_tagged!(RArray => "Array");
