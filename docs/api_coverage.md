@@ -41,7 +41,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_check_convert_type` | macro | ❌ | ❌ |  |
 | `mrb_check_frozen` | fn | ✅ | 🚫 | declined: takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `Value::check_frozen` |
 | `mrb_check_frozen_value` | fn | ✅ | ✅ | `Value::check_frozen` — the frozen-state precondition guard, the `mrb_value` form a typed caller can reach |
-| `mrb_check_hash_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `Hash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type` |
+| `mrb_check_hash_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `RHash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type` |
 | `mrb_check_intern` | fn | ✅ | ❌ |  |
 | `mrb_check_intern_cstr` | fn | ✅ | ❌ |  |
 | `mrb_check_intern_str` | fn | ✅ | ❌ |  |
