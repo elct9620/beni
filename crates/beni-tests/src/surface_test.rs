@@ -23,7 +23,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::define_error::<&core::ffi::CStr>;
     let _ = Mrb::class_get::<&core::ffi::CStr>;
     let _ = Mrb::module_get::<&core::ffi::CStr>;
-    let _ = Mrb::define_global_const;
+    let _ = Mrb::define_global_const::<&core::ffi::CStr, Value>;
     let _ = Mrb::gv_set::<&core::ffi::CStr>;
     let _ = Mrb::gv_get::<&core::ffi::CStr>;
     let _ = Mrb::arena_scope;
@@ -130,14 +130,12 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <RClass as Module>::define_method::<&core::ffi::CStr>;
     let _ = <RClass as Module>::define_private_method::<&core::ffi::CStr>;
     let _ = <RClass as Module>::define_module_function::<&core::ffi::CStr>;
-    let _ = <RClass as Module>::define_const::<&core::ffi::CStr>;
     let _ = <RClass as Module>::name;
     let _ = <RModule as Module>::define_class::<&core::ffi::CStr>;
     let _ = <RModule as Module>::define_error::<&core::ffi::CStr>;
     let _ = <RModule as Module>::define_method::<&core::ffi::CStr>;
     let _ = <RModule as Module>::define_private_method::<&core::ffi::CStr>;
     let _ = <RModule as Module>::define_module_function::<&core::ffi::CStr>;
-    let _ = <RModule as Module>::define_const::<&core::ffi::CStr>;
     let _ = <RClass as Object>::define_singleton_method::<&core::ffi::CStr>;
     let _ = <RModule as Object>::define_singleton_method::<&core::ffi::CStr>;
     let _ = <ExceptionClass as Module>::define_method::<&core::ffi::CStr>;

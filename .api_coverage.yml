@@ -157,9 +157,6 @@ typed:
   mrb_define_class_method_id: "`Object::define_singleton_method` with an `Id` key on a class — a class's singleton method is its class method (magnus alignment)"
   mrb_define_class_under: "`Module::define_class` with a name key — interns and routes through `mrb_define_class_under_id`"
   mrb_define_class_under_id: "`Module::define_class` with an `Id` key (the symbol-or-name key) — the create path; a bound name is fetched as for `mrb_define_class_id`"
-  mrb_define_const: "`Module::define_const` with a name key — interns and routes through `mrb_define_const_id`"
-  mrb_define_const_id: "`Module::define_const` with an `Id` key (the symbol-or-name key)"
-  mrb_define_global_const: Mrb::define_global_const
   mrb_define_method: "`Module::define_method` with a name key — interns and routes through `mrb_define_method_id`"
   mrb_define_method_id: "`Module::define_method` with an `Id` key (the symbol-or-name key)"
   mrb_define_module: "`Mrb::define_module` with a name key — interns and routes through `mrb_define_module_id`"
@@ -499,6 +496,9 @@ subsumed:
   mrb_check_string_type: "`FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type`"
   mrb_check_type: "the `FromValue` downcasts — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot"
 declined:
+  mrb_define_const_id: "binds a constant without running the receiver's `const_added` hook (`vendor/mruby/src/variable.c:1474` sets the ivar directly) — the one way it differs from `mrb_const_set`, whose `Module::const_set` is the binding magnus offers; CRuby's `rb_define_const` itself goes through `rb_const_set`"
+  mrb_define_const: "the C-string-keyed form of `mrb_define_const_id` — see it"
+  mrb_define_global_const: "`mrb_define_const_id` on `Object` — see it; `Mrb::define_global_const` binds through `mrb_const_set` on `Object`, as magnus's binds through `rb_const_set`"
   mrb_obj_clone: "Ruby's `clone` on a value — the typed name would be `Value::clone`, which a `Value`'s own `Clone` already holds, and magnus offers no form either; a consumer dispatches `clone` through `ReprValue::funcall`, while `typed_data::Dup::clone` keeps using it inside the crate"
   mrb_sys_fail: "declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from an exception class and a message, which `ExceptionClass::raise` already reaches from a Rust `std::io::Error`"
   mrb_print_error: "writes the pending exception and its backtrace to the process's standard error (`vendor/mruby/src/error.c:843-866`) — no typed shape carries a write to the host's stderr, and SPEC holds the same line for the compiler's diagnostics: where a diagnostic is written is the host's choice, not beni's. `Error::message` and `Error::backtrace` hand a Rust caller the same text to write where it chooses"

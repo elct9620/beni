@@ -275,7 +275,7 @@ fn define_error_fetches_a_same_named_class_and_rejects_a_conflict() {
     );
 
     mrb.object_class()
-        .define_const(&mrb, c"BeniNotAClass", 1i32.into_value(&mrb))
+        .const_set(&mrb, c"BeniNotAClass", 1i32)
         .expect("binding the constant must succeed");
     assert!(
         mrb.define_error(c"BeniNotAClass", standard_error).is_err(),
@@ -488,4 +488,36 @@ fn a_global_answers_its_absent_value_for_a_key_too_long_to_intern() {
         .exc_get(c"ArgumentError")
         .expect("ArgumentError is built in");
     assert!(err.is_kind_of(&mrb, argument_error));
+}
+
+#[test]
+fn const_set_names_an_anonymous_class_by_its_constant_path() {
+    let mrb = open_mrb();
+    let outer = mrb
+        .define_module(c"BeniNamingOuter")
+        .expect("defining a module must succeed");
+    let anon = mrb
+        .class_new(mrb.object_class())
+        .expect("creating an anonymous class under Object must succeed");
+
+    outer
+        .const_set(&mrb, c"Inner", anon)
+        .expect("binding a constant must succeed");
+
+    assert_eq!(anon.path(&mrb).as_deref(), Some("BeniNamingOuter::Inner"));
+}
+
+#[test]
+fn define_global_const_runs_the_const_added_hook() {
+    let mrb = open_mrb();
+    mrb.load_string(b"class Object; def self.const_added(name) = $beni_added = name; end")
+        .expect("defining the hook must succeed");
+
+    mrb.define_global_const(c"BeniHooked", 1i32)
+        .expect("binding a top-level constant must succeed");
+
+    let added = mrb
+        .load_string(b"$beni_added")
+        .expect("the hook's record reads back");
+    assert_eq!(added.inspect(&mrb), ":BeniHooked");
 }

@@ -3,8 +3,8 @@
 
 use crate::class::{bound_class, private, protect_register};
 use crate::{
-    sys::AsRawValue, Error, ExceptionClass, IntoId, IntoValue, MethodDef, Mrb, Object, RClass,
-    RModule, ReprValue, TryConvert, Value,
+    Error, ExceptionClass, IntoId, IntoValue, MethodDef, Mrb, Object, RClass, RModule, ReprValue,
+    TryConvert, Value,
 };
 use beni_sys as sys;
 
@@ -180,24 +180,6 @@ pub trait Module: Object + private::ClassLike {
                 sys::mrb_define_module_function_id(mrb.as_ptr(), self.raw(), sym, raw, aspec)
             };
         })
-    }
-
-    /// `mrb_define_const_id(mrb, self, name, val)` — bind the constant
-    /// `name` to `val` on this class or module. The name is a
-    /// symbol-or-name key (`IntoId`). Runs inside exception protection, so a
-    /// frozen-receiver rejection surfaces as `Err(Error::Exception)`
-    /// rather than long-jumping — the same contract as the definition
-    /// methods above.
-    fn define_const<K: IntoId>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
-        let sym = name.into_id(mrb)?.to_raw();
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame;
-            // `self` and `val` originate from the same VM; `sym`
-            // was interned against it.
-            unsafe { sys::mrb_define_const_id(mrb.as_ptr(), self.raw(), sym, val.as_raw()) };
-            crate::value::qnil()
-        })
-        .map(|_| ())
     }
 
     /// `mrb_define_alias_id(mrb, self, new, old)` — bind `new` as a

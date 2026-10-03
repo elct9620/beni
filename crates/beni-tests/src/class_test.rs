@@ -33,7 +33,7 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
         )
         .expect("registering a method under a Symbol key must succeed");
     class
-        .define_const(
+        .const_set(
             &mrb,
             beni::Symbol::new(&mrb, c"ANSWER").expect("the name interns"),
             7i32.into_value(&mrb),
@@ -548,14 +548,14 @@ fn module_function_instance_form_is_private() {
 }
 
 #[test]
-fn define_const_binds_a_constant_readable_from_ruby() {
+fn const_set_binds_a_constant_readable_from_ruby() {
     let mrb = open_mrb();
     let module = mrb
         .define_module(c"BeniConstHost")
         .expect("defining the host module must succeed");
 
     module
-        .define_const(&mrb, c"ANSWER", 42i32.into_value(&mrb))
+        .const_set(&mrb, c"ANSWER", 42i32.into_value(&mrb))
         .expect("binding the constant must succeed");
 
     // The constant must resolve from plain Ruby source — the
@@ -1055,7 +1055,7 @@ fn a_name_key_too_long_to_intern_surfaces_as_the_operations_own_argument_error()
         mrb.define_module(name.as_c_str())
             .expect_err("a top-level definition must refuse the name"),
         object
-            .define_const(&mrb, name.as_c_str(), beni::value::qnil().as_value())
+            .const_set(&mrb, name.as_c_str(), beni::value::qnil().as_value())
             .expect_err("a namespaced definition must refuse the name"),
         beni::value::qnil()
             .as_value()
@@ -1117,7 +1117,7 @@ fn a_rust_string_key_names_its_bytes_past_an_embedded_nul() {
     // intern check, which answers for any short name whether or not one
     // was ever interned.
     object
-        .define_const(&mrb, "BENI\0TAIL", beni::value::qnil().as_value())
+        .const_set(&mrb, "BENI\0TAIL", beni::value::qnil().as_value())
         .expect("binding under a key with an embedded NUL must succeed");
 
     let whole = mrb.intern(b"BENI\0TAIL").expect("the whole name interns");

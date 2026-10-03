@@ -11,7 +11,7 @@
 //!   * `mrb_class_get` / `mrb_module_get` — look one up by name.
 //!   * `mrb_class_defined` — test whether one is defined by name.
 //!   * `mrb_exc_get_id` — look up a built-in exception class by name.
-//!   * `mrb_define_global_const` — bind a top-level constant.
+//!   * `define_global_const` — bind a top-level constant.
 //!   * `mrb_gv_set` / `mrb_gv_get` — assign or read a Ruby `$global`.
 //!
 //! Class and module definitions and lookups run inside
@@ -23,7 +23,7 @@
 //! plain table operation that cannot raise.
 
 use crate::{
-    sys::AsRawValue, Error, ExceptionClass, IntoId, Mrb, RClass, RModule, ReprValue, Value,
+    sys::AsRawValue, Error, ExceptionClass, IntoId, Module, Mrb, RClass, RModule, ReprValue, Value,
 };
 use beni_sys as sys;
 
@@ -175,20 +175,17 @@ impl Mrb {
         })
     }
 
-    /// `mrb_define_global_const(mrb, name, val)` — bind a top-level
-    /// constant. Reachable as `name` and as `Object::name`. Runs inside
-    /// exception protection, so a frozen `Object` surfaces as
-    /// `Err(Error::Exception)` rather than long-jumping, as
-    /// `Module::define_const` does for any other receiver.
+    /// Bind a top-level constant: a constant assignment on `Object`, as
+    /// magnus's `define_global_const` binds through CRuby's `rb_const_set`.
+    /// Reachable as `name` and as `Object::name`; surfaces an `Err` when
+    /// `Object` is frozen or its `const_added` hook raises.
     #[inline]
-    pub fn define_global_const(&self, name: &core::ffi::CStr, val: Value) -> Result<(), Error> {
-        self.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `name` is
-            // NUL-terminated; `val` originates from the same VM.
-            unsafe { sys::mrb_define_global_const(mrb.as_ptr(), name.as_ptr(), val.as_raw()) };
-            crate::value::qnil()
-        })
-        .map(|_| ())
+    pub fn define_global_const<K: IntoId, U: crate::IntoValue>(
+        &self,
+        name: K,
+        val: U,
+    ) -> Result<(), Error> {
+        self.object_class().const_set(self, name, val)
     }
 
     /// `mrb_gv_set(mrb, sym, val)` — assign the global variable named
