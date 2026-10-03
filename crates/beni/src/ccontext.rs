@@ -17,7 +17,7 @@
 //! `ParseMessage` and the context keeps that load's warnings as more
 //! of them, which is the only place either location surfaces.
 
-use crate::{Error, Mrb, ParseMessage, Proc, Value};
+use crate::{Error, Mrb, ParseMessage, Proc, ReprValue, Value};
 use beni_sys as sys;
 use core::cell::RefCell;
 
@@ -201,7 +201,7 @@ impl<'mrb> Ccontext<'mrb> {
             // The parser's own jump target catches a raise inside it —
             // interning a filename too long to be a symbol — and leaves
             // the exception pending; that exception is the failure.
-            let raised = self.mrb.outcome(Value::nil());
+            let raised = self.mrb.outcome(crate::value::qnil().as_value());
             // The failing parser is beni's to release. Handing it to
             // `mrb_load_exec` instead would have it format slot 0
             // unconditionally, which is not always a slot the compiler

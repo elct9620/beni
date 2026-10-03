@@ -29,7 +29,7 @@ fn as_break_rejects_non_break_values() {
     // exception object (a raise is not a break).
     assert!(42i32.into_value(&mrb).as_break().is_none());
     assert!(mrb.str_new(b"x").as_value().as_break().is_none());
-    assert!(Value::nil().as_break().is_none());
+    assert!(beni::value::qnil().as_break().is_none());
 }
 
 #[test]
@@ -172,7 +172,7 @@ fn the_string_downcast_discriminates_the_string_tag() {
     assert!(mrb.str_new(b"x").as_value().is::<beni::RString>());
     // A non-String tag — and an immediate — both reject.
     assert!(!42i32.into_value(&mrb).is::<beni::RString>());
-    assert!(!Value::nil().is::<beni::RString>());
+    assert!(!beni::value::qnil().as_value().is::<beni::RString>());
 }
 
 #[test]
@@ -221,7 +221,7 @@ fn handle_downcasts_discriminate_module_range_and_exception() {
     assert!(!range.is::<beni::RModule>());
     assert!(!exception.is::<beni::Range>());
     assert!(!42i32.into_value(&mrb).is::<beni::Exception>());
-    assert!(!Value::nil().is::<beni::RModule>());
+    assert!(!beni::value::qnil().as_value().is::<beni::RModule>());
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn inspect_renders_the_ruby_debug_string() {
     // the debug forms, not the to_s forms.
     assert_eq!(mrb.str_new(b"hi").as_value().inspect(&mrb), "\"hi\"");
     assert_eq!(42i32.into_value(&mrb).inspect(&mrb), "42");
-    assert_eq!(Value::nil().inspect(&mrb), "nil");
+    assert_eq!(beni::value::qnil().inspect(&mrb), "nil");
 }
 
 #[test]
@@ -538,7 +538,7 @@ fn to_a_returns_int(_mrb: &Mrb, _self: Value) -> i32 {
 /// A `to_a` that returns `nil` — the case `mrb_ary_splat` wraps in a
 /// one-element array holding the receiver.
 fn to_a_returns_nil(_mrb: &Mrb, _self: Value) -> Value {
-    Value::nil()
+    beni::value::qnil().as_value()
 }
 
 #[test]
@@ -560,7 +560,8 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
     // `nil` answers `to_a` with an empty array here (mruby-object-ext
     // defines `NilClass#to_a`), so it spreads to `[]` — the responder
     // path, not a wrap.
-    let nil_spread = RArray::to_ary(Value::nil(), &mrb).expect("nil spreads through its to_a");
+    let nil_spread =
+        RArray::to_ary(beni::value::qnil().as_value(), &mrb).expect("nil spreads through its to_a");
     assert_eq!(nil_spread.len(), 0);
 
     // A `to_a` responder whose result is an array passes that array
@@ -613,9 +614,9 @@ fn to_bool_follows_ruby_truthiness() {
 
     // Only `nil` and `false` are falsy; every other value — zero
     // and the empty string included — is truthy.
-    assert!(Value::true_().to_bool());
-    assert!(!Value::false_().to_bool());
-    assert!(!Value::nil().to_bool());
+    assert!(beni::value::qtrue().to_bool());
+    assert!(!beni::value::qfalse().to_bool());
+    assert!(!beni::value::qnil().to_bool());
     assert!(0i32.into_value(&mrb).to_bool());
     assert!(mrb.str_new(b"").as_value().to_bool());
 }
@@ -1208,12 +1209,15 @@ fn arithmetic_rejects_a_non_numeric_operand() {
     // mrb_num_add dispatches on the numeric tag: a non-numeric right
     // operand raises TypeError, caught into Err rather than long-jumping.
     assert!(matches!(
-        1i32.into_value(&mrb).add(&mrb, Value::nil()),
+        1i32.into_value(&mrb)
+            .add(&mrb, beni::value::qnil().as_value()),
         Err(Error::Exception(_))
     ));
     // A non-numeric receiver is rejected the same way.
     assert!(matches!(
-        Value::nil().add(&mrb, 1i32.into_value(&mrb)),
+        beni::value::qnil()
+            .as_value()
+            .add(&mrb, 1i32.into_value(&mrb)),
         Err(Error::Exception(_))
     ));
     // The VM stays usable after the protected raise.
@@ -1532,7 +1536,7 @@ fn a_boxed_c_pointer_converts_into_rcptr_alone() {
 
     assert!(beni::RCptr::from_value(cptr).is_some());
     assert!(beni::RInlineStruct::from_value(cptr).is_none());
-    assert!(beni::RCptr::from_value(Value::nil()).is_none());
+    assert!(beni::RCptr::from_value(beni::value::qnil().as_value()).is_none());
     assert!(beni::RCptr::from_value(mrb.object_class().as_value()).is_none());
 }
 

@@ -168,7 +168,7 @@ where
         // the transmute is a no-op at codegen.
         let raw: sys::mrb_func_t = unsafe { core::mem::transmute(method.func) };
         register(mrb, raw, aspec);
-        Value::nil()
+        crate::value::qnil()
     })
     .map(|_| ())
 }
@@ -576,7 +576,7 @@ pub trait Module: Object + private::ClassLike {
             // `self` and `val` originate from the same VM; `sym`
             // was interned against it.
             unsafe { sys::mrb_define_const_id(mrb.as_ptr(), self.raw(), sym, val.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -599,7 +599,7 @@ pub trait Module: Object + private::ClassLike {
             // raises NameError when `old` is absent — caught by
             // `protect`.
             unsafe { sys::mrb_define_alias_id(mrb.as_ptr(), self.raw(), new, old) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -621,7 +621,7 @@ pub trait Module: Object + private::ClassLike {
             // against it. `mrb_undef_method_id` raises NameError when
             // the method is absent — caught by `protect`.
             unsafe { sys::mrb_undef_method_id(mrb.as_ptr(), self.raw(), sym) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -643,7 +643,7 @@ pub trait Module: Object + private::ClassLike {
             // against it. `mrb_remove_method` raises NameError when the
             // method is not defined on the handle — caught by `protect`.
             unsafe { sys::mrb_remove_method(mrb.as_ptr(), self.raw(), sym) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -659,7 +659,7 @@ pub trait Module: Object + private::ClassLike {
             // checks frozen state and rejects a cyclic include, raising
             // FrozenError or ArgumentError — caught by `protect`.
             unsafe { sys::mrb_include_module(mrb.as_ptr(), self.raw(), module.as_internal()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -676,7 +676,7 @@ pub trait Module: Object + private::ClassLike {
             // checks frozen state and rejects a cyclic prepend, raising
             // FrozenError or ArgumentError — caught by `protect`.
             unsafe { sys::mrb_prepend_module(mrb.as_ptr(), self.raw(), module.as_internal()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -770,7 +770,7 @@ pub trait Module: Object + private::ClassLike {
             // raises `FrozenError` on a frozen receiver and runs a
             // `const_added` hook that may raise — caught by `protect`.
             unsafe { sys::mrb_const_set(mrb.as_ptr(), self.as_value().0, sym, val.0) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -786,7 +786,7 @@ pub trait Module: Object + private::ClassLike {
             // originates from the same VM. `mrb_const_remove` raises
             // `FrozenError` on a frozen receiver — caught by `protect`.
             unsafe { sys::mrb_const_remove(mrb.as_ptr(), self.as_value().0, sym) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -820,7 +820,7 @@ pub trait Module: Object + private::ClassLike {
             // and `val` originate from the same VM. `mrb_cv_set` raises
             // `FrozenError` on a frozen receiver — caught by `protect`.
             unsafe { sys::mrb_cv_set(mrb.as_ptr(), self.as_value().0, sym, val.0) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -906,7 +906,7 @@ pub trait Object: ReprValue {
                 let singleton = sys::mrb_singleton_class(mrb.as_ptr(), self.as_value().0);
                 sys::mrb_undef_method_id(mrb.as_ptr(), sys::mrb_class_ptr_func(singleton), sym);
             }
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -936,7 +936,7 @@ pub trait Object: ReprValue {
             // `val` originate from the same VM. `mrb_iv_set` raises
             // `FrozenError` on a frozen holder — caught by `protect`.
             unsafe { sys::mrb_iv_set(mrb.as_ptr(), self.as_value().0, sym, val.0) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }

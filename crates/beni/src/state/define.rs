@@ -22,7 +22,9 @@
 //! `crate::RClass` / `crate::RModule`. Global variable access is a
 //! plain table operation that cannot raise.
 
-use crate::{sys::AsRawValue, Error, ExceptionClass, IntoId, Mrb, RClass, RModule, Value};
+use crate::{
+    sys::AsRawValue, Error, ExceptionClass, IntoId, Mrb, RClass, RModule, ReprValue, Value,
+};
 use beni_sys as sys;
 
 impl Mrb {
@@ -184,7 +186,7 @@ impl Mrb {
             // SAFETY: `mrb` is alive inside the protect frame; `name` is
             // NUL-terminated; `val` originates from the same VM.
             unsafe { sys::mrb_define_global_const(mrb.as_ptr(), name.as_ptr(), val.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -207,7 +209,7 @@ impl Mrb {
     #[inline]
     pub fn gv_get<K: IntoId>(&self, name: K) -> Value {
         let Ok(sym) = name.into_id(self).map(crate::Id::to_raw) else {
-            return Value::nil();
+            return crate::value::qnil().as_value();
         };
         // SAFETY: `self` is alive; `sym` was interned against it.
         self.hold(Value::from_raw_unchecked(unsafe {

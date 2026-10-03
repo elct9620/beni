@@ -12,7 +12,7 @@ use beni_sys as sys;
 pub(crate) fn read_frame(mrb: &Mrb, read: impl FnOnce(&Mrb)) -> Result<(), Error> {
     mrb.protect(|mrb| {
         read(mrb);
-        Value::nil()
+        crate::value::qnil()
     })
     .map(|_| ())
 }

@@ -169,9 +169,9 @@ impl IntoValue for bool {
     #[inline]
     fn into_value(self, _mrb: &Mrb) -> Value {
         if self {
-            Value::true_()
+            crate::value::qtrue().as_value()
         } else {
-            Value::false_()
+            crate::value::qfalse().as_value()
         }
     }
 }

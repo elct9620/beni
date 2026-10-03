@@ -92,6 +92,38 @@ impl core::fmt::Debug for Value {
     }
 }
 
+/// Ruby's `nil`, as magnus's `Ruby::qnil` answers it. It takes no
+/// interpreter handle: magnus's `&Ruby` proves the caller is on a Ruby
+/// thread, while mruby's `mrb_nil_value` needs no `mrb_state` and a beni
+/// handle crosses threads freely.
+#[inline]
+pub fn qnil() -> crate::Qnil {
+    // SAFETY: the cached word is mruby's own `nil`.
+    unsafe {
+        <crate::Qnil as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qnil))
+    }
+}
+
+/// Ruby's `true`, as magnus's `Ruby::qtrue` answers it; takes no
+/// interpreter handle for the reason `qnil` gives.
+#[inline]
+pub fn qtrue() -> crate::Qtrue {
+    // SAFETY: the cached word is mruby's own `true`.
+    unsafe {
+        <crate::Qtrue as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qtrue))
+    }
+}
+
+/// Ruby's `false`, as magnus's `Ruby::qfalse` answers it; takes no
+/// interpreter handle for the reason `qnil` gives.
+#[inline]
+pub fn qfalse() -> crate::Qfalse {
+    // SAFETY: the cached word is mruby's own `false`.
+    unsafe {
+        <crate::Qfalse as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qfalse))
+    }
+}
+
 /// A typed handle that stands for a `Value`, carrying the operations any
 /// value answers — magnus's `ReprValue`.
 /// Sealed: the handles this crate defines are the only ones, which is
@@ -483,7 +515,7 @@ pub trait ReprValue: private::ReprValue {
             // raises `FrozenError` on a frozen or immediate receiver —
             // caught by `protect`.
             unsafe { sys::mrb_check_frozen_value(mrb.as_ptr(), self.as_value().0) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -522,9 +554,9 @@ pub trait ReprValue: private::ReprValue {
             // `protect` catches into `Err`.
             let eq = unsafe { sys::mrb_equal(mrb.as_ptr(), self.as_value().0, other.0) };
             if eq {
-                Value::true_()
+                crate::value::qtrue().as_value()
             } else {
-                Value::false_()
+                crate::value::qfalse().as_value()
             }
         })
         .map(|v| v.to_bool())
@@ -540,9 +572,9 @@ pub trait ReprValue: private::ReprValue {
             // raise, caught by `protect`.
             let eq = unsafe { sys::mrb_eql(mrb.as_ptr(), self.as_value().0, other.0) };
             if eq {
-                Value::true_()
+                crate::value::qtrue().as_value()
             } else {
-                Value::false_()
+                crate::value::qfalse().as_value()
             }
         })
         .map(|v| v.to_bool())
@@ -688,7 +720,7 @@ impl Value {
     /// All-zero `Value`. Under word boxing this matches
     /// `mrb_nil_value()` (MRB_Qnil = 0), but callers that need a
     /// guaranteed nil should prefer
-    /// `Value::nil` which reads through the mruby shim. The
+    /// `value::qnil` which reads through the mruby shim. The
     /// zeroed form exists for out-parameter initialization
     /// (`mrb_get_args` writes to it).
     #[inline]
@@ -698,25 +730,6 @@ impl Value {
 }
 
 impl Value {
-    /// Canonical mruby `nil`. Reads through the process-wide
-    /// `Immediates` cache; capture is lazy and one-shot.
-    #[inline]
-    pub fn nil() -> Self {
-        Self(Immediates::get().qnil)
-    }
-
-    /// Canonical mruby `true`. See `Value::nil`.
-    #[inline]
-    pub fn true_() -> Self {
-        Self(Immediates::get().qtrue)
-    }
-
-    /// Canonical mruby `false`. See `Value::nil`.
-    #[inline]
-    pub fn false_() -> Self {
-        Self(Immediates::get().qfalse)
-    }
-
     /// `mrb_int_value(mrb, n)` — construct an mruby Integer from `n`,
     /// via mruby's own boxing-agnostic `MRB_INLINE` constructor
     /// (reached through bindgen's static-fn trampoline, compiled with

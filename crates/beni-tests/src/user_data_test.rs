@@ -98,7 +98,7 @@ fn closing_the_interpreter_drops_the_held_value() {
 fn realm_name(mrb: &Mrb, _self: Value) -> Value {
     match mrb.user_data::<Realm>() {
         Some(realm) => mrb.str_new(realm.name.as_bytes()).as_value(),
-        None => Value::nil(),
+        None => beni::value::qnil().as_value(),
     }
 }
 

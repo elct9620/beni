@@ -460,7 +460,7 @@ fn define_global_const_surfaces_a_frozen_object_as_err() {
     let frozen_error = mrb.exc_get(c"FrozenError").expect("a core exception class");
 
     let err = mrb
-        .define_global_const(c"BENI_GLOBAL_ON_FROZEN", Value::nil())
+        .define_global_const(c"BENI_GLOBAL_ON_FROZEN", beni::value::qnil().as_value())
         .expect_err("binding onto a frozen Object must surface as Err");
 
     assert!(err.is_kind_of(&mrb, frozen_error));
@@ -482,7 +482,7 @@ fn a_global_answers_its_absent_value_for_a_key_too_long_to_intern() {
     assert!(mrb.gv_get(name.as_c_str()).is_nil());
     mrb.gv_remove(name.as_c_str());
     let err = mrb
-        .gv_set(name.as_c_str(), Value::nil())
+        .gv_set(name.as_c_str(), beni::value::qnil().as_value())
         .expect_err("the assignment must refuse the name");
     let argument_error = mrb
         .exc_get(c"ArgumentError")

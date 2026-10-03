@@ -128,7 +128,7 @@ fn a_mismatch_raises_mrubys_data_type_error() {
         "wrong argument type String (expected C data)"
     );
 
-    let err = RTypedData::try_convert(Value::nil(), &mrb)
+    let err = RTypedData::try_convert(beni::value::qnil().as_value(), &mrb)
         .err()
         .expect("nil is no data carrier");
     assert_eq!(
@@ -392,7 +392,7 @@ fn a_data_carrier_converts_into_rtypeddata_and_any_other_value_does_not() {
 
     assert!(RTypedData::from_value(carrier).is_some());
     assert!(RTypedData::from_value(mrb.str_new(b"s").as_value()).is_none());
-    assert!(RTypedData::from_value(Value::nil()).is_none());
+    assert!(RTypedData::from_value(beni::value::qnil().as_value()).is_none());
 }
 
 #[test]

@@ -194,7 +194,7 @@ fn load_bytecode_hands_back_an_exception_the_program_raised() {
 fn caught(outcome: Result<Value, Error>) -> Value {
     match outcome {
         Err(Error::Exception(exc)) => exc,
-        _ => Value::nil(),
+        _ => beni::value::qnil().as_value(),
     }
 }
 
@@ -213,7 +213,8 @@ fn load_string_inside_a_registered_method_hands_the_raise_back_as_err() {
         .define_method(&mrb, c"load_inside", beni::method!(load_string_inside, 0))
         .expect("defining the method must succeed");
 
-    let exc = Value::nil()
+    let exc = beni::value::qnil()
+        .as_value()
         .funcall(&mrb, c"load_inside", &[])
         .expect("the raise must come back to the method that ran the load");
 
@@ -236,7 +237,8 @@ fn load_bytecode_inside_a_registered_method_hands_the_raise_back_as_err() {
         .define_method(&mrb, c"load_inside", beni::method!(load_bytecode_inside, 1))
         .expect("defining the method must succeed");
 
-    let exc = Value::nil()
+    let exc = beni::value::qnil()
+        .as_value()
         .funcall(&mrb, c"load_inside", &[mrb.str_new(&bytes).as_value()])
         .expect("the raise must come back to the method that ran the load");
 

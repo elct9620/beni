@@ -92,7 +92,7 @@ impl mrb_value {
     /// `mrb_nil_value()` (MRB_Qnil = 0). Out-parameter initialisers
     /// (`mrb_get_args` writes to it) use this; callers that need a
     /// guaranteed nil should prefer the
-    /// `Value::nil` accessor in the `beni` wrapper which reads
+    /// `value::qnil` function in the `beni` wrapper which reads
     /// through mruby's helper.
     pub const fn zeroed() -> Self {
         Self { w: 0 }

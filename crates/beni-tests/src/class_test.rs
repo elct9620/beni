@@ -1055,9 +1055,10 @@ fn a_name_key_too_long_to_intern_surfaces_as_the_operations_own_argument_error()
         mrb.define_module(name.as_c_str())
             .expect_err("a top-level definition must refuse the name"),
         object
-            .define_const(&mrb, name.as_c_str(), Value::nil())
+            .define_const(&mrb, name.as_c_str(), beni::value::qnil().as_value())
             .expect_err("a namespaced definition must refuse the name"),
-        Value::nil()
+        beni::value::qnil()
+            .as_value()
             .funcall(&mrb, name.as_c_str(), &[])
             .expect_err("a dispatch must refuse the name before looking up a method"),
     ];
@@ -1116,7 +1117,7 @@ fn a_rust_string_key_names_its_bytes_past_an_embedded_nul() {
     // intern check, which answers for any short name whether or not one
     // was ever interned.
     object
-        .define_const(&mrb, "BENI\0TAIL", Value::nil())
+        .define_const(&mrb, "BENI\0TAIL", beni::value::qnil().as_value())
         .expect("binding under a key with an embedded NUL must succeed");
 
     let whole = mrb.intern(b"BENI\0TAIL").expect("the whole name interns");

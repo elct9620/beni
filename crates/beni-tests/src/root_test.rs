@@ -216,7 +216,7 @@ fn a_hidden_instance_variable_holds_its_value_until_overwritten() {
     );
 
     holder
-        .ivar_set(&mrb, "held", beni::Value::nil())
+        .ivar_set(&mrb, "held", beni::value::qnil().as_value())
         .expect("overwriting the hidden instance variable must succeed");
     mrb.full_gc();
     assert_eq!(

@@ -488,7 +488,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_env_p` | macro | ❌ | 🚫 | declined: tests for the environment tag, which only the VM's captured local-variable frames carry (`vendor/mruby/src/gc.c:568`) — see `mrb_iclass_p` |
 | `mrb_exception_p` | macro | ❌ | ✅ | `Exception::from_value`, the downcast reading the value tag |
 | `mrb_false_p` | macro | ✅ | ✅ | `Qfalse::from_value` — false apart from nil, which shares its tag |
-| `mrb_false_value` | fn | ✅ | ✅ | `Value::false_` |
+| `mrb_false_value` | fn | ✅ | ✅ | `value::qfalse` |
 | `mrb_fiber_p` | macro | ❌ | ✅ | `Fiber::from_value`, the downcast reading the value tag |
 | `mrb_fixnum_p` | macro | ❌ | 🚫 | declined: tests whether an Integer sits inline in the word (`vendor/mruby/include/mruby/boxing_word.h:200`) — a boxing fact, not the fixed-width-or-arbitrary split magnus's `Fixnum` draws; `Integer::from_value` discriminates the type |
 | `mrb_fixnum_value` | fn | ✅ | ❌ |  |
@@ -507,7 +507,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_msvc_snprintf` | fn | ❌ | 🚫 | conditional: `_MSC_VER` — MSVC's `snprintf` shim, absent from every toolchain beni builds with |
 | `mrb_msvc_vsnprintf` | fn | ❌ | ❌ |  |
 | `mrb_nil_p` | macro | ✅ | ✅ | `ReprValue::is_nil`, `Qnil::from_value` |
-| `mrb_nil_value` | fn | ✅ | ✅ | `Value::nil` |
+| `mrb_nil_value` | fn | ✅ | ✅ | `value::qnil` |
 | `mrb_obj_value` | fn | ✅ | ✅ | `ReprValue::as_value` on `RClass`, `RModule`, and `ExceptionClass`, `Mrb::wrap_as` |
 | `mrb_object_p` | macro | ❌ | ✅ | `RObject::from_value`, the downcast reading the value tag |
 | `mrb_proc_p` | macro | ❌ | ✅ | `Proc::from_value`, the downcast reading the value tag |
@@ -521,7 +521,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_symbol_value` | fn | ✅ | ✅ | `Symbol::from` an `Id`, `IntoValue for Id` — boxing the interned id into its symbol value, magnus's `From<Id> for Symbol` |
 | `mrb_test` | macro | ✅ | ✅ | `ReprValue::to_bool` |
 | `mrb_true_p` | macro | ✅ | ✅ | `Qtrue::from_value` |
-| `mrb_true_value` | fn | ✅ | ✅ | `Value::true_` |
+| `mrb_true_value` | fn | ✅ | ✅ | `value::qtrue` |
 | `mrb_undef_p` | macro | ✅ | ✅ | `Qundef::from_value` — the handle never converts back into a value, as magnus's `Qundef::as_value` is `unsafe` |
 | `mrb_undef_value` | fn | ✅ | ❌ |  |
 ## mruby/variable.h

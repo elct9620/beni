@@ -40,9 +40,9 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::load_bytecode;
     let _ = scan_args::scan_args::<(), (), (), (), (), ()>;
     let _ = scan_args::get_kwargs::<&str, (), (), ()>;
-    let _ = Value::nil;
-    let _ = Value::true_;
-    let _ = Value::false_;
+    let _ = beni::value::qnil;
+    let _ = beni::value::qtrue;
+    let _ = beni::value::qfalse;
     let _ = <Value as ReprValue>::to_r_string;
     let _ = <Value as ReprValue>::any_to_s;
     let _ = <Value as ReprValue>::dup;

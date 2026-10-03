@@ -17,7 +17,11 @@ fn eval(mrb: &Mrb, source: &str) -> Value {
 #[test]
 fn nil_true_and_false_each_convert_only_into_their_own_handle() {
     let mrb = open_mrb();
-    let (nil, t, f) = (Value::nil(), eval(&mrb, "true"), eval(&mrb, "false"));
+    let (nil, t, f) = (
+        beni::value::qnil().as_value(),
+        eval(&mrb, "true"),
+        eval(&mrb, "false"),
+    );
 
     assert!(Qnil::from_value(nil).is_some());
     assert!(Qtrue::from_value(t).is_some());
@@ -38,7 +42,7 @@ fn the_undefined_value_converts_into_qundef_and_nil_does_not() {
         unsafe { <Value as beni::sys::FromRawValue>::from_raw(beni::sys::mrb_undef_value_func()) };
 
     assert!(Qundef::from_value(undef).is_some());
-    assert!(Qundef::from_value(Value::nil()).is_none());
+    assert!(Qundef::from_value(beni::value::qnil().as_value()).is_none());
     assert!(Qundef::from_value(eval(&mrb, "false")).is_none());
 }
 
@@ -63,7 +67,7 @@ fn an_ordinary_object_converts_into_robject_and_a_built_in_layout_does_not() {
     assert!(RObject::from_value(eval(&mrb, "Object.new")).is_some());
     assert!(RObject::from_value(eval(&mrb, "'s'")).is_none());
     assert!(RObject::from_value(eval(&mrb, "RuntimeError.new")).is_none());
-    assert!(RObject::from_value(Value::nil()).is_none());
+    assert!(RObject::from_value(beni::value::qnil().as_value()).is_none());
 }
 
 #[test]

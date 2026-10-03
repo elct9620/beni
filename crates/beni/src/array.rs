@@ -75,7 +75,7 @@ impl RArray {
             // `mrb_ary_modify`, which raises `FrozenError` on a frozen
             // array — caught by `protect` into `Err`.
             unsafe { sys::mrb_ary_push(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -90,7 +90,7 @@ impl RArray {
     #[inline]
     pub fn entry(self, mrb: &Mrb, idx: isize) -> Value {
         let Ok(idx) = sys::mrb_int::try_from(idx) else {
-            return Value::nil();
+            return crate::value::qnil().as_value();
         };
         // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
         // contract; `mrb_ary_entry` is bounds-tolerant.
@@ -123,7 +123,7 @@ impl RArray {
             // `n` and may raise `IndexError`, which `protect` catches
             // into `Err`.
             unsafe { sys::mrb_ary_set(mrb.as_ptr(), self.0.as_raw(), n, val.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -143,7 +143,7 @@ impl RArray {
             // raises `FrozenError` on a frozen array — caught by
             // `protect` into `Err`.
             unsafe { sys::mrb_ary_resize(mrb.as_ptr(), self.0.as_raw(), new_len) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -183,7 +183,7 @@ impl RArray {
             // SAFETY: as `push`; `mrb_ary_unshift` modifies and may
             // raise `FrozenError` — caught by `protect`.
             unsafe { sys::mrb_ary_unshift(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -198,7 +198,7 @@ impl RArray {
             // and share the VM. `mrb_ary_concat` modifies `self` and
             // may raise `FrozenError` — caught by `protect`.
             unsafe { sys::mrb_ary_concat(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -213,7 +213,7 @@ impl RArray {
             // and share the VM. `mrb_ary_replace` modifies `self` and
             // may raise `FrozenError` — caught by `protect`.
             unsafe { sys::mrb_ary_replace(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -264,7 +264,7 @@ impl RArray {
             // SAFETY: as `push`; `mrb_ary_clear` modifies and may raise
             // `FrozenError` — caught by `protect`.
             unsafe { sys::mrb_ary_clear(mrb.as_ptr(), self.0.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -276,7 +276,7 @@ impl RArray {
     /// the way Ruby's `join` treats a `nil` argument.
     #[inline]
     pub fn join(self, mrb: &Mrb, sep: Option<RString>) -> Result<RString, Error> {
-        let sep = sep.map_or_else(Value::nil, RString::as_value);
+        let sep = sep.map_or_else(|| crate::value::qnil().as_value(), RString::as_value);
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract;

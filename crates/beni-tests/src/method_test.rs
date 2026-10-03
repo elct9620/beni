@@ -449,7 +449,15 @@ fn nilable_parameters_bind_none_for_nil_and_the_value_otherwise() {
     let message = mrb.str_new(b"boom").as_value();
 
     let absent = receiver
-        .funcall(&mrb, c"error", &[message, Value::nil(), Value::nil()])
+        .funcall(
+            &mrb,
+            c"error",
+            &[
+                message,
+                beni::value::qnil().as_value(),
+                beni::value::qnil().as_value(),
+            ],
+        )
         .expect("nil is accepted for a nilable parameter");
     let present = receiver
         .funcall(
@@ -485,7 +493,7 @@ fn a_nilable_parameter_still_rejects_what_its_inner_type_rejects() {
             &[
                 mrb.str_new(b"boom").as_value(),
                 1i32.into_value(&mrb),
-                Value::nil(),
+                beni::value::qnil().as_value(),
             ],
         )
         .expect_err("an Integer where a nilable String is expected must raise");
@@ -535,7 +543,7 @@ fn a_nilable_optional_tells_omission_from_an_explicit_nil() {
 
     assert_eq!(call(&[]), Some(0), "omitted binds None");
     assert_eq!(
-        call(&[Value::nil()]),
+        call(&[beni::value::qnil().as_value()]),
         Some(1),
         "an explicit nil binds Some(None)"
     );
@@ -664,7 +672,8 @@ fn an_any_arity_method_converts_its_receiver() {
         .expect("a String receiver converts");
     assert_eq!(i32::from_value(got), Some(4));
 
-    let err = Value::nil()
+    let err = beni::value::qnil()
+        .as_value()
         .funcall(&mrb, c"any_len", &[])
         .expect_err("nil fails the String conversion");
     assert_eq!(err.message(&mrb), "nil cannot be converted to String");

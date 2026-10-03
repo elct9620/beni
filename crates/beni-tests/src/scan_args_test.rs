@@ -58,7 +58,7 @@ fn positionals_fill_required_and_trailing_before_optional_and_splat() {
 // def m(a, b = nil)
 fn bounded(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     scan_args::<(Value,), (Option<Value>,), (), (), (), ()>(mrb)?;
-    Ok(Value::nil())
+    Ok(beni::value::qnil().as_value())
 }
 
 #[test]
@@ -184,7 +184,7 @@ fn optional_block(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 
 fn ignored_block(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     scan_args::<(), (), (), (), (), ()>(mrb)?;
-    Ok(Value::nil())
+    Ok(beni::value::qnil().as_value())
 }
 
 #[test]
@@ -219,7 +219,7 @@ impl Drop for ReadGuard {
 fn guarded(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let _guard = ReadGuard;
     scan_args::<(i32,), (), (), (), (), Proc>(mrb)?;
-    Ok(Value::nil())
+    Ok(beni::value::qnil().as_value())
 }
 
 #[test]
@@ -235,7 +235,9 @@ fn a_call_that_does_not_fit_leaves_the_body_through_its_own_return() {
 }
 
 fn or_nil(mrb: &Mrb, value: Option<impl IntoValue>) -> Value {
-    value.map_or(Value::nil(), |value| value.into_value(mrb))
+    value.map_or(beni::value::qnil().as_value(), |value| {
+        value.into_value(mrb)
+    })
 }
 
 // def t(a:, b:, c: nil, **rest) — answered as [a, b, c, rest].
@@ -314,7 +316,7 @@ fn a_keyword_no_list_names_is_an_argument_error_without_a_rest() {
 fn mismatched_names(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let bucket = mrb.hash_new();
     get_kwargs::<_, (i32, i32), (), ()>(mrb, bucket, &["a"], &[])?;
-    Ok(Value::nil())
+    Ok(beni::value::qnil().as_value())
 }
 
 #[test]

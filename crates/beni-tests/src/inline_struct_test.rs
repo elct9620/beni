@@ -162,7 +162,7 @@ fn a_value_of_another_kind_is_a_type_error_naming_it_as_mruby_does() {
         .expect("an Object constructs");
 
     for (value, named) in [
-        (Value::nil(), "nil"),
+        (beni::value::qnil().as_value(), "nil"),
         (3i32.into_value(&mrb), "Integer"),
         (plain, "Object"),
         (cell, "BeniCell"),
@@ -254,7 +254,7 @@ fn point_x(_mrb: &Mrb, rb_self: Point2D) -> i32 {
 
 fn point_set_x(mrb: &Mrb, rb_self: Inline<Point2D>, x: f64) -> Result<Value, Error> {
     rb_self.set(mrb, Point2D { x, ..rb_self.get() })?;
-    Ok(Value::nil())
+    Ok(beni::value::qnil().as_value())
 }
 
 fn define_point(mrb: &Mrb) {
@@ -326,7 +326,8 @@ fn the_derive_names_the_type_by_its_name_attribute() {
         exception(&mrb, err).1,
         "wrong argument type BeniSize2D (expected BeniPoint2D)"
     );
-    let err = Size2D::try_convert(Value::nil(), &mrb).expect_err("nil does not convert");
+    let err = Size2D::try_convert(beni::value::qnil().as_value(), &mrb)
+        .expect_err("nil does not convert");
     assert_eq!(
         exception(&mrb, err).1,
         "wrong argument type nil (expected Size2D)"

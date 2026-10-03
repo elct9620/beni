@@ -35,7 +35,10 @@ fn bool_round_trips_and_converts_totally() {
     // The conversion is total — it never returns None — and reads a
     // non-boolean through Ruby truthiness (`nil` is falsy). The full
     // truthiness boundary lives with `Value::to_bool` in value.rs.
-    assert_eq!(bool::from_value(Value::nil()), Some(false));
+    assert_eq!(
+        bool::from_value(beni::value::qnil().as_value()),
+        Some(false)
+    );
 }
 
 #[test]
@@ -239,7 +242,7 @@ fn value_converts_as_itself() {
     let mrb = open_mrb();
 
     for value in [
-        Value::nil(),
+        beni::value::qnil().as_value(),
         7i32.into_value(&mrb),
         mrb.str_new(b"s").as_value(),
     ] {
@@ -263,7 +266,7 @@ fn i64_holds_every_integer_the_configured_width_carries() {
         None,
         "a Float is not widened"
     );
-    assert_eq!(i64::from_value(Value::nil()), None);
+    assert_eq!(i64::from_value(beni::value::qnil().as_value()), None);
 }
 
 #[test]
@@ -320,7 +323,7 @@ fn an_integer_target_rejects_every_value_that_is_not_an_integer() {
 
     assert_eq!(u8::from_value(float), None);
     assert_eq!(u64::from_value(float), None);
-    assert_eq!(isize::from_value(Value::nil()), None);
+    assert_eq!(isize::from_value(beni::value::qnil().as_value()), None);
     assert_eq!(usize::from_value(mrb.str_new(b"1").as_value()), None);
 }
 
@@ -329,7 +332,7 @@ fn option_reads_nil_as_none_and_defers_the_rest_to_its_inner_type() {
     let mrb = open_mrb();
 
     assert!(matches!(
-        Option::<RString>::from_value(Value::nil()),
+        Option::<RString>::from_value(beni::value::qnil().as_value()),
         Some(None)
     ));
     assert!(matches!(

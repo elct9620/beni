@@ -587,7 +587,7 @@ where
 /// fn each(mrb: &Mrb, _self: Value, a: i32, block: Option<Proc>) -> Result<Value, Error> {
 ///     match block {
 ///         Some(b) => b.call(mrb, &[a.into_value(mrb)]),
-///         None => Ok(Value::nil()),
+///         None => Ok(crate::value::qnil().as_value()),
 ///     }
 /// }
 /// class.define_method(&mrb, c"each", method!(each, 1, &))?;

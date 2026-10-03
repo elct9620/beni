@@ -83,7 +83,7 @@ fn an_instance_variable_outlives_its_overwrite() {
     // Overwritten rather than removed: a removal answers the old value,
     // which would hold it on its own.
     holder
-        .ivar_set(&mrb, "@probe", Value::nil())
+        .ivar_set(&mrb, "@probe", beni::value::qnil().as_value())
         .expect("ivar_set must succeed");
     mrb.full_gc();
 
@@ -120,7 +120,7 @@ fn a_walked_hash_value_outlives_the_hash_clearing() {
             .expect("set must succeed")
     });
 
-    let mut read = Value::nil();
+    let mut read = beni::value::qnil().as_value();
     hash.each(&mrb, |_, val| {
         read = val;
         ForEach::Continue

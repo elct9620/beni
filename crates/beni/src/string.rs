@@ -66,7 +66,7 @@ impl RString {
                     bytes.len(),
                 );
             }
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -90,7 +90,7 @@ impl RString {
             unsafe {
                 sys::mrb_str_cat_str(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw());
             }
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -115,7 +115,7 @@ impl RString {
             unsafe {
                 sys::mrb_str_cat_cstr(mrb.as_ptr(), self.0.as_raw(), s.as_ptr());
             }
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -140,7 +140,7 @@ impl RString {
             unsafe {
                 sys::mrb_str_concat(mrb.as_ptr(), self.0.as_raw(), other.as_raw());
             }
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -182,7 +182,7 @@ impl RString {
                     }
                 }
             }
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -458,7 +458,7 @@ impl RString {
             unsafe {
                 sys::mrb_string_cstr(mrb.as_ptr(), self.0.as_raw());
             }
-            Value::nil()
+            crate::value::qnil().as_value()
         })?;
         // On the success path `mrb_string_cstr` proved the bytes hold no
         // NUL, so the CString build cannot fail.

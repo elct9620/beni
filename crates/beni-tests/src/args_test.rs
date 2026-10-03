@@ -253,7 +253,8 @@ fn a_call_the_single_argument_read_does_not_fit_leaves_the_body_through_its_own_
     let one = 1i32.into_value(&mrb);
     let before = GUARD_DROPS.with(core::cell::Cell::get);
 
-    let err = Value::nil()
+    let err = beni::value::qnil()
+        .as_value()
         .funcall(&mrb, c"read_arg1", &[one, one])
         .expect_err("a call the read does not fit must reach the caller as a raise");
 
@@ -298,7 +299,8 @@ fn argv_copy_survives_vm_reentry() {
         mrb.str_new(b"pha").as_value(),
     ];
 
-    let got = Value::nil()
+    let got = beni::value::qnil()
+        .as_value()
         .funcall(&mrb, c"argv_survives_reentry", &args)
         .expect("the read must not raise");
 

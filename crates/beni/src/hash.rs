@@ -64,7 +64,7 @@ impl RHash {
             // on a frozen hash) and may run the key's `hash`/`eql?` —
             // either caught by `protect` into `Err`.
             unsafe { sys::mrb_hash_set(mrb.as_ptr(), self.0.as_raw(), key.as_raw(), val.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -147,9 +147,9 @@ impl RHash {
             let present =
                 unsafe { sys::mrb_hash_key_p(mrb.as_ptr(), self.0.as_raw(), key.as_raw()) };
             if present {
-                Value::true_()
+                crate::value::qtrue().as_value()
             } else {
-                Value::false_()
+                crate::value::qfalse().as_value()
             }
         })
         .map(|v| v.to_bool())
@@ -203,7 +203,7 @@ impl RHash {
             // `FrozenError` when frozen) and runs each key's
             // `hash`/`eql?` — caught by `protect`.
             unsafe { sys::mrb_hash_merge(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -220,7 +220,7 @@ impl RHash {
             // `FrozenError` on a frozen hash — caught by `protect` into
             // `Err`.
             unsafe { sys::mrb_hash_clear(mrb.as_ptr(), self.0.as_raw()) };
-            Value::nil()
+            crate::value::qnil()
         })
         .map(|_| ())
     }
@@ -337,7 +337,7 @@ impl RHash {
                 let hash = sys::mrb_obj_ptr_func(self.0.as_raw()) as *mut sys::RHash;
                 sys::mrb_hash_foreach(mrb.as_ptr(), hash, Some(trampoline::<F>), walk_ptr);
             }
-            Value::nil()
+            crate::value::qnil().as_value()
         });
         // A `body` panic and an mruby raise cannot both fire in one
         // callback, but each leaves its own channel: resurface a parked

@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_range.rs`: the `range_new` factory lives on
 //! `Mrb`, the begin / end / exclusive-end reads live here.
 
-use crate::{sys::AsRawValue, Error, FromValue, Mrb, Value};
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, ReprValue, Value};
 use beni_sys as sys;
 
 /// The three-way outcome of `Range::beg_len` — the normalized slice a
@@ -145,7 +145,7 @@ impl Range {
             });
             begp.set(beg);
             lenp.set(sel);
-            Value::nil()
+            crate::value::qnil().as_value()
         })?;
 
         Ok(match outcome.get() {

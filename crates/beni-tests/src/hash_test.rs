@@ -70,7 +70,7 @@ fn set_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn keyed_operations_surface_a_raising_key_as_err() {
-    use beni::{Ccontext, Error, Value};
+    use beni::{Ccontext, Error};
 
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"raising_key.rb").expect("allocating the context must succeed");
@@ -88,8 +88,12 @@ fn keyed_operations_surface_a_raising_key_as_err() {
     );
 
     let hash = mrb.hash_new();
-    hash.set(&mrb, mrb.str_new(b"seed").as_value(), Value::nil())
-        .expect("seeding a plain key does not raise");
+    hash.set(
+        &mrb,
+        mrb.str_new(b"seed").as_value(),
+        beni::value::qnil().as_value(),
+    )
+    .expect("seeding a plain key does not raise");
 
     let v = mrb.str_new(b"v").as_value();
     assert!(matches!(hash.set(&mrb, key, v), Err(Error::Exception(_))));
@@ -99,7 +103,7 @@ fn keyed_operations_surface_a_raising_key_as_err() {
         Err(Error::Exception(_))
     ));
     assert!(matches!(
-        hash.fetch(&mrb, key, Value::nil()),
+        hash.fetch(&mrb, key, beni::value::qnil().as_value()),
         Err(Error::Exception(_))
     ));
     assert!(matches!(hash.delete(&mrb, key), Err(Error::Exception(_))));
