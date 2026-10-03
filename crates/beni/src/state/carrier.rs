@@ -35,12 +35,7 @@ impl Mrb {
     /// value that is not a class, or when that class refuses the
     /// carrier mark.
     pub fn mark_carrier(&self, path: &'static CStr) -> Result<RClass, Error> {
-        let class = self.resolve_carrier(path)?;
-        class.set_instance_data_tt(self)?;
-        class.undef_default_alloc_func(self);
-        let record = self.carrier_record()?;
-        record.set(self, self.carrier_key(path)?, class.as_value())?;
-        Ok(class)
+        self.prepare_carrier(path, |class| class.set_instance_data_tt(self))
     }
 
     /// As `mark_carrier`, preparing the class `path` names so its
@@ -49,20 +44,16 @@ impl Mrb {
         &self,
         path: &'static CStr,
     ) -> Result<RClass, Error> {
-        let class = self.resolve_carrier(path)?;
-        class.set_instance_inline_tt::<T>(self)?;
-        class.undef_default_alloc_func(self);
-        let record = self.carrier_record()?;
-        record.set(self, self.carrier_key(path)?, class.as_value())?;
-        Ok(class)
+        self.prepare_carrier(path, |class| class.set_instance_inline_tt::<T>(self))
     }
 
     /// The class this interpreter's carrier record holds for `path`,
     /// and nothing when `mark_carrier` has put none there.
     pub fn carrier(&self, path: &'static CStr) -> Option<RClass> {
-        let name = self.intern_static(RECORD_GLOBAL).ok()?;
-        let record = RHash::from_value(self.gv_get(name))?;
-        let held = record.get(self, self.carrier_key(path).ok()?).ok()?;
+        let held = self
+            .held_record()?
+            .get(self, self.carrier_key(path).ok()?)
+            .ok()?;
         RClass::try_convert(held, self).ok()
     }
 
@@ -113,9 +104,11 @@ impl Mrb {
     }
 
     fn held_inline_owners(&self) -> Option<RArray> {
-        let name = self.intern_static(RECORD_GLOBAL).ok()?;
-        let record = RHash::from_value(self.gv_get(name))?;
-        RArray::from_value(record.get(self, self.inline_key().ok()?).ok()?)
+        let held = self
+            .held_record()?
+            .get(self, self.inline_key().ok()?)
+            .ok()?;
+        RArray::from_value(held)
     }
 
     /// The key the pairs sit under: a name no constant path can spell,
@@ -128,13 +121,33 @@ impl Mrb {
     /// interpreter's lifetime by the global it is stored under — which
     /// is also what keeps every class it holds reachable.
     fn carrier_record(&self) -> Result<RHash, Error> {
-        let name = self.intern_static(RECORD_GLOBAL)?;
-        if let Some(record) = RHash::from_value(self.gv_get(name)) {
+        if let Some(record) = self.held_record() {
             return Ok(record);
         }
         let record = self.hash_new();
-        self.gv_set(name, record.as_value())?;
+        self.gv_set(self.intern_static(RECORD_GLOBAL)?, record.as_value())?;
         Ok(record)
+    }
+
+    /// The record, and nothing before anything has been marked.
+    fn held_record(&self) -> Option<RHash> {
+        let name = self.intern_static(RECORD_GLOBAL).ok()?;
+        RHash::from_value(self.gv_get(name))
+    }
+
+    /// Resolve `path`, mark the class it names with `mark`, undefine its
+    /// default allocator, and hold it in the record under `path`.
+    fn prepare_carrier(
+        &self,
+        path: &'static CStr,
+        mark: impl FnOnce(RClass) -> Result<(), Error>,
+    ) -> Result<RClass, Error> {
+        let class = self.resolve_carrier(path)?;
+        mark(class)?;
+        class.undef_default_alloc_func(self);
+        let record = self.carrier_record()?;
+        record.set(self, self.carrier_key(path)?, class.as_value())?;
+        Ok(class)
     }
 
     /// The whole path as the symbol keying it in the record. A symbol
