@@ -1,30 +1,32 @@
 # beni
 
-Typed Rust wrapper over the mruby C API — the Rust half of
-[beni](https://github.com/elct9620/beni), an mruby toolchain whose
-Ruby gem builds the mruby archive and whose crates bind it. The split
-mirrors magnus + rb-sys at the CRuby boundary:
+Typed Rust wrapper over the mruby C API, the Rust half of
+[beni](https://github.com/elct9620/beni). As magnus sits over rb-sys,
 [beni-sys](https://crates.io/crates/beni-sys) carries the bindgen FFI
-surface, this crate owns every abstraction above it.
+surface and this crate owns every abstraction above it.
 
-- `Mrb` / `Ccontext` — RAII owners of the interpreter state and
-  compile contexts
-- `Value` / `RClass` / `RModule` / `RArray` / `RHash` — typed handles
-  over `mrb_value`
-- `IntoValue` / `FromValue` / `TryConvert` — the Rust ⇄ mruby conversion
-  seam, `TryConvert` being the one a method's receiver and arguments cross
-- `TypedData` — a Rust type carried as an mruby object's payload, read
-  back as `&T` or `typed_data::Obj<T>`; `#[beni::wrap]` and
-  `#[derive(beni::TypedData)]` implement it from the class it wraps as,
-  which `mark_carriers` prepares from the gem's `init`
-- `InlineStruct` — a `bytemuck::Pod` struct stored inside the object,
-  copied in and out through `Inline<T>`; derived as
-  `#[derive(beni::InlineStruct)]` or `#[beni::wrap(..., inline)]`
-- `method!` — registers a typed Rust function as an mruby method,
-  with argument conversion and a sealed panic boundary
-- `beni::sys` — raw-FFI escape hatch carrying all of `beni-sys`, with
-  `sys::protect` to catch a raw binding's raise and `sys::catch_unwind`
-  to catch a C callback's panic, each as a Rust `Err`
+## Surface
+
+Each item is reached from the crate root.
+
+| Item | What it is |
+|---|---|
+| `Mrb` / `Ccontext` | RAII owners of the interpreter and compile contexts |
+| `Value` and its handles | `RClass`, `RArray`, `Integer`, … — one per type tag |
+| `FromValue` | the downcast that tells a value's type |
+| `IntoValue` / `TryConvert` | Rust into a value; the argument conversion |
+| `TypedData` | a Rust payload read back as `&T` or `Obj<T>` |
+| `InlineStruct` | a `Pod` struct stored inside the object |
+| `method!` | registers a typed Rust function as a method |
+| `beni::sys` | the raw FFI, with `protect` and `catch_unwind` |
+
+`#[beni::wrap]` and `#[derive(beni::TypedData)]` implement `TypedData`
+for the class `mark_carriers` prepares from the gem's `init`.
+`#[derive(beni::InlineStruct)]` or `#[beni::wrap(..., inline)]` does the
+same for `InlineStruct`, copied through `Inline<T>`. `method!` converts
+the arguments and seals the panic boundary. `sys::protect` turns a raw
+binding's raise, and `sys::catch_unwind` a C callback's panic, into an
+`Err`.
 
 ## Usage
 
@@ -67,13 +69,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Linking mruby
 
-`beni-sys` discovers a prebuilt archive through environment variables
-(`MRUBY_LIB_DIR`, or the vendor tree the beni Ruby gem stages under
-`BENI_VENDOR_DIR`) and aligns its bindings with the archive's ABI via
-the `libmruby.flags.mak` sidecar. A build that finds no archive fails
-naming the variables it consulted.
+`beni-sys` finds a prebuilt archive through one of two variables, and
+fails naming both when neither leads to one.
 
-Behavior contracts live in the repository's
+| Variable | Points at |
+|---|---|
+| `MRUBY_LIB_DIR` | the directory holding the archive |
+| `BENI_VENDOR_DIR` | the vendor tree the beni Ruby gem stages |
+
+The `libmruby.flags.mak` sidecar beside the archive aligns the bindings
+with its ABI. Behavior contracts live in the repository's
 [SPEC.md](https://github.com/elct9620/beni/blob/main/SPEC.md).
 
 ## License
