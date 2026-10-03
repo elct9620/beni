@@ -1,6 +1,6 @@
 use crate::support::{open_mrb, Is};
 use beni::prelude::*;
-use beni::{FromValue, IntoValue, TypedData};
+use beni::{FromValue, IntoValue, RObject, TypedData};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload with no observable drop — the value wrapped where only the
@@ -158,7 +158,8 @@ fn marking_refuses_a_singleton_class_so_no_carrier_shares_it() {
     let owner = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
-    let singleton = owner
+    let singleton = RObject::from_value(owner)
+        .expect("Object.new answers a plain object")
         .singleton_class(&mrb)
         .expect("an ordinary object has a singleton class");
 

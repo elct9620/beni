@@ -1,6 +1,8 @@
 use crate::support::{open_mrb, same_object, Is, OwnedBytes};
 use beni::prelude::*;
-use beni::{ExceptionClass, FromValue, IntoValue, RArray, RClass, RHash, RModule, RString, Value};
+use beni::{
+    ExceptionClass, FromValue, IntoValue, RArray, RClass, RHash, RModule, RObject, RString, Value,
+};
 
 // Boxes through mruby's generic `mrb_int_value` / `mrb_float_value`
 // constructors and unboxes through the macro-expanding C helpers —
@@ -159,9 +161,12 @@ fn every_class_family_handle_round_trips_through_its_value() {
     let mrb = open_mrb();
 
     let class = mrb.class_get(c"String").expect("String is a core class");
-    let singleton = mrb
-        .str_new(b"beni")
-        .as_value()
+    let object = mrb
+        .object_class()
+        .new_instance(&mrb, &[])
+        .expect("Object.new constructs without raising");
+    let singleton = RObject::from_value(object)
+        .expect("Object.new answers a plain object")
         .singleton_class(&mrb)
         .expect("an ordinary object has a singleton class");
     let module = mrb.module_get(c"Kernel").expect("Kernel is a core module");

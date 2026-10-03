@@ -6,7 +6,7 @@
 //! conversion (`to_str`, `to_ary`, `to_proc`, `to_path`) mruby has none,
 //! so a handle converts on its type tag alone.
 
-use crate::{method::core_exception, Error, Mrb, RArray, RHash, RString, Value};
+use crate::{method::core_exception, Error, Mrb, RArray, RHash, RString, ReprValue, Value};
 use core::num::{
     NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
     NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize,

@@ -3,7 +3,8 @@
 //! afterwards must not reclaim what the caller still holds.
 
 use crate::support::open_mrb;
-use beni::{ForEach, IntoValue, Mrb, ReprValue, TypedData, Value};
+use beni::prelude::*;
+use beni::{ForEach, IntoValue, Mrb, RObject, ReprValue, TypedData, Value};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload whose `Drop` counts into the case's own counter — the only
@@ -69,13 +70,16 @@ fn an_instance_variable_outlives_its_overwrite() {
     let _root = mrb
         .gc_root(holder)
         .expect("rooting the holder must succeed");
+    let holder = RObject::from_value(holder).expect("Object.new answers a plain object");
     stored_carrier(&mrb, &DROPS, |obj| {
         holder
             .ivar_set(&mrb, "@probe", obj)
             .expect("ivar_set must succeed")
     });
 
-    let read = holder.ivar_get(&mrb, "@probe");
+    let read: Value = holder
+        .ivar_get(&mrb, "@probe")
+        .expect("ivar_get must succeed");
     // Overwritten rather than removed: a removal answers the old value,
     // which would hold it on its own.
     holder
@@ -138,13 +142,11 @@ fn a_pending_exception_outlives_its_clearing() {
         .exc_get("RuntimeError")
         .expect("RuntimeError is a core class");
     stored_carrier(&mrb, &DROPS, |obj| {
-        let exc = runtime_error
-            .new_str(&mrb, mrb.str_new("staged".as_bytes()))
-            .as_value();
+        let exc = runtime_error.new_str(&mrb, mrb.str_new("staged".as_bytes()));
         exc.ivar_set(&mrb, "@probe", obj)
             .expect("ivar_set must succeed");
         // SAFETY: `exc` is an exception object from this VM.
-        unsafe { mrb.set_pending_exc(exc) };
+        unsafe { mrb.set_pending_exc(exc.as_value()) };
     });
 
     let read = mrb.pending_exc();

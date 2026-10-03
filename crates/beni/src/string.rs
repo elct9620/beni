@@ -11,7 +11,7 @@
 //! (`str_new`, `str_new_cstr`), per-string ops (`cat`, `as_bytes`,
 //! `to_string`, and `to_bytes` with the `bytes` feature) live here.
 
-use crate::{sys::AsRawValue, Error, FromValue, Mrb, Value};
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, ReprValue, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `String`. `#[repr(transparent)]` over
@@ -123,7 +123,7 @@ impl RString {
     /// `mrb_str_concat(mrb, self, other)` — append `other` coerced to a
     /// String, the dispatching counterpart of `cat_str`, the way Ruby's
     /// `String#concat` accepts a non-string argument. A non-string
-    /// `other` runs the same coercion as `Value::to_r_string` (a
+    /// `other` runs the same coercion as `ReprValue::to_r_string` (a
     /// Symbol/Integer/Class renders directly, anything else dispatches
     /// `to_s`), which may raise; appending to a frozen receiver raises
     /// `FrozenError`. The call runs under exception protection, so either
@@ -434,7 +434,7 @@ impl RString {
     /// when it does not yet exist. It interns the receiver's bytes
     /// directly, as `Mrb::intern_str` does, dispatching nothing; bytes
     /// too long to be a symbol surface as `Err`. Distinct from
-    /// `Value::to_sym`, which coerces an arbitrary value.
+    /// `ReprValue::to_sym`, which coerces an arbitrary value.
     #[inline]
     pub fn intern(self, mrb: &Mrb) -> Result<crate::Symbol, crate::Error> {
         mrb.intern_str(self.0).map(crate::Symbol::from)

@@ -3,7 +3,7 @@
 require_relative "gate"
 
 module BeniSurface
-  # One inherent public method path, e.g. +Value::cvar_get+, together
+  # One inherent public method path, e.g. +Value::zeroed+, together
   # with the capability feature carrying it — +nil+ when every build
   # has it.
   Entry = Data.define(:type, :name, :feature) do

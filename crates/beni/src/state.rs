@@ -57,7 +57,7 @@ pub mod root;
 pub mod symbol;
 pub mod user_data;
 
-use crate::{sys::AsRawValue, Error, RClass, Value};
+use crate::{sys::AsRawValue, Error, RClass, ReprValue, Value};
 use beni_sys as sys;
 use core::ptr::NonNull;
 

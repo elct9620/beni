@@ -1,7 +1,10 @@
 use crate::support::{open_mrb, same_object, Is, OwnedBytes};
 use beni::prelude::*;
 use beni::scan_args::scan_args;
-use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, RArray, Symbol, Value};
+use beni::{
+    Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, RArray, RClass, RModule, RObject,
+    Symbol, Value,
+};
 
 /// Yielder method in the boundary-terminating shape kobako uses:
 /// read the captured (non-orphan) block, yield it, and on a real
@@ -628,19 +631,21 @@ fn dup_copies_state_into_an_independent_object() {
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
-    let dup = orig.dup(&mrb).expect("dup does not raise");
+    let orig = RObject::from_value(orig).expect("the source answers a plain object");
+    let dup = RObject::from_value(orig.dup(&mrb).expect("dup does not raise"))
+        .expect("a plain object dups to a plain object");
     let x = mrb.intern_cstr(c"@x").expect("the name interns");
     // The dup carries the copied ivar...
-    assert_eq!(i32::from_value(dup.ivar_get(&mrb, x)), Some(1));
+    assert_eq!(dup.ivar_get::<_, i32>(&mrb, x).ok(), Some(1));
     // ...and is a distinct object: mutating it leaves the original.
-    dup.ivar_set(&mrb, x, 2i32.into_value(&mrb))
+    dup.ivar_set(&mrb, x, 2i32)
         .expect("ivar_set on a fresh object does not raise");
-    assert_eq!(i32::from_value(dup.ivar_get(&mrb, x)), Some(2));
-    assert_eq!(i32::from_value(orig.ivar_get(&mrb, x)), Some(1));
+    assert_eq!(dup.ivar_get::<_, i32>(&mrb, x).ok(), Some(2));
+    assert_eq!(orig.ivar_get::<_, i32>(&mrb, x).ok(), Some(1));
 }
 
 #[test]
-fn ivar_set_surfaces_frozen_and_non_object_receivers_as_err() {
+fn ivar_set_surfaces_a_frozen_receiver_as_err() {
     let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"ivar_set_test.rb").expect("allocating the context must succeed");
@@ -653,14 +658,9 @@ fn ivar_set_surfaces_frozen_and_non_object_receivers_as_err() {
         .load_nstring(b"Object.new.freeze")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let frozen = RObject::from_value(frozen).expect("the source answers a plain object");
     assert!(matches!(
         frozen.ivar_set(&mrb, x, one),
-        Err(Error::Exception(_))
-    ));
-
-    // An immediate cannot hold instance variables — also an Err, not UB.
-    assert!(matches!(
-        42i32.into_value(&mrb).ivar_set(&mrb, x, one),
         Err(Error::Exception(_))
     ));
 }
@@ -675,19 +675,22 @@ fn const_get_reads_a_constant_and_surfaces_an_absent_one_as_err() {
         .load_nstring(b"module BeniConstHost; FOO = 7; end; BeniConstHost")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let module = RModule::from_value(module).expect("the source answers a module");
 
     // A defined constant reads back its value.
     let foo = mrb.intern_cstr(c"FOO").expect("the name interns");
     assert_eq!(
-        i32::from_value(module.const_get(&mrb, foo).expect("FOO is defined")),
-        Some(7)
+        module
+            .const_get::<_, i32>(&mrb, foo)
+            .expect("FOO is defined"),
+        7
     );
 
     // An absent constant raises NameError — surfaced as Err instead
     // of unwinding across the call.
     let missing = mrb.intern_cstr(c"BENI_MISSING").expect("the name interns");
     assert!(matches!(
-        module.const_get(&mrb, missing),
+        module.const_get::<_, Value>(&mrb, missing),
         Err(Error::Exception(_))
     ));
 }
@@ -702,12 +705,15 @@ fn cvar_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
         .load_nstring(b"class BeniCvHost; @@count = 3; end; BeniCvHost")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let class = RClass::from_value(class).expect("the source answers a class");
 
     // A defined class variable reads back its value.
     let count = mrb.intern_cstr(c"@@count").expect("the name interns");
     assert_eq!(
-        i32::from_value(class.cvar_get(&mrb, count).expect("@@count is defined")),
-        Some(3)
+        class
+            .cvar_get::<_, i32>(&mrb, count)
+            .expect("@@count is defined"),
+        3
     );
 
     // An absent class variable raises NameError — surfaced as Err
@@ -716,13 +722,13 @@ fn cvar_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
         .intern_cstr(c"@@beni_missing")
         .expect("the name interns");
     assert!(matches!(
-        class.cvar_get(&mrb, missing),
+        class.cvar_get::<_, Value>(&mrb, missing),
         Err(Error::Exception(_))
     ));
 }
 
 #[test]
-fn const_set_assigns_a_constant_and_surfaces_a_non_module_receiver_as_err() {
+fn const_set_assigns_a_constant() {
     let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"const_set_test.rb").expect("allocating the context must succeed");
@@ -731,27 +737,23 @@ fn const_set_assigns_a_constant_and_surfaces_a_non_module_receiver_as_err() {
         .load_nstring(b"module BeniConstWriteHost; end; BeniConstWriteHost")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let module = RModule::from_value(module).expect("the source answers a module");
 
     // A fresh constant assigned on a module reads back its value.
     let bar = mrb.intern_cstr(c"BAR").expect("the name interns");
     module
-        .const_set(&mrb, bar, 9i32.into_value(&mrb))
+        .const_set(&mrb, bar, 9i32)
         .expect("assigning a constant on a module must succeed");
     assert_eq!(
-        i32::from_value(module.const_get(&mrb, bar).expect("BAR was just set")),
-        Some(9)
+        module
+            .const_get::<_, i32>(&mrb, bar)
+            .expect("BAR was just set"),
+        9
     );
-
-    // A non-module receiver raises TypeError — surfaced as Err
-    // instead of unwinding across the call.
-    assert!(matches!(
-        42i32.into_value(&mrb).const_set(&mrb, bar, Value::nil()),
-        Err(Error::Exception(_))
-    ));
 }
 
 #[test]
-fn const_remove_removes_a_constant_and_surfaces_a_non_module_receiver_as_err() {
+fn const_remove_removes_a_constant_and_treats_an_absent_one_as_a_no_op() {
     let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"const_remove_test.rb").expect("allocating the context must succeed");
@@ -760,6 +762,7 @@ fn const_remove_removes_a_constant_and_surfaces_a_non_module_receiver_as_err() {
         .load_nstring(b"module BeniConstRemoveHost; GONE = 5; end; BeniConstRemoveHost")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let module = RModule::from_value(module).expect("the source answers a module");
 
     // Removing a defined constant succeeds and clears its presence.
     let gone = mrb.intern_cstr(c"GONE").expect("the name interns");
@@ -776,13 +779,6 @@ fn const_remove_removes_a_constant_and_surfaces_a_non_module_receiver_as_err() {
     module
         .const_remove(&mrb, gone)
         .expect("removing an absent constant is a no-op");
-
-    // A non-module receiver raises TypeError — surfaced as Err
-    // instead of unwinding across the call.
-    assert!(matches!(
-        42i32.into_value(&mrb).const_remove(&mrb, gone),
-        Err(Error::Exception(_))
-    ));
 }
 
 #[test]
@@ -798,6 +794,7 @@ fn const_defined_at_answers_only_for_the_receivers_own_constant() {
         )
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let child = RClass::from_value(child).expect("the source answers a class");
 
     let owned = mrb.intern_cstr(c"OWNED").expect("the name interns");
     let absent = mrb.intern_cstr(c"ABSENT").expect("the name interns");
@@ -817,6 +814,7 @@ fn const_defined_at_answers_only_for_the_receivers_own_constant() {
     let parent = cxt
         .load_nstring(b"BeniConstAtParent")
         .expect("the test source must compile and run");
+    let parent = RClass::from_value(parent).expect("the source answers a class");
     assert!(
         parent.const_defined_at(&mrb, owned),
         "OWNED is on the parent's own table"
@@ -836,15 +834,18 @@ fn cvar_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
         .load_nstring(b"class BeniCvWriteHost; end; BeniCvWriteHost")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let class = RClass::from_value(class).expect("the source answers a class");
 
     // A class variable assigned on a class reads back its value.
     let total = mrb.intern_cstr(c"@@total").expect("the name interns");
     class
-        .cvar_set(&mrb, total, 5i32.into_value(&mrb))
+        .cvar_set(&mrb, total, 5i32)
         .expect("assigning a class variable on a class must succeed");
     assert_eq!(
-        i32::from_value(class.cvar_get(&mrb, total).expect("@@total was just set")),
-        Some(5)
+        class
+            .cvar_get::<_, i32>(&mrb, total)
+            .expect("@@total was just set"),
+        5
     );
 
     // A frozen receiver rejects the assignment — surfaced as Err
@@ -853,8 +854,9 @@ fn cvar_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
         .load_nstring(b"BeniCvWriteHost.freeze")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "freezing must not raise");
+    let frozen = RClass::from_value(frozen).expect("the source answers a class");
     assert!(matches!(
-        frozen.cvar_set(&mrb, total, 6i32.into_value(&mrb)),
+        frozen.cvar_set(&mrb, total, 6i32),
         Err(Error::Exception(_))
     ));
 }
@@ -872,6 +874,7 @@ fn cvar_defined_tests_class_variable_presence_walking_the_ancestry() {
         )
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let child = RClass::from_value(child).expect("the source answers a class");
 
     // A class variable defined on an ancestor is present on the
     // child; an absent one is not — the predicate is total, raising
@@ -880,65 +883,6 @@ fn cvar_defined_tests_class_variable_presence_walking_the_ancestry() {
     let missing = mrb.intern_cstr(c"@@missing").expect("the name interns");
     assert!(child.cvar_defined(&mrb, inherited));
     assert!(!child.cvar_defined(&mrb, missing));
-}
-
-/// The `Err` must carry a `TypeError` — the same rejection the
-/// constant accessors surface for a non-class receiver.
-fn assert_type_error(mrb: &Mrb, err: Error) {
-    match err {
-        Error::Exception(exc) => assert_eq!(exc.classname(mrb), "TypeError"),
-        other => panic!("expected a TypeError exception, got a panic, got {other}"),
-    }
-}
-
-#[test]
-fn cvar_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
-    let mrb = open_mrb();
-    let sym = mrb.intern_cstr(c"@@x").expect("the name interns");
-
-    // nil, an immediate, and a plain object all sit outside the
-    // class-or-module family the accessors dereference into: the
-    // reads and writes surface a TypeError `Err`, the presence
-    // test stays a total predicate answering false.
-    let receivers = [
-        Value::nil(),
-        5i32.into_value(&mrb),
-        mrb.str_new(b"not a module").as_value(),
-    ];
-    for receiver in receivers {
-        let err = receiver
-            .cvar_get(&mrb, sym)
-            .expect_err("a non-class receiver must not read a class variable");
-        assert_type_error(&mrb, err);
-
-        let err = receiver
-            .cvar_set(&mrb, sym, Value::nil())
-            .expect_err("a non-class receiver must not assign a class variable");
-        assert_type_error(&mrb, err);
-
-        assert!(!receiver.cvar_defined(&mrb, sym));
-    }
-    // The VM stays usable after the rejections.
-    assert!(mrb.pending_exc().is_nil());
-}
-
-#[test]
-fn const_presence_answers_false_for_a_receiver_that_is_not_a_class_or_module() {
-    let mrb = open_mrb();
-    let sym = mrb.intern_cstr(c"X").expect("the name interns");
-
-    // Both presence tests are total predicates: a receiver outside
-    // the class-or-module family answers false instead of walking
-    // an unchecked dereference.
-    let receivers = [
-        Value::nil(),
-        5i32.into_value(&mrb),
-        mrb.str_new(b"not a module").as_value(),
-    ];
-    for receiver in receivers {
-        assert!(!receiver.const_defined(&mrb, sym));
-        assert!(!receiver.const_defined_at(&mrb, sym));
-    }
 }
 
 #[test]
@@ -953,17 +897,18 @@ fn cvar_accessors_accept_a_singleton_class_receiver() {
         .load_nstring(b"class BeniCvSclassHost; end; BeniCvSclassHost.singleton_class")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let sclass = RClass::from_value(sclass).expect("a singleton class is a class handle");
 
     let sym = mrb
         .intern_cstr(c"@@through_sclass")
         .expect("the name interns");
     sclass
-        .cvar_set(&mrb, sym, 7i32.into_value(&mrb))
+        .cvar_set(&mrb, sym, 7i32)
         .expect("a singleton-class receiver must accept the write");
-    let got = sclass
+    let got: i32 = sclass
         .cvar_get(&mrb, sym)
         .expect("a singleton-class receiver must read the value back");
-    assert_eq!(i32::from_value(got), Some(7));
+    assert_eq!(got, 7);
 }
 
 #[test]
@@ -976,6 +921,7 @@ fn ivar_defined_tests_instance_variable_presence() {
         .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let obj = RObject::from_value(obj).expect("the source answers a plain object");
 
     // A set instance variable is present; an unset one is not — the
     // predicate is total, raising for neither.
@@ -995,6 +941,7 @@ fn ivar_remove_yields_the_former_value_and_clears_presence() {
         .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let obj = RObject::from_value(obj).expect("the source answers a plain object");
 
     // Removing a set variable hands back its former value and leaves
     // the variable undefined.
@@ -1014,6 +961,7 @@ fn ivar_remove_distinguishes_absent_from_a_removed_nil() {
         .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, nil); o")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let obj = RObject::from_value(obj).expect("the source answers a plain object");
 
     // An absent variable yields None — distinct from a variable that
     // held nil, which yields Some(nil).
@@ -1026,13 +974,6 @@ fn ivar_remove_distinguishes_absent_from_a_removed_nil() {
     let x = mrb.intern_cstr(c"@x").expect("the name interns");
     let removed = obj.ivar_remove(&mrb, x).expect("removal does not raise");
     assert!(removed.is_some_and(Value::is_nil));
-
-    // An immediate cannot hold instance variables — also None, not Err.
-    assert!(42i32
-        .into_value(&mrb)
-        .ivar_remove(&mrb, x)
-        .expect("a non-holder removal does not raise")
-        .is_none());
 }
 
 #[test]
@@ -1047,6 +988,7 @@ fn ivar_remove_surfaces_a_frozen_holder_as_err() {
         .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o.freeze; o")
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
+    let frozen = RObject::from_value(frozen).expect("the source answers a plain object");
     let x = mrb.intern_cstr(c"@x").expect("the name interns");
     assert!(matches!(
         frozen.ivar_remove(&mrb, x),
@@ -1177,41 +1119,27 @@ fn kind_predicates_take_an_exception_class_handle() {
 }
 
 #[test]
-fn singleton_class_reads_a_stable_eigenclass_and_rejects_immediates() {
+fn singleton_class_reads_a_stable_eigenclass() {
     let mrb = open_mrb();
-    let s = mrb.str_new(b"hi").as_value();
+    let s = RObject::from_value(
+        mrb.object_class()
+            .new_instance(&mrb, &[])
+            .expect("Object.new constructs without raising"),
+    )
+    .expect("Object.new answers a plain object");
 
     // An ordinary object's singleton class is its own per-instance
     // eigenclass — distinct from the regular class it shares with peers.
     let sclass = s
         .singleton_class(&mrb)
-        .expect("a string has a singleton class");
+        .expect("a plain object has a singleton class");
     assert!(!same_object(&mrb, sclass, s.class(&mrb)));
 
     // Re-reading the same object yields the same singleton class.
     let again = s
         .singleton_class(&mrb)
-        .expect("a string has a singleton class");
+        .expect("a plain object has a singleton class");
     assert!(same_object(&mrb, sclass, again));
-
-    // nil yields its predefined class, which acts as its singleton
-    // class, so the read succeeds.
-    assert!(same_object(
-        &mrb,
-        Value::nil()
-            .singleton_class(&mrb)
-            .expect("nil has a singleton class"),
-        Value::nil().class(&mrb)
-    ));
-
-    // Every other immediate has no singleton class: the TypeError
-    // mruby raises surfaces as Err.
-    match 1i32.into_value(&mrb).singleton_class(&mrb) {
-        Err(Error::Exception(exc)) => {
-            assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
-        }
-        other => panic!("expected a TypeError Err, got {other:?}"),
-    }
 }
 
 #[test]
@@ -1336,6 +1264,7 @@ fn ivar_foreach_visits_every_set_instance_variable() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
+    let obj = RObject::from_value(obj).expect("the source answers a plain object");
     obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@a").expect("the name interns"),
@@ -1381,10 +1310,16 @@ fn ivar_foreach_visits_nothing_for_a_receiver_without_instance_variables() {
 
     let mrb = open_mrb();
 
-    // An immediate cannot hold instance variables, so the guarded
-    // foreach returns without ever calling back.
+    // A fresh object holds no instance variables, so the foreach
+    // returns without ever calling back.
+    let holder = RObject::from_value(
+        mrb.object_class()
+            .new_instance(&mrb, &[])
+            .expect("Object.new constructs without raising"),
+    )
+    .expect("Object.new answers a plain object");
     let mut count = 0;
-    42i32.into_value(&mrb).ivar_foreach(&mrb, |_, _| {
+    holder.ivar_foreach(&mrb, |_, _| {
         count += 1;
         ForEach::Continue
     });
@@ -1401,6 +1336,7 @@ fn ivar_foreach_stops_early_on_stop() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
+    let obj = RObject::from_value(obj).expect("the source answers a plain object");
     obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@a").expect("the name interns"),
@@ -1440,6 +1376,7 @@ fn ivar_foreach_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
+    let obj = RObject::from_value(obj).expect("the source answers a plain object");
     let a = mrb.intern_cstr(c"@a").expect("the name interns");
     let b = mrb.intern_cstr(c"@b").expect("the name interns");
     let added = mrb.intern_cstr(c"@added").expect("the name interns");
@@ -1467,8 +1404,8 @@ fn ivar_foreach_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
     seen.sort();
 
     assert_eq!(seen, vec![("@a".to_owned(), 1), ("@b".to_owned(), 2)]);
-    assert_eq!(i32::from_value(obj.ivar_get(&mrb, added)), Some(9));
-    assert_eq!(i32::from_value(obj.ivar_get(&mrb, b)), Some(99));
+    assert_eq!(obj.ivar_get::<_, i32>(&mrb, added).ok(), Some(9));
+    assert_eq!(obj.ivar_get::<_, i32>(&mrb, b).ok(), Some(99));
 }
 
 #[test]
@@ -1481,6 +1418,7 @@ fn ivar_foreach_keeps_snapshot_values_alive_across_removal_and_gc() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
+    let obj = RObject::from_value(obj).expect("the source answers a plain object");
     let a = mrb.intern_cstr(c"@a").expect("the name interns");
     let b = mrb.intern_cstr(c"@b").expect("the name interns");
 
@@ -1525,6 +1463,7 @@ fn ivar_foreach_resurfaces_a_closure_panic_on_the_rust_side() {
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
+    let obj = RObject::from_value(obj).expect("the source answers a plain object");
     obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@a").expect("the name interns"),
@@ -1561,7 +1500,8 @@ fn ivar_foreach_resurfaces_a_closure_panic_on_the_rust_side() {
 
     // The VM survives the caught panic.
     assert_eq!(
-        i32::from_value(obj.ivar_get(&mrb, mrb.intern_cstr(c"@b").expect("the name interns"))),
+        obj.ivar_get::<_, i32>(&mrb, mrb.intern_cstr(c"@b").expect("the name interns"))
+            .ok(),
         Some(2)
     );
 }
@@ -1594,4 +1534,36 @@ fn a_boxed_c_pointer_converts_into_rcptr_alone() {
     assert!(beni::RInlineStruct::from_value(cptr).is_none());
     assert!(beni::RCptr::from_value(Value::nil()).is_none());
     assert!(beni::RCptr::from_value(mrb.object_class().as_value()).is_none());
+}
+
+/// Assign and read back one instance variable through `holder`.
+fn keeps_an_instance_variable<T: beni::Object>(mrb: &Mrb, holder: T) -> Option<i32> {
+    let name = mrb.intern_cstr(c"@kept").expect("the name interns");
+    holder
+        .ivar_set(mrb, name, 5i32)
+        .expect("assigning on an unfrozen holder does not raise");
+    holder.ivar_get::<_, i32>(mrb, name).ok()
+}
+
+#[test]
+fn every_instance_variable_holder_keeps_an_instance_variable() {
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"holders.rb").expect("allocating the context must succeed");
+    let eval = |src: &[u8]| cxt.load_nstring(src).expect("the source evaluates");
+
+    let object = RObject::from_value(eval(b"Object.new")).expect("a plain object");
+    let class = RClass::from_value(eval(b"Class.new")).expect("a class");
+    let module = RModule::from_value(eval(b"Module.new")).expect("a module");
+    let hash = beni::RHash::from_value(eval(b"{}")).expect("a hash");
+    let exception = beni::Exception::from_value(eval(b"RuntimeError.new")).expect("an exception");
+    let exception_class = mrb
+        .exc_get(c"RuntimeError")
+        .expect("RuntimeError is defined");
+
+    assert_eq!(keeps_an_instance_variable(&mrb, object), Some(5));
+    assert_eq!(keeps_an_instance_variable(&mrb, class), Some(5));
+    assert_eq!(keeps_an_instance_variable(&mrb, module), Some(5));
+    assert_eq!(keeps_an_instance_variable(&mrb, hash), Some(5));
+    assert_eq!(keeps_an_instance_variable(&mrb, exception), Some(5));
+    assert_eq!(keeps_an_instance_variable(&mrb, exception_class), Some(5));
 }

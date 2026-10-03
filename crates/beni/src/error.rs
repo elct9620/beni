@@ -6,7 +6,7 @@
 //! instead of letting the raise long-jump across Rust frames, and a
 //! Rust panic caught at the FFI boundary travels the same channel.
 
-use crate::{ExceptionClass, Module, Mrb, ParseMessage, Value};
+use crate::{ExceptionClass, Module, Mrb, ParseMessage, ReprValue, Value};
 use beni_sys as sys;
 
 /// Error surfaced to Rust callers when mruby rejects an operation or
@@ -84,7 +84,7 @@ impl Error {
     /// context never got the `debug_info` a backtrace is packed from.
     /// Reading the backtrace runs Ruby, so an exception whose
     /// `backtrace` is overridden and raises answers an empty list too,
-    /// the way `Value::to_string` renders a raising `to_s`.
+    /// the way `ReprValue::to_string` renders a raising `to_s`.
     pub fn backtrace(&self, mrb: &Mrb) -> Vec<String> {
         let Error::Exception(exc) = self else {
             return Vec::new();

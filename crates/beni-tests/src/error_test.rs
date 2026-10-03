@@ -1,4 +1,5 @@
 use crate::support::{open_mrb, Is};
+use beni::prelude::*;
 use beni::scan_args::scan_args;
 use beni::{Ccontext, Error, FromValue, IntoValue, Module, Mrb, Proc, RArray, Symbol, Value};
 

@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_hash.rs`: factories live on `Ruby` /
 //! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
 
-use crate::{sys::AsRawValue, Error, FromValue, Mrb, RArray, TryConvert, Value};
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, RArray, ReprValue, TryConvert, Value};
 use beni_sys as sys;
 
 /// Signal an `RHash::each` closure returns to steer the walk. Mirrors

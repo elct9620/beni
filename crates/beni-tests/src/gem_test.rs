@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 use beni::{Error, FromValue, Gem, Module, Mrb, Value};
 
 fn answer(_mrb: &Mrb, _self: Value) -> i32 {

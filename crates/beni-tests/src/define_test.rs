@@ -91,7 +91,6 @@ fn module_new_takes_its_name_from_the_constant_it_is_assigned_to() {
     // assignment is what gives it a name.
     let module = mrb.module_new();
     mrb.object_class()
-        .as_value()
         .const_set(
             &mrb,
             mrb.intern_cstr(c"BeniBoundModule")

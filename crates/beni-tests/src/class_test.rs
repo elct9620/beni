@@ -56,8 +56,7 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
         .expect("the Symbol-keyed method must be callable by name");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 
-    let const_val = fetched
-        .as_value()
+    let const_val: Value = fetched
         .const_get(&mrb, mrb.intern_cstr(c"ANSWER").expect("the name interns"))
         .expect("the Symbol-keyed constant must read by name");
     assert_eq!(i64::from_value(const_val).expect("an Integer"), 7);
@@ -1122,7 +1121,6 @@ fn a_rust_string_key_names_its_bytes_past_an_embedded_nul() {
 
     let whole = mrb.intern(b"BENI\0TAIL").expect("the whole name interns");
     let prefix = mrb.intern(b"BENI").expect("the prefix interns");
-    let namespace = object.as_value();
-    assert!(namespace.const_defined_at(&mrb, whole));
-    assert!(!namespace.const_defined_at(&mrb, prefix));
+    assert!(object.const_defined_at(&mrb, whole));
+    assert!(!object.const_defined_at(&mrb, prefix));
 }

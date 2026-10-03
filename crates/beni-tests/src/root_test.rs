@@ -1,4 +1,5 @@
 use crate::support::open_mrb;
+use beni::prelude::*;
 use beni::{Mrb, RClass, ReprValue, TryConvert, TypedData};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -193,9 +194,9 @@ fn a_hidden_instance_variable_holds_its_value_until_overwritten() {
     let mrb = open_mrb();
     let class = carrier::<HiddenProbe>(&mrb, c"BeniHiddenHolder");
     // The holder is itself a carrier, the place a payload keeps a value.
-    let holder = mrb.wrap_as(HiddenProbe, class).as_value();
+    let holder = mrb.wrap_as(HiddenProbe, class);
     let _root = mrb
-        .gc_root(holder)
+        .gc_root(holder.as_value())
         .expect("rooting the holder must succeed");
 
     {

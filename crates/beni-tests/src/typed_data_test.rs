@@ -334,12 +334,11 @@ fn dup_carries_an_independent_copy_of_the_payload() {
 fn clone_keeps_singleton_and_frozen_state_with_a_copied_payload() {
     let mrb = open_mrb();
     define_counter(&mrb);
-    let original = mrb
-        .obj_wrap(Counter {
-            n: std::cell::Cell::new(5),
-        })
-        .as_value();
-    original
+    let wrapped = mrb.obj_wrap(Counter {
+        n: std::cell::Cell::new(5),
+    });
+    let original = wrapped.as_value();
+    wrapped
         .singleton_class(&mrb)
         .expect("a carrier has a singleton class")
         .define_method(&mrb, c"only_mine", beni::method!(counter_n, 0))
@@ -394,4 +393,23 @@ fn a_data_carrier_converts_into_rtypeddata_and_any_other_value_does_not() {
     assert!(RTypedData::from_value(carrier).is_some());
     assert!(RTypedData::from_value(mrb.str_new(b"s").as_value()).is_none());
     assert!(RTypedData::from_value(Value::nil()).is_none());
+}
+
+#[test]
+fn a_data_carrier_keeps_an_instance_variable_through_either_handle() {
+    let mrb = open_mrb();
+    define_point(&mrb);
+    let name = mrb.intern_cstr(c"@tag").expect("the name interns");
+
+    let typed = mrb.obj_wrap(Point { x: 1 });
+    typed
+        .ivar_set(&mrb, name, 3i32)
+        .expect("assigning on an unfrozen carrier does not raise");
+    let untyped = mrb.wrap(Point { x: 2 });
+    untyped
+        .ivar_set(&mrb, name, 4i32)
+        .expect("assigning on an unfrozen carrier does not raise");
+
+    assert_eq!(typed.ivar_get::<_, i32>(&mrb, name).ok(), Some(3));
+    assert_eq!(untyped.ivar_get::<_, i32>(&mrb, name).ok(), Some(4));
 }

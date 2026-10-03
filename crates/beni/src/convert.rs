@@ -13,7 +13,7 @@
 //! typed handle's conversions sit beside the handle, and every conversion
 //! copies rather than borrowing VM storage.
 
-use crate::{sys, Mrb, RString, Value};
+use crate::{sys, Mrb, RString, ReprValue, Value};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors

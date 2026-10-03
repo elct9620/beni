@@ -10,7 +10,7 @@
 //! the block lives here.
 
 use crate::try_convert::type_error;
-use crate::{sys::AsRawValue, Error, FromValue, Mrb, TryConvert, Value};
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, ReprValue, TryConvert, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Proc` (a block). `#[repr(transparent)]`
@@ -46,7 +46,7 @@ impl Proc {
     ///
     /// Interpreting a non-local exit (a real `break` versus a `return`
     /// aimed past a frame versus a plain raise) is the caller's
-    /// concern: `Value::as_break` discriminates a break and reads its
+    /// concern: `ReprValue::as_break` discriminates a break and reads its
     /// carried value, while the call-info frame indices that separate a
     /// break from a return-past-frame are VM internals reached through
     /// the unsafe `beni::sys` escape hatch.

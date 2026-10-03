@@ -363,7 +363,7 @@ Type discrimination is the typed handle's `FromValue` downcast, magnus's
 `from_value`: every type tag a value a typed caller holds can carry, the break
 tag aside, converts into a handle, which accepts precisely what the table names
 and rejects every other value. A value also answers whether it is `nil`
-(`Value::is_nil`, as magnus's does); no other per-type predicate exists.
+(`ReprValue::is_nil`, as magnus's does); no other per-type predicate exists.
 
 | Handle | Accepts |
 |---|---|
@@ -384,7 +384,7 @@ and rejects every other value. A value also answers whether it is `nil`
 | `RCptr` | a bare C pointer a C extension boxed |
 
 The include-class, environment, freed-slot, and backtrace tags stay inside the
-VM and carry no handle; the break tag is read through `Value::as_break`. A class
+VM and carry no handle; the break tag is read through `ReprValue::as_break`. A class
 handle answers whether it names a singleton class (`RClass::is_singleton`).
 
 An `Integer` handle reads out as an `i64`, mirroring `magnus`'s
@@ -1163,7 +1163,7 @@ its key can surface.
   an argument slice under exception protection: the block's normal return is
   the `Ok` value, and any non-local
   exit — a raised exception, or a `break` / `return` object the block throws
-  — surfaces as a Rust `Err` instead of unwinding across FFI. `Value::as_break`
+  — surfaces as a Rust `Err` instead of unwinding across FFI. `ReprValue::as_break`
   views an escaped value as a typed `Break` when it carries mruby's break tag
   and yields no view for any other tag; `Break` exposes the value the break
   carries. Whether a break is a real `break`, a `return` aimed past a frame, or

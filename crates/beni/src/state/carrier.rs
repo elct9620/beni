@@ -161,7 +161,7 @@ impl Mrb {
     fn resolve_carrier(&self, path: &'static CStr) -> Result<RClass, Error> {
         let mut named = self.object_class().as_value();
         for segment in segments(path.to_bytes()) {
-            named = named.const_get(self, self.intern_static(segment)?)?;
+            named = named.fetch_const(self, self.intern_static(segment)?)?;
         }
         RClass::try_convert(named, self)
     }

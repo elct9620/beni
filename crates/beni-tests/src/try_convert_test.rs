@@ -3,6 +3,7 @@
 //! mruby's own — every other value surfaces.
 
 use crate::support::{open_mrb, Is};
+use beni::prelude::*;
 use beni::{
     Error, ExceptionClass, Mrb, Proc, RArray, RClass, RHash, RModule, RString, Range, Symbol,
     TryConvert, Value,

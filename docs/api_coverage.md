@@ -28,19 +28,19 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `MRB_ARGS_REQ` | macro | ✅ | ✅ | a typed method's positional arity, derived by `Module::define_method` |
 | `MRB_ARGS_REST` | macro | ❌ | ✅ | defined as `MRB_ARGS_ANY` |
 | `mrb_alloca` | macro | ❌ | 🚫 | declined: VM scratch allocator, a `#define` over `mrb_temp_alloc` — see `mrb_malloc` |
-| `mrb_any_to_s` | fn | ✅ | ✅ | `Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::to_r_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly |
+| `mrb_any_to_s` | fn | ✅ | ✅ | `ReprValue::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `ReprValue::to_r_string` it dispatches no `to_s`, and unlike `ReprValue::inspect` it runs no user `inspect`. Total, so it returns the RString directly |
 | `mrb_argnum_error` | fn | ✅ | ✅ | `Error::argnum` |
 | `mrb_as_float` | macro | ✅ | ✅ | `TryConvert` for `f64` — the Float coercion read out, `Float::try_convert` then `Float::to_f64`; answers `f64`, which holds every configured float width |
 | `mrb_as_int` | macro | ✅ | ✅ | `TryConvert` for the Rust integers — the narrowed Integer coercion read out, `Integer::try_convert` then `Integer::to_i64` |
-| `mrb_attr_get` | fn | ✅ | ✅ | `Value::ivar_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `ivar_get` takes the same symbol-or-name key with the same absence of validation, so it yields an identical value for every key a typed caller can form and no separate item is needed |
+| `mrb_attr_get` | fn | ✅ | ✅ | `Object::ivar_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `ivar_get` takes the same symbol-or-name key with the same absence of validation, so it yields an identical value for every key a typed caller can form and no separate item is needed |
 | `mrb_basic_alloc_func` | fn | ✅ | 🚫 | declined: the default allocator `mrb_open_allocf` installs; `Mrb::open` opens with `mrb_open`, so no typed caller reaches it |
 | `mrb_block_given_p` | fn | ✅ | ✅ | `Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises |
 | `mrb_bug` | fn | ✅ | ❌ |  |
 | `mrb_calloc` | fn | ✅ | 🚫 | declined: VM allocator — see `mrb_malloc` |
 | `mrb_check_array_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `RArray` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it |
 | `mrb_check_convert_type` | macro | ❌ | ❌ |  |
-| `mrb_check_frozen` | fn | ✅ | 🚫 | declined: takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `Value::check_frozen` |
-| `mrb_check_frozen_value` | fn | ✅ | ✅ | `Value::check_frozen` — the frozen-state precondition guard, the `mrb_value` form a typed caller can reach |
+| `mrb_check_frozen` | fn | ✅ | 🚫 | declined: takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `ReprValue::check_frozen` |
+| `mrb_check_frozen_value` | fn | ✅ | ✅ | `ReprValue::check_frozen` — the frozen-state precondition guard, the `mrb_value` form a typed caller can reach |
 | `mrb_check_hash_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `RHash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type` |
 | `mrb_check_intern` | fn | ✅ | ❌ |  |
 | `mrb_check_intern_cstr` | fn | ✅ | ❌ |  |
@@ -60,7 +60,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_class_new_instance` | fn | ✅ | ✅ | `RClass::new_instance` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed |
 | `mrb_class_path` | fn | ✅ | ✅ | `Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous |
 | `mrb_close` | fn | ✅ | ✅ | `Mrb::drop` |
-| `mrb_cmp` | fn | ✅ | ✅ | `Value::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable |
+| `mrb_cmp` | fn | ✅ | ✅ | `ReprValue::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable |
 | `mrb_context_run` | macro | ❌ | ❌ |  |
 | `mrb_convert_type` | macro | ❌ | ❌ |  |
 | `mrb_define_alias` | fn | ✅ | ✅ | `Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id` |
@@ -92,8 +92,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_ensure_int_type` | fn | ✅ | ✅ | `TryConvert` for the Rust integers — the numeric coercion narrowed to the configured integer width, read out as a Rust integer |
 | `mrb_ensure_integer_type` | fn | ✅ | ✅ | `TryConvert` for `Integer` — the un-narrowed numeric coercion, as magnus routes `rb_to_int` through `TryConvert` |
 | `mrb_ensure_string_type` | fn | ✅ | ✅ | `TryConvert` for `RString` — the raising String-tag conversion |
-| `mrb_eql` | fn | ✅ | ✅ | `Value::eql` |
-| `mrb_equal` | fn | ✅ | ✅ | `Value::equal` |
+| `mrb_eql` | fn | ✅ | ✅ | `ReprValue::eql` |
+| `mrb_equal` | fn | ✅ | ✅ | `ReprValue::equal` |
 | `mrb_exc_get` | macro | ❌ | ✅ | subsumed: `Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it |
 | `mrb_exc_get_id` | fn | ✅ | ✅ | `Mrb::exc_get` (the symbol-or-name key) — fetch a built-in exception class, guaranteed an `Exception` subclass |
 | `mrb_exc_new` | fn | ✅ | ✅ | `Error::new` — builds the exception from a class and Rust bytes, as magnus's `Error::new` does |
@@ -109,10 +109,10 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_frozen_error` | fn | ✅ | 🚫 | declined: raises what `mrb_check_frozen` checks for, taking the object as `void*` the same way (`vendor/mruby/include/mruby.h:1446`) — see `mrb_check_frozen`; the pointer form cannot express the immediate mruby raises the same `FrozenError` for, which the `mrb_value` form tests before raising (`vendor/mruby/src/error.c:693-699`) |
 | `mrb_full_gc` | fn | ✅ | ✅ | `Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive) |
 | `mrb_func_basic_p` | fn | ✅ | ❌ |  |
-| `mrb_funcall` | fn | ✅ | ✅ | subsumed: `Value::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch |
-| `mrb_funcall_argv` | fn | ✅ | ✅ | `Value::funcall` — the symbol-or-name key reaches this dispatch whether the caller holds a name or an already-interned `Id` or `Symbol` |
-| `mrb_funcall_id` | fn | ✅ | ✅ | subsumed: `Value::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc` |
-| `mrb_funcall_with_block` | fn | ✅ | ✅ | `Value::funcall_with_block` — dispatch passing an explicit typed `Proc` block |
+| `mrb_funcall` | fn | ✅ | ✅ | subsumed: `ReprValue::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch |
+| `mrb_funcall_argv` | fn | ✅ | ✅ | `ReprValue::funcall` — the symbol-or-name key reaches this dispatch whether the caller holds a name or an already-interned `Id` or `Symbol` |
+| `mrb_funcall_id` | fn | ✅ | ✅ | subsumed: `ReprValue::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc` |
+| `mrb_funcall_with_block` | fn | ✅ | ✅ | `ReprValue::funcall_with_block` — dispatch passing an explicit typed `Proc` block |
 | `mrb_garbage_collect` | fn | ✅ | ✅ | subsumed: `Mrb::full_gc` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection |
 | `mrb_gc_arena_restore` | macro | ✅ | ✅ | `ArenaScope::keep`/`drop` (see ArenaScope extension) |
 | `mrb_gc_arena_save` | macro | ✅ | ✅ | `Mrb::arena_scope` (see ArenaScope extension) |
@@ -129,7 +129,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_get_mid` | fn | ✅ | ❌ |  |
 | `mrb_include_module` | fn | ✅ | ✅ | `Module::include_module` |
 | `mrb_incremental_gc` | fn | ✅ | ✅ | `Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive) |
-| `mrb_inspect` | fn | ✅ | ✅ | `Value::inspect` |
+| `mrb_inspect` | fn | ✅ | ✅ | `ReprValue::inspect` |
 | `mrb_int` | macro | ✅ | ✅ | defined as `mrb_as_int` |
 | `mrb_intern` | fn | ✅ | ✅ | `Mrb::intern` — the general byte-taking creating intern: interns the exact bytes a borrowed slice spans (length-based, so a name embedding a NUL or not NUL-terminated interns whole), creating the Symbol when absent where `mrb_intern_check` only tests |
 | `mrb_intern_check` | fn | ✅ | ✅ | `Mrb::intern_check` — the non-creating presence test over name bytes, `Some` `Id` when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to |
@@ -153,21 +153,21 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_notimplement` | fn | ✅ | ❌ |  |
 | `mrb_notimplement_m` | fn | ✅ | ❌ |  |
 | `mrb_obj_alloc` | fn | ✅ | 🚫 | declined: allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `Mrb::wrap_as` |
-| `mrb_obj_class` | fn | ✅ | ✅ | `Value::class` |
-| `mrb_obj_classname` | fn | ✅ | ✅ | `Value::classname` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form |
-| `mrb_obj_clone` | fn | ✅ | 🚫 | declined: Ruby's `clone` on a value — the typed name would be `Value::clone`, which a `Value`'s own `Clone` already holds, and magnus offers no form either; a consumer dispatches `clone` through `Value::funcall`, while `typed_data::Dup::clone` keeps using it inside the crate |
-| `mrb_obj_dup` | fn | ✅ | ✅ | `Value::dup` |
+| `mrb_obj_class` | fn | ✅ | ✅ | `ReprValue::class` |
+| `mrb_obj_classname` | fn | ✅ | ✅ | `ReprValue::classname` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form |
+| `mrb_obj_clone` | fn | ✅ | 🚫 | declined: Ruby's `clone` on a value — the typed name would be `Value::clone`, which a `Value`'s own `Clone` already holds, and magnus offers no form either; a consumer dispatches `clone` through `ReprValue::funcall`, while `typed_data::Dup::clone` keeps using it inside the crate |
+| `mrb_obj_dup` | fn | ✅ | ✅ | `ReprValue::dup` |
 | `mrb_obj_eq` | fn | ✅ | ❌ |  |
-| `mrb_obj_equal` | fn | ✅ | ✅ | `Value::is_equal` |
-| `mrb_obj_freeze` | fn | ✅ | ✅ | `Value::freeze` |
-| `mrb_obj_id` | fn | ✅ | ✅ | `Value::object_id` — the value-level identity id; `mrb_obj_eq` (the boxing-internal identity primitive `mrb_obj_equal` wraps), `mrb_obj_itself` (returns its own receiver), and `mrb_obj_respond_to` (the raw-`RClass*` form of the graduated value-level `mrb_respond_to`) stay in `sys` |
+| `mrb_obj_equal` | fn | ✅ | ✅ | `ReprValue::is_equal` |
+| `mrb_obj_freeze` | fn | ✅ | ✅ | `ReprValue::freeze` |
+| `mrb_obj_id` | fn | ✅ | ✅ | `ReprValue::object_id` — the value-level identity id; `mrb_obj_eq` (the boxing-internal identity primitive `mrb_obj_equal` wraps), `mrb_obj_itself` (returns its own receiver), and `mrb_obj_respond_to` (the raw-`RClass*` form of the graduated value-level `mrb_respond_to`) stay in `sys` |
 | `mrb_obj_inspect` | fn | ✅ | ❌ |  |
-| `mrb_obj_is_instance_of` | fn | ✅ | ✅ | `Value::is_instance_of` |
-| `mrb_obj_is_kind_of` | fn | ✅ | ✅ | `Value::is_kind_of`, `Error::is_kind_of` |
+| `mrb_obj_is_instance_of` | fn | ✅ | ✅ | `ReprValue::is_instance_of` |
+| `mrb_obj_is_kind_of` | fn | ✅ | ✅ | `ReprValue::is_kind_of`, `Error::is_kind_of` |
 | `mrb_obj_itself` | fn | ✅ | ❌ |  |
 | `mrb_obj_new` | fn | ✅ | ✅ | `RClass::new_instance` |
 | `mrb_obj_respond_to` | fn | ✅ | ❌ |  |
-| `mrb_obj_to_sym` | fn | ✅ | ✅ | `Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path |
+| `mrb_obj_to_sym` | fn | ✅ | ✅ | `ReprValue::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path |
 | `mrb_open` | fn | ✅ | ✅ | `Mrb::open` |
 | `mrb_open_core` | fn | ✅ | ❌ |  |
 | `mrb_p` | fn | ✅ | ❌ |  |
@@ -180,10 +180,10 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_realloc_simple` | fn | ✅ | 🚫 | declined: VM allocator, the non-raising variant — see `mrb_malloc` |
 | `mrb_recursive_func_p` | fn | ✅ | ❌ |  |
 | `mrb_recursive_method_p` | fn | ✅ | ❌ |  |
-| `mrb_respond_to` | fn | ✅ | ✅ | `Value::respond_to` |
+| `mrb_respond_to` | fn | ✅ | ✅ | `ReprValue::respond_to` |
 | `mrb_show_copyright` | fn | ✅ | ❌ |  |
 | `mrb_show_version` | fn | ✅ | ❌ |  |
-| `mrb_singleton_class` | fn | ✅ | ✅ | `Value::singleton_class` — the value's per-instance eigenclass (Ruby's `singleton_class`), returning a typed `RClass`; nil/true/false yield their predefined classes and every other immediate raises a TypeError. The raw-`RClass*` form `mrb_singleton_class_ptr`, which hands back a possibly-null pointer and demands VM-internal reasoning, stays in `sys` |
+| `mrb_singleton_class` | fn | ✅ | ✅ | `Object::singleton_class` — the value's per-instance eigenclass (Ruby's `singleton_class`), returning a typed `RClass`; nil/true/false yield their predefined classes and every other immediate raises a TypeError. The raw-`RClass*` form `mrb_singleton_class_ptr`, which hands back a possibly-null pointer and demands VM-internal reasoning, stays in `sys` |
 | `mrb_singleton_class_ptr` | fn | ✅ | ❌ |  |
 | `mrb_stack_extend` | fn | ✅ | ❌ |  |
 | `mrb_state_atexit` | fn | ✅ | ❌ |  |
@@ -269,7 +269,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_class` | fn | ✅ | ❌ |  |
 | `mrb_class_outer` | fn | ✅ | ❌ |  |
 | `mrb_class_ptr` | macro | ✅ | ✅ | `RClass::from_value`, `RModule::from_value`, `ExceptionClass::from_value` — the checked downcast is the typed unbox of a class value; the pointer itself stays the raw binding's to read, as magnus leaves the class struct |
-| `mrb_class_real` | fn | ✅ | ✅ | `RClass::real` — resolve a class handle to its real class, skipping singleton / include classes; `mrb_class` (the raw class of a value, which may be a singleton or include class and needs VM-internal reasoning) stays in `sys`, and `Value::class` via `mrb_obj_class` already returns the real class of a value |
+| `mrb_class_real` | fn | ✅ | ✅ | `RClass::real` — resolve a class handle to its real class, skipping singleton / include classes; `mrb_class` (the raw class of a value, which may be a singleton or include class and needs VM-internal reasoning) stays in `sys`, and `ReprValue::class` via `mrb_obj_class` already returns the real class of a value |
 | `mrb_define_method_raw` | fn | ✅ | ❌ |  |
 | `mrb_mc_clear_by_class` | macro | ✅ | ❌ |  |
 | `mrb_method_search` | fn | ✅ | ❌ |  |
@@ -398,11 +398,11 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_float_to_integer` | fn | ✅ | ✅ | `Float::to_integer` — the Integer a Float truncates toward zero (Ruby's Float#to_i); raises RangeError on an infinite or NaN float |
 | `mrb_int_to_cstr` | fn | ✅ | ❌ |  |
 | `mrb_integer_to_str` | fn | ✅ | ✅ | `Integer::to_r_string_radix` — render an Integer to an RString in a radix (Ruby's Integer#to_s(base)); raises ArgumentError on a radix outside 2 through 36. The buffer form `mrb_int_to_cstr` (writes into a caller-owned char buffer) stays in `sys` |
-| `mrb_num_add` | fn | ✅ | ✅ | `Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width |
+| `mrb_num_add` | fn | ✅ | ✅ | `ReprValue::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width |
 | `mrb_num_minus` | macro | ❌ | ✅ | defined as `mrb_num_sub` |
-| `mrb_num_mul` | fn | ✅ | ✅ | `Value::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
+| `mrb_num_mul` | fn | ✅ | ✅ | `ReprValue::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `ReprValue::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
 | `mrb_num_plus` | macro | ❌ | ✅ | defined as `mrb_num_add` |
-| `mrb_num_sub` | fn | ✅ | ✅ | `Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
+| `mrb_num_sub` | fn | ✅ | ✅ | `ReprValue::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `ReprValue::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width) |
 ## mruby/proc.h
 
 | Symbol | Kind | sys | typed | Note |
@@ -438,7 +438,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `RSTRING_END` | macro | ❌ | ❌ |  |
 | `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len` |
 | `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature) |
-| `mrb_obj_as_string` | fn | ✅ | ✅ | `Value::to_r_string` |
+| `mrb_obj_as_string` | fn | ✅ | ✅ | `ReprValue::to_r_string` |
 | `mrb_ptr_to_str` | fn | ✅ | ❌ |  |
 | `mrb_str_append` | fn | ✅ | ✅ | `RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed |
 | `mrb_str_buf_append` | macro | ❌ | ✅ | defined as `mrb_str_cat_str` |
@@ -455,7 +455,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_str_equal` | fn | ✅ | ✅ | `RString::eq` — total byte equality of two strings (length check then memcmp); dispatches nothing and never raises |
 | `mrb_str_index` | fn | ✅ | ✅ | `RString::index` — byte index of the first substring match at or after an offset, or None when absent; never raises |
 | `mrb_str_index_lit` | macro | ❌ | ✅ | `RString::index` — the literal macro `mrb_str_index_lit(mrb, str, lit, off)` is `mrb_str_index` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
-| `mrb_str_intern` | fn | ✅ | ✅ | `RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns them as `Mrb::intern_str` does, surfacing an `Err` for bytes too long to be a symbol. Distinct from `mrb_obj_to_sym` → `Value::to_sym`, which coerces an arbitrary value, and from `Symbol::new`, which interns Rust bytes |
+| `mrb_str_intern` | fn | ✅ | ✅ | `RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns them as `Mrb::intern_str` does, surfacing an `Err` for bytes too long to be a symbol. Distinct from `mrb_obj_to_sym` → `ReprValue::to_sym`, which coerces an arbitrary value, and from `Symbol::new`, which interns Rust bytes |
 | `mrb_str_modify` | fn | ✅ | ❌ |  |
 | `mrb_str_modify_keep_ascii` | fn | ✅ | ❌ |  |
 | `mrb_str_new_capa` | fn | ✅ | ✅ | `Mrb::str_new_capa` |
@@ -480,7 +480,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_bigint_p` | macro | ❌ | 🚫 | conditional: `MRB_USE_BIGINT` — without it `vendor/mruby/include/mruby/value.h:322` expands the macro to `FALSE`; beni's pinned ABI sets only `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT` |
 | `mrb_bool` | macro | ✅ | ✅ | defined as `mrb_test` |
 | `mrb_bool_value` | fn | ✅ | ✅ | `IntoValue for bool` — a Rust bool boxes to the true/false immediate (see convert extension) |
-| `mrb_break_p` | macro | ✅ | ✅ | `Value::as_break` |
+| `mrb_break_p` | macro | ✅ | ✅ | `ReprValue::as_break` |
 | `mrb_class_p` | macro | ❌ | ✅ | `RClass::from_value` with `RClass::is_singleton` false — the downcast accepts the class and singleton-class tags alike |
 | `mrb_cptr_p` | macro | ❌ | ✅ | `RCptr::from_value`, the downcast reading the value tag |
 | `mrb_cptr_value` | fn | ✅ | 🚫 | declined: boxes a bare `void*` into a value — the graduation rule: a raw pointer crossing into the typed domain, and reading it back answers the same untyped pointer, so no typed shape carries more than the raw call. mruby uses it as the context an `mrb_ensure` callback reads (`vendor/mruby/mrbgems/mruby-socket/src/socket.c:222`), which a Rust closure carries; Rust data an object owns crosses through `TypedData` |
@@ -506,7 +506,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_module_p` | macro | ❌ | ✅ | `RModule::from_value`, the downcast reading the value tag |
 | `mrb_msvc_snprintf` | fn | ❌ | 🚫 | conditional: `_MSC_VER` — MSVC's `snprintf` shim, absent from every toolchain beni builds with |
 | `mrb_msvc_vsnprintf` | fn | ❌ | ❌ |  |
-| `mrb_nil_p` | macro | ✅ | ✅ | `Value::is_nil`, `Qnil::from_value` |
+| `mrb_nil_p` | macro | ✅ | ✅ | `ReprValue::is_nil`, `Qnil::from_value` |
 | `mrb_nil_value` | fn | ✅ | ✅ | `Value::nil` |
 | `mrb_obj_value` | fn | ✅ | ✅ | `ReprValue::as_value` on `RClass`, `RModule`, and `ExceptionClass`, `Mrb::wrap_as` |
 | `mrb_object_p` | macro | ❌ | ✅ | `RObject::from_value`, the downcast reading the value tag |
@@ -519,7 +519,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_string_p` | macro | ❌ | ✅ | `RString::from_value`, the downcast reading the value tag |
 | `mrb_symbol_p` | macro | ❌ | ✅ | `Symbol::from_value`, the downcast reading the value tag |
 | `mrb_symbol_value` | fn | ✅ | ✅ | `Symbol::from` an `Id`, `IntoValue for Id` — boxing the interned id into its symbol value, magnus's `From<Id> for Symbol` |
-| `mrb_test` | macro | ✅ | ✅ | `Value::to_bool` |
+| `mrb_test` | macro | ✅ | ✅ | `ReprValue::to_bool` |
 | `mrb_true_p` | macro | ✅ | ✅ | `Qtrue::from_value` |
 | `mrb_true_value` | fn | ✅ | ✅ | `Value::true_` |
 | `mrb_undef_p` | macro | ✅ | ✅ | `Qundef::from_value` — the handle never converts back into a value, as magnus's `Qundef::as_value` is `unsafe` |
@@ -528,25 +528,25 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_const_defined` | fn | ✅ | ✅ | `Value::const_defined` — the constant presence test walking the ancestry; contrast `mrb_const_defined_at`/`Value::const_defined_at`, the direct own-table-only form |
-| `mrb_const_defined_at` | fn | ✅ | ✅ | `Value::const_defined_at` — the direct constant presence test, true only for the receiver's own constant; contrast `mrb_const_defined`/`Value::const_defined`, which walks the ancestry |
-| `mrb_const_get` | fn | ✅ | ✅ | `Value::const_get` |
-| `mrb_const_remove` | fn | ✅ | ✅ | `Value::const_remove` — the value-level constant removal; discards the former value (the C API is `void`) and treats an absent constant as a no-op |
-| `mrb_const_set` | fn | ✅ | ✅ | `Value::const_set` |
-| `mrb_cv_defined` | fn | ✅ | ✅ | `Value::cvar_defined` — the value-level class-variable presence test, walking the ancestry; `mrb_mod_cv_defined` (the raw-`RClass*` form) stays in `sys` |
-| `mrb_cv_get` | fn | ✅ | ✅ | `Value::cvar_get` |
-| `mrb_cv_set` | fn | ✅ | ✅ | `Value::cvar_set` — the value-level class-variable write; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in `sys` |
+| `mrb_const_defined` | fn | ✅ | ✅ | `Module::const_defined` — the constant presence test walking the ancestry; contrast `mrb_const_defined_at`/`Module::const_defined_at`, the direct own-table-only form |
+| `mrb_const_defined_at` | fn | ✅ | ✅ | `Module::const_defined_at` — the direct constant presence test, true only for the receiver's own constant; contrast `mrb_const_defined`/`Module::const_defined`, which walks the ancestry |
+| `mrb_const_get` | fn | ✅ | ✅ | `Module::const_get` |
+| `mrb_const_remove` | fn | ✅ | ✅ | `Module::const_remove` — the value-level constant removal; discards the former value (the C API is `void`) and treats an absent constant as a no-op |
+| `mrb_const_set` | fn | ✅ | ✅ | `Module::const_set` |
+| `mrb_cv_defined` | fn | ✅ | ✅ | `Module::cvar_defined` — the value-level class-variable presence test, walking the ancestry; `mrb_mod_cv_defined` (the raw-`RClass*` form) stays in `sys` |
+| `mrb_cv_get` | fn | ✅ | ✅ | `Module::cvar_get` |
+| `mrb_cv_set` | fn | ✅ | ✅ | `Module::cvar_set` — the value-level class-variable write; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in `sys` |
 | `mrb_gv_get` | fn | ✅ | ✅ | `Mrb::gv_get` |
 | `mrb_gv_remove` | fn | ✅ | ✅ | `Mrb::gv_remove` |
 | `mrb_gv_set` | fn | ✅ | ✅ | `Mrb::gv_set` |
 | `mrb_iv_copy` | fn | ✅ | ❌ |  |
-| `mrb_iv_defined` | fn | ✅ | ✅ | `Value::ivar_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys` |
-| `mrb_iv_foreach` | fn | ✅ | ✅ | `Value::ivar_foreach` — closure-based iteration over a snapshot of a value's set instance variables, name as a typed `Symbol`; the closure returns `ForEach::{Continue,Stop}` to proceed or end early, the iteration dispatches no Ruby so no `Result` is needed (magnus binds no ivar foreach) |
-| `mrb_iv_get` | fn | ✅ | ✅ | `Value::ivar_get` |
+| `mrb_iv_defined` | fn | ✅ | ✅ | `Object::ivar_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys` |
+| `mrb_iv_foreach` | fn | ✅ | ✅ | `Object::ivar_foreach` — closure-based iteration over a snapshot of a value's set instance variables, name as a typed `Symbol`; the closure returns `ForEach::{Continue,Stop}` to proceed or end early, the iteration dispatches no Ruby so no `Result` is needed (magnus binds no ivar foreach) |
+| `mrb_iv_get` | fn | ✅ | ✅ | `Object::ivar_get` |
 | `mrb_iv_name_sym_check` | fn | ✅ | ❌ |  |
 | `mrb_iv_name_sym_p` | fn | ✅ | ❌ |  |
-| `mrb_iv_remove` | fn | ✅ | ✅ | `Value::ivar_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None` |
-| `mrb_iv_set` | fn | ✅ | ✅ | `Value::ivar_set` |
+| `mrb_iv_remove` | fn | ✅ | ✅ | `Object::ivar_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None` |
+| `mrb_iv_set` | fn | ✅ | ✅ | `Object::ivar_set` |
 | `mrb_mod_cv_set` | fn | ✅ | ❌ |  |
 | `mrb_obj_iv_defined` | fn | ✅ | ❌ |  |
 | `mrb_obj_iv_get` | fn | ✅ | ❌ |  |
@@ -579,7 +579,7 @@ covered (✅); the Via column names the surface that covers each one.
 | `?` | ✅ | the Option a scan_args optional part or an optional-positional registration binds |
 | `:` | ✅ | scan_args keyword part, then get_kwargs by name |
 | `!` | ✅ | scan_args + FromValue<Option<T>> — nil reads as None, any other value by T's rule |
-| `+` | ✅ | scan_args + Value::check_frozen |
+| `+` | ✅ | scan_args + ReprValue::check_frozen |
 ## Admitted internal symbols
 
 Declared in a header mruby marks internal to the library, so outside the
@@ -598,7 +598,7 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `ArenaScope` | RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore` with a `mrb_gc_protect` keep — a safety guard with no single C API. |
 | `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, reached through `TypedData`, magnus's shape: a Rust type names its own `DataType` and class, so a wrap and a read take no descriptor. The class mark is a separate class-setup step (`RClass::set_instance_data_tt`) that magnus has no counterpart for, since mruby allocates a carrier only from a marked class; `TypedData`'s unsafe contract makes every class it names a marked one, which keeps wrapping infallible. The mark is refused unless the class allocates plain objects or is already a carrier, so no built-in layout is read as a carrier. The `DataType::dfree` release hook wraps the payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame of mruby's GC sweep, where unwinding is undefined. |
 | `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by exception protection (`mrb_protect_error`), which `sys::protect` offers a raw call. `Error::is_kind_of` asks the carried exception Ruby's `is_a?` (`mrb_obj_is_kind_of`). `Error::new` builds an exception error from a class and a message (via `mrb_exc_new`) for a handler to raise its own exception, and `Error::argnum` builds the canonical wrong-argument-count `ArgumentError` (via `mrb_argnum_error`) for a handler validating its own arity. |
-| `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `Value::funcall`, `TryConvert` for `RArray`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
+| `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `ReprValue::funcall`, `TryConvert` for `RArray`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
 | `ExceptionClass` | Typed handle on an exception class, magnus's `ExceptionClass`: only it builds or raises an exception, so `mrb_exc_new` / `mrb_exc_new_str` never meet a class whose instances are not exceptions. `Mrb::define_error` and `Module::define_error` compose `mrb_define_class_id` / `mrb_define_class_under_id` with an exception-class superclass. Binds no new C symbol. |
 | `GcRoot` | The releasable root: a guard holding one slot of a table the interpreter keeps, released when the guard drops. Binds no new C symbol — it composes the already-graduated array and global-variable primitives — because the C pair it would otherwise wrap cannot carry it: `mrb_gc_unregister` removes by value, so one holder's release would drop every other root over the same value. A slot is the per-root identity mruby's registry lacks, the same role the storage address plays for CRuby's `rb_gc_register_address`. Released slots go on an intrusive free list so a long-running consumer's table stops growing. A refused release leaves the value rooted for the interpreter's remaining lifetime — over-retention, never a value collected while a holder still names it. |
 | `Id` | The interned id as its own typed form, magnus's `Id`, beside the `Symbol` value handle: the two convert with `From`, boxing through `mrb_symbol_value` and unboxing through the `mrb_symbol` shim. It compares and hashes by the id — mruby publishes no C comparison to bind, interning being canonical — and a `Symbol` compares by the id it boxes. |
