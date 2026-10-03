@@ -64,23 +64,23 @@ fn an_instance_variable_outlives_its_overwrite() {
     let mrb = open_mrb();
     let holder = mrb
         .object_class()
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("an Object constructs without raising");
     let _root = mrb
         .gc_root(holder)
         .expect("rooting the holder must succeed");
     stored_carrier(&mrb, &DROPS, |obj| {
         holder
-            .iv_set(&mrb, "@probe", obj)
-            .expect("iv_set must succeed")
+            .ivar_set(&mrb, "@probe", obj)
+            .expect("ivar_set must succeed")
     });
 
-    let read = holder.iv_get(&mrb, "@probe");
+    let read = holder.ivar_get(&mrb, "@probe");
     // Overwritten rather than removed: a removal answers the old value,
     // which would hold it on its own.
     holder
-        .iv_set(&mrb, "@probe", Value::nil())
-        .expect("iv_set must succeed");
+        .ivar_set(&mrb, "@probe", Value::nil())
+        .expect("ivar_set must succeed");
     mrb.full_gc();
 
     assert_held(&DROPS, "an instance variable's value");
@@ -138,9 +138,11 @@ fn a_pending_exception_outlives_its_clearing() {
         .exc_get("RuntimeError")
         .expect("RuntimeError is a core class");
     stored_carrier(&mrb, &DROPS, |obj| {
-        let exc = runtime_error.exc_new(&mrb, "staged");
-        exc.iv_set(&mrb, "@probe", obj)
-            .expect("iv_set must succeed");
+        let exc = runtime_error
+            .new_str(&mrb, mrb.str_new("staged".as_bytes()))
+            .as_value();
+        exc.ivar_set(&mrb, "@probe", obj)
+            .expect("ivar_set must succeed");
         // SAFETY: `exc` is an exception object from this VM.
         unsafe { mrb.set_pending_exc(exc) };
     });

@@ -42,6 +42,26 @@ impl RArray {
         Self(v)
     }
 
+    /// Spread `val` into a new array, Ruby's `*` splat: an array yields a
+    /// copy of itself, a value whose `to_a` answers an array yields that
+    /// array, and any other value — `to_a` answering `nil` included —
+    /// wraps in a one-element array. Mirrors magnus's `RArray::to_ary`,
+    /// dispatching `to_a` where CRuby dispatches `to_ary`, as mruby's
+    /// `mrb_ary_splat` does. Surfaces an `Err` for a raise inside `to_a`,
+    /// and the `TypeError` mruby raises when it answers a non-array.
+    pub fn to_ary(val: Value, mrb: &Mrb) -> Result<RArray, Error> {
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; a raise from
+            // `to_a`, or its non-array answer's `TypeError`, is caught by
+            // `protect`, and otherwise the splat answers an array.
+            let v = Value::from_raw_unchecked(unsafe {
+                sys::mrb_ary_splat(mrb.as_ptr(), val.as_raw())
+            });
+            // SAFETY: a returning splat answers an Array.
+            unsafe { RArray::from_value_unchecked(v) }
+        })
+    }
+
     /// `mrb_ary_push(mrb, self, val)` — append `val`, the way Ruby's
     /// `Array#push` extends its receiver. Appending to a frozen array
     /// raises `FrozenError`; the call runs under exception protection, so that

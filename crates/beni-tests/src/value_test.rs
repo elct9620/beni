@@ -314,8 +314,8 @@ fn equality_separates_value_eql_and_identity() {
 
     // `equal?` is identity: a value is the same object as itself but
     // not as a distinct equal-valued object.
-    assert!(a.obj_equal(&mrb, a));
-    assert!(!a.obj_equal(&mrb, b));
+    assert!(a.is_equal(&mrb, a));
+    assert!(!a.is_equal(&mrb, b));
 }
 
 #[test]
@@ -466,8 +466,11 @@ fn dup_and_clone_surface_a_raising_initialize_copy_as_err() {
 
     // Both copies run `initialize_copy`, which raises — surfaced as
     // Err instead of unwinding across the call.
-    assert!(matches!(obj.obj_dup(&mrb), Err(Error::Exception(_))));
-    assert!(matches!(obj.obj_clone(&mrb), Err(Error::Exception(_))));
+    assert!(matches!(obj.dup(&mrb), Err(Error::Exception(_))));
+    assert!(matches!(
+        obj.funcall(&mrb, c"clone", &[]),
+        Err(Error::Exception(_))
+    ));
 }
 
 #[test]
@@ -504,21 +507,21 @@ fn check_frozen_guards_frozen_and_immediate_receivers() {
 }
 
 #[test]
-fn obj_as_string_coerces_through_to_s() {
+fn to_r_string_coerces_through_to_s() {
     let mrb = open_mrb();
 
     // Already a string: coercion returns that same string, not a copy.
     let already = mrb.str_new(b"hi").as_value();
     let coerced = already
-        .obj_as_string(&mrb)
+        .to_r_string(&mrb)
         .expect("a string coerces without raising");
     assert!(coerced.is::<beni::RString>());
-    assert!(already.obj_equal(&mrb, coerced));
+    assert!(already.is_equal(&mrb, coerced));
 
     // A non-string coerces through its `to_s`.
     assert!(42i32
         .into_value(&mrb)
-        .obj_as_string(&mrb)
+        .to_r_string(&mrb)
         .expect("to_s of an integer does not raise")
         .is::<beni::RString>());
 }
@@ -541,27 +544,20 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
 
     // An array spreads to a copy: same elements, distinct object.
     let src = mrb.ary_new_from_values(&[1i32.into_value(&mrb), 2i32.into_value(&mrb)]);
-    let spread = src
-        .as_value()
-        .to_ary(&mrb)
-        .expect("an array spreads without raising");
+    let spread = RArray::to_ary(src.as_value(), &mrb).expect("an array spreads without raising");
     assert_eq!(spread.len(), 2);
-    assert!(!src.as_value().obj_equal(&mrb, spread.as_value()));
+    assert!(!src.as_value().is_equal(&mrb, spread.as_value()));
 
     // A scalar that does not respond to `to_a` wraps in `[scalar]`.
-    let wrapped = 7i32
-        .into_value(&mrb)
-        .to_ary(&mrb)
-        .expect("a scalar wraps without raising");
+    let wrapped =
+        RArray::to_ary(7i32.into_value(&mrb), &mrb).expect("a scalar wraps without raising");
     assert_eq!(wrapped.len(), 1);
     assert_eq!(i32::from_value(wrapped.entry(&mrb, 0)), Some(7));
 
     // `nil` answers `to_a` with an empty array here (mruby-object-ext
     // defines `NilClass#to_a`), so it spreads to `[]` — the responder
     // path, not a wrap.
-    let nil_spread = Value::nil()
-        .to_ary(&mrb)
-        .expect("nil spreads through its to_a");
+    let nil_spread = RArray::to_ary(Value::nil(), &mrb).expect("nil spreads through its to_a");
     assert_eq!(nil_spread.len(), 0);
 
     // A `to_a` responder whose result is an array passes that array
@@ -569,10 +565,8 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
     let range = mrb
         .range_new(1i32.into_value(&mrb), 3i32.into_value(&mrb), false)
         .expect("a Range over comparable bounds constructs");
-    let enumerated = range
-        .as_value()
-        .to_ary(&mrb)
-        .expect("a Range spreads through its to_a");
+    let enumerated =
+        RArray::to_ary(range.as_value(), &mrb).expect("a Range spreads through its to_a");
     assert_eq!(enumerated.len(), 3);
 
     // A `to_a` that returns `nil` falls back to wrapping the receiver
@@ -584,13 +578,12 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
         .define_method(&mrb, c"to_a", beni::method!(to_a_returns_nil, 0))
         .expect("registering to_a must succeed");
     let nil_obj = nil_class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the class whose to_a returns nil instantiates");
-    let nil_returned = nil_obj
-        .to_ary(&mrb)
-        .expect("a nil-returning to_a wraps without raising");
+    let nil_returned =
+        RArray::to_ary(nil_obj, &mrb).expect("a nil-returning to_a wraps without raising");
     assert_eq!(nil_returned.len(), 1);
-    assert!(nil_obj.obj_equal(&mrb, nil_returned.entry(&mrb, 0)));
+    assert!(nil_obj.is_equal(&mrb, nil_returned.entry(&mrb, 0)));
 
     // A `to_a` that returns a non-array non-`nil` value raises a
     // genuine `TypeError`, caught into the `Err` rather than wrapping.
@@ -601,9 +594,9 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
         .define_method(&mrb, c"to_a", beni::method!(to_a_returns_int, 0))
         .expect("registering to_a must succeed");
     let obj = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the class with a misbehaving to_a instantiates");
-    match obj.to_ary(&mrb) {
+    match RArray::to_ary(obj, &mrb) {
         Err(Error::Exception(exc)) => {
             assert_eq!(exc.class(&mrb).name(&mrb), "TypeError");
         }
@@ -625,7 +618,7 @@ fn to_bool_follows_ruby_truthiness() {
 }
 
 #[test]
-fn obj_dup_copies_state_into_an_independent_object() {
+fn dup_copies_state_into_an_independent_object() {
     let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"dup_test.rb").expect("allocating the compile context must succeed");
@@ -635,21 +628,22 @@ fn obj_dup_copies_state_into_an_independent_object() {
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
 
-    let dup = orig.obj_dup(&mrb).expect("dup does not raise");
+    let dup = orig.dup(&mrb).expect("dup does not raise");
     let x = mrb.intern_cstr(c"@x").expect("the name interns");
     // The dup carries the copied ivar...
-    assert_eq!(i32::from_value(dup.iv_get(&mrb, x)), Some(1));
+    assert_eq!(i32::from_value(dup.ivar_get(&mrb, x)), Some(1));
     // ...and is a distinct object: mutating it leaves the original.
-    dup.iv_set(&mrb, x, 2i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
-    assert_eq!(i32::from_value(dup.iv_get(&mrb, x)), Some(2));
-    assert_eq!(i32::from_value(orig.iv_get(&mrb, x)), Some(1));
+    dup.ivar_set(&mrb, x, 2i32.into_value(&mrb))
+        .expect("ivar_set on a fresh object does not raise");
+    assert_eq!(i32::from_value(dup.ivar_get(&mrb, x)), Some(2));
+    assert_eq!(i32::from_value(orig.ivar_get(&mrb, x)), Some(1));
 }
 
 #[test]
-fn iv_set_surfaces_frozen_and_non_object_receivers_as_err() {
+fn ivar_set_surfaces_frozen_and_non_object_receivers_as_err() {
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"iv_set_test.rb").expect("allocating the context must succeed");
+    let cxt =
+        Ccontext::new(&mrb, c"ivar_set_test.rb").expect("allocating the context must succeed");
     let x = mrb.intern_cstr(c"@x").expect("the name interns");
     let one = 1i32.into_value(&mrb);
 
@@ -660,13 +654,13 @@ fn iv_set_surfaces_frozen_and_non_object_receivers_as_err() {
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
     assert!(matches!(
-        frozen.iv_set(&mrb, x, one),
+        frozen.ivar_set(&mrb, x, one),
         Err(Error::Exception(_))
     ));
 
     // An immediate cannot hold instance variables — also an Err, not UB.
     assert!(matches!(
-        42i32.into_value(&mrb).iv_set(&mrb, x, one),
+        42i32.into_value(&mrb).ivar_set(&mrb, x, one),
         Err(Error::Exception(_))
     ));
 }
@@ -699,9 +693,10 @@ fn const_get_reads_a_constant_and_surfaces_an_absent_one_as_err() {
 }
 
 #[test]
-fn cv_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
+fn cvar_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"cv_get_test.rb").expect("allocating the context must succeed");
+    let cxt =
+        Ccontext::new(&mrb, c"cvar_get_test.rb").expect("allocating the context must succeed");
 
     let class = cxt
         .load_nstring(b"class BeniCvHost; @@count = 3; end; BeniCvHost")
@@ -711,7 +706,7 @@ fn cv_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
     // A defined class variable reads back its value.
     let count = mrb.intern_cstr(c"@@count").expect("the name interns");
     assert_eq!(
-        i32::from_value(class.cv_get(&mrb, count).expect("@@count is defined")),
+        i32::from_value(class.cvar_get(&mrb, count).expect("@@count is defined")),
         Some(3)
     );
 
@@ -721,7 +716,7 @@ fn cv_get_reads_a_class_variable_and_surfaces_an_absent_one_as_err() {
         .intern_cstr(c"@@beni_missing")
         .expect("the name interns");
     assert!(matches!(
-        class.cv_get(&mrb, missing),
+        class.cvar_get(&mrb, missing),
         Err(Error::Exception(_))
     ));
 }
@@ -832,9 +827,10 @@ fn const_defined_at_answers_only_for_the_receivers_own_constant() {
 }
 
 #[test]
-fn cv_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
+fn cvar_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"cv_set_test.rb").expect("allocating the context must succeed");
+    let cxt =
+        Ccontext::new(&mrb, c"cvar_set_test.rb").expect("allocating the context must succeed");
 
     let class = cxt
         .load_nstring(b"class BeniCvWriteHost; end; BeniCvWriteHost")
@@ -844,10 +840,10 @@ fn cv_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
     // A class variable assigned on a class reads back its value.
     let total = mrb.intern_cstr(c"@@total").expect("the name interns");
     class
-        .cv_set(&mrb, total, 5i32.into_value(&mrb))
+        .cvar_set(&mrb, total, 5i32.into_value(&mrb))
         .expect("assigning a class variable on a class must succeed");
     assert_eq!(
-        i32::from_value(class.cv_get(&mrb, total).expect("@@total was just set")),
+        i32::from_value(class.cvar_get(&mrb, total).expect("@@total was just set")),
         Some(5)
     );
 
@@ -858,16 +854,16 @@ fn cv_set_assigns_a_class_variable_and_surfaces_a_frozen_receiver_as_err() {
         .expect("the test source must compile and run");
     assert!(mrb.pending_exc().is_nil(), "freezing must not raise");
     assert!(matches!(
-        frozen.cv_set(&mrb, total, 6i32.into_value(&mrb)),
+        frozen.cvar_set(&mrb, total, 6i32.into_value(&mrb)),
         Err(Error::Exception(_))
     ));
 }
 
 #[test]
-fn cv_defined_tests_class_variable_presence_walking_the_ancestry() {
+fn cvar_defined_tests_class_variable_presence_walking_the_ancestry() {
     let mrb = open_mrb();
     let cxt =
-        Ccontext::new(&mrb, c"cv_defined_test.rb").expect("allocating the context must succeed");
+        Ccontext::new(&mrb, c"cvar_defined_test.rb").expect("allocating the context must succeed");
 
     let child = cxt
         .load_nstring(
@@ -882,8 +878,8 @@ fn cv_defined_tests_class_variable_presence_walking_the_ancestry() {
     // for neither.
     let inherited = mrb.intern_cstr(c"@@inherited").expect("the name interns");
     let missing = mrb.intern_cstr(c"@@missing").expect("the name interns");
-    assert!(child.cv_defined(&mrb, inherited));
-    assert!(!child.cv_defined(&mrb, missing));
+    assert!(child.cvar_defined(&mrb, inherited));
+    assert!(!child.cvar_defined(&mrb, missing));
 }
 
 /// The `Err` must carry a `TypeError` — the same rejection the
@@ -896,7 +892,7 @@ fn assert_type_error(mrb: &Mrb, err: Error) {
 }
 
 #[test]
-fn cv_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
+fn cvar_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
     let mrb = open_mrb();
     let sym = mrb.intern_cstr(c"@@x").expect("the name interns");
 
@@ -911,16 +907,16 @@ fn cv_accessors_reject_a_receiver_that_is_not_a_class_or_module() {
     ];
     for receiver in receivers {
         let err = receiver
-            .cv_get(&mrb, sym)
+            .cvar_get(&mrb, sym)
             .expect_err("a non-class receiver must not read a class variable");
         assert_type_error(&mrb, err);
 
         let err = receiver
-            .cv_set(&mrb, sym, Value::nil())
+            .cvar_set(&mrb, sym, Value::nil())
             .expect_err("a non-class receiver must not assign a class variable");
         assert_type_error(&mrb, err);
 
-        assert!(!receiver.cv_defined(&mrb, sym));
+        assert!(!receiver.cvar_defined(&mrb, sym));
     }
     // The VM stays usable after the rejections.
     assert!(mrb.pending_exc().is_nil());
@@ -946,10 +942,10 @@ fn const_presence_answers_false_for_a_receiver_that_is_not_a_class_or_module() {
 }
 
 #[test]
-fn cv_accessors_accept_a_singleton_class_receiver() {
+fn cvar_accessors_accept_a_singleton_class_receiver() {
     let mrb = open_mrb();
     let cxt =
-        Ccontext::new(&mrb, c"cv_sclass_test.rb").expect("allocating the context must succeed");
+        Ccontext::new(&mrb, c"cvar_sclass_test.rb").expect("allocating the context must succeed");
 
     // A singleton class carries `MRB_TT_SCLASS`, inside the guarded
     // family: the accessors must keep working through it.
@@ -962,19 +958,19 @@ fn cv_accessors_accept_a_singleton_class_receiver() {
         .intern_cstr(c"@@through_sclass")
         .expect("the name interns");
     sclass
-        .cv_set(&mrb, sym, 7i32.into_value(&mrb))
+        .cvar_set(&mrb, sym, 7i32.into_value(&mrb))
         .expect("a singleton-class receiver must accept the write");
     let got = sclass
-        .cv_get(&mrb, sym)
+        .cvar_get(&mrb, sym)
         .expect("a singleton-class receiver must read the value back");
     assert_eq!(i32::from_value(got), Some(7));
 }
 
 #[test]
-fn iv_defined_tests_instance_variable_presence() {
+fn ivar_defined_tests_instance_variable_presence() {
     let mrb = open_mrb();
     let cxt =
-        Ccontext::new(&mrb, c"iv_defined_test.rb").expect("allocating the context must succeed");
+        Ccontext::new(&mrb, c"ivar_defined_test.rb").expect("allocating the context must succeed");
 
     let obj = cxt
         .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o")
@@ -985,15 +981,15 @@ fn iv_defined_tests_instance_variable_presence() {
     // predicate is total, raising for neither.
     let x = mrb.intern_cstr(c"@x").expect("the name interns");
     let y = mrb.intern_cstr(c"@y").expect("the name interns");
-    assert!(obj.iv_defined(&mrb, x));
-    assert!(!obj.iv_defined(&mrb, y));
+    assert!(obj.ivar_defined(&mrb, x));
+    assert!(!obj.ivar_defined(&mrb, y));
 }
 
 #[test]
-fn iv_remove_yields_the_former_value_and_clears_presence() {
+fn ivar_remove_yields_the_former_value_and_clears_presence() {
     let mrb = open_mrb();
     let cxt =
-        Ccontext::new(&mrb, c"iv_remove_test.rb").expect("allocating the context must succeed");
+        Ccontext::new(&mrb, c"ivar_remove_test.rb").expect("allocating the context must succeed");
 
     let obj = cxt
         .load_nstring(b"o = Object.new; o.instance_variable_set(:@x, 1); o")
@@ -1003,15 +999,15 @@ fn iv_remove_yields_the_former_value_and_clears_presence() {
     // Removing a set variable hands back its former value and leaves
     // the variable undefined.
     let x = mrb.intern_cstr(c"@x").expect("the name interns");
-    let removed = obj.iv_remove(&mrb, x).expect("removal does not raise");
+    let removed = obj.ivar_remove(&mrb, x).expect("removal does not raise");
     assert_eq!(removed.and_then(i32::from_value), Some(1));
-    assert!(!obj.iv_defined(&mrb, x));
+    assert!(!obj.ivar_defined(&mrb, x));
 }
 
 #[test]
-fn iv_remove_distinguishes_absent_from_a_removed_nil() {
+fn ivar_remove_distinguishes_absent_from_a_removed_nil() {
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"iv_remove_absent_test.rb")
+    let cxt = Ccontext::new(&mrb, c"ivar_remove_absent_test.rb")
         .expect("allocating the context must succeed");
 
     let obj = cxt
@@ -1023,26 +1019,26 @@ fn iv_remove_distinguishes_absent_from_a_removed_nil() {
     // held nil, which yields Some(nil).
     let y = mrb.intern_cstr(c"@y").expect("the name interns");
     assert!(obj
-        .iv_remove(&mrb, y)
+        .ivar_remove(&mrb, y)
         .expect("absent removal does not raise")
         .is_none());
 
     let x = mrb.intern_cstr(c"@x").expect("the name interns");
-    let removed = obj.iv_remove(&mrb, x).expect("removal does not raise");
+    let removed = obj.ivar_remove(&mrb, x).expect("removal does not raise");
     assert!(removed.is_some_and(Value::is_nil));
 
     // An immediate cannot hold instance variables — also None, not Err.
     assert!(42i32
         .into_value(&mrb)
-        .iv_remove(&mrb, x)
+        .ivar_remove(&mrb, x)
         .expect("a non-holder removal does not raise")
         .is_none());
 }
 
 #[test]
-fn iv_remove_surfaces_a_frozen_holder_as_err() {
+fn ivar_remove_surfaces_a_frozen_holder_as_err() {
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"iv_remove_frozen_test.rb")
+    let cxt = Ccontext::new(&mrb, c"ivar_remove_frozen_test.rb")
         .expect("allocating the context must succeed");
 
     // A frozen instance-variable holder rejects removal — surfaced as
@@ -1053,13 +1049,13 @@ fn iv_remove_surfaces_a_frozen_holder_as_err() {
     assert!(mrb.pending_exc().is_nil(), "setup must not raise");
     let x = mrb.intern_cstr(c"@x").expect("the name interns");
     assert!(matches!(
-        frozen.iv_remove(&mrb, x),
+        frozen.ivar_remove(&mrb, x),
         Err(Error::Exception(_))
     ));
 }
 
 #[test]
-fn obj_clone_carries_frozen_state_where_dup_drops_it() {
+fn clone_carries_frozen_state_where_dup_drops_it() {
     let mrb = open_mrb();
     let cxt =
         Ccontext::new(&mrb, c"clone_test.rb").expect("allocating the compile context must succeed");
@@ -1072,13 +1068,13 @@ fn obj_clone_carries_frozen_state_where_dup_drops_it() {
     // clone is the deeper copy — it preserves the frozen state;
     // dup always yields an unfrozen object.
     assert!(frozen
-        .obj_clone(&mrb)
+        .funcall(&mrb, c"clone", &[])
         .expect("clone does not raise")
         .funcall(&mrb, c"frozen?", &[])
         .expect("frozen? does not raise")
         .to_bool());
     assert!(!frozen
-        .obj_dup(&mrb)
+        .dup(&mrb)
         .expect("dup does not raise")
         .funcall(&mrb, c"frozen?", &[])
         .expect("frozen? does not raise")
@@ -1097,7 +1093,7 @@ fn as_break_views_a_real_escaping_break() {
         .expect("registering the yielder method must succeed");
 
     let recv = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     mrb.gv_set(c"$beni_break_recv", recv)
         .expect("the name interns");
@@ -1171,7 +1167,9 @@ fn kind_predicates_take_an_exception_class_handle() {
     let standard_error = mrb
         .exc_get(c"StandardError")
         .expect("StandardError is built in");
-    let exc = argument_error.exc_new(&mrb, "boom");
+    let exc = argument_error
+        .new_str(&mrb, mrb.str_new("boom".as_bytes()))
+        .as_value();
 
     assert!(exc.is_kind_of(&mrb, standard_error));
     assert!(exc.is_instance_of(&mrb, argument_error));
@@ -1330,35 +1328,35 @@ fn arithmetic_surfaces_integer_overflow_as_err() {
 }
 
 #[test]
-fn each_iv_visits_every_set_instance_variable() {
+fn ivar_foreach_visits_every_set_instance_variable() {
     use beni::{ForEach, Symbol};
 
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"each_iv.rb").expect("allocating the context must succeed");
+    let cxt = Ccontext::new(&mrb, c"ivar_foreach.rb").expect("allocating the context must succeed");
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
-    obj.iv_set(
+    obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@a").expect("the name interns"),
         1i32.into_value(&mrb),
     )
-    .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(
+    .expect("ivar_set on a fresh object does not raise");
+    obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@b").expect("the name interns"),
         2i32.into_value(&mrb),
     )
-    .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(
+    .expect("ivar_set on a fresh object does not raise");
+    obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@c").expect("the name interns"),
         3i32.into_value(&mrb),
     )
-    .expect("iv_set on a fresh object does not raise");
+    .expect("ivar_set on a fresh object does not raise");
 
     let mut seen = Vec::new();
-    obj.each_iv(&mrb, |name: Symbol, val| {
+    obj.ivar_foreach(&mrb, |name: Symbol, val| {
         seen.push((
             name.name(&mrb).expect("an ivar name interns to a name"),
             i32::from_value(val).expect("the seeded values are integers"),
@@ -1378,7 +1376,7 @@ fn each_iv_visits_every_set_instance_variable() {
 }
 
 #[test]
-fn each_iv_visits_nothing_for_a_receiver_without_instance_variables() {
+fn ivar_foreach_visits_nothing_for_a_receiver_without_instance_variables() {
     use beni::ForEach;
 
     let mrb = open_mrb();
@@ -1386,7 +1384,7 @@ fn each_iv_visits_nothing_for_a_receiver_without_instance_variables() {
     // An immediate cannot hold instance variables, so the guarded
     // foreach returns without ever calling back.
     let mut count = 0;
-    42i32.into_value(&mrb).each_iv(&mrb, |_, _| {
+    42i32.into_value(&mrb).ivar_foreach(&mrb, |_, _| {
         count += 1;
         ForEach::Continue
     });
@@ -1394,36 +1392,37 @@ fn each_iv_visits_nothing_for_a_receiver_without_instance_variables() {
 }
 
 #[test]
-fn each_iv_stops_early_on_stop() {
+fn ivar_foreach_stops_early_on_stop() {
     use beni::ForEach;
 
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"each_iv_stop.rb").expect("allocating the context must succeed");
+    let cxt =
+        Ccontext::new(&mrb, c"ivar_foreach_stop.rb").expect("allocating the context must succeed");
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
-    obj.iv_set(
+    obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@a").expect("the name interns"),
         1i32.into_value(&mrb),
     )
-    .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(
+    .expect("ivar_set on a fresh object does not raise");
+    obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@b").expect("the name interns"),
         2i32.into_value(&mrb),
     )
-    .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(
+    .expect("ivar_set on a fresh object does not raise");
+    obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@c").expect("the name interns"),
         3i32.into_value(&mrb),
     )
-    .expect("iv_set on a fresh object does not raise");
+    .expect("ivar_set on a fresh object does not raise");
 
     // Stopping at the first variable leaves the rest unvisited.
     let mut count = 0;
-    obj.each_iv(&mrb, |_, _| {
+    obj.ivar_foreach(&mrb, |_, _| {
         count += 1;
         ForEach::Stop
     });
@@ -1432,32 +1431,32 @@ fn each_iv_stops_early_on_stop() {
 }
 
 #[test]
-fn each_iv_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
+fn ivar_foreach_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
     use beni::{ForEach, Symbol};
 
     let mrb = open_mrb();
-    let cxt =
-        Ccontext::new(&mrb, c"each_iv_mutate.rb").expect("allocating the context must succeed");
+    let cxt = Ccontext::new(&mrb, c"ivar_foreach_mutate.rb")
+        .expect("allocating the context must succeed");
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
     let a = mrb.intern_cstr(c"@a").expect("the name interns");
     let b = mrb.intern_cstr(c"@b").expect("the name interns");
     let added = mrb.intern_cstr(c"@added").expect("the name interns");
-    obj.iv_set(&mrb, a, 1i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(&mrb, b, 2i32.into_value(&mrb))
-        .expect("iv_set on a fresh object does not raise");
+    obj.ivar_set(&mrb, a, 1i32.into_value(&mrb))
+        .expect("ivar_set on a fresh object does not raise");
+    obj.ivar_set(&mrb, b, 2i32.into_value(&mrb))
+        .expect("ivar_set on a fresh object does not raise");
 
     // The closure adds a variable and reassigns @b on every visit:
     // the mutations land on the receiver, while the iteration keeps
     // visiting the two variables and the values captured when it
     // began.
     let mut seen = Vec::new();
-    obj.each_iv(&mrb, |name: Symbol, val| {
-        obj.iv_set(&mrb, added, 9i32.into_value(&mrb))
+    obj.ivar_foreach(&mrb, |name: Symbol, val| {
+        obj.ivar_set(&mrb, added, 9i32.into_value(&mrb))
             .expect("adding a variable mid-iteration lands on the receiver");
-        obj.iv_set(&mrb, b, 99i32.into_value(&mrb))
+        obj.ivar_set(&mrb, b, 99i32.into_value(&mrb))
             .expect("reassigning a variable mid-iteration lands on the receiver");
         seen.push((
             name.name(&mrb).expect("an ivar name interns to a name"),
@@ -1468,16 +1467,17 @@ fn each_iv_visits_the_snapshot_when_the_closure_mutates_the_receiver() {
     seen.sort();
 
     assert_eq!(seen, vec![("@a".to_owned(), 1), ("@b".to_owned(), 2)]);
-    assert_eq!(i32::from_value(obj.iv_get(&mrb, added)), Some(9));
-    assert_eq!(i32::from_value(obj.iv_get(&mrb, b)), Some(99));
+    assert_eq!(i32::from_value(obj.ivar_get(&mrb, added)), Some(9));
+    assert_eq!(i32::from_value(obj.ivar_get(&mrb, b)), Some(99));
 }
 
 #[test]
-fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
+fn ivar_foreach_keeps_snapshot_values_alive_across_removal_and_gc() {
     use beni::{ForEach, RString};
 
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"each_iv_gc.rb").expect("allocating the context must succeed");
+    let cxt =
+        Ccontext::new(&mrb, c"ivar_foreach_gc.rb").expect("allocating the context must succeed");
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
@@ -1488,10 +1488,10 @@ fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
     // receiver's iv table is their only reference going into the
     // iteration.
     let scope = mrb.arena_scope();
-    obj.iv_set(&mrb, a, mrb.str_new(b"one").as_value())
-        .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(&mrb, b, mrb.str_new(b"two").as_value())
-        .expect("iv_set on a fresh object does not raise");
+    obj.ivar_set(&mrb, a, mrb.str_new(b"one").as_value())
+        .expect("ivar_set on a fresh object does not raise");
+    obj.ivar_set(&mrb, b, mrb.str_new(b"two").as_value())
+        .expect("ivar_set on a fresh object does not raise");
     drop(scope);
 
     // The first visit removes every variable and runs a full
@@ -1499,11 +1499,11 @@ fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
     // intact — the iteration owns its arena protection.
     let mut seen = Vec::new();
     let mut first = true;
-    obj.each_iv(&mrb, |_, val| {
+    obj.ivar_foreach(&mrb, |_, val| {
         if first {
             first = false;
-            obj.iv_remove(&mrb, a).expect("removal does not raise");
-            obj.iv_remove(&mrb, b).expect("removal does not raise");
+            obj.ivar_remove(&mrb, a).expect("removal does not raise");
+            obj.ivar_remove(&mrb, b).expect("removal does not raise");
             mrb.full_gc();
         }
         let s = RString::from_value(val).expect("the seeded values are strings");
@@ -1513,30 +1513,30 @@ fn each_iv_keeps_snapshot_values_alive_across_removal_and_gc() {
     seen.sort();
 
     assert_eq!(seen, vec!["one".to_owned(), "two".to_owned()]);
-    assert!(!obj.iv_defined(&mrb, a), "the removals landed");
-    assert!(!obj.iv_defined(&mrb, b), "the removals landed");
+    assert!(!obj.ivar_defined(&mrb, a), "the removals landed");
+    assert!(!obj.ivar_defined(&mrb, b), "the removals landed");
 }
 
 #[test]
-fn each_iv_resurfaces_a_closure_panic_on_the_rust_side() {
+fn ivar_foreach_resurfaces_a_closure_panic_on_the_rust_side() {
     let mrb = open_mrb();
     let cxt =
-        Ccontext::new(&mrb, c"each_iv_panic.rb").expect("allocating the context must succeed");
+        Ccontext::new(&mrb, c"ivar_foreach_panic.rb").expect("allocating the context must succeed");
     let obj = cxt
         .load_nstring(b"Object.new")
         .expect("the test source must compile and run");
-    obj.iv_set(
+    obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@a").expect("the name interns"),
         1i32.into_value(&mrb),
     )
-    .expect("iv_set on a fresh object does not raise");
-    obj.iv_set(
+    .expect("ivar_set on a fresh object does not raise");
+    obj.ivar_set(
         &mrb,
         mrb.intern_cstr(c"@b").expect("the name interns"),
         2i32.into_value(&mrb),
     )
-    .expect("iv_set on a fresh object does not raise");
+    .expect("ivar_set on a fresh object does not raise");
 
     // A panic in the closure ends the iteration and propagates on the
     // Rust side — the closure runs against the collected snapshot, so
@@ -1544,9 +1544,9 @@ fn each_iv_resurfaces_a_closure_panic_on_the_rust_side() {
     // sees the panic with its payload intact.
     let visited = std::cell::Cell::new(0u32);
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        obj.each_iv(&mrb, |_, _| {
+        obj.ivar_foreach(&mrb, |_, _| {
             visited.set(visited.get() + 1);
-            panic!("boom in each_iv closure");
+            panic!("boom in ivar_foreach closure");
         });
     }));
 
@@ -1555,13 +1555,13 @@ fn each_iv_resurfaces_a_closure_panic_on_the_rust_side() {
         .downcast_ref::<&str>()
         .copied()
         .expect("the original panic payload survives the round-trip");
-    assert_eq!(msg, "boom in each_iv closure");
+    assert_eq!(msg, "boom in ivar_foreach closure");
     // The walk stopped at the first variable rather than running on.
     assert_eq!(visited.get(), 1);
 
     // The VM survives the caught panic.
     assert_eq!(
-        i32::from_value(obj.iv_get(&mrb, mrb.intern_cstr(c"@b").expect("the name interns"))),
+        i32::from_value(obj.ivar_get(&mrb, mrb.intern_cstr(c"@b").expect("the name interns"))),
         Some(2)
     );
 }

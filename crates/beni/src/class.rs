@@ -70,7 +70,7 @@ pub struct RModule(pub(crate) *mut sys::RClass);
 /// ```compile_fail
 /// # use beni::Mrb;
 /// fn build(mrb: &Mrb) {
-///     let _ = mrb.object_class().exc_new(mrb, "boom");
+///     let _ = mrb.object_class().new_str(mrb, mrb.str_new(b"boom"));
 /// }
 /// ```
 #[repr(transparent)]
@@ -277,7 +277,7 @@ impl RClass {
     /// Surfaces an `Err` when `initialize` raises. Mirrors `magnus`'s
     /// `Class::new_instance`.
     #[inline]
-    pub fn obj_new(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
+    pub fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
         // Value is repr(transparent) over mrb_value; the slice
         // pointer reuses the same layout.
         let argv = args.as_ptr() as *const sys::mrb_value;
@@ -353,18 +353,10 @@ impl ExceptionClass {
         unsafe { sys::mrb_raise(mrb.as_ptr(), self.0, msg.as_ptr()) }
     }
 
-    /// `mrb_exc_new(mrb, self, msg, len)` — build an exception of this
-    /// class carrying `msg`, without raising it. The bytes are copied
-    /// into the new object before the call returns. Counterpart to
-    /// `ExceptionClass::raise` for the path that returns the exception as
-    /// a `Value` — a bridge body wraps it in `Error::Exception` to raise
-    /// it to the Ruby caller at the boundary instead of long-jumping
-    /// mid-body. Building never raises: the class allocates exceptions.
-    /// `msg.len()` saturates to `sys::mrb_int::MAX` (the archive's
-    /// configured integer width), like `Mrb::str_new`; real handler
-    /// messages stay far below that.
+    /// An exception of this class carrying `msg`, built without running
+    /// `initialize`; `Error::new` is the public form.
     #[inline]
-    pub fn exc_new(self, mrb: &Mrb, msg: &str) -> Value {
+    pub(crate) fn exc_new(self, mrb: &Mrb, msg: &str) -> Value {
         let len = msg.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
         // SAFETY: `mrb` is alive; `self` is an exception class of the
         // same VM, so the allocation cannot refuse its instance type;
@@ -380,23 +372,19 @@ impl ExceptionClass {
         })
     }
 
-    /// `mrb_exc_new_str(mrb, self, str)` — build an exception of this
-    /// class carrying an existing mruby string as its message, without
-    /// raising it. The counterpart to `ExceptionClass::exc_new` for a
-    /// message a consumer already holds as an `RString` (one it built,
-    /// mutated, or received), carried as-is with no Rust-side copy and no
-    /// re-encoding through bytes — distinct from `exc_new`, which
-    /// allocates a fresh string from Rust bytes. Building never raises and
-    /// runs no user Ruby: the class allocates exceptions, and the
-    /// `RString` is statically a string.
+    /// An exception of this class carrying `str` as its message, built
+    /// without copying it and, as mruby builds one, without running
+    /// `initialize`. Mirrors mruby's `mrb_exc_new_str`.
     #[inline]
-    pub fn exc_new_str(self, mrb: &Mrb, str: RString) -> Value {
+    pub fn new_str(self, mrb: &Mrb, str: RString) -> crate::Exception {
         // SAFETY: `mrb` is alive; `self` is an exception class and `str`
         // a String-tagged value of the same VM, so neither the
         // allocation nor the string type guard can raise.
-        Value::from_raw_unchecked(unsafe {
+        let exc = Value::from_raw_unchecked(unsafe {
             sys::mrb_exc_new_str(mrb.as_ptr(), self.0, str.as_raw())
-        })
+        });
+        // SAFETY: an exception class allocates exception objects.
+        unsafe { <crate::Exception as crate::value::private::ReprValue>::from_value_unchecked(exc) }
     }
 }
 

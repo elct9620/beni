@@ -45,7 +45,7 @@ fn a_marked_path_answers_its_class_and_carries_data() {
 
     assert!(mrb
         .carrier(c"BeniCarrierPoint")
-        .is_some_and(|held| held.as_value().obj_equal(&mrb, marked.as_value())));
+        .is_some_and(|held| held.as_value().is_equal(&mrb, marked.as_value())));
     let err = mrb
         .load_string(b"BeniCarrierPoint.new")
         .expect_err("the marked class has its allocator undefined");
@@ -66,7 +66,7 @@ fn a_nested_path_resolves_one_constant_per_segment() {
 
     assert!(marked
         .as_value()
-        .obj_equal(&mrb, class(&mrb, "BeniCarrierOuter::Inner").as_value()));
+        .is_equal(&mrb, class(&mrb, "BeniCarrierOuter::Inner").as_value()));
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn marking_a_held_path_again_replaces_what_it_holds() {
 
     assert!(remarked
         .as_value()
-        .obj_equal(&mrb, class(&mrb, "BeniCarrierOther").as_value()));
+        .is_equal(&mrb, class(&mrb, "BeniCarrierOther").as_value()));
 }
 
 #[test]
@@ -131,7 +131,7 @@ fn no_ruby_program_reaches_the_record_through_a_global() {
 
     assert!(mrb
         .carrier(c"BeniCarrierGuarded")
-        .is_some_and(|held| held.as_value().obj_equal(&mrb, marked.as_value())));
+        .is_some_and(|held| held.as_value().is_equal(&mrb, marked.as_value())));
 }
 
 #[test]
@@ -181,7 +181,7 @@ fn the_record_keeps_its_class_through_a_collection() {
     let held = mrb
         .carrier(c"BeniCarrierHeld")
         .expect("the record still holds the class the constant let go of");
-    assert!(held.as_value().obj_equal(&mrb, marked.as_value()));
+    assert!(held.as_value().is_equal(&mrb, marked.as_value()));
     assert_eq!(
         held.name(&mrb),
         "BeniCarrierHeld",

@@ -119,10 +119,10 @@ fn dup_and_clone_copy_the_payload() {
     let inline = Inline::new(&mrb, Vector2D { x: 7.0, y: 8.0 });
 
     for copy in [
-        inline.as_value().obj_dup(&mrb).expect("dup must succeed"),
+        inline.as_value().dup(&mrb).expect("dup must succeed"),
         inline
             .as_value()
-            .obj_clone(&mrb)
+            .funcall(&mrb, c"clone", &[])
             .expect("clone must succeed"),
     ] {
         let copy = Inline::<Vector2D>::try_convert(copy, &mrb)
@@ -158,7 +158,7 @@ fn a_value_of_another_kind_is_a_type_error_naming_it_as_mruby_does() {
     let cell = Inline::new(&mrb, Cell(1)).as_value();
     let plain = mrb
         .object_class()
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("an Object constructs");
 
     for (value, named) in [
@@ -373,7 +373,7 @@ fn an_inline_struct_of_any_type_converts_into_rinlinestruct() {
     let inline = Inline::new(&mrb, Vector2D { x: 0.0, y: 0.0 }).as_value();
     let plain = mrb
         .object_class()
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("an Object constructs");
 
     assert!(beni::RInlineStruct::from_value(inline).is_some());

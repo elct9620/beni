@@ -202,7 +202,7 @@ fn a_hidden_instance_variable_holds_its_value_until_overwritten() {
         let scope = mrb.arena_scope();
         let obj = mrb.wrap_as(HiddenProbe, class).as_value();
         holder
-            .iv_set(&mrb, "held", obj)
+            .ivar_set(&mrb, "held", obj)
             .expect("a plain object takes a hidden instance variable");
         drop(scope);
     }
@@ -215,7 +215,7 @@ fn a_hidden_instance_variable_holds_its_value_until_overwritten() {
     );
 
     holder
-        .iv_set(&mrb, "held", beni::Value::nil())
+        .ivar_set(&mrb, "held", beni::Value::nil())
         .expect("overwriting the hidden instance variable must succeed");
     mrb.full_gc();
     assert_eq!(

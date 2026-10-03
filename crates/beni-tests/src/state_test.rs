@@ -115,8 +115,10 @@ fn pending_exc_reads_the_slot_and_clear_exc_empties_it() {
     let runtime_error = mrb
         .exc_get(c"RuntimeError")
         .expect("RuntimeError is a core class");
-    let exc = runtime_error.exc_new(&mrb, "installed by the test");
-    // SAFETY: `exc` is the exception object `exc_new` just built
+    let exc = runtime_error
+        .new_str(&mrb, mrb.str_new("installed by the test".as_bytes()))
+        .as_value();
+    // SAFETY: `exc` is the exception object `new_str` just built
     // on this VM.
     unsafe { mrb.set_pending_exc(exc) };
     assert_eq!(mrb.pending_exc().classname(&mrb), "RuntimeError");

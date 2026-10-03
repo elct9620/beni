@@ -51,7 +51,7 @@ fn point_moved(_mrb: &Mrb, rb_self: &Point, by: i32) -> Point {
 }
 
 fn point_same(mrb: &Mrb, rb_self: Obj<Point>, other: Obj<Point>) -> bool {
-    rb_self.as_value().obj_equal(mrb, other.as_value())
+    rb_self.as_value().is_equal(mrb, other.as_value())
 }
 
 fn type_error_message(mrb: &Mrb, err: Error) -> String {
@@ -318,7 +318,7 @@ fn dup_carries_an_independent_copy_of_the_payload() {
 
     let copy = original.funcall(&mrb, c"dup", &[]).expect("dup copies");
     assert_eq!(copy.classname(&mrb), "BeniCounter");
-    assert!(!copy.obj_equal(&mrb, original), "dup answers a new object");
+    assert!(!copy.is_equal(&mrb, original), "dup answers a new object");
     assert_eq!(read_n(&mrb, copy), 1);
 
     copy.funcall(&mrb, c"bump", &[]).expect("bump the copy");
@@ -347,10 +347,7 @@ fn clone_keeps_singleton_and_frozen_state_with_a_copied_payload() {
     original.freeze(&mrb);
 
     let copy = original.funcall(&mrb, c"clone", &[]).expect("clone copies");
-    assert!(
-        !copy.obj_equal(&mrb, original),
-        "clone answers a new object"
-    );
+    assert!(!copy.is_equal(&mrb, original), "clone answers a new object");
     assert_eq!(read_n(&mrb, copy), 5);
     let frozen = copy
         .funcall(&mrb, c"frozen?", &[])

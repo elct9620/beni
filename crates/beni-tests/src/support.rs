@@ -13,7 +13,7 @@ pub fn open_mrb() -> Mrb {
 /// values they stand for, the comparison a consumer has for handles
 /// that carry no raw pointer of their own.
 pub fn same_object(mrb: &Mrb, a: impl IntoValue, b: impl IntoValue) -> bool {
-    a.into_value(mrb).obj_equal(mrb, b.into_value(mrb))
+    a.into_value(mrb).is_equal(mrb, b.into_value(mrb))
 }
 
 /// A string's bytes as an owned `Vec<u8>`, the way a consumer without

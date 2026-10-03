@@ -47,7 +47,9 @@ fn fallible(mrb: &Mrb, _self: Value) -> Result<i32, Error> {
         .exc_get(c"RuntimeError")
         .expect("RuntimeError is a core class");
     Err(Error::Exception(
-        runtime_error.exc_new(mrb, "fallible body says no"),
+        runtime_error
+            .new_str(mrb, mrb.str_new("fallible body says no".as_bytes()))
+            .as_value(),
     ))
 }
 
@@ -65,7 +67,7 @@ fn typed_method_roundtrips_scalars() {
         .expect("registering the typed method must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let args = [1i32.into_value(&mrb), 2i32.into_value(&mrb)];
     let got = receiver
@@ -83,7 +85,7 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
         .expect("registering the fixed-arity method must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
 
     // `mrb_get_args` enforces the `MRB_ARGS_REQ(2)` count before any
@@ -130,7 +132,7 @@ fn conversion_failure_raises_before_body_runs() {
     // raise mruby's TypeError to the Ruby caller and the wrapped
     // function must never run.
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let args = [mrb.str_new(b"x").as_value(), 2i32.into_value(&mrb)];
     let err = receiver
@@ -152,7 +154,7 @@ fn optional_argument_defaults_to_none_when_omitted() {
         .expect("registering the optional-arg method must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
 
     // Omitting the optional argument binds `None`: the body sees
@@ -182,7 +184,7 @@ fn all_optional_method_reads_its_lone_slot() {
         .expect("registering the all-optional method must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
 
     let omitted = receiver
@@ -205,7 +207,7 @@ fn a_float_argument_truncates_into_an_integer_parameter() {
         .expect("registering the optional-arg method must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
         .funcall(
@@ -229,7 +231,7 @@ fn supplied_optional_failing_conversion_raises() {
     // as a required argument does — an omitted slot would bind None
     // instead, so the raise is specific to the supplied case.
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let err = receiver
         .funcall(
@@ -275,7 +277,7 @@ fn block_accepting_method_binds_none_without_a_block() {
     // No block passed: the slot is nil, the parameter binds `None`,
     // and the body returns the argument unchanged.
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
         .funcall(&mrb, c"apply", &[7i32.into_value(&mrb)])
@@ -295,7 +297,7 @@ fn panicking_method_surfaces_as_ruby_exception() {
     // RuntimeError the Ruby-side caller (here: the protect frame)
     // observes — never an unwind through mruby's C frames.
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let err = receiver
         .funcall(&mrb, c"detonate", &[])
@@ -317,7 +319,7 @@ fn result_returning_method_raises_its_err() {
         .expect("registering the fallible method must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let err = receiver
         .funcall(&mrb, c"try", &[])
@@ -441,7 +443,9 @@ fn nilable_parameters_bind_none_for_nil_and_the_value_otherwise() {
     class
         .define_method(&mrb, c"error", beni::method!(report, 3))
         .expect("registering the typed method must succeed");
-    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let receiver = class
+        .new_instance(&mrb, &[])
+        .expect("the receiver constructs");
     let message = mrb.str_new(b"boom").as_value();
 
     let absent = receiver
@@ -470,7 +474,9 @@ fn a_nilable_parameter_still_rejects_what_its_inner_type_rejects() {
     class
         .define_method(&mrb, c"error", beni::method!(report, 3))
         .expect("registering the typed method must succeed");
-    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let receiver = class
+        .new_instance(&mrb, &[])
+        .expect("the receiver constructs");
 
     let err = receiver
         .funcall(
@@ -497,14 +503,16 @@ fn a_value_parameter_receives_the_argument_itself() {
     class
         .define_method(&mrb, c"pass", beni::method!(passthrough, 1))
         .expect("registering the typed method must succeed");
-    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let receiver = class
+        .new_instance(&mrb, &[])
+        .expect("the receiver constructs");
     let argument = mrb.str_new(b"same").as_value();
 
     let got = receiver
         .funcall(&mrb, c"pass", &[argument])
         .expect("any value is accepted");
 
-    assert!(got.obj_equal(&mrb, argument));
+    assert!(got.is_equal(&mrb, argument));
 }
 
 #[test]
@@ -514,7 +522,9 @@ fn a_nilable_optional_tells_omission_from_an_explicit_nil() {
     class
         .define_method(&mrb, c"given", beni::method!(nilable_optional, 0, 1))
         .expect("registering the typed method must succeed");
-    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let receiver = class
+        .new_instance(&mrb, &[])
+        .expect("the receiver constructs");
     let call = |args: &[Value]| {
         i32::from_value(
             receiver
@@ -561,7 +571,9 @@ fn optional_arity_raises_argument_error_outside_its_range() {
     class
         .define_method(&mrb, c"add", beni::method!(opt_add, 1, 1))
         .expect("registering the typed method must succeed");
-    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let receiver = class
+        .new_instance(&mrb, &[])
+        .expect("the receiver constructs");
     let one = 1i32.into_value(&mrb);
 
     assert_each_raises_argument_error(&mrb, receiver, c"add", &[vec![], vec![one, one, one]]);
@@ -574,7 +586,9 @@ fn block_accepting_arity_raises_argument_error_on_wrong_count() {
     class
         .define_method(&mrb, c"apply", beni::method!(apply_block, 1, &))
         .expect("registering the typed method must succeed");
-    let receiver = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let receiver = class
+        .new_instance(&mrb, &[])
+        .expect("the receiver constructs");
     let one = 1i32.into_value(&mrb);
 
     assert_each_raises_argument_error(&mrb, receiver, c"apply", &[vec![], vec![one, one]]);

@@ -104,7 +104,7 @@ fn a_tagged_handle_answers_the_value_it_was_converted_from() {
     let handle = RObject::from_value(object).expect("an Object converts");
 
     assert!(crate::support::same_object(&mrb, handle, object));
-    assert!(handle.as_value().obj_equal(&mrb, object));
+    assert!(handle.as_value().is_equal(&mrb, object));
 }
 
 #[test]

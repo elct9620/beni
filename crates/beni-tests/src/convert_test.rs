@@ -239,7 +239,7 @@ fn value_converts_as_itself() {
         mrb.str_new(b"s").as_value(),
     ] {
         let got = Value::from_value(value).expect("a value never rejects");
-        assert!(got.obj_equal(&mrb, value), "the same object comes back");
+        assert!(got.is_equal(&mrb, value), "the same object comes back");
     }
 }
 
@@ -367,5 +367,5 @@ fn a_class_handle_reads_out_as_its_value_and_crosses_back_through_the_downcast()
     let back = RClass::from_value(value).expect("a class value downcasts to its class");
 
     assert!(same_object(&mrb, back, object));
-    assert!(value.obj_equal(&mrb, object.as_value()));
+    assert!(value.is_equal(&mrb, object.as_value()));
 }

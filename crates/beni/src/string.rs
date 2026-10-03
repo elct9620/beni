@@ -123,7 +123,7 @@ impl RString {
     /// `mrb_str_concat(mrb, self, other)` — append `other` coerced to a
     /// String, the dispatching counterpart of `cat_str`, the way Ruby's
     /// `String#concat` accepts a non-string argument. A non-string
-    /// `other` runs the same coercion as `Value::obj_as_string` (a
+    /// `other` runs the same coercion as `Value::to_r_string` (a
     /// Symbol/Integer/Class renders directly, anything else dispatches
     /// `to_s`), which may raise; appending to a frozen receiver raises
     /// `FrozenError`. The call runs under exception protection, so either

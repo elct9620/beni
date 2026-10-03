@@ -49,7 +49,7 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
     // The method and constant keyed by Symbol read back through the
     // equivalent name — both keys resolve to the same interned sym.
     let receiver = fetched
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
         .funcall(&mrb, c"answer", &[])
@@ -106,7 +106,7 @@ fn symbol_key_registers_private_singleton_and_module_function() {
         .expect("registering the singleton method under a Symbol key must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     // funcall bypasses visibility, reaching the private body.
     let private = receiver
@@ -297,10 +297,10 @@ fn class_defined_answers_a_total_bool_within_a_namespace() {
 }
 
 #[test]
-fn obj_new_surfaces_a_raising_initialize_as_err() {
+fn new_instance_surfaces_a_raising_initialize_as_err() {
     let mrb = open_mrb();
-    let cxt =
-        beni::Ccontext::new(&mrb, c"obj_new_test.rb").expect("allocating the context must succeed");
+    let cxt = beni::Ccontext::new(&mrb, c"new_instance_test.rb")
+        .expect("allocating the context must succeed");
 
     cxt.load_nstring(b"class BeniBoomInit; def initialize; raise 'no'; end; end")
         .expect("the test source must compile and run");
@@ -314,7 +314,10 @@ fn obj_new_surfaces_a_raising_initialize_as_err() {
     let class = mrb
         .class_get(c"BeniBoomInit")
         .expect("the class is defined");
-    assert!(matches!(class.obj_new(&mrb, &[]), Err(Error::Exception(_))));
+    assert!(matches!(
+        class.new_instance(&mrb, &[]),
+        Err(Error::Exception(_))
+    ));
 }
 
 #[test]
@@ -354,7 +357,7 @@ fn private_method_rejects_public_dispatch_but_is_attached() {
         .define_private_method(&mrb, c"secret", beni::method!(answer_seven, 0))
         .expect("registering the private method must succeed");
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
 
     // VM-dispatched code with an explicit receiver must observe
@@ -410,7 +413,7 @@ fn alias_method_keys_both_names_as_symbol_or_name() {
         .expect("aliasing under a name key must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let original = receiver
         .funcall(&mrb, c"answer", &[])
@@ -445,7 +448,7 @@ fn module_and_object_traits_register_methods() {
         .define_method(&mrb, c"answer", beni::method!(answer_seven, 0))
         .expect("registering the instance method must succeed");
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
         .funcall(&mrb, c"answer", &[])
@@ -594,7 +597,7 @@ fn alias_method_binds_a_second_name_for_an_existing_method() {
     // The alias resolves to the same body as the original — the
     // consumer-visible point of preserving a method before override.
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
         .funcall(&mrb, c"original_answer", &[])
@@ -623,7 +626,7 @@ fn include_module_mixes_in_and_rejects_a_cyclic_include() {
 
     // An instance of the host now answers the mixed-in method.
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
         .funcall(&mrb, c"helped", &[])
@@ -662,7 +665,7 @@ fn prepend_module_overrides_the_receiver_and_rejects_a_cyclic_prepend() {
         .expect("prepending the module must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
 
     // The prepended module sits ahead of the receiver, so its method wins.
@@ -718,7 +721,7 @@ fn undef_method_marks_a_method_undefined_on_the_handle() {
 
     // The method responds before undefinition.
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
         .funcall(&mrb, c"answer", &[])
@@ -782,7 +785,7 @@ fn remove_method_strips_a_method_defined_on_the_handle() {
     // The method responds before removal.
     let answer = c"answer".into_id(&mrb).expect("the name interns");
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     assert!(
         receiver.respond_to(&mrb, answer),
@@ -947,34 +950,37 @@ fn real_resolves_a_singleton_class_to_its_attached_object_class() {
 }
 
 #[test]
-fn exc_new_builds_an_exception_of_the_class_without_raising() {
+fn error_new_builds_an_exception_of_the_class_without_raising() {
     let mrb = open_mrb();
     let runtime_error = mrb
         .exc_get(c"RuntimeError")
         .expect("RuntimeError is present in every VM");
 
-    let exc = runtime_error.exc_new(&mrb, "something failed");
+    let err = Error::new(&mrb, runtime_error, "something failed");
 
     // Building does not raise; the object carries the class and the
-    // message verbatim, ready to ride out as Error::Exception.
-    assert!(mrb.pending_exc().is_nil(), "exc_new must not raise");
+    // message verbatim, ready to ride out as the Err.
+    assert!(mrb.pending_exc().is_nil(), "Error::new must not raise");
+    let Error::Exception(exc) = &err else {
+        panic!("Error::new builds an exception")
+    };
     assert_eq!(exc.classname(&mrb), "RuntimeError");
-    assert_eq!(Error::Exception(exc).message(&mrb), "something failed");
+    assert_eq!(err.message(&mrb), "something failed");
 }
 
 #[test]
-fn exc_new_str_carries_an_existing_string_value_without_raising() {
+fn new_str_carries_an_existing_string_value_without_raising() {
     let mrb = open_mrb();
     let runtime_error = mrb
         .exc_get(c"RuntimeError")
         .expect("RuntimeError is present in every VM");
 
     // A message the consumer already holds as an RString rides into
-    // the exception as-is — the String-valued counterpart of exc_new.
+    // the exception as-is — the String-valued counterpart of Error::new.
     let message = mrb.str_new(b"already a string");
-    let exc = runtime_error.exc_new_str(&mrb, message);
+    let exc = runtime_error.new_str(&mrb, message).as_value();
 
-    assert!(mrb.pending_exc().is_nil(), "exc_new_str must not raise");
+    assert!(mrb.pending_exc().is_nil(), "new_str must not raise");
     assert_eq!(exc.classname(&mrb), "RuntimeError");
     assert_eq!(Error::Exception(exc).message(&mrb), "already a string");
 }
@@ -1029,7 +1035,8 @@ fn exception_class_registers_methods_through_the_module_trait() {
         .expect("registering a method on an exception class must succeed");
 
     let got = runtime_error
-        .exc_new(&mrb, "carrying a code")
+        .new_str(&mrb, mrb.str_new("carrying a code".as_bytes()))
+        .as_value()
         .funcall(&mrb, c"beni_code", &[])
         .expect("the registered method must be callable on the exception");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
@@ -1090,7 +1097,7 @@ fn a_rust_string_key_reaches_the_same_definition_as_the_c_string_name() {
     let instance = mrb
         .class_get(c"BeniStrKeyed")
         .expect("the class is fetchable by its C-string name")
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the class instantiates");
     let answered = instance
         .funcall(&mrb, c"answer", &[])

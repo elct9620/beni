@@ -295,7 +295,9 @@ fn is_kind_of_answers_false_for_a_break_object() {
     class
         .define_method(&mrb, c"run", beni::method!(break_is_an_exception, -1))
         .expect("registering the probe method must succeed");
-    let recv = class.obj_new(&mrb, &[]).expect("the receiver constructs");
+    let recv = class
+        .new_instance(&mrb, &[])
+        .expect("the receiver constructs");
     mrb.gv_set(c"$beni_break_kind_recv", recv)
         .expect("the name interns");
 

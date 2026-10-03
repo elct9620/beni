@@ -29,7 +29,7 @@ fn class_new_creates_an_unnamed_usable_class() {
         .define_method(&mrb, c"answer", beni::method!(answer_seven, 0))
         .expect("registering a method on the anonymous class must succeed");
     let got = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the anonymous class instantiates")
         .funcall(&mrb, c"answer", &[])
         .expect("the method on the anonymous class must be callable");
@@ -76,7 +76,7 @@ fn module_new_creates_an_unnamed_mixable_module() {
         .include_module(&mrb, module)
         .expect("mixing the anonymous module in must succeed");
     let got = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the host class instantiates")
         .funcall(&mrb, c"answer", &[])
         .expect("the mixed-in method must be reachable");
@@ -246,7 +246,10 @@ fn define_error_nests_under_a_namespace() {
         .define_error(&mrb, c"ParseError", runtime_error)
         .expect("defining the nested exception class must succeed");
     assert_eq!(nested.name(&mrb), "BeniErrors::ParseError");
-    assert!(nested.exc_new(&mrb, "nested").is::<beni::Exception>());
+    assert!(nested
+        .new_str(&mrb, mrb.str_new("nested".as_bytes()))
+        .as_value()
+        .is::<beni::Exception>());
 }
 
 #[test]

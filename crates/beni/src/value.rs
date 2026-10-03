@@ -344,37 +344,12 @@ impl Value {
     /// exception protection: `Ok` with the string value, or `Err` when `to_s`
     /// does not return a string. Mirrors mruby's `mrb_obj_as_string`.
     #[inline]
-    pub fn obj_as_string(self, mrb: &Mrb) -> Result<Value, Error> {
+    pub fn to_r_string(self, mrb: &Mrb) -> Result<Value, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_obj_as_string` may run
             // `to_s` and raise — caught by `protect` into `Err`.
             Value(unsafe { sys::mrb_obj_as_string(mrb.as_ptr(), self.0) })
-        })
-    }
-
-    /// Spread `self` into a new typed `RArray`, Ruby's `*` splat coercion:
-    /// an array yields a copy of itself; a non-array that responds to
-    /// `to_a` runs it, taking the result when it is an array and wrapping
-    /// `self` in a one-element array when `to_a` returns `nil`; a value
-    /// that answers no `to_a` wraps in a one-element array. It dispatches
-    /// `to_a` and always yields an array, unlike `RArray::try_convert`, which
-    /// takes only an already-array value. A `TypeError` mruby raises
-    /// when `to_a` returns a non-array non-`nil` value, or a raise from
-    /// `to_a` itself, is caught by exception protection into the returned `Err`.
-    /// Mirrors mruby's `mrb_ary_splat`.
-    #[inline]
-    pub fn to_ary(self, mrb: &Mrb) -> Result<crate::RArray, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `self`
-            // originates from the same VM. `mrb_ary_splat` dispatches
-            // `to_a` for a non-array — a raise inside it, or a non-array
-            // non-`nil` return, long-jumps a `TypeError` caught by
-            // `protect` into `Err` — and otherwise returns an array.
-            let v = Value(unsafe { sys::mrb_ary_splat(mrb.as_ptr(), self.0) });
-            // SAFETY: `mrb_ary_splat` always returns an Array-tagged value
-            // when it returns, the tag the unchecked wrap requires.
-            unsafe { crate::RArray::from_value_unchecked(v) }
         })
     }
 
@@ -405,7 +380,7 @@ impl Value {
     /// `Ok` with the copy, or `Err` when `initialize_copy` raises.
     /// Mirrors mruby's `mrb_obj_dup`.
     #[inline]
-    pub fn obj_dup(self, mrb: &Mrb) -> Result<Value, Error> {
+    pub fn dup(self, mrb: &Mrb) -> Result<Value, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_obj_dup` runs
@@ -420,7 +395,7 @@ impl Value {
     /// Runs under exception protection: `Ok` with the copy, or `Err` when
     /// `initialize_copy` raises. Mirrors mruby's `mrb_obj_clone`.
     #[inline]
-    pub fn obj_clone(self, mrb: &Mrb) -> Result<Value, Error> {
+    pub(crate) fn obj_clone(self, mrb: &Mrb) -> Result<Value, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_obj_clone` runs
@@ -528,7 +503,7 @@ impl Value {
     /// `mrb_any_to_s(mrb, self)` — the value's default `to_s` render as a
     /// new `RString`: `#<ClassName>` for an immediate, `#<ClassName:0x...>`
     /// for a heap object. Built from the class name without dispatching the
-    /// value's own `to_s`, so it is the render `obj_as_string` falls back to
+    /// value's own `to_s`, so it is the render `to_r_string` falls back to
     /// and runs no user Ruby — total, returning the string directly.
     #[inline]
     pub fn any_to_s(self, mrb: &Mrb) -> crate::RString {
@@ -711,23 +686,17 @@ impl Value {
     }
 
     // ----------------------------------------------------------------
-    // Instance variable / constant / class variable accessors. The
-    // mruby C API spells these as `mrb_iv_set` / `mrb_iv_get` /
-    // `mrb_const_set` / `mrb_const_get` / `mrb_cv_set` / `mrb_cv_get` /
-    // `mrb_const_defined` / `mrb_respond_to`; the inherent methods
-    // carry the same names so the call shape mirrors the C-side
-    // documentation one-to-one. The reads (`iv_get`, `const_defined`,
-    // `respond_to`) dispatch nothing and hand back a bare value; the
-    // assigning and fetching operations (`iv_set`, `const_set`,
-    // `const_get`, `cv_set`, `cv_get`) can raise, so they route through
-    // `protect` and return a `Result`.
+    // Instance variable / constant / class variable accessors, named as
+    // magnus names them. The reads dispatch nothing and hand back a bare
+    // value; the assigning and fetching operations can raise, so they
+    // route through `protect` and return a `Result`.
     // ----------------------------------------------------------------
 
     /// `mrb_iv_set(mrb, self, sym, val)` — assign instance variable
     /// `sym` on `self` to `val`. Surfaces an `Err` when `self` is
     /// frozen or cannot hold instance variables.
     #[inline]
-    pub fn iv_set<K: crate::IntoId>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
+    pub fn ivar_set<K: crate::IntoId>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
         let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
@@ -744,11 +713,11 @@ impl Value {
     /// `mrb_iv_get(mrb, self, sym)` — return instance variable `sym`
     /// from `self`, or `nil` when unset.
     #[inline]
-    pub fn iv_get<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Value {
+    pub fn ivar_get<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Value {
         let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return Value::nil();
         };
-        // SAFETY: as `iv_set`.
+        // SAFETY: as `ivar_set`.
         mrb.hold(Value(unsafe { sys::mrb_iv_get(mrb.as_ptr(), self.0, sym) }))
     }
 
@@ -758,11 +727,11 @@ impl Value {
     /// analogue of the raw-`RObject*` `mrb_obj_iv_defined`, which stays
     /// in `sys`.
     #[inline]
-    pub fn iv_defined<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
+    pub fn ivar_defined<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
         let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
-        // SAFETY: as `iv_set`.
+        // SAFETY: as `ivar_set`.
         unsafe { sys::mrb_iv_defined(mrb.as_ptr(), self.0, sym) }
     }
 
@@ -773,7 +742,7 @@ impl Value {
     /// while holding `nil`. Surfaces an `Err` only when a frozen `self`
     /// can hold instance variables.
     #[inline]
-    pub fn iv_remove<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Result<Option<Value>, Error> {
+    pub fn ivar_remove<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Result<Option<Value>, Error> {
         let sym = name.into_id(mrb)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
@@ -810,7 +779,7 @@ impl Value {
     /// after the C walk has finished, so the panic never crosses
     /// mruby's frames.
     #[inline]
-    pub fn each_iv<F>(self, mrb: &Mrb, body: F)
+    pub fn ivar_foreach<F>(self, mrb: &Mrb, body: F)
     where
         F: FnMut(crate::Symbol, Value) -> crate::ForEach,
     {
@@ -896,7 +865,7 @@ impl Value {
         let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
-        // SAFETY: as `iv_set`, with the class-or-module receiver
+        // SAFETY: as `ivar_set`, with the class-or-module receiver
         // `mrb_const_defined` dereferences unchecked established
         // by the guard above.
         unsafe { sys::mrb_const_defined(mrb.as_ptr(), self.0, sym) }
@@ -914,7 +883,7 @@ impl Value {
         let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
-        // SAFETY: as `iv_set`, with the class-or-module receiver
+        // SAFETY: as `ivar_set`, with the class-or-module receiver
         // `mrb_const_defined_at` dereferences unchecked established
         // by the guard above.
         unsafe { sys::mrb_const_defined_at(mrb.as_ptr(), self.0, sym) }
@@ -981,7 +950,7 @@ impl Value {
     /// Surfaces an `Err` when `self` is not a class or module, or when
     /// `sym` resolves to no class variable.
     #[inline]
-    pub fn cv_get<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Result<Value, Error> {
+    pub fn cvar_get<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> Result<Value, Error> {
         if !self.is_class_or_module() {
             return Err(self.not_class_or_module_error(mrb));
         }
@@ -998,10 +967,10 @@ impl Value {
     /// `mrb_cv_set(mrb, self, sym, val)` — assign class variable `sym`
     /// on `self` (the module or class value) to `val`. Surfaces an
     /// `Err` when `self` is not a class or module, or is frozen. The
-    /// value-level write complementing `cv_get`; `mrb_mod_cv_set` (the
+    /// value-level write complementing `cvar_get`; `mrb_mod_cv_set` (the
     /// raw-`RClass*` form) stays in `sys`.
     #[inline]
-    pub fn cv_set<K: crate::IntoId>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
+    pub fn cvar_set<K: crate::IntoId>(self, mrb: &Mrb, name: K, val: Value) -> Result<(), Error> {
         if !self.is_class_or_module() {
             return Err(self.not_class_or_module_error(mrb));
         }
@@ -1023,14 +992,14 @@ impl Value {
     /// value-level analogue of the raw-`RClass*` `mrb_mod_cv_defined`,
     /// which stays in `sys`.
     #[inline]
-    pub fn cv_defined<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
+    pub fn cvar_defined<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
         if !self.is_class_or_module() {
             return false;
         }
         let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
-        // SAFETY: as `iv_set`, with the class-or-module receiver
+        // SAFETY: as `ivar_set`, with the class-or-module receiver
         // `mrb_cv_defined` dereferences unchecked established by
         // the guard above.
         unsafe { sys::mrb_cv_defined(mrb.as_ptr(), self.0, sym) }
@@ -1043,7 +1012,7 @@ impl Value {
         let Ok(mid) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
-        // SAFETY: as `iv_set`.
+        // SAFETY: as `ivar_set`.
         unsafe { sys::mrb_respond_to(mrb.as_ptr(), self.0, mid) }
     }
 
@@ -1144,7 +1113,7 @@ impl Value {
     /// are the same object, Ruby's `equal?`. A pure identity compare:
     /// it dispatches nothing, so it never raises and yields a `bool`.
     #[inline]
-    pub fn obj_equal(self, mrb: &Mrb, other: Value) -> bool {
+    pub fn is_equal(self, mrb: &Mrb, other: Value) -> bool {
         // SAFETY: `mrb` is alive; `self` and `other` share the VM by
         // the single-VM contract. `mrb_obj_equal` only inspects the
         // two values' identity.

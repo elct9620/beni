@@ -87,17 +87,17 @@ typed:
   mrb_ary_resize: RArray::resize
   mrb_ary_set: RArray::store
   mrb_ary_shift: RArray::shift
-  mrb_ary_splat: "`Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `RArray`; distinct from `TryConvert` for `RArray`, which takes only an Array"
+  mrb_ary_splat: "`RArray::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `RArray`; distinct from `TryConvert` for `RArray`, which takes only an Array"
   mrb_ary_splice: RArray::splice
   mrb_ary_unshift: RArray::unshift
   mrb_array_p: "`RArray::from_value`, the downcast reading the value tag"
   mrb_assoc_new: Mrb::assoc_new
   mrb_as_float: "`TryConvert` for `f64` — the Float coercion read out, `Float::try_convert` then `Float::to_f64`; answers `f64`, which holds every configured float width"
   mrb_as_int: "`TryConvert` for the Rust integers — the narrowed Integer coercion read out, `Integer::try_convert` then `Integer::to_i64`"
-  mrb_attr_get: "`Value::iv_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `iv_get` takes the same symbol-or-name key with the same absence of validation, so it yields an identical value for every key a typed caller can form and no separate item is needed"
+  mrb_attr_get: "`Value::ivar_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `ivar_get` takes the same symbol-or-name key with the same absence of validation, so it yields an identical value for every key a typed caller can form and no separate item is needed"
   mrb_block_given_p: "`Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises"
   mrb_break_p: Value::as_break
-  mrb_class_new_instance: "`RClass::obj_new` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed"
+  mrb_class_new_instance: "`RClass::new_instance` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed"
   mrb_class_p: "`RClass::from_value` with `RClass::is_singleton` false — the downcast accepts the class and singleton-class tags alike"
   mrb_data_p: "`RTypedData::from_value`, the downcast reading the value tag"
   mrb_istruct_p: "`RInlineStruct::from_value`, the downcast reading the value tag"
@@ -140,9 +140,9 @@ typed:
   mrb_const_get: Value::const_get
   mrb_const_remove: "`Value::const_remove` — the value-level constant removal; discards the former value (the C API is `void`) and treats an absent constant as a no-op"
   mrb_const_set: Value::const_set
-  mrb_cv_defined: "`Value::cv_defined` — the value-level class-variable presence test, walking the ancestry; `mrb_mod_cv_defined` (the raw-`RClass*` form) stays in `sys`"
-  mrb_cv_get: Value::cv_get
-  mrb_cv_set: "`Value::cv_set` — the value-level class-variable write; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in `sys`"
+  mrb_cv_defined: "`Value::cvar_defined` — the value-level class-variable presence test, walking the ancestry; `mrb_mod_cv_defined` (the raw-`RClass*` form) stays in `sys`"
+  mrb_cv_get: Value::cvar_get
+  mrb_cv_set: "`Value::cvar_set` — the value-level class-variable write; `mrb_mod_cv_set` (the raw-`RClass*` form) stays in `sys`"
   mrb_data_check_get_ptr: "`TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — the type-checked read of a carrier's payload"
   mrb_data_check_type: "`TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — a mismatch surfaces the `TypeError` this check raises, protected into an `Err`"
   mrb_data_init: "`typed_data::Dup::clone` — installs a clone of the payload into the bare carrier `mrb_obj_clone` made, the one install on the typed surface"
@@ -181,10 +181,10 @@ typed:
   mrb_cmp: "`Value::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable"
   mrb_eql: Value::eql
   mrb_equal: Value::equal
-  mrb_obj_equal: Value::obj_equal
+  mrb_obj_equal: Value::is_equal
   mrb_exc_get_id: "`Mrb::exc_get` (the symbol-or-name key) — fetch a built-in exception class, guaranteed an `Exception` subclass"
-  mrb_exc_new: "`ExceptionClass::exc_new`, also via `Error::new` (see Error extension)"
-  mrb_exc_new_str: "`ExceptionClass::exc_new_str` — build an exception carrying an existing mruby `RString` as-is; the static String tag means the underlying type guard never fires"
+  mrb_exc_new: "`Error::new` — builds the exception from a class and Rust bytes, as magnus's `Error::new` does"
+  mrb_exc_new_str: "`ExceptionClass::new_str` — an `Exception` carrying an existing mruby `RString` as-is; the static String tag means the underlying type guard never fires"
   mrb_exc_raise: raised from `Err` by the dispatch bridge (see Error extension)
   mrb_false_p: "`Qfalse::from_value` — false apart from nil, which shares its tag"
   mrb_bool_value: "`IntoValue for bool` — a Rust bool boxes to the true/false immediate (see convert extension)"
@@ -234,11 +234,11 @@ typed:
   mrb_intern_static: Mrb::intern_static
   mrb_intern_lit: "`Mrb::intern_static` — the literal macro `mrb_intern_lit(mrb, lit)` is `mrb_intern_static` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_intern_str: Mrb::intern_str
-  mrb_iv_defined: "`Value::iv_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys`"
-  mrb_iv_foreach: "`Value::each_iv` — closure-based iteration over a snapshot of a value's set instance variables, name as a typed `Symbol`; the closure returns `ForEach::{Continue,Stop}` to proceed or end early, the iteration dispatches no Ruby so no `Result` is needed (magnus binds no ivar foreach)"
-  mrb_iv_get: Value::iv_get
-  mrb_iv_remove: "`Value::iv_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None`"
-  mrb_iv_set: Value::iv_set
+  mrb_iv_defined: "`Value::ivar_defined` — the value-level instance-variable presence test; the raw-`RObject*` `mrb_obj_iv_defined` and `mrb_obj_iv_set` stay in `sys`"
+  mrb_iv_foreach: "`Value::ivar_foreach` — closure-based iteration over a snapshot of a value's set instance variables, name as a typed `Symbol`; the closure returns `ForEach::{Continue,Stop}` to proceed or end early, the iteration dispatches no Ruby so no `Result` is needed (magnus binds no ivar foreach)"
+  mrb_iv_get: Value::ivar_get
+  mrb_iv_remove: "`Value::ivar_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None`"
+  mrb_iv_set: Value::ivar_set
   mrb_parse_nstring: "`Ccontext::load_nstring` — carried by the `compiler` capability feature"
   mrb_load_exec: "`Ccontext::load_nstring` — carried by the `compiler` capability feature"
   mrb_parser_free: "`Ccontext::load_nstring` — carried by the `compiler` capability feature"
@@ -253,17 +253,16 @@ typed:
   mrb_num_add: "`Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width"
   mrb_num_sub: "`Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width)"
   mrb_num_mul: "`Value::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width)"
-  mrb_any_to_s: "`Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::obj_as_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly"
-  mrb_obj_as_string: Value::obj_as_string
+  mrb_any_to_s: "`Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::to_r_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly"
+  mrb_obj_as_string: Value::to_r_string
   mrb_obj_class: Value::class
   mrb_obj_classname: "`Value::classname` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form"
-  mrb_obj_clone: Value::obj_clone
-  mrb_obj_dup: Value::obj_dup
+  mrb_obj_dup: Value::dup
   mrb_obj_freeze: Value::freeze
   mrb_obj_id: "`Value::object_id` — the value-level identity id; `mrb_obj_eq` (the boxing-internal identity primitive `mrb_obj_equal` wraps), `mrb_obj_itself` (returns its own receiver), and `mrb_obj_respond_to` (the raw-`RClass*` form of the graduated value-level `mrb_respond_to`) stay in `sys`"
   mrb_obj_is_instance_of: Value::is_instance_of
   mrb_obj_is_kind_of: "`Value::is_kind_of`, `Error::is_kind_of`"
-  mrb_obj_new: RClass::obj_new
+  mrb_obj_new: RClass::new_instance
   mrb_obj_to_sym: "`Value::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path"
   mrb_obj_value: "`ReprValue::as_value` on `RClass`, `RModule`, and `ExceptionClass`, `Mrb::wrap_as`"
   mrb_open: Mrb::open
@@ -334,7 +333,7 @@ extensions:
     `sys::protect` offers a raw call. `Error::is_kind_of` asks the carried
     exception Ruby's `is_a?` (`mrb_obj_is_kind_of`). `Error::new`
     builds an exception error from a class and a message (via
-    `ExceptionClass::exc_new`) for a handler to raise its own exception, and
+    `mrb_exc_new`) for a handler to raise its own exception, and
     `Error::argnum` builds the canonical wrong-argument-count
     `ArgumentError` (via `mrb_argnum_error`) for a handler validating its
     own arity.
@@ -489,9 +488,9 @@ subsumed:
   mrb_rescue_exceptions: "`sys::protect`, `Error::is_kind_of` — `mrb_protect_error` followed by an `mrb_obj_is_kind_of` walk of the class array (`vendor/mruby/mrbgems/mruby-error/src/exception.c:109-133`). In Rust that walk and the handler are Rust control flow: a `match` on the `Err` a call answers, guarded by `Error::is_kind_of`, carries the class array and both `mrb_func_t` + `mrb_value` data pairs the C form spells out, and a typed operation answers that `Err` with no protection of the caller's own. The arena restore and exception clear that bracket the C form are `mrb_protect_error`'s own (`vendor/mruby/src/vm.c:548,566-567`), so every protected call already performs them"
   mrb_rescue: "`sys::protect`, `Error::is_kind_of` — the StandardError form of `mrb_rescue_exceptions`, whose body passes `1, &mrb->eStandardError_class` (`vendor/mruby/mrbgems/mruby-error/src/exception.c:86-89`); a `match` guard naming `StandardError` reaches it"
   mrb_raisef: "`ExceptionClass::raise`, `Error::new` — the formatting variant of `mrb_raise`, whose body builds the message through mruby's own format engine and ends in the same `mrb_exc_raise` (`vendor/mruby/src/error.c:456-468`); a Rust caller formats the message in Rust before handing it over, the magnus-aligned shape SPEC's error contract names, so the engine is a means the Rust shape already carries rather than a capability of its own"
-  mrb_name_error: "`RClass::obj_new` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef`"
-  mrb_no_method_error: "`RClass::obj_new` — `NoMethodError#initialize(message, name, args)` sets the same `@name` and `@args` the C form writes directly (`vendor/mruby/src/error.c:634-635`, `vendor/mruby/mrblib/10error.rb:11-19`); see `mrb_name_error`"
-  mrb_exc_new_lit: "`ExceptionClass::exc_new_str` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it"
+  mrb_name_error: "`RClass::new_instance` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef`"
+  mrb_no_method_error: "`RClass::new_instance` — `NoMethodError#initialize(message, name, args)` sets the same `@name` and `@args` the C form writes directly (`vendor/mruby/src/error.c:634-635`, `vendor/mruby/mrblib/10error.rb:11-19`); see `mrb_name_error`"
+  mrb_exc_new_lit: "`Error::new` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it"
   mrb_exc_get: "`Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it"
   mrb_clear_error: "`Mrb::clear_exc` — the inner call of `mrb_check_error`, whose body is `if (mrb->exc) { mrb_clear_error(mrb); return TRUE; }` (`vendor/mruby/src/error.c:876-891`); the bool the C form returns is what the Rust shape drops, and clearing the pending exception is the whole of what remains"
   mrb_ensure: "`sys::protect` — `mrb_protect_error`, then the cleanup call, then a rethrow of the caught exception (`vendor/mruby/mrbgems/mruby-error/src/exception.c:56-68`). In Rust the cleanup is the code after the call and the rethrow is the `Err` that call answers, a cleanup's own `Err` replacing it through `?`, so the two `mrb_func_t` + `mrb_value` data pairs are Rust control flow. The C form brackets both calls in one arena save to keep the body's result alive across the cleanup; each `mrb_protect_error` re-protects the value it surfaces before returning (`vendor/mruby/src/vm.c:566-567`), so the call's result outlives the cleanup's own protected calls"
@@ -500,6 +499,7 @@ subsumed:
   mrb_check_string_type: "`FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type`"
   mrb_check_type: "the `FromValue` downcasts — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot"
 declined:
+  mrb_obj_clone: "Ruby's `clone` on a value — the typed name would be `Value::clone`, which a `Value`'s own `Clone` already holds, and magnus offers no form either; a consumer dispatches `clone` through `Value::funcall`, while `typed_data::Dup::clone` keeps using it inside the crate"
   mrb_sys_fail: "declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from an exception class and a message, which `ExceptionClass::raise` already reaches from a Rust `std::io::Error`"
   mrb_print_error: "writes the pending exception and its backtrace to the process's standard error (`vendor/mruby/src/error.c:843-866`) — no typed shape carries a write to the host's stderr, and SPEC holds the same line for the compiler's diagnostics: where a diagnostic is written is the host's choice, not beni's. `Error::message` and `Error::backtrace` hand a Rust caller the same text to write where it chooses"
   mrb_malloc: "VM allocator — Principle 11: a Rust consumer owns memory through Rust's allocator, and `TypedData`'s wraps are the graduated seam between the two"

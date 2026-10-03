@@ -29,7 +29,7 @@ fn a_splat_reads_the_argc_mruby_writes() {
         .expect("registering the bridge must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let args = [
         1i32.into_value(&mrb),
@@ -91,7 +91,7 @@ fn arg1_reads_the_single_argument() {
         .expect("registering the bridge must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let got = receiver
         .funcall(&mrb, c"arg1_echo", &[42i32.into_value(&mrb)])
@@ -110,7 +110,7 @@ fn arg1_raises_argument_error_on_wrong_count() {
         .expect("registering the bridge must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     // Two positionals: `mrb_get_arg1` raises ArgumentError rather
     // than returning the first — the strict-count contract.
@@ -135,7 +135,7 @@ fn argc_reads_the_argument_count() {
         .expect("registering the bridge must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     let args = [
         1i32.into_value(&mrb),
@@ -159,7 +159,7 @@ fn argv_reads_the_whole_argument_array() {
         .expect("registering the bridge must succeed");
 
     let receiver = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
 
     // Several arguments: the body reads every slot and sums them, so
@@ -194,7 +194,7 @@ fn block_given_reports_whether_a_block_was_passed() {
         .expect("registering the bridge must succeed");
 
     let recv = class
-        .obj_new(&mrb, &[])
+        .new_instance(&mrb, &[])
         .expect("the receiver constructs without raising");
     mrb.gv_set(c"$beni_block_recv", recv)
         .expect("the name interns");
