@@ -24,7 +24,8 @@
 //!                      value          (Value + ReprValue, the trait
 //!                                      every handle stands for one by)
 //!                      class          (RClass / RModule / ExceptionClass
-//!                                      handles + traits)
+//!                                      handles)
+//!                      module / object (Module and Object traits)
 //!                      array / hash   (RArray / RHash handles)
 //!                      string / range (RString / Range handles)
 //!                      symbol / proc  (Id, Symbol / Proc handles)
@@ -73,6 +74,8 @@ pub mod gem;
 pub mod hash;
 pub mod inline_struct;
 pub mod method;
+pub mod module;
+mod object;
 pub mod parse;
 pub mod proc;
 pub mod range;
@@ -100,7 +103,7 @@ pub use state::{Mrb, MrbOpenError};
 pub use ccontext::Ccontext;
 
 pub use array::RArray;
-pub use class::{ExceptionClass, Module, Object, RClass, RModule};
+pub use class::{ExceptionClass, RClass, RModule};
 pub use convert::{FromValue, IntoValue};
 pub use data::DataType;
 pub use error::Error;
@@ -108,6 +111,8 @@ pub use gem::Gem;
 pub use hash::{ForEach, RHash};
 pub use inline_struct::{Inline, InlineStruct, InlineType};
 pub use method::{MethodDef, MethodReturn};
+pub use module::Module;
+pub use object::Object;
 pub use parse::ParseMessage;
 pub use proc::{DumpOptions, Proc};
 pub use range::{Range, RangeBegLen};
