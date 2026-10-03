@@ -334,7 +334,6 @@ pub use beni_macros::TypedData;
 /// struct Cell(u32);
 /// ```
 pub use beni_macros::InlineStruct;
-pub use value::cstr_ptr;
 pub use value::{Break, ReprValue, Value};
 
 /// Typed counterpart of `sys::mrb_func_t` using the `Value` newtype

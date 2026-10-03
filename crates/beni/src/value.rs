@@ -11,31 +11,6 @@ use beni_sys as sys;
 use crate::{sys::AsRawValue, Error, Module, Mrb, RClass};
 use crate::{FromValue, RString};
 
-/// Compile-time NUL-terminated C-string literal pointer.
-///
-/// `cstr!("name")` expands to `concat!("name", "\0").as_ptr() as *const c_char`,
-/// avoiding the noisy hand-written `b"name\0".as_ptr() as *const core::ffi::c_char`
-/// pattern at every FFI call site.
-#[macro_export]
-macro_rules! cstr {
-    ($s:expr) => {
-        concat!($s, "\0").as_ptr() as *const core::ffi::c_char
-    };
-}
-
-/// Coerce a NUL-terminated byte slice to `*const c_char`. Used for the
-/// top-of-file `const X: &[u8] = b"...\0"` declarations that already
-/// carry their NUL terminator — `cstr_ptr(CLASS_NAME)` reads cleaner
-/// than `CLASS_NAME.as_ptr() as *const core::ffi::c_char`.
-///
-/// The caller must guarantee `b` ends with `0u8` — debug builds assert.
-#[inline]
-pub const fn cstr_ptr(b: &[u8]) -> *const core::ffi::c_char {
-    debug_assert!(!b.is_empty());
-    debug_assert!(b[b.len() - 1] == 0);
-    b.as_ptr() as *const core::ffi::c_char
-}
-
 // --------------------------------------------------------------------
 // Immediates cache.
 // --------------------------------------------------------------------
@@ -1249,28 +1224,6 @@ pub(crate) fn widen(n: sys::mrb_int) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn cstr_macro_appends_nul_terminator() {
-        let p = cstr!("hello");
-        let cs = unsafe { core::ffi::CStr::from_ptr(p) };
-        assert_eq!(cs.to_str().unwrap(), "hello");
-    }
-
-    #[test]
-    fn cstr_ptr_accepts_nul_terminated_bytes() {
-        const NAME: &[u8] = b"Kobako\0";
-        let p = cstr_ptr(NAME);
-        let cs = unsafe { core::ffi::CStr::from_ptr(p) };
-        assert_eq!(cs.to_str().unwrap(), "Kobako");
-    }
-
-    #[test]
-    fn cstr_macro_handles_empty_string() {
-        let p = cstr!("");
-        let cs = unsafe { core::ffi::CStr::from_ptr(p) };
-        assert_eq!(cs.to_str().unwrap(), "");
-    }
 
     #[test]
     fn value_shares_abi_with_mrb_value() {
