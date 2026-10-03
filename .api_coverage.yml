@@ -90,7 +90,7 @@ typed:
   mrb_ary_splat: "`Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `RArray`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `RArray` downcast (the tag-test that reads a non-Array as absent)"
   mrb_ary_splice: RArray::splice
   mrb_ary_unshift: RArray::unshift
-  mrb_array_p: "`Value::is_array`, via the value tag"
+  mrb_array_p: "`RArray::from_value`, the downcast reading the value tag"
   mrb_assoc_new: Mrb::assoc_new
   mrb_as_float: "`Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast. Answers `f64`, which holds every configured float width"
   mrb_as_int: "`Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast"
@@ -98,20 +98,23 @@ typed:
   mrb_block_given_p: "`Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises"
   mrb_break_p: Value::as_break
   mrb_class_new_instance: "`RClass::obj_new` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed"
-  mrb_class_p: "`Value::is_class`, via the value tag"
-  mrb_data_p: "`Value::is_data`, via the value tag"
-  mrb_istruct_p: "`Value::is_istruct`, via the value tag"
-  mrb_cptr_p: "`Value::is_cptr`, via the value tag"
-  mrb_exception_p: "`Value::is_exception`, via the value tag"
-  mrb_float_p: "`Value::is_float`, via the value tag"
-  mrb_hash_p: "`Value::is_hash`, via the value tag"
-  mrb_integer_p: "`Value::is_integer` — true for any Integer; the immediate-only `mrb_fixnum_p`, which diverges from this under word boxing, is intentionally not graduated"
-  mrb_module_p: "`Value::is_module`, via the value tag"
-  mrb_proc_p: "`Value::is_proc`, via the value tag"
-  mrb_range_p: "`Value::is_range`, via the value tag"
-  mrb_sclass_p: "`Value::is_sclass`, via the value tag"
-  mrb_string_p: "`Value::is_string`, via the value tag"
-  mrb_symbol_p: "`Value::is_symbol`, via the value tag"
+  mrb_class_p: "`RClass::from_value` with `RClass::is_singleton` false — the downcast accepts the class and singleton-class tags alike"
+  mrb_data_p: "`RTypedData::from_value`, the downcast reading the value tag"
+  mrb_istruct_p: "`RInlineStruct::from_value`, the downcast reading the value tag"
+  mrb_cptr_p: "`RCptr::from_value`, the downcast reading the value tag"
+  mrb_exception_p: "`Exception::from_value`, the downcast reading the value tag"
+  mrb_float_p: "`Float::from_value`, the downcast reading the value tag"
+  mrb_hash_p: "`RHash::from_value`, the downcast reading the value tag"
+  mrb_integer_p: "`Integer::from_value` — accepts the fixed-width tag `mrb_integer_p` tests and the arbitrary-width tag beside it, as magnus's `Integer` takes a Fixnum or a Bignum"
+  mrb_module_p: "`RModule::from_value`, the downcast reading the value tag"
+  mrb_proc_p: "`Proc::from_value`, the downcast reading the value tag"
+  mrb_range_p: "`Range::from_value`, the downcast reading the value tag"
+  mrb_sclass_p: "`RClass::is_singleton` on a `RClass::from_value` handle — the downcast accepts the class and singleton-class tags alike, and mruby keeps `singleton_class?` in the class-ext gem"
+  mrb_string_p: "`RString::from_value`, the downcast reading the value tag"
+  mrb_symbol_p: "`Symbol::from_value`, the downcast reading the value tag"
+  mrb_object_p: "`RObject::from_value`, the downcast reading the value tag"
+  mrb_fiber_p: "`Fiber::from_value`, the downcast reading the value tag"
+  mrb_undef_p: "`Qundef::from_value` — the handle never converts back into a value, as magnus's `Qundef::as_value` is `unsafe`"
   mrb_break_value_get: Break::value
   mrb_ccontext_filename: "`Ccontext::new` — carried by the `compiler` capability feature"
   mrb_ccontext_free: "`Ccontext::drop` — carried by the `compiler` capability feature"
@@ -183,7 +186,7 @@ typed:
   mrb_exc_new: "`ExceptionClass::exc_new`, also via `Error::new` (see Error extension)"
   mrb_exc_new_str: "`ExceptionClass::exc_new_str` — build an exception carrying an existing mruby `RString` as-is; the static String tag means the underlying type guard never fires"
   mrb_exc_raise: raised from `Err` by the dispatch bridge (see Error extension)
-  mrb_false_p: Value::is_false
+  mrb_false_p: "`Qfalse::from_value` — false apart from nil, which shares its tag"
   mrb_bool_value: "`IntoValue for bool` — a Rust bool boxes to the true/false immediate (see convert extension)"
   mrb_false_value: Value::false_
   mrb_float_to_integer: "`Value::float_to_int` — convert a Float value to the Integer value it truncates toward zero (Ruby's Float#to_i / Float#to_int); guards the Float tag (TypeError) and raises RangeError on an infinite or NaN float"
@@ -245,7 +248,7 @@ typed:
   mrb_module_get_under: "`Module::module_get` with a name key — interns and routes through `mrb_module_get_under_id`"
   mrb_module_get_under_id: "`Module::module_get` with an `Id` key (the symbol-or-name key)"
   mrb_module_new: "`Mrb::module_new` — create an anonymous module, bound to no constant"
-  mrb_nil_p: Value::is_nil
+  mrb_nil_p: "`Value::is_nil`, `Qnil::from_value`"
   mrb_nil_value: Value::nil
   mrb_num_add: "`Value::add` — add two numeric values (Ruby's `+` on Integer / Float); dispatches the operands on the numeric tag, raising TypeError on a non-numeric operand and RangeError on an integer result past the configured width"
   mrb_num_sub: "`Value::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `Value::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width)"
@@ -309,7 +312,7 @@ typed:
   mrb_test: Value::to_bool
   mrb_top_run: Mrb::load_bytecode
   mrb_top_self: Mrb::load_bytecode
-  mrb_true_p: Value::is_true
+  mrb_true_p: Qtrue::from_value
   mrb_true_value: Value::true_
   mrb_undef_class_method_id: "`Object::undef_singleton_method` — undefine a class method (a class's singleton method); routes both the symbol-or-name key through the raising `_id` form, so the `mrb_undef_class_method` string variant stays in `sys`"
   mrb_undef_method_id: "`Module::undef_method` — Ruby's `Module#undef_method`; both the symbol-or-name key route through the raising `_id` form, so the `mrb_undef_method` string variant (which does not raise) stays in `sys`"
@@ -425,6 +428,11 @@ extensions:
     `std::panic::catch_unwind` and answers `Error::Panic` carrying the
     payload's message. The registered-method bridge and `Mrb::init_gem`
     go through it. Binds no C symbol.
+  Tagged handles: >-
+    `RStruct`, `RSet`, `RRational` and `RComplex` downcast on the struct,
+    set, rational and complex tags their gems allocate, which mruby gives
+    no `mrb_*_p` macro; with the macro-backed handles they make every tag
+    a typed caller can hold convertible into a handle.
   RArray::entries: >-
     `ExactSizeIterator` walk of an array by C-level index: composes the
     already-graduated `RArray::entry` (`mrb_ary_entry`) and `RArray::len`
@@ -446,7 +454,7 @@ extensions:
 # checks that every specifier the crate hands `mrb_get_args` is marked covered.
 get_args_formats:
   o: { status: covered, via: "scan_args required / optional / trailing parts, or the typed method registration" }
-  C: { status: covered, via: "scan_args + FromValue<RClass> / FromValue<RModule>, or Value::is_class / is_sclass / is_module" }
+  C: { status: covered, via: "scan_args + FromValue<RClass> / FromValue<RModule>" }
   S: { status: covered, via: "scan_args + FromValue<RString>, or Value::ensure_string" }
   A: { status: covered, via: "scan_args + FromValue<RArray> / Value::ensure_array" }
   H: { status: covered, via: "scan_args + FromValue<RHash> / Value::ensure_hash" }
@@ -490,7 +498,7 @@ subsumed:
   mrb_check_array_type: "`FromValue` -> `RArray` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it"
   mrb_check_hash_type: "`FromValue` -> `Hash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type`"
   mrb_check_string_type: "`FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type`"
-  mrb_check_type: "the `FromValue` downcasts and the `Value::is_*` tag predicates — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot"
+  mrb_check_type: "the `FromValue` downcasts — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot"
 declined:
   mrb_sys_fail: "declared `mrb_noreturn` (`vendor/mruby/src/error.c:593`) and raises through `SystemCallError`, so it never returns to a typed caller — SPEC's error contract builds an exception from an exception class and a message, which `ExceptionClass::raise` already reaches from a Rust `std::io::Error`"
   mrb_print_error: "writes the pending exception and its backtrace to the process's standard error (`vendor/mruby/src/error.c:843-866`) — no typed shape carries a write to the host's stderr, and SPEC holds the same line for the compiler's diagnostics: where a diagnostic is written is the host's choice, not beni's. `Error::message` and `Error::backtrace` hand a Rust caller the same text to write where it chooses"
@@ -522,6 +530,11 @@ declined:
   mrb_obj_alloc: "allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `Mrb::wrap_as`"
   mrb_free_context: "releases a `struct mrb_context*` — VM-internal, the same call-frame machinery whose indices stay in `sys`; `Mrb::drop` releases the interpreter and every context it owns"
   mrb_iclass_p: "tests for the include-class tag, which no value a typed caller holds carries — mruby keeps include classes internal, filtering them out of `ObjectSpace` (`vendor/mruby/mrbgems/mruby-objectspace/src/mruby_objectspace.c:131-135`) and answering the included module in their place from `Module#ancestors` (`vendor/mruby/src/class.c:2245-2246`)"
+  mrb_env_p: "tests for the environment tag, which only the VM's captured local-variable frames carry (`vendor/mruby/src/gc.c:568`) — see `mrb_iclass_p`"
+  mrb_free_p: "tests for the freed-slot tag the collector paints a reclaimed object with (`vendor/mruby/src/gc.c:348`) — a typed `Value` names a live object or it is not one; see `mrb_object_dead_p`"
+  mrb_immediate_p: "tests how the configured boxing stores a value (`vendor/mruby/include/mruby/boxing_word.h:175`), not which type it is — no typed caller decides anything by the boxing; type discrimination is the handle downcasts"
+  mrb_fixnum_p: "tests whether an Integer sits inline in the word (`vendor/mruby/include/mruby/boxing_word.h:200`) — a boxing fact, not the fixed-width-or-arbitrary split magnus's `Fixnum` draws; `Integer::from_value` discriminates the type"
+  mrb_ro_data_p: "tests whether a C pointer falls in the binary's read-only section (`vendor/mruby/include/mruby/value.h:440-470`), mruby's own string-literal optimisation — it takes a pointer, not a value, and no typed caller holds one to ask about"
   mrb_cptr_value: "boxes a bare `void*` into a value — Principle 11: a raw pointer crossing into the typed domain, and reading it back answers the same untyped pointer, so no typed shape carries more than the raw call. mruby uses it as the context an `mrb_ensure` callback reads (`vendor/mruby/mrbgems/mruby-socket/src/socket.c:222`), which a Rust closure carries; Rust data an object owns crosses through `TypedData`"
 conditional:
   mrb_bigint_p: "`MRB_USE_BIGINT` — without it `vendor/mruby/include/mruby/value.h:322` expands the macro to `FALSE`; beni's pinned ABI sets only `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`"
