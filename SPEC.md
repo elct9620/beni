@@ -1125,10 +1125,12 @@ A class or module handle's named class variables and constants support these ope
 | class-variable assign | any `IntoValue` value, in place | the receiver is frozen |
 | class-variable presence | walking the ancestry | never; a total predicate |
 | constant fetch | through `TryConvert` into a requested type | the name resolves to no constant, its `const_missing` hook raises, or the value does not convert |
-| constant assign | any `IntoValue` value, in place | the receiver is frozen, or its `const_added` hook raises |
+| constant assign | any `IntoValue` value, in place; an unnamed class or module it binds is named by the constant's path when the receiver is `Object` or itself named | the receiver is frozen, or its `const_added` hook raises |
 | constant presence | walking the ancestry | never; a total predicate |
 | direct constant presence | on the receiver alone; true only for the receiver's own constant, never one inherited from an ancestor | never; a total predicate |
 | constant removal | discards the former value; an absent constant is a no-op rather than an error | the receiver is frozen |
+
+A top-level constant binds on the live `Mrb` handle as a constant assignment on `Object`, mirroring `magnus`'s `define_global_const`.
 
 ##### Global variables
 
@@ -1155,7 +1157,7 @@ Class and module definition are methods on the live `Mrb` handle: `define_class(
 
 ##### Anonymous classes
 
-The live `Mrb` handle also creates an anonymous class, given a superclass, and an anonymous module, mirroring `magnus`'s anonymous class and module creation. The result is an unnamed `RClass` or `RModule`, reachable only through the returned handle and never registered under a name in any namespace. It gains a name only when a consumer later binds it to a constant.
+The live `Mrb` handle also creates an anonymous class, given a superclass, and an anonymous module, mirroring `magnus`'s anonymous class and module creation. The result is an unnamed `RClass` or `RModule`, reachable only through the returned handle and never registered under a name in any namespace. It gains a name only when a constant assignment later binds it.
 
 | Creation | Outcome |
 |---|---|
@@ -1168,7 +1170,6 @@ Methods register on those handles through the `Module` trait, and singleton meth
 
 | Operation | Effect |
 |---|---|
-| constant binding | binds a constant |
 | alias | aliases an existing method |
 | include (Ruby's `Module#include`) | mixes another module in after the receiver in the ancestry; the receiver's own methods win |
 | prepend (Ruby's `Module#prepend`) | mixes it in ahead of the receiver; the module's methods override the receiver's own |
