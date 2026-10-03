@@ -366,3 +366,22 @@ fn a_float_surfaces_infinity_and_nan_as_err() {
         Some(2)
     );
 }
+
+#[test]
+fn an_integer_reads_out_as_an_i64() {
+    let mrb = open_mrb();
+
+    assert_eq!(integer(&mrb, -7).to_i64(&mrb).expect("fits"), -7);
+    assert_eq!(
+        integer(&mrb, i32::MAX).to_i64(&mrb).expect("fits"),
+        i64::from(i32::MAX)
+    );
+}
+
+#[test]
+fn a_float_reads_out_as_an_f64() {
+    let mrb = open_mrb();
+
+    assert_eq!(float(&mrb, 2.5).to_f64(), 2.5);
+    assert!(float(&mrb, f32::NAN).to_f64().is_nan());
+}

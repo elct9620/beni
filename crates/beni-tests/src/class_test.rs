@@ -54,13 +54,13 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
     let got = receiver
         .funcall(&mrb, c"answer", &[])
         .expect("the Symbol-keyed method must be callable by name");
-    assert_eq!(unsafe { got.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 
     let const_val = fetched
         .as_value()
         .const_get(&mrb, mrb.intern_cstr(c"ANSWER").expect("the name interns"))
         .expect("the Symbol-keyed constant must read by name");
-    assert_eq!(unsafe { const_val.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(const_val).expect("an Integer"), 7);
 }
 
 #[test]
@@ -112,12 +112,12 @@ fn symbol_key_registers_private_singleton_and_module_function() {
     let private = receiver
         .funcall(&mrb, c"secret", &[])
         .expect("the Symbol-keyed private method must be reachable via funcall");
-    assert_eq!(unsafe { private.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(private).expect("an Integer"), 7);
     let singleton = class
         .as_value()
         .funcall(&mrb, c"klass_answer", &[])
         .expect("the Symbol-keyed singleton method must be callable");
-    assert_eq!(unsafe { singleton.unbox_integer() }, 9);
+    assert_eq!(i64::from_value(singleton).expect("an Integer"), 9);
 
     let module = mrb
         .define_module(c"BeniSymModFn")
@@ -143,7 +143,7 @@ fn symbol_key_registers_private_singleton_and_module_function() {
         "calling the Symbol-keyed module function must not raise: {}",
         mrb.pending_exc().to_string(&mrb)
     );
-    assert_eq!(unsafe { got.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 }
 
 #[test]
@@ -380,7 +380,7 @@ fn private_method_rejects_public_dispatch_but_is_attached() {
     let got = receiver
         .funcall(&mrb, c"secret", &[])
         .expect("funcall dispatch must reach the private body");
-    assert_eq!(unsafe { got.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 }
 
 #[test]
@@ -421,9 +421,9 @@ fn alias_method_keys_both_names_as_symbol_or_name() {
     let by_name = receiver
         .funcall(&mrb, c"by_name", &[])
         .expect("the name-keyed alias must be callable");
-    assert_eq!(unsafe { original.unbox_integer() }, 7);
-    assert_eq!(unsafe { by_sym.unbox_integer() }, 7);
-    assert_eq!(unsafe { by_name.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(original).expect("an Integer"), 7);
+    assert_eq!(i64::from_value(by_sym).expect("an Integer"), 7);
+    assert_eq!(i64::from_value(by_name).expect("an Integer"), 7);
 }
 
 #[test]
@@ -450,7 +450,7 @@ fn module_and_object_traits_register_methods() {
     let got = receiver
         .funcall(&mrb, c"answer", &[])
         .expect("the registered method must not raise");
-    assert_eq!(unsafe { got.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 
     // Object trait: singleton registration on the class handle,
     // invoked through the reified class value.
@@ -461,7 +461,7 @@ fn module_and_object_traits_register_methods() {
     let got = class_value
         .funcall(&mrb, c"class_answer", &[])
         .expect("the registered class method must not raise");
-    assert_eq!(unsafe { got.unbox_integer() }, 9);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 9);
 
     // Lookup round-trip through the trait.
     let fetched = outer
@@ -493,7 +493,7 @@ fn define_module_function_attaches_to_module_and_includers() {
         "calling the module function must not raise: {}",
         mrb.pending_exc().to_string(&mrb)
     );
-    assert_eq!(unsafe { direct.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(direct).expect("an Integer"), 7);
 
     // Callable as a bare private helper inside a class that mixes the
     // module in — the private-instance form.
@@ -507,7 +507,7 @@ fn define_module_function_attaches_to_module_and_includers() {
         "calling the mixed-in private form must not raise: {}",
         mrb.pending_exc().to_string(&mrb)
     );
-    assert_eq!(unsafe { included.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(included).expect("an Integer"), 7);
 }
 
 #[test]
@@ -572,7 +572,7 @@ fn define_const_binds_a_constant_readable_from_ruby() {
         got.is::<beni::Integer>(),
         "the bound constant reads back as Integer"
     );
-    assert_eq!(unsafe { got.unbox_integer() }, 42);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 42);
 }
 
 #[test]
@@ -599,7 +599,7 @@ fn alias_method_binds_a_second_name_for_an_existing_method() {
     let got = receiver
         .funcall(&mrb, c"original_answer", &[])
         .expect("the aliased method must not raise");
-    assert_eq!(unsafe { got.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 }
 
 #[test]
@@ -628,7 +628,7 @@ fn include_module_mixes_in_and_rejects_a_cyclic_include() {
     let got = receiver
         .funcall(&mrb, c"helped", &[])
         .expect("the mixed-in method must not raise");
-    assert_eq!(unsafe { got.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 
     // Including a module into itself is a cyclic include — rejected.
     assert!(helper.include_module(&mrb, helper).is_err());
@@ -669,13 +669,13 @@ fn prepend_module_overrides_the_receiver_and_rejects_a_cyclic_prepend() {
     let overridden = receiver
         .funcall(&mrb, c"answer", &[])
         .expect("the overriding method must not raise");
-    assert_eq!(unsafe { overridden.unbox_integer() }, 9);
+    assert_eq!(i64::from_value(overridden).expect("an Integer"), 9);
 
     // A method only the prepended module defines is callable.
     let only = receiver
         .funcall(&mrb, c"helped", &[])
         .expect("the module-only method must not raise");
-    assert_eq!(unsafe { only.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(only).expect("an Integer"), 7);
 
     // Prepending a module into itself is a cyclic prepend — rejected.
     assert!(helper.prepend_module(&mrb, helper).is_err());
@@ -723,7 +723,7 @@ fn undef_method_marks_a_method_undefined_on_the_handle() {
     let got = receiver
         .funcall(&mrb, c"answer", &[])
         .expect("the defined method must be callable before undefinition");
-    assert_eq!(unsafe { got.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 
     class
         .undef_method(&mrb, c"answer")
@@ -840,7 +840,7 @@ fn undef_singleton_method_marks_a_class_method_undefined() {
     let got = class_value
         .funcall(&mrb, c"class_answer", &[])
         .expect("the class method must be callable before undefinition");
-    assert_eq!(unsafe { got.unbox_integer() }, 9);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 9);
 
     class
         .undef_singleton_method(&mrb, c"class_answer")
@@ -1032,7 +1032,7 @@ fn exception_class_registers_methods_through_the_module_trait() {
         .exc_new(&mrb, "carrying a code")
         .funcall(&mrb, c"beni_code", &[])
         .expect("the registered method must be callable on the exception");
-    assert_eq!(unsafe { got.unbox_integer() }, 7);
+    assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 }
 
 #[test]

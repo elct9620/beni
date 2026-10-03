@@ -41,7 +41,7 @@ fn a_splat_reads_the_argc_mruby_writes() {
         .expect("the bridge must not raise");
 
     assert!(count.is::<beni::Integer>(), "bridge must return an Integer");
-    assert_eq!(unsafe { count.unbox_integer() }, 3);
+    assert_eq!(i64::from_value(count).expect("an Integer"), 3);
 }
 
 /// Registered through `beni::method!(arg1_echo, -1)`: reads the single

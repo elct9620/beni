@@ -30,8 +30,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_alloca` | macro | ❌ | 🚫 | declined: VM scratch allocator, a `#define` over `mrb_temp_alloc` — see `mrb_malloc` |
 | `mrb_any_to_s` | fn | ✅ | ✅ | `Value::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `Value::obj_as_string` it dispatches no `to_s`, and unlike `Value::inspect` it runs no user `inspect`. Total, so it returns the RString directly |
 | `mrb_argnum_error` | fn | ✅ | ✅ | `Error::argnum` |
-| `mrb_as_float` | macro | ✅ | ✅ | `Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast. Answers `f64`, which holds every configured float width |
-| `mrb_as_int` | macro | ✅ | ✅ | `Value::as_int` — convert across the numeric types, distinct from the exact-tag `i32::from_value` downcast |
+| `mrb_as_float` | macro | ✅ | ✅ | `TryConvert` for `f64` — the Float coercion read out, `Float::try_convert` then `Float::to_f64`; answers `f64`, which holds every configured float width |
+| `mrb_as_int` | macro | ✅ | ✅ | `TryConvert` for the Rust integers — the narrowed Integer coercion read out, `Integer::try_convert` then `Integer::to_i64` |
 | `mrb_attr_get` | fn | ✅ | ✅ | `Value::iv_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `iv_get` takes the same symbol-or-name key with the same absence of validation, so it yields an identical value for every key a typed caller can form and no separate item is needed |
 | `mrb_basic_alloc_func` | fn | ✅ | 🚫 | declined: the default allocator `mrb_open_allocf` installs; `Mrb::open` opens with `mrb_open`, so no typed caller reaches it |
 | `mrb_block_given_p` | fn | ✅ | ✅ | `Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises |

@@ -1233,59 +1233,6 @@ fn freeze_marks_the_value_frozen() {
 }
 
 #[test]
-fn as_int_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
-    let mrb = open_mrb();
-
-    // An Integer reads directly.
-    assert_eq!(
-        42i32
-            .into_value(&mrb)
-            .as_int(&mrb)
-            .expect("an Integer converts"),
-        42
-    );
-
-    // A Float converts by truncating toward zero — unlike the
-    // exact-tag `i32::from_value`, which rejects the Float tag.
-    let float_val = 2.9f32.into_value(&mrb);
-    assert_eq!(i32::from_value(float_val), None);
-    assert_eq!(float_val.as_int(&mrb).expect("a Float truncates"), 2);
-
-    // A non-numeric value raises TypeError — surfaced as Err instead
-    // of unwinding across the call.
-    assert!(matches!(
-        mrb.str_new(b"x").as_value().as_int(&mrb),
-        Err(Error::Exception(_))
-    ));
-}
-
-#[test]
-fn as_float_converts_across_numeric_types_and_surfaces_non_numeric_as_err() {
-    let mrb = open_mrb();
-
-    // A Float reads directly.
-    assert_eq!(
-        1.5f32
-            .into_value(&mrb)
-            .as_float(&mrb)
-            .expect("a Float converts"),
-        1.5
-    );
-
-    // An Integer widens to a float — unlike the exact-tag
-    // `f64::from_value`, which rejects the Integer tag.
-    let int_val = 3i32.into_value(&mrb);
-    assert_eq!(f64::from_value(int_val), None);
-    assert_eq!(int_val.as_float(&mrb).expect("an Integer widens"), 3.0);
-
-    // A non-numeric value raises TypeError — surfaced as Err.
-    assert!(matches!(
-        mrb.str_new(b"x").as_value().as_float(&mrb),
-        Err(Error::Exception(_))
-    ));
-}
-
-#[test]
 fn arithmetic_computes_on_integers_and_floats() {
     let mrb = open_mrb();
 

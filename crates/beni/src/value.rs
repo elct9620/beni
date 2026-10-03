@@ -681,35 +681,26 @@ impl Value {
         unsafe { sys::mrb_break_p_func(self.0) }.then_some(Break(self))
     }
 
-    /// Direct `mrb_integer(v)` unbox via mruby's own
-    /// `mrb_integer_func` helper (a `MRB_INLINE` reached through
-    /// bindgen's static-fn trampoline), as an `i64`, which holds every
-    /// configured integer width.
+    /// The integer a fixed-width Integer carries, as an `i64`, which
+    /// holds every configured integer width.
     ///
     /// # Safety
     ///
-    /// `self` must carry the fixed-width Integer tag (`MRB_TT_INTEGER`)
-    /// — an `Integer` downcast also accepts the arbitrary-width tag, which
-    /// this unbox cannot read; calling on any other value is undefined
-    /// behaviour per mruby's macro contract.
+    /// `self` must carry the fixed-width Integer tag (`MRB_TT_INTEGER`).
     #[inline]
-    pub unsafe fn unbox_integer(self) -> i64 {
+    pub(crate) unsafe fn unbox_integer(self) -> i64 {
         // SAFETY: forwarded from caller.
         widen(unsafe { sys::mrb_integer_func(self.0) })
     }
 
-    /// Direct `mrb_float(v)` unbox via the `mrb_float_func`
-    /// static-inline wrapper in `wrapper.h`. The `mrb_float(o)` macro
-    /// expands differently per boxing mode (inline-rotated word,
-    /// RFloat heap read, NaN payload); expanding it inside the C
-    /// compiler keeps the unbox correct for whatever config the
-    /// linked archive was built with.
+    /// The float a Float carries, read through a C wrapper so the
+    /// configured boxing mode's expansion of `mrb_float` applies.
     ///
     /// # Safety
     ///
-    /// As `Value::unbox_integer`: caller has confirmed Float-tagging.
+    /// `self` must carry the Float tag.
     #[inline]
-    pub unsafe fn unbox_float(self) -> f64 {
+    pub(crate) unsafe fn unbox_float(self) -> f64 {
         // SAFETY: forwarded from caller.
         let f = unsafe { sys::mrb_float_func(self.0) };
         // The widening is the configured width's, not a cast the
@@ -1262,61 +1253,6 @@ impl Value {
             n if n < 0 => Some(core::cmp::Ordering::Less),
             _ => Some(core::cmp::Ordering::Greater),
         })
-    }
-
-    /// `mrb_as_int(mrb, self)` — convert `self` to a Rust integer across
-    /// the numeric types: an Integer reads directly and a Float truncates
-    /// toward zero. A non-numeric value raises `TypeError` and a Float
-    /// that is infinite or NaN raises `RangeError`, so the conversion runs
-    /// under exception protection: `Ok` with the number, or `Err`. The
-    /// conversion runs no user Ruby — it dispatches no `to_int`. Distinct
-    /// from `i32::from_value`, the exact-tag downcast that never converts
-    /// across types and rejects a Float outright.
-    ///
-    /// The converted number round-trips through `Value::from_int` inside
-    /// the protect frame and `unbox_integer` after — `mrb_int_value` is
-    /// the boxing-agnostic constructor (heap bigint when the value
-    /// exceeds the inline range) and `mrb_integer` reads either form
-    /// back, so the round-trip is lossless across the configured
-    /// integer width, which an `i64` holds.
-    #[inline]
-    pub fn as_int(self, mrb: &Mrb) -> Result<i64, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `self`
-            // originates from the same VM. `mrb_as_int` raises
-            // `TypeError` on a non-numeric value and `RangeError` on
-            // an infinite / NaN float — both caught by `protect`. The
-            // result re-boxes losslessly through `from_int`.
-            let n = unsafe { sys::mrb_as_int_func(mrb.as_ptr(), self.0) };
-            Value::from_int(mrb, n)
-        })
-        // SAFETY: the `Ok` value was boxed by `Value::from_int` just
-        // above, so it carries an Integer tag the unbox accepts.
-        .map(|v| unsafe { v.unbox_integer() })
-    }
-
-    /// `mrb_as_float(mrb, self)` — convert `self` to a Rust float across
-    /// the numeric types: a Float reads directly and an Integer widens to
-    /// a float. A non-numeric value raises `TypeError`, so like `as_int`
-    /// the conversion runs under exception protection and dispatches no `to_f`.
-    /// Distinct from `f64::from_value`, the exact-tag downcast that never
-    /// converts across types and rejects an Integer outright.
-    ///
-    /// The converted number round-trips through `Value::from_float` and
-    /// `unbox_float` at the archive's own float width, so nothing is
-    /// lost between them.
-    #[inline]
-    pub fn as_float(self, mrb: &Mrb) -> Result<f64, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: as `as_int`; `mrb_as_float` raises `TypeError`
-            // on a non-numeric value, caught by `protect`. The result
-            // re-boxes losslessly through `from_float`.
-            let f = unsafe { sys::mrb_as_float_func(mrb.as_ptr(), self.0) };
-            Value::from_float(mrb, f)
-        })
-        // SAFETY: the `Ok` value was boxed by `Value::from_float`
-        // just above, so it carries a Float tag the unbox accepts.
-        .map(|v| unsafe { v.unbox_float() })
     }
 }
 

@@ -51,8 +51,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Value::to_string;
     let _ = Value::funcall::<&core::ffi::CStr>;
     let _ = Value::is_nil;
-    let _ = Value::unbox_integer;
-    let _ = Value::unbox_float;
     let _ = Value::ary_entry;
     let _ = Value::iv_set::<&core::ffi::CStr>;
     let _ = Value::iv_get::<&core::ffi::CStr>;
@@ -328,8 +326,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Symbol::name_bytes;
     let _ = Symbol::to_str;
     let _ = Value::add;
-    let _ = Value::as_float;
-    let _ = Value::as_int;
+    let _ = Float::to_f64;
+    let _ = Integer::to_i64;
     let _ = Value::check_frozen;
     let _ = Value::class;
     let _ = Value::cmp;

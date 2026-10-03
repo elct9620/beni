@@ -203,6 +203,27 @@ impl TryConvert for Float {
 }
 
 impl Integer {
+    /// The integer as an `i64`. Surfaces an `Err` carrying the
+    /// `RangeError` mruby raises for an arbitrary-width Integer beyond the
+    /// configured integer width. Mirrors magnus's `Integer::to_i64`.
+    pub fn to_i64(self, mrb: &Mrb) -> Result<i64, Error> {
+        let fixed = if self.0.tag() == sys::MRB_TT_INTEGER {
+            self.0
+        } else {
+            mrb.protect(|mrb| {
+                // SAFETY: `mrb` is alive inside the protect frame; narrowing
+                // raises the `RangeError` for an Integer beyond the
+                // configured width, caught by `protect`, and otherwise
+                // answers a fixed-width Integer.
+                Value::from_raw_unchecked(unsafe {
+                    sys::mrb_ensure_int_type(mrb.as_ptr(), self.0.as_raw())
+                })
+            })?
+        };
+        // SAFETY: `fixed` carries the fixed-width Integer tag.
+        Ok(unsafe { fixed.unbox_integer() })
+    }
+
     /// Render to a new `RString` in `base`, the way Ruby's
     /// `Integer#to_s(base)` does — `12345` to `"3039"` in base 16. Surfaces
     /// an `Err` carrying an `ArgumentError` for a `base` outside 2 through
@@ -222,6 +243,13 @@ impl Integer {
 }
 
 impl Float {
+    /// The float as an `f64`, which holds every configured float width.
+    /// Mirrors magnus's `Float::to_f64`.
+    pub fn to_f64(self) -> f64 {
+        // SAFETY: a `Float` carries the Float tag.
+        unsafe { self.0.unbox_float() }
+    }
+
     /// The `Integer` this float truncates toward zero, the way Ruby's
     /// `Float#to_i` does — `3.9` to `3`, `-3.9` to `-3`. Surfaces an `Err`
     /// carrying a `RangeError` for an infinite or NaN float. Mirrors

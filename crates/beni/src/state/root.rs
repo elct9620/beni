@@ -109,10 +109,7 @@ impl RootTable {
     /// answer one means the table is unusable — reported as "no free
     /// slot", which grows the table instead of reusing a wrong one.
     fn free_head(&self, mrb: &Mrb) -> usize {
-        self.0
-            .entry(mrb, 0)
-            .as_int(mrb)
-            .ok()
+        i64::from_value(self.0.entry(mrb, 0))
             .and_then(|head| usize::try_from(head).ok())
             .unwrap_or(0)
     }

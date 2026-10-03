@@ -124,7 +124,7 @@ macro_rules! try_convert_integer {
         impl TryConvert for $int {
             #[inline]
             fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-                let n = val.as_int(mrb)?;
+                let n = crate::Integer::try_convert(val, mrb)?.to_i64(mrb)?;
                 <$int>::try_from(n)
                     .map_err(|_| exception(mrb, c"RangeError", &format!("{n} out of range")))
             }
@@ -155,7 +155,7 @@ try_convert_non_zero!(
 impl TryConvert for f64 {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        val.as_float(mrb)
+        crate::Float::try_convert(val, mrb).map(crate::Float::to_f64)
     }
 }
 
