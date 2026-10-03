@@ -3,6 +3,7 @@
 
 use crate::support::open_mrb;
 use beni::prelude::*;
+use beni::TryConvert;
 use beni::{
     Exception, Fiber, Float, Integer, Mrb, Qfalse, Qnil, Qtrue, Qundef, RComplex, RObject,
     RRational, RSet, RStruct, Value,
@@ -115,4 +116,165 @@ fn a_class_handle_tells_a_singleton_class_from_an_ordinary_one() {
 
     assert!(singleton.is_singleton());
     assert!(!ordinary.is_singleton());
+}
+
+/// The class and message of the `Err` converting `source`'s value into `T`.
+fn rejection<T: beni::TryConvert>(mrb: &Mrb, source: &str) -> (String, String) {
+    match T::try_convert(eval(mrb, source), mrb) {
+        Ok(_) => panic!("{source} must not convert"),
+        Err(err) => {
+            let beni::Error::Exception(exc) = &err else {
+                panic!("{source} must surface an exception")
+            };
+            (exc.classname(mrb), err.message(mrb))
+        }
+    }
+}
+
+fn type_error(message: &str) -> (String, String) {
+    ("TypeError".to_owned(), message.to_owned())
+}
+
+#[test]
+fn a_tagged_handle_takes_an_argument_of_its_own_tag() {
+    let mrb = open_mrb();
+    let accepts = |source: &str| {
+        let value = eval(&mrb, source);
+        [
+            Qnil::try_convert(value, &mrb).is_ok(),
+            Qtrue::try_convert(value, &mrb).is_ok(),
+            Qfalse::try_convert(value, &mrb).is_ok(),
+            Exception::try_convert(value, &mrb).is_ok(),
+            RObject::try_convert(value, &mrb).is_ok(),
+            Fiber::try_convert(value, &mrb).is_ok(),
+            RStruct::try_convert(value, &mrb).is_ok(),
+            RSet::try_convert(value, &mrb).is_ok(),
+            RRational::try_convert(value, &mrb).is_ok(),
+            RComplex::try_convert(value, &mrb).is_ok(),
+        ]
+        .iter()
+        .position(|ok| *ok)
+    };
+
+    assert_eq!(accepts("nil"), Some(0));
+    assert_eq!(accepts("true"), Some(1));
+    assert_eq!(accepts("false"), Some(2));
+    assert_eq!(accepts("RuntimeError.new('boom')"), Some(3));
+    assert_eq!(accepts("Object.new"), Some(4));
+    assert_eq!(accepts("Fiber.new {}"), Some(5));
+    assert_eq!(accepts("Struct.new(:a).new(1)"), Some(6));
+    assert_eq!(accepts("Set.new"), Some(7));
+    assert_eq!(accepts("Complex(1, 2)"), Some(9));
+}
+
+#[test]
+fn a_tagged_handle_words_a_mismatch_as_mruby_type_check_does() {
+    let mrb = open_mrb();
+
+    assert_eq!(
+        rejection::<Qnil>(&mrb, "false"),
+        type_error("wrong argument type false (expected NilClass)")
+    );
+    assert_eq!(
+        rejection::<Qtrue>(&mrb, "nil"),
+        type_error("wrong argument type nil (expected TrueClass)")
+    );
+    assert_eq!(
+        rejection::<Qfalse>(&mrb, "true"),
+        type_error("wrong argument type true (expected FalseClass)")
+    );
+    assert_eq!(
+        rejection::<Exception>(&mrb, "1"),
+        type_error("wrong argument type Integer (expected Exception)")
+    );
+    assert_eq!(
+        rejection::<RObject>(&mrb, "'text'"),
+        type_error("wrong argument type String (expected Object)")
+    );
+    assert_eq!(
+        rejection::<Fiber>(&mrb, ":sym"),
+        type_error("wrong argument type Symbol (expected Fiber)")
+    );
+    assert_eq!(
+        rejection::<RStruct>(&mrb, "[]"),
+        type_error("wrong argument type Array (expected Struct)")
+    );
+    assert_eq!(
+        rejection::<RSet>(&mrb, "{}"),
+        type_error("wrong argument type Hash (expected Set)")
+    );
+    assert_eq!(
+        rejection::<RRational>(&mrb, "nil"),
+        type_error("wrong argument type nil (expected Rational)")
+    );
+    assert_eq!(
+        rejection::<RComplex>(&mrb, "Object.new"),
+        type_error("wrong argument type Object (expected Complex)")
+    );
+    assert_eq!(
+        rejection::<beni::RInlineStruct>(&mrb, "Object.new"),
+        type_error("wrong argument type Object (expected istruct)")
+    );
+    assert_eq!(
+        rejection::<beni::RCptr>(&mrb, "Object.new"),
+        type_error("wrong argument type Object (expected cptr)")
+    );
+}
+
+#[test]
+fn an_exception_argument_dispatches_no_exception_method() {
+    let mrb = open_mrb();
+
+    // An object answering `exception` is what `raise` accepts, but the
+    // argument conversion runs no Ruby and takes the tag alone.
+    let (class, _) = rejection::<Exception>(
+        &mrb,
+        "o = Object.new; def o.exception(*a); RuntimeError.new('x'); end; o",
+    );
+    assert_eq!(class, "TypeError");
+}
+
+#[test]
+fn an_integer_argument_coerces_a_float_as_mruby_does() {
+    let mrb = open_mrb();
+    let int = |source: &str| {
+        let handle = Integer::try_convert(eval(&mrb, source), &mrb)
+            .unwrap_or_else(|err| panic!("{source} must convert: {}", err.message(&mrb)));
+        i64::from_value(handle.as_value())
+    };
+
+    assert_eq!(int("42"), Some(42));
+    assert_eq!(int("3.9"), Some(3));
+    assert_eq!(int("-3.9"), Some(-3));
+    assert_eq!(
+        rejection::<Integer>(&mrb, "'abc'"),
+        type_error("String cannot be converted to Integer")
+    );
+    assert_eq!(
+        rejection::<Integer>(&mrb, "nil"),
+        type_error("nil cannot be converted to Integer")
+    );
+    assert_eq!(rejection::<Integer>(&mrb, "1.0 / 0").0, "RangeError");
+    assert_eq!(rejection::<Integer>(&mrb, "0.0 / 0").0, "RangeError");
+}
+
+#[test]
+fn a_float_argument_widens_an_integer_as_mruby_does() {
+    let mrb = open_mrb();
+    let float = |source: &str| {
+        let handle = Float::try_convert(eval(&mrb, source), &mrb)
+            .unwrap_or_else(|err| panic!("{source} must convert: {}", err.message(&mrb)));
+        f64::from_value(handle.as_value())
+    };
+
+    assert_eq!(float("1.5"), Some(1.5));
+    assert_eq!(float("2"), Some(2.0));
+    assert_eq!(
+        rejection::<Float>(&mrb, "nil"),
+        type_error("can't convert nil into Float")
+    );
+    assert_eq!(
+        rejection::<Float>(&mrb, "'abc'"),
+        type_error("String cannot be converted to Float")
+    );
 }

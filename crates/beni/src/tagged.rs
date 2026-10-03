@@ -1,14 +1,16 @@
 //! Handles a value converts into by its type tag alone.
 //!
-//! Each handle here carries no operations of its own: it exists so the
-//! `FromValue` downcast answers "what type is this?" for every tag a
-//! typed caller can hold, as magnus's `Qnil`, `Integer`, `RObject`, … do.
+//! Each handle exists so the `FromValue` downcast answers "what type is
+//! this?" for every tag a typed caller can hold, and so a method can take
+//! an argument of that type through `TryConvert`, as magnus's `Qnil`,
+//! `Integer`, `RObject`, … do.
 
 use crate::{
     convert::{FromValue, IntoValue},
     sys::AsRawValue,
+    try_convert::wrong_argument_type,
     value::{private, ReprValue},
-    Mrb, Value,
+    Error, Mrb, TryConvert, Value,
 };
 use beni_sys as sys;
 
@@ -47,24 +49,34 @@ macro_rules! tagged_handle {
             }
         }
     };
+    ($(#[$doc:meta])* $name:ident => $expected:literal, |$value:ident| $accepts:expr) => {
+        tagged_handle!($(#[$doc])* $name, |$value| $accepts);
+
+        impl TryConvert for $name {
+            #[inline]
+            fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+                Self::from_value(val).ok_or_else(|| wrong_argument_type(val, mrb, $expected))
+            }
+        }
+    };
 }
 
 tagged_handle!(
     /// The `nil` value. Mirrors magnus's `value::Qnil`.
-    Qnil,
+    Qnil => "NilClass",
     |value| value.is_nil()
 );
 
 tagged_handle!(
     /// The `true` value. Mirrors magnus's `value::Qtrue`.
-    Qtrue,
+    Qtrue => "TrueClass",
     |value| value.tag() == sys::MRB_TT_TRUE
 );
 
 tagged_handle!(
     /// The `false` value, told apart from `nil`, which shares its tag.
     /// Mirrors magnus's `value::Qfalse`.
-    Qfalse,
+    Qfalse => "FalseClass",
     // SAFETY: mrb_false_p is a pure read of the value and does not
     // touch `mrb_state`.
     |value| unsafe { sys::mrb_false_p_func(value.as_raw()) }
@@ -85,60 +97,60 @@ tagged_handle!(
 
 tagged_handle!(
     /// An exception object. Mirrors magnus's `Exception`.
-    Exception,
+    Exception => "Exception",
     |value| value.tag() == sys::MRB_TT_EXCEPTION
 );
 
 tagged_handle!(
     /// An ordinary object — what `Object.new` allocates. Mirrors
     /// magnus's `RObject`.
-    RObject,
+    RObject => "Object",
     |value| value.tag() == sys::MRB_TT_OBJECT
 );
 
 tagged_handle!(
     /// A Fiber, from the `mruby-fiber` gem. Mirrors magnus's `Fiber`.
-    Fiber,
+    Fiber => "Fiber",
     |value| value.tag() == sys::MRB_TT_FIBER
 );
 
 tagged_handle!(
     /// A Struct instance, from the `mruby-struct` gem. Mirrors magnus's
     /// `RStruct`.
-    RStruct,
+    RStruct => "Struct",
     |value| value.tag() == sys::MRB_TT_STRUCT
 );
 
 tagged_handle!(
     /// A Set, from the `mruby-set` gem.
-    RSet,
+    RSet => "Set",
     |value| value.tag() == sys::MRB_TT_SET
 );
 
 tagged_handle!(
     /// A Rational, from the `mruby-rational` gem. Mirrors magnus's
     /// `RRational`.
-    RRational,
+    RRational => "Rational",
     |value| value.tag() == sys::MRB_TT_RATIONAL
 );
 
 tagged_handle!(
     /// A Complex, from the `mruby-complex` gem. Mirrors magnus's
     /// `RComplex`.
-    RComplex,
+    RComplex => "Complex",
     |value| value.tag() == sys::MRB_TT_COMPLEX
 );
 
 tagged_handle!(
     /// An inline struct of any type — the untyped counterpart of
     /// `Inline<T>`, as `RTypedData` is of `Obj<T>`.
-    RInlineStruct,
+    RInlineStruct => "istruct",
     |value| value.tag() == sys::MRB_TT_ISTRUCT
 );
 
 tagged_handle!(
     /// A bare C pointer a C extension boxed.
-    RCptr,
+    RCptr => "cptr",
     |value| value.tag() == sys::MRB_TT_CPTR
 );
 
@@ -155,5 +167,37 @@ impl FromValue for Qundef {
         // SAFETY: mrb_undef_p is a pure read of the value and does not
         // touch `mrb_state`.
         unsafe { sys::mrb_undef_p_func(value.as_raw()) }.then_some(Self { _private: () })
+    }
+}
+
+impl TryConvert for Integer {
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        if let Some(int) = Self::from_value(val) {
+            return Ok(int);
+        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; the coercion
+            // raises the mismatch's `TypeError` or `RangeError`, caught by
+            // `protect`, and otherwise answers an Integer.
+            Integer(Value::from_raw_unchecked(unsafe {
+                sys::mrb_ensure_integer_type(mrb.as_ptr(), val.as_raw())
+            }))
+        })
+    }
+}
+
+impl TryConvert for Float {
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        if let Some(float) = Self::from_value(val) {
+            return Ok(float);
+        }
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; the coercion
+            // raises the mismatch's `TypeError`, caught by `protect`, and
+            // otherwise answers a Float.
+            Float(Value::from_raw_unchecked(unsafe {
+                sys::mrb_ensure_float_type(mrb.as_ptr(), val.as_raw())
+            }))
+        })
     }
 }
