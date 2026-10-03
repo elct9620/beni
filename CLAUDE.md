@@ -8,39 +8,102 @@ beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sd
 
 ## Principles
 
-Apply these in order — earlier principles override later ones on conflict.
+Each section below is one principle, and an earlier one overrides a later one on conflict.
 
-1. **SPEC.md is the source of truth, and authority flows spec → code.** The spec is deliberately ahead of the implementation; unimplemented spec behaviors are the roadmap, and a spec/code mismatch is an implementation bug. Never edit SPEC.md to ratify what the code happens to do — when SPEC is silent, extend it first, then implement. Cross-package contracts (archive discovery, compile-flags sidecar, staged path, documentation bindings, integer-width metadata, float-width metadata) are defined once at the write end with constants in SPEC's Terminology; cite those terms instead of restating them.
+| Order | Principle | Decides |
+|---|---|---|
+| 1 | Spec Authority | what the code must do |
+| 2 | Upstream Baseline | whose shape a package copies |
+| 3 | Magnus Naming | what a `beni` item is called |
+| 4 | Proven Divergence | when `beni` departs from magnus |
+| 5 | Defensive Layers | what is not modelled |
+| 6 | Prohibitions | what never lands |
 
-2. **kobako-derived code is scaffolding, not precedent.** Much of this repo was extracted from kobako; matching kobako's shape is never a design justification. Follow upstream conventions instead — mruby's own (`rake` entry point, `MRUBY_CONFIG`, untouched `build_config/default.rb` as the gem default), wasi-sdk's (`/opt/wasi-sdk`), the `-sys` crate conventions (`*_LIB_DIR`, `links =` metadata), and magnus's wrapper idioms for the `beni` crate's API surface. Names follow magnus's C function index (`src/lib.rs`), and a function it leaves unnamed takes the same rules: a conversion is `TryConvert`; `rb_` and the receiver's type prefix drop (`ivar_get`, `new_instance`); a predicate is `is_x`, a handle-returning read `to_r_*`; an operation a Rust trait names implements it. mruby's C name is never the reason — `.api_coverage.yml` already maps it.
+### Spec Authority
 
-3. **Verify toolchain facts against vendored sources, not memory.** mruby behavior claims must be checked in `vendor/mruby` before being relied on or written into SPEC/comments — e.g. `MRuby::Lockfile` is enabled at autoload (the class body calls `enable`), not opt-in.
+SPEC.md is the source of truth, and authority flows from spec to code.
 
-4. **The compile-flags sidecar is the only ABI alignment channel.** `beni-sys` parses `libmruby.flags.mak` next to each archive; never hard-code ABI defines in the crates, and never let a staged archive without its sidecar fall back to guessing. The gem ships no config template — `beni:config` copies the configured version's upstream default config from the staged mruby source; `build_config/mruby.rb` is the repo's own validation config (the generate-then-edit consumer posture, kept committed).
+```
+SPEC.md ──defines──▶ code     mismatch: implementation bug
+   ▲                          silent:   extend SPEC first
+   └── never edited to ratify the code
+```
 
-5. **Follow language community conventions via tooling.** Ruby: Rubocop + Steep; Rust: `cargo fmt` + `cargo clippy -D warnings` (also against every staged ABI and under `--target wasm32-wasip1` — the CI lint step says why each is needed) + `cargo doc -D warnings --document-private-items`. All run via PostToolUse/Stop hooks and block on failure. When a cop or lint fires, shrink the code to fit the tool — don't widen `.rubocop.yml` exclusions or add `#[allow]`. Tool-vs-tool conflicts are the one justified widening: `Style/DataInheritance` is disabled because ruby/rbs documents `class X < Data.define(...)` as the Steep-friendly form.
+The spec runs ahead of the code, so an unimplemented behavior is the roadmap. A cross-package contract is defined once at its write end, with its constants in SPEC's Terminology; cite those terms instead of restating them. The typed surface's safety bar is SPEC's "Graduation, safety, and coverage".
 
-6. **Don't pre-abstract; model exactly what SPEC requires** — no defensive layers against problems that don't exist (rejected: `Bundler.with_unbundled_env` isolation, a minirake fallback, a generalized cross-compile abstraction beyond wasm32). Growing the `beni` crate toward magnus's API surface is still the product goal (SPEC-first per Principle 1); "no consumer needs it yet" never rejects that work.
+### Upstream Baseline
 
-7. **Docs and comments state intent in 1–2 sentences; don't narrate mechanism, incidents, or rejected suggestions** — code doesn't explain itself against problems it doesn't have. Ruby: RDoc prose (`+code+`, no YARD tags). Rust: backtick code spans, no rustdoc intra-doc links (they rot on renames and the `cargo doc` gate rejects breakage).
+Each package copies its upstream. Where a shape came from is never a reason to keep it: kobako-derived code is scaffolding, and mruby's C name is already mapped by `.api_coverage.yml`.
 
-8. **`test/` holds unit tests; `test/scenarios/` holds consumer harnesses** — each a consumer-shaped Rakefile run through the gem's task surface alone (`scenario:setup` → `beni:build` → `scenario:verify`), excluded from the default glob (else the vendored mruby tree's own `*_test.rb` get swept in). New consumer-visible behavior gets a scenario, not a unit test that fakes the task layer. The Rust side splits the same way: `crates/beni-tests/` holds the wrapper's behavior suite, reaching it through public paths alone and always against a staged archive; a `#[cfg(test)]` module inside `crates/beni/` holds only what no consumer can observe (a private field, a `pub(crate)` helper). A new wrapper test goes to `beni-tests` unless it needs something private.
+| Package | Upstream |
+|---|---|
+| gem build | mruby's `rake`, `MRUBY_CONFIG`, untouched `default.rb` |
+| gem toolchain | wasi-sdk's `/opt/wasi-sdk` |
+| `beni-sys` | `-sys` crates: `*_LIB_DIR`, `links =` |
+| `beni`, `beni-macros` | the latest stable magnus |
 
-9. **RBS mirrors `lib/` 1:1 under `sig/`.** The steep hook blocks Ruby edits without matching signatures. Missing stdlib sigs: reach for `library "<name>"` in `Steepfile` first, hand-rolled patches in `sig/patches/` last.
+For `beni`, magnus decides the name, signature, receiver, carrying trait, and whether an operation is `unsafe`. Read magnus from its latest release's source, and mruby from `vendor/mruby`, before a claim reaches SPEC or a comment. Growing `beni` toward magnus's surface is the product goal.
 
-10. **Commit lock files** (`Cargo.lock`, `Gemfile.lock`, `rbs_collection.lock.yaml`) alongside the dependency changes that produced them. Non-permanent design notes go to `tmp/` (gitignored), never `docs/`.
+### Magnus Naming
 
-11. **The typed `beni` surface graduates only what is safe to use without VM-internal reasoning** — a stronger bar than "cannot cause UB". An operation reaches the safe surface only when the wrapper can encode its invariant (a lifetime, carrier, or runtime check) **and magnus gives it no `unsafe` form** — magnus's shape (Principle 2) decides safety too, so an operation a magnus consumer reaches for through `unsafe` stays `unsafe` here even where an invariant could be encoded, which is what keeps the two surfaces' intuitions the same. Crossing a raw value, id, or pointer **into** the typed domain is the standing instance: `unsafe`, beside the raw bindings as in magnus's `rb_sys`, while reading the raw form back out is safe. Otherwise the honest form is `unsafe` — a typed `unsafe fn` when a typed shape can still carry the value with one caller-owned invariant unencoded, or a raw `beni::sys` binding when the value is VM-internal with no shape to add, where a safe-looking wrapper would misrepresent its sharpness. One unsafe only for want of an unbuilt carrier graduates once built; a permanently VM-internal one stays in `sys`, and zeroing a consumer's `sys::` use is never the goal. Refines Principle 6; the contract itself lives in SPEC. Every graduation is recorded in `.api_coverage.yml`, whose header defines the sections — what matters here is the rule they exist to keep: a capability merely awaiting a carrier is recorded in none of them, which is what makes an unrecorded symbol mean "still owed" and nothing else. A symbol from a header mruby marks internal to the library is admitted only for the typed item that carries it, by copying its one declaration into `wrapper.h` rather than including that header.
+Names follow magnus's C function index (`src/lib.rs`), and a function it leaves unnamed takes the same rules.
+
+| C function | Rust name |
+|---|---|
+| a type conversion | `TryConvert` |
+| `rb_` and receiver type prefix | dropped: `ivar_get`, `new_instance` |
+| a predicate | `is_x` |
+| a handle-returning read | `to_r_*` |
+| an operation a Rust trait names | that trait's impl |
+
+`TryConvert` is magnus's implicit conversion. A coercion with no implicit protocol, such as `mrb_obj_to_sym`, stays a method.
+
+### Proven Divergence
+
+`beni` departs from magnus only on an mruby ↔ CRuby difference proven in source. It reaches only as far as magnus's path stops working; a path that still works with one more step is a cost, not a divergence.
+
+| mruby against CRuby | `beni`'s shape | Instance |
+|---|---|---|
+| narrower | encode the limit in the type | `Object` only where `obj_iv_p` holds |
+| lacks magnus's reason | drop what it forced | `value::qnil()` takes no `Mrb` |
+| has more | give it magnus's shape | the `RCptr` handle |
+
+The divergent item's doc comment names the evidence.
+
+### Defensive Layers
+
+Model what SPEC requires and no layer against a problem that does not exist. "No consumer needs it yet" never rejects growth toward magnus.
+
+| Rejected layer |
+|---|
+| `Bundler.with_unbundled_env` isolation |
+| a minirake fallback |
+| a cross-compile abstraction beyond wasm32 |
+
+### Prohibitions
+
+Hooks and CI run the tooling gates; these are the rules no gate checks.
+
+| Area | Never |
+|---|---|
+| ABI | hard-code an ABI define in a crate |
+| ABI | let an archive without its sidecar fall back to guessing |
+| Config | ship a config template in the gem |
+| Lint | widen `.rubocop.yml` exclusions or add `#[allow]` |
+| Docs | narrate mechanism, incidents, or rejected suggestions |
+| Docs | use YARD tags or rustdoc intra-doc links |
+| Tests | fake the task layer for consumer-visible behavior |
+| Tests | test in `crates/beni` what public paths reach |
+| Tests | sweep `test/scenarios/` into the default glob |
+| RBS | patch `sig/patches/` before trying a `Steepfile` library |
+| Deps | commit a dependency change without its lock file |
+| Notes | put a non-permanent design note outside `tmp/` |
+
+A tool-vs-tool conflict is the one allowed lint widening: `Style/DataInheritance` is off because ruby/rbs documents `class X < Data.define(...)`.
 
 ## Build Pipeline
 
-The repo dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validation config
-`build_config/mruby.rb` (host + wasi, ABI-pinned with `MRB_INT32` + `MRB_WORDBOX_NO_INLINE_FLOAT`),
-while the gem's default stays mruby's untouched upstream config. `rake rust:verify` is the single
-local gate; each leg says what it is for in `tasks/rust.rake`'s header, and each CI lane in
-`.github/workflows/main.yml`'s inline comments.
-
-## Common Commands
+The repo dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validation config `build_config/mruby.rb`. That config builds host and wasi, ABI-pinned with `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`; the gem's default stays mruby's untouched upstream config. `rake rust:verify` is the single local gate.
 
 | Task | Command |
 |------|---------|
@@ -52,7 +115,7 @@ local gate; each leg says what it is for in `tasks/rust.rake`'s header, and each
 | Full Rust verification chain | `bundle exec rake rust:verify` |
 | Build vendored mruby (both targets) | `bundle exec rake beni:build` |
 | Stage toolchains only | `bundle exec rake beni:vendor:setup` |
-| Remove build trees / unpacked toolchains / everything | `rake beni:clean` / `rake beni:vendor:clean` / `rake beni:vendor:clobber` |
+| Remove build trees / toolchains / everything | `rake beni:clean` / `beni:vendor:clean` / `beni:vendor:clobber` |
 | Run a consumer scenario | `cd test/scenarios/default_host && rake scenario:setup beni:build scenario:verify` |
 | Interactive console | `bin/console` |
 
@@ -99,21 +162,26 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
 - **Numeric conversions are width-gated, not feature-gated.** Unlike a capability, the configured integer and float widths are ABI facts, so they are read rather than declared: `beni/build.rs` turns the integer-width and float-width metadata into `mrb_int64` and `mrb_float32`, and a Rust number type converts into a `Value` only where every value it holds fits. Width-dependent conversions stay lint-clean under both widths by spelling the target as `sys::mrb_int` (or as an identity per width) — clippy flags a conversion only when a concrete target type equals its source.
 - The typed `mrb_func_t` at the `beni` crate root uses `Value` slots; `Class::define_method` transmutes it once to the raw `sys::mrb_func_t` — ABI-identical because `Value` is `#[repr(transparent)]` over `mrb_value`.
 
-## Where to Look
+## Entry Points
 
-| Topic | Entry points | Notes |
-|-------|--------------|-------|
-| Behavior contracts | `SPEC.md` | Single file: Features per package, exhaustive error table, Terminology constants. Check here before reading code. |
-| Task surface / settings | `lib/beni/tasks.rb` | Consumes the resolved `Beni::Configuration`; the declarative DSL itself lives in `lib/beni/dsl/` (`DSL::Context` and friends). |
-| Vendor pipeline | `lib/beni/vendor.rb` (façade) | Pinned versions, platform detection, factory registry; pipeline stages in `lib/beni/vendor/`. |
-| mruby build driving | `lib/beni/builder.rb` | Spawns mruby's own rake; artifact = archive + sidecar per target. |
-| Config generation | `lib/beni/build_config.rb` | Copies the staged upstream default (see Principle 4); `build_config/mruby.rb` is the repo's own validation config. |
-| Archive discovery / ABI alignment | `crates/beni-sys/build.rs` | The file-top comment is the authoritative mode/contract description. |
-| Typed wrapper | `crates/beni/src/lib.rs` | Module-level doc carries the L0–L2 tier map. |
-| Wrapper macros | `crates/beni-macros/src/typed_data.rs`, `inline_struct.rs` | `wrap` / `TypedData` / `InlineStruct` derive expansion; the tested docs and compile-fail cases sit on the re-exports in `crates/beni/src/lib.rs`. |
-| Typed wrapper's tests | `crates/beni-tests/src/*_test.rs` | Consumer position: public paths only, always against a staged archive. `surface_test.rs` names every inherent pub fn and applies every re-exported macro from outside, so a dropped re-export breaks it; `api:surface` keeps that list and the crate's surface in step. Reached by `rake rust:test`, not by a bare `cargo test`. |
-| Consumer scenarios | `test/scenarios/*/Rakefile` | Each documents the consumer path it pins; harness contract is `scenario:setup` → `beni:build` → `scenario:verify`. Read the headers to see which postures are already covered before adding one. |
-| Verification chain | `tasks/rust.rake`, `tasks/docs.rake` | Header lists every leg of `rust:verify` and what it is for; the documentation bindings are generated rather than tracked, so `docs.rake` is where that contract lives. |
-| CI lanes | `.github/workflows/main.yml` | Lane rationale is commented inline (e.g. why wasm clippy lives in verify, not lint). |
-| RBS signatures | `sig/beni/` | Mirrors `lib/beni/` 1:1; stdlib via `Steepfile`, patches in `sig/patches/`. |
-| API coverage | `.api_coverage.yml` → `docs/api_coverage.md` | `rake api:coverage` diffs mruby's scanned C surface against the Rust layers. The sys tier and `#define` equivalences are derived; the manifest hand-curates four per-symbol states plus `admitted:` beside them, so a symbol absent from all of them is API still owed and nothing else (see Principle 11). `rake api:priority` orders what is owed by what downstream calls — a Rust consumer's use ranks above any number of mrbgem uses, and `BENI_CONSUMER_PATHS` points the scan at a consumer checkout. |
+Each entry point's own header or module doc is the authority for its area; read it before the code below it.
+
+| Topic | Entry point | Note |
+|-------|-------------|------|
+| Behavior contracts | `SPEC.md` | features, error table, Terminology |
+| Task surface | `lib/beni/tasks.rb` | DSL in `lib/beni/dsl/` |
+| Vendor pipeline | `lib/beni/vendor.rb` | pins, platforms, factory registry |
+| mruby build driving | `lib/beni/builder.rb` | archive and sidecar per target |
+| Config generation | `lib/beni/build_config.rb` | copies the staged upstream default |
+| ABI alignment | `crates/beni-sys/build.rs` | file-top comment is the contract |
+| Typed wrapper | `crates/beni/src/lib.rs` | module doc maps tiers L0–L2 |
+| Wrapper macros | `crates/beni-macros/src/` | tested on `beni`'s re-exports |
+| Wrapper tests | `crates/beni-tests/src/` | run by `rake rust:test` only |
+| Consumer scenarios | `test/scenarios/*/Rakefile` | headers list covered postures |
+| Verification chain | `tasks/rust.rake` | header explains each leg |
+| Documentation bindings | `tasks/docs.rake` | generated, never tracked |
+| CI lanes | `.github/workflows/main.yml` | rationale inline |
+| RBS signatures | `sig/beni/` | mirrors `lib/beni/` 1:1 |
+| API coverage | `.api_coverage.yml` | rendered to `docs/api_coverage.md` |
+
+The wrapper tests sit in consumer position, reaching public paths only against a staged archive. `surface_test.rs` names every inherent pub fn and re-exported macro, and `api:surface` keeps that list in step with the crate. In the coverage manifest, a symbol absent from every section is API still owed. `rake api:priority` ranks what is owed by downstream use, and `BENI_CONSUMER_PATHS` points it at a consumer checkout.
