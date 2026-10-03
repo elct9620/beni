@@ -4,7 +4,7 @@
 
 use crate::support::open_mrb;
 use beni::{
-    Array, Error, ExceptionClass, Hash, Mrb, Proc, RClass, RModule, RString, Range, Symbol,
+    Error, ExceptionClass, Mrb, Proc, RArray, RClass, RHash, RModule, RString, Range, Symbol,
     TryConvert, Value,
 };
 use core::num::{NonZeroI32, NonZeroU8};
@@ -113,8 +113,8 @@ fn value_bool_and_option_convert_as_their_downcasts_do() {
 fn a_handle_converts_its_own_tag_and_dispatches_no_conversion() {
     let mrb = open_mrb();
     convert::<RString>(&mrb, "'s'");
-    convert::<Array>(&mrb, "[]");
-    convert::<Hash>(&mrb, "{}");
+    convert::<RArray>(&mrb, "[]");
+    convert::<RHash>(&mrb, "{}");
     convert::<Symbol>(&mrb, ":s");
     convert::<Range>(&mrb, "1..2");
     convert::<Proc>(&mrb, "proc {}");
@@ -123,11 +123,11 @@ fn a_handle_converts_its_own_tag_and_dispatches_no_conversion() {
         pair("TypeError", "Object cannot be converted to String")
     );
     assert_eq!(
-        rejection::<Array>(&mrb, "1"),
+        rejection::<RArray>(&mrb, "1"),
         pair("TypeError", "Integer cannot be converted to Array")
     );
     assert_eq!(
-        rejection::<Hash>(&mrb, "true"),
+        rejection::<RHash>(&mrb, "true"),
         pair("TypeError", "true cannot be converted to Hash")
     );
     assert_eq!(
@@ -245,20 +245,20 @@ fn a_map_target_converts_each_pair_of_a_hash() {
 #[test]
 fn the_handles_read_their_elements_into_rust_collections() {
     let mrb = open_mrb();
-    let ary = convert::<Array>(&mrb, "[1, 2]");
+    let ary = convert::<RArray>(&mrb, "[1, 2]");
     assert_eq!(ary.to_vec::<u8>(&mrb).expect("both fit a u8"), vec![1, 2]);
     assert_eq!(
         ary.to_array::<i64, 2>(&mrb).expect("the length matches"),
         [1, 2]
     );
     assert!(ary.to_array::<i64, 3>(&mrb).is_err());
-    let hash = convert::<Hash>(&mrb, "{a: 1}");
+    let hash = convert::<RHash>(&mrb, "{a: 1}");
     assert_eq!(
         hash.to_btree_map::<String, i32>(&mrb)
             .map_err(|e| e.message(&mrb)),
         Err("Symbol cannot be converted to String".to_owned())
     );
-    let hash = convert::<Hash>(&mrb, "{'a' => 1}");
+    let hash = convert::<RHash>(&mrb, "{'a' => 1}");
     assert_eq!(
         hash.to_hash_map::<String, i32>(&mrb)
             .expect("the pairs convert"),

@@ -1,18 +1,18 @@
-//! Typed `Hash` newtype around a Hash-tagged `Value`.
+//! Typed `RHash` newtype around a Hash-tagged `Value`.
 //!
-//! `Hash` is `#[repr(transparent)]` over `Value` (which is itself
+//! `RHash` is `#[repr(transparent)]` over `Value` (which is itself
 //! `#[repr(transparent)]` over `mrb_value`). The two share their
-//! in-memory layout — `Hash` is exactly an `mrb_value` known to carry
+//! in-memory layout — `RHash` is exactly an `mrb_value` known to carry
 //! an mruby `Hash`. Construction is by explicit unchecked cast from
 //! `Value`; element operations cluster on the resulting newtype.
 //!
 //! Mirrors magnus's `src/r_hash.rs`: factories live on `Ruby` /
 //! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
 
-use crate::{sys::AsRawValue, Array, Error, Mrb, TryConvert, Value};
+use crate::{sys::AsRawValue, Error, Mrb, RArray, TryConvert, Value};
 use beni_sys as sys;
 
-/// Signal a `Hash::each` closure returns to steer the walk. Mirrors
+/// Signal an `RHash::each` closure returns to steer the walk. Mirrors
 /// magnus's `ForEach`, minus its CRuby-only `Delete` (mruby's
 /// `mrb_hash_foreach` has no delete-and-continue path).
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -27,15 +27,15 @@ pub enum ForEach {
 /// `Value` so the C ABI is preserved.
 ///
 /// Construct via `Mrb::hash_new` (fresh hash), the checked
-/// `FromValue` downcast (`Hash::from_value`, tag-discriminated), or
-/// `Hash::from_value_unchecked` (assert that a `Value` you
+/// `FromValue` downcast (`RHash::from_value`, tag-discriminated), or
+/// `RHash::from_value_unchecked` (assert that a `Value` you
 /// already hold is Hash-tagged). Round-trip back to a generic
 /// `Value` via `ReprValue::as_value` for APIs that take any value.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Hash(pub(crate) Value);
+pub struct RHash(pub(crate) Value);
 
-impl Hash {
+impl RHash {
     /// Wrap a `Value` that the caller has already determined to be
     /// Hash-tagged (e.g. via a `classname` check or because it came
     /// straight from `mrb_hash_new` / a host hash decoder).
@@ -86,28 +86,28 @@ impl Hash {
     }
 
     /// `mrb_hash_keys(mrb, self)` — return the Array of keys as a
-    /// typed `Array`.
+    /// typed `RArray`.
     #[inline]
-    pub fn keys(self, mrb: &Mrb) -> Array {
+    pub fn keys(self, mrb: &Mrb) -> RArray {
         // SAFETY: as `set`; `mrb_hash_keys` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_keys(
+            RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_keys(
                 mrb.as_ptr(),
                 self.0.as_raw(),
             )))
         }
     }
 
-    /// `mrb_hash_values(mrb, self)` — the values as a typed `Array`,
+    /// `mrb_hash_values(mrb, self)` — the values as a typed `RArray`,
     /// Ruby's `Hash#values`. Mirror of `keys`; a pure read that never
     /// fails.
     #[inline]
-    pub fn values(self, mrb: &Mrb) -> Array {
+    pub fn values(self, mrb: &Mrb) -> RArray {
         // SAFETY: as `keys`; `mrb_hash_values` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_values(
+            RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_values(
                 mrb.as_ptr(),
                 self.0.as_raw(),
             )))
@@ -196,7 +196,7 @@ impl Hash {
     /// runs each key's `hash`/`eql?`; a frozen receiver or a raising key
     /// surfaces as `Err`.
     #[inline]
-    pub fn update(self, mrb: &Mrb, other: Hash) -> Result<(), Error> {
+    pub fn update(self, mrb: &Mrb, other: RHash) -> Result<(), Error> {
         mrb.protect(|mrb| {
             // SAFETY: as `set`; `self` and `other` are Hash-tagged and
             // share the VM. `mrb_hash_merge` modifies `self` (raises
@@ -228,12 +228,12 @@ impl Hash {
     /// `mrb_hash_dup(mrb, self)` — a shallow copy, Ruby's `Hash#dup`. It
     /// does not mutate the receiver, so it never fails.
     #[inline]
-    pub fn dup(self, mrb: &Mrb) -> Hash {
+    pub fn dup(self, mrb: &Mrb) -> RHash {
         // SAFETY: `self` is Hash-tagged by the contract; `mrb_hash_dup`
         // returns a fresh Hash-tagged value, so the unchecked wrap is
         // sound.
         unsafe {
-            Hash::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_dup(
+            RHash::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_dup(
                 mrb.as_ptr(),
                 self.0.as_raw(),
             )))
@@ -270,7 +270,7 @@ impl Hash {
         struct Walk<F> {
             body: F,
             panic: Option<Box<dyn std::any::Any + Send>>,
-            held: Array,
+            held: RArray,
         }
 
         unsafe extern "C" fn trampoline<F>(

@@ -9,7 +9,7 @@ surface, this crate owns every abstraction above it.
 
 - `Mrb` / `Ccontext` — RAII owners of the interpreter state and
   compile contexts
-- `Value` / `RClass` / `RModule` / `Array` / `Hash` — typed handles
+- `Value` / `RClass` / `RModule` / `RArray` / `RHash` — typed handles
   over `mrb_value`
 - `IntoValue` / `FromValue` / `TryConvert` — the Rust ⇄ mruby conversion
   seam, `TryConvert` being the one a method's receiver and arguments cross

@@ -16,7 +16,7 @@
 //! interpreter holds, so releasing one clears that slot and leaves every
 //! other slot — including another root over the same value — standing.
 
-use crate::{sys::AsRawValue, Array, FromValue as _, ReprValue};
+use crate::{sys::AsRawValue, FromValue as _, RArray, ReprValue};
 use crate::{Error, Mrb, Value};
 use beni_sys as sys;
 
@@ -58,7 +58,7 @@ impl Mrb {
     /// can reach the table by writing a global variable.
     fn root_table(&self) -> Result<RootTable, Error> {
         let name = self.intern_static(TABLE_GLOBAL)?;
-        if let Some(table) = Array::from_value(self.gv_get(name)) {
+        if let Some(table) = RArray::from_value(self.gv_get(name)) {
             return Ok(RootTable(table));
         }
 
@@ -76,7 +76,7 @@ impl Mrb {
 /// and each free slot holds the index of the next one, so a released
 /// slot is reused without scanning.
 #[derive(Clone, Copy)]
-struct RootTable(Array);
+struct RootTable(RArray);
 
 impl RootTable {
     /// Store `v` in a free slot, reusing a released one when the free

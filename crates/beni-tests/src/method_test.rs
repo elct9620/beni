@@ -333,11 +333,11 @@ fn echo_string(_mrb: &Mrb, _self: Value, v: beni::RString) -> beni::RString {
     v
 }
 
-fn echo_array(_mrb: &Mrb, _self: Value, v: beni::Array) -> beni::Array {
+fn echo_array(_mrb: &Mrb, _self: Value, v: beni::RArray) -> beni::RArray {
     v
 }
 
-fn echo_hash(_mrb: &Mrb, _self: Value, v: beni::Hash) -> beni::Hash {
+fn echo_hash(_mrb: &Mrb, _self: Value, v: beni::RHash) -> beni::RHash {
     v
 }
 

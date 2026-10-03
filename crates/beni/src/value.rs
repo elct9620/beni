@@ -221,8 +221,8 @@ macro_rules! value_backed_repr {
 }
 
 value_backed_repr!(
-    crate::Array,
-    crate::Hash,
+    crate::RArray,
+    crate::RHash,
     crate::Proc,
     crate::Range,
     crate::RString,
@@ -481,19 +481,19 @@ impl Value {
         })
     }
 
-    /// Coerce `self` to a typed `Array` handle by its Array tag,
+    /// Coerce `self` to a typed `RArray` handle by its Array tag,
     /// surfacing a non-Array as an `Err` rather than rejecting it to
     /// `None`: `Ok` with the handle when `self` is Array-tagged, `Err`
     /// carrying a `TypeError` for any other tag. It runs no user Ruby —
     /// it dispatches no `to_ary` — so it is the raising counterpart to
-    /// the `Array::from_value` downcast. The `TypeError` it would
+    /// the `RArray::from_value` downcast. The `TypeError` it would
     /// long-jump is caught by exception protection into the returned `Err`.
     /// Suits a handler that requires an Array argument and rejects
     /// anything else; reach for the `FromValue` downcast instead when a
     /// non-Array should read as absent. Mirrors mruby's
     /// `mrb_ensure_array_type`.
     #[inline]
-    pub fn ensure_array(self, mrb: &Mrb) -> Result<crate::Array, Error> {
+    pub fn ensure_array(self, mrb: &Mrb) -> Result<crate::RArray, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_ensure_array_type`
@@ -504,11 +504,11 @@ impl Value {
             // SAFETY: a value returned without a raise passed `mrb_array_p` inside
             // `mrb_ensure_array_type`, so it carries the Array tag the
             // unchecked wrap requires.
-            unsafe { crate::Array::from_value_unchecked(v) }
+            unsafe { crate::RArray::from_value_unchecked(v) }
         })
     }
 
-    /// Spread `self` into a new typed `Array`, Ruby's `*` splat coercion:
+    /// Spread `self` into a new typed `RArray`, Ruby's `*` splat coercion:
     /// an array yields a copy of itself; a non-array that responds to
     /// `to_a` runs it, taking the result when it is an array and wrapping
     /// `self` in a one-element array when `to_a` returns `nil`; a value
@@ -520,7 +520,7 @@ impl Value {
     /// `to_a` itself, is caught by exception protection into the returned `Err`.
     /// Mirrors mruby's `mrb_ary_splat`.
     #[inline]
-    pub fn to_ary(self, mrb: &Mrb) -> Result<crate::Array, Error> {
+    pub fn to_ary(self, mrb: &Mrb) -> Result<crate::RArray, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_ary_splat` dispatches
@@ -530,23 +530,23 @@ impl Value {
             let v = Value(unsafe { sys::mrb_ary_splat(mrb.as_ptr(), self.0) });
             // SAFETY: `mrb_ary_splat` always returns an Array-tagged value
             // when it returns, the tag the unchecked wrap requires.
-            unsafe { crate::Array::from_value_unchecked(v) }
+            unsafe { crate::RArray::from_value_unchecked(v) }
         })
     }
 
-    /// Coerce `self` to a typed `Hash` handle by its Hash tag,
+    /// Coerce `self` to a typed `RHash` handle by its Hash tag,
     /// surfacing a non-Hash as an `Err` rather than rejecting it to
     /// `None`: `Ok` with the handle when `self` is Hash-tagged, `Err`
     /// carrying a `TypeError` for any other tag. It runs no user Ruby —
     /// it dispatches no `to_hash` — so it is the raising counterpart to
-    /// the `Hash::from_value` downcast. The `TypeError` it would
+    /// the `RHash::from_value` downcast. The `TypeError` it would
     /// long-jump is caught by exception protection into the returned `Err`.
     /// Suits a handler that requires a Hash argument and rejects
     /// anything else; reach for the `FromValue` downcast instead when a
     /// non-Hash should read as absent. Mirrors mruby's
     /// `mrb_ensure_hash_type`.
     #[inline]
-    pub fn ensure_hash(self, mrb: &Mrb) -> Result<crate::Hash, Error> {
+    pub fn ensure_hash(self, mrb: &Mrb) -> Result<crate::RHash, Error> {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_ensure_hash_type`
@@ -557,7 +557,7 @@ impl Value {
             // SAFETY: a value returned without a raise passed `mrb_hash_p` inside
             // `mrb_ensure_hash_type`, so it carries the Hash tag the
             // unchecked wrap requires.
-            unsafe { crate::Hash::from_value_unchecked(v) }
+            unsafe { crate::RHash::from_value_unchecked(v) }
         })
     }
 
@@ -926,7 +926,7 @@ impl Value {
     }
 
     /// TRUE when `self` carries `MRB_TT_ARRAY`. See `Value::is_integer`.
-    /// Pair with `Array::from_value_unchecked` for the direct-wrap path.
+    /// Pair with `RArray::from_value_unchecked` for the direct-wrap path.
     #[inline]
     pub fn is_array(self) -> bool {
         // SAFETY: as `is_integer`.
@@ -934,7 +934,7 @@ impl Value {
     }
 
     /// TRUE when `self` carries `MRB_TT_HASH`. See `Value::is_integer`.
-    /// Pair with `Hash::from_value_unchecked` for the direct-wrap path.
+    /// Pair with `RHash::from_value_unchecked` for the direct-wrap path.
     #[inline]
     pub fn is_hash(self) -> bool {
         // SAFETY: as `is_integer`.
@@ -1784,8 +1784,8 @@ mod tests {
         fn crosses<T: Send + Sync>() {}
         crosses::<crate::Value>();
         crosses::<crate::Break>();
-        crosses::<crate::Array>();
-        crosses::<crate::Hash>();
+        crosses::<crate::RArray>();
+        crosses::<crate::RHash>();
         crosses::<crate::Proc>();
         crosses::<crate::Range>();
         crosses::<crate::RString>();

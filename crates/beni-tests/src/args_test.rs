@@ -1,12 +1,12 @@
 use crate::support::open_mrb;
 use beni::prelude::*;
 use beni::scan_args::scan_args;
-use beni::{Array, Error, IntoValue, Mrb, Value};
+use beni::{Error, IntoValue, Mrb, RArray, Value};
 
 /// Registered through `beni::method!(rest_count, -1)`: reads the splat
 /// and returns its length as an mruby Integer.
 fn rest_count(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    let splat = scan_args::<(), (), Array, (), (), ()>(mrb)?.splat;
+    let splat = scan_args::<(), (), RArray, (), (), ()>(mrb)?.splat;
     Ok((splat.len() as i32).into_value(mrb))
 }
 
@@ -357,7 +357,7 @@ fn the_argument_array_ends_with_the_keyword_hash() {
 // [count, keyword bucket size, count] around a keyword read.
 fn count_around_a_keyword_read(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
     let before = mrb.argc() as i32;
-    let bucket = scan_args::<(), (), Array, (), beni::Hash, ()>(mrb)?.keywords;
+    let bucket = scan_args::<(), (), RArray, (), beni::RHash, ()>(mrb)?.keywords;
     let after = mrb.argc() as i32;
     Ok(mrb
         .ary_new_from_values(&[
@@ -370,7 +370,7 @@ fn count_around_a_keyword_read(mrb: &Mrb, _self: Value) -> Result<Value, Error> 
 
 // [splat size, count] after a read that folds the keywords in.
 fn count_after_a_folding_read(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    let splat = scan_args::<(), (), Array, (), (), ()>(mrb)?.splat;
+    let splat = scan_args::<(), (), RArray, (), (), ()>(mrb)?.splat;
     Ok(mrb
         .ary_new_from_values(&[
             (splat.len() as i32).into_value(mrb),

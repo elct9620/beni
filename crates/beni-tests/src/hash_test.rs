@@ -45,7 +45,7 @@ fn keys_returns_the_typed_key_array() {
 
 #[test]
 fn set_surfaces_frozen_receiver_as_err() {
-    use beni::{Ccontext, Error, FromValue, Hash};
+    use beni::{Ccontext, Error, FromValue, RHash};
 
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_hash.rb").expect("allocating the context must succeed");
@@ -53,7 +53,7 @@ fn set_surfaces_frozen_receiver_as_err() {
     // A frozen Hash still carries the Hash tag, so the downcast holds,
     // but assigning into it raises FrozenError — which protect catches
     // into Err rather than long-jumping.
-    let frozen = Hash::from_value(
+    let frozen = RHash::from_value(
         cxt.load_nstring(b"{}.freeze")
             .expect("the test source must compile and run"),
     )
@@ -107,7 +107,7 @@ fn keyed_operations_surface_a_raising_key_as_err() {
 
 #[test]
 fn read_surfaces_a_raising_default_as_err() {
-    use beni::{Ccontext, Error, FromValue, Hash};
+    use beni::{Ccontext, Error, FromValue, RHash};
 
     let mrb = open_mrb();
     let cxt =
@@ -116,7 +116,7 @@ fn read_surfaces_a_raising_default_as_err() {
     // A hash whose default block raises turns an absent-key read into
     // a raise protect must catch — the default path a read takes and
     // fetch does not.
-    let hash = Hash::from_value(
+    let hash = RHash::from_value(
         cxt.load_nstring(b"Hash.new { raise 'no' }")
             .expect("the test source must compile and run"),
     )
@@ -234,14 +234,14 @@ fn clear_empties_the_hash() {
 
 #[test]
 fn clear_surfaces_frozen_receiver_as_err() {
-    use beni::{Ccontext, Error, FromValue, Hash};
+    use beni::{Ccontext, Error, FromValue, RHash};
 
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_clear.rb").expect("allocating the context must succeed");
 
     // clear checks frozen state before touching entries, so even a
     // populated frozen hash surfaces FrozenError as Err.
-    let frozen = Hash::from_value(
+    let frozen = RHash::from_value(
         cxt.load_nstring(b"{a: 1}.freeze")
             .expect("the test source must compile and run"),
     )
@@ -276,14 +276,14 @@ fn dup_copies_independently() {
 
 #[test]
 fn delete_surfaces_frozen_receiver_as_err() {
-    use beni::{Ccontext, Error, FromValue, Hash};
+    use beni::{Ccontext, Error, FromValue, RHash};
 
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_del.rb").expect("allocating the context must succeed");
 
     // delete checks frozen state before touching entries, so even a
     // populated frozen hash surfaces FrozenError as Err.
-    let frozen = Hash::from_value(
+    let frozen = RHash::from_value(
         cxt.load_nstring(b"{a: 1}.freeze")
             .expect("the test source must compile and run"),
     )
@@ -296,7 +296,7 @@ fn delete_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn update_surfaces_frozen_receiver_as_err() {
-    use beni::{Ccontext, Error, FromValue, Hash};
+    use beni::{Ccontext, Error, FromValue, RHash};
 
     let mrb = open_mrb();
     let cxt =
@@ -304,7 +304,7 @@ fn update_surfaces_frozen_receiver_as_err() {
 
     // merge checks frozen state before folding entries, so merging
     // into a frozen hash surfaces FrozenError as Err.
-    let frozen = Hash::from_value(
+    let frozen = RHash::from_value(
         cxt.load_nstring(b"{a: 1}.freeze")
             .expect("the test source must compile and run"),
     )

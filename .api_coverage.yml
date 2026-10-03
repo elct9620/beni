@@ -69,27 +69,27 @@ typed:
   MRB_ARGS_REQ: a typed method's positional arity, derived by `Module::define_method`
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
   MRB_UNDEF_ALLOCATOR: RClass::undef_default_alloc_func
-  RARRAY_LEN: Array::len
+  RARRAY_LEN: RArray::len
   RSTRING_LEN: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len`"
   RSTRING_PTR: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature)"
   mrb_argnum_error: Error::argnum
-  mrb_ary_clear: Array::clear
-  mrb_ary_concat: Array::concat
-  mrb_ary_dup: Array::dup
-  mrb_ary_entry: "`Array::entry`, `Value::ary_entry`"
-  mrb_ary_join: Array::join
+  mrb_ary_clear: RArray::clear
+  mrb_ary_concat: RArray::concat
+  mrb_ary_dup: RArray::dup
+  mrb_ary_entry: "`RArray::entry`, `Value::ary_entry`"
+  mrb_ary_join: RArray::join
   mrb_ary_new: Mrb::ary_new
   mrb_ary_new_capa: Mrb::ary_new_capa
   mrb_ary_new_from_values: Mrb::ary_new_from_values
-  mrb_ary_pop: Array::pop
-  mrb_ary_push: Array::push
-  mrb_ary_replace: Array::replace
-  mrb_ary_resize: Array::resize
-  mrb_ary_set: Array::store
-  mrb_ary_shift: Array::shift
-  mrb_ary_splat: "`Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `Array`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `Array` downcast (the tag-test that reads a non-Array as absent)"
-  mrb_ary_splice: Array::splice
-  mrb_ary_unshift: Array::unshift
+  mrb_ary_pop: RArray::pop
+  mrb_ary_push: RArray::push
+  mrb_ary_replace: RArray::replace
+  mrb_ary_resize: RArray::resize
+  mrb_ary_set: RArray::store
+  mrb_ary_shift: RArray::shift
+  mrb_ary_splat: "`Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `RArray`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `RArray` downcast (the tag-test that reads a non-Array as absent)"
+  mrb_ary_splice: RArray::splice
+  mrb_ary_unshift: RArray::unshift
   mrb_array_p: "`Value::is_array`, via the value tag"
   mrb_assoc_new: Mrb::assoc_new
   mrb_as_float: "`Value::as_float` — convert across the numeric types, distinct from the exact-tag `f64::from_value` downcast. Answers `f64`, which holds every configured float width"
@@ -169,8 +169,8 @@ typed:
   mrb_define_private_method_id: "`Module::define_private_method` with an `Id` key (the symbol-or-name key)"
   mrb_define_singleton_method: "`Object::define_singleton_method` with a name key — interns and routes through `mrb_define_singleton_method_id`"
   mrb_define_singleton_method_id: "`Object::define_singleton_method` with an `Id` key (the symbol-or-name key)"
-  mrb_ensure_array_type: "`Value::ensure_array` — the raising Array-tag coercion to an `Array` handle"
-  mrb_ensure_hash_type: "`Value::ensure_hash` — the raising Hash-tag coercion to a `Hash` handle"
+  mrb_ensure_array_type: "`Value::ensure_array` — the raising Array-tag coercion to an `RArray` handle"
+  mrb_ensure_hash_type: "`Value::ensure_hash` — the raising Hash-tag coercion to an `RHash` handle"
   mrb_ensure_string_type: "`Value::ensure_string` — the raising String-tag coercion to an `RString` handle"
   mrb_ensure_int_type: "`Value::ensure_int` — the raising numeric-tag coercion to an Integer `Value` (Integer unchanged, Float truncated toward zero), narrowing to one that fits the configured integer width; distinct from the exact-tag `FromValue` -> integer downcast, which coerces nothing"
   mrb_ensure_integer_type: "`Value::ensure_int` — the un-narrowed Integer coercion that `mrb_ensure_int_type` wraps; same raising numeric-tag coercion, surfaced through the single `Value::ensure_int`"
@@ -203,21 +203,21 @@ typed:
   mrb_gv_get: Mrb::gv_get
   mrb_gv_remove: Mrb::gv_remove
   mrb_gv_set: Mrb::gv_set
-  mrb_hash_clear: Hash::clear
-  mrb_hash_delete_key: Hash::delete
-  mrb_hash_dup: Hash::dup
-  mrb_hash_empty_p: Hash::is_empty
-  mrb_hash_fetch: Hash::fetch
-  mrb_hash_foreach: "`Hash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); runs under `protect` and returns a `Result` because a closure that re-enters the VM to mutate the hash trips mruby's in-walk modify guard (`H_CHECK_MODIFIED`), which raises and would `longjmp` across the FFI boundary unprotected, surfaced instead as `Err`"
-  mrb_hash_get: Hash::get
-  mrb_hash_key_p: Hash::contains_key
-  mrb_hash_keys: Hash::keys
-  mrb_hash_merge: Hash::update
+  mrb_hash_clear: RHash::clear
+  mrb_hash_delete_key: RHash::delete
+  mrb_hash_dup: RHash::dup
+  mrb_hash_empty_p: RHash::is_empty
+  mrb_hash_fetch: RHash::fetch
+  mrb_hash_foreach: "`RHash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); runs under `protect` and returns a `Result` because a closure that re-enters the VM to mutate the hash trips mruby's in-walk modify guard (`H_CHECK_MODIFIED`), which raises and would `longjmp` across the FFI boundary unprotected, surfaced instead as `Err`"
+  mrb_hash_get: RHash::get
+  mrb_hash_key_p: RHash::contains_key
+  mrb_hash_keys: RHash::keys
+  mrb_hash_merge: RHash::update
   mrb_hash_new: Mrb::hash_new
   mrb_hash_new_capa: Mrb::hash_new_capa
-  mrb_hash_set: Hash::set
-  mrb_hash_size: Hash::len
-  mrb_hash_values: Hash::values
+  mrb_hash_set: RHash::set
+  mrb_hash_size: RHash::len
+  mrb_hash_values: RHash::values
   mrb_include_module: Module::include_module
   mrb_incremental_gc: "`Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive)"
   mrb_inspect: Value::inspect
@@ -425,9 +425,9 @@ extensions:
     `std::panic::catch_unwind` and answers `Error::Panic` carrying the
     payload's message. The registered-method bridge and `Mrb::init_gem`
     go through it. Binds no C symbol.
-  Array::entries: >-
+  RArray::entries: >-
     `ExactSizeIterator` walk of an array by C-level index: composes the
-    already-graduated `Array::entry` (`mrb_ary_entry`) and `Array::len`
+    already-graduated `RArray::entry` (`mrb_ary_entry`) and `RArray::len`
     (`RARRAY_LEN`) over a length snapshot taken when the walk begins, binding
     no new C symbol. A live view rather than a content snapshot — a
     re-entrant mutation is only partly visible, and a position the array no
@@ -448,11 +448,11 @@ get_args_formats:
   o: { status: covered, via: "scan_args required / optional / trailing parts, or the typed method registration" }
   C: { status: covered, via: "scan_args + FromValue<RClass> / FromValue<RModule>, or Value::is_class / is_sclass / is_module" }
   S: { status: covered, via: "scan_args + FromValue<RString>, or Value::ensure_string" }
-  A: { status: covered, via: "scan_args + FromValue<Array> / Value::ensure_array" }
-  H: { status: covered, via: "scan_args + FromValue<Hash> / Value::ensure_hash" }
+  A: { status: covered, via: "scan_args + FromValue<RArray> / Value::ensure_array" }
+  H: { status: covered, via: "scan_args + FromValue<RHash> / Value::ensure_hash" }
   s: { status: covered, via: "scan_args + FromValue<Vec<u8>> — a copy of the String argument's bytes" }
   z: { status: covered, via: "scan_args + RString::to_cstr" }
-  a: { status: covered, via: "scan_args + Array::entries" }
+  a: { status: covered, via: "scan_args + RArray::entries" }
   c: { status: covered, via: "scan_args + FromValue<RClass> / FromValue<RModule>" }
   f: { status: covered, via: "scan_args + FromValue<f64> / Value::ensure_float" }
   i: { status: covered, via: "scan_args + FromValue<i32> / FromValue<i64> / Value::ensure_int" }
@@ -460,7 +460,7 @@ get_args_formats:
   n: { status: covered, via: "scan_args + FromValue<Symbol>" }
   d: { status: covered, via: "scan_args + TryConvert for &T / Obj<T>" }
   "&": { status: covered, via: "scan_args block part, or block-accepting registration" }
-  "*": { status: covered, via: "scan_args splat part — an Array handle or a converted Vec" }
+  "*": { status: covered, via: "scan_args splat part — an `RArray` handle or a converted Vec" }
   "|": { status: covered, via: "scan_args optional part, or optional-positional registration" }
   "?": { status: covered, via: "the Option a scan_args optional part or an optional-positional registration binds" }
   ":": { status: covered, via: "scan_args keyword part, then get_kwargs by name" }
@@ -487,7 +487,7 @@ subsumed:
   mrb_exc_get: "`Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it"
   mrb_clear_error: "`Mrb::clear_exc` — the inner call of `mrb_check_error`, whose body is `if (mrb->exc) { mrb_clear_error(mrb); return TRUE; }` (`vendor/mruby/src/error.c:876-891`); the bool the C form returns is what the Rust shape drops, and clearing the pending exception is the whole of what remains"
   mrb_ensure: "`sys::protect` — `mrb_protect_error`, then the cleanup call, then a rethrow of the caught exception (`vendor/mruby/mrbgems/mruby-error/src/exception.c:56-68`). In Rust the cleanup is the code after the call and the rethrow is the `Err` that call answers, a cleanup's own `Err` replacing it through `?`, so the two `mrb_func_t` + `mrb_value` data pairs are Rust control flow. The C form brackets both calls in one arena save to keep the body's result alive across the cleanup; each `mrb_protect_error` re-protects the value it surfaces before returning (`vendor/mruby/src/vm.c:566-567`), so the call's result outlives the cleanup's own protected calls"
-  mrb_check_array_type: "`FromValue` -> `Array` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it"
+  mrb_check_array_type: "`FromValue` -> `RArray` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it"
   mrb_check_hash_type: "`FromValue` -> `Hash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type`"
   mrb_check_string_type: "`FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type`"
   mrb_check_type: "the `FromValue` downcasts and the `Value::is_*` tag predicates — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot"

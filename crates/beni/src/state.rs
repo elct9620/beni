@@ -32,7 +32,7 @@
 //! per-concern files under `state::`. Each file extends `Mrb` with
 //! inherent methods covering one concern:
 //!
-//!   * `factory` — `String` / `Array` / `Hash` factories
+//!   * `factory` — `String` / `RArray` / `RHash` factories
 //!   * `symbol` — symbol intern + name lookup
 //!   * `define` — top-level module / class / const / gvar
 //!   * `args` — the single-argument, count, argument-array, and block

@@ -7,7 +7,7 @@
 //! so a handle converts on its type tag alone.
 
 use crate::{
-    method::core_exception, Array, Error, ExceptionClass, FromValue, Hash, Mrb, Proc, RClass,
+    method::core_exception, Error, ExceptionClass, FromValue, Mrb, Proc, RArray, RClass, RHash,
     RModule, RString, Range, Symbol, Value,
 };
 use core::num::{
@@ -180,7 +180,7 @@ macro_rules! try_convert_tagged {
 }
 
 try_convert_tagged!(
-    RString => "String", Array => "Array", Hash => "Hash", Symbol => "Symbol", Range => "Range",
+    RString => "String", RArray => "Array", RHash => "Hash", Symbol => "Symbol", Range => "Range",
 );
 
 macro_rules! try_convert_class {
@@ -255,14 +255,14 @@ impl TryConvert for std::path::PathBuf {
 impl<T: TryConvert> TryConvert for Vec<T> {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        Array::try_convert(val, mrb)?.to_vec(mrb)
+        RArray::try_convert(val, mrb)?.to_vec(mrb)
     }
 }
 
 impl<T: TryConvert, const N: usize> TryConvert for [T; N] {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        Array::try_convert(val, mrb)?.to_array(mrb)
+        RArray::try_convert(val, mrb)?.to_array(mrb)
     }
 }
 
@@ -270,7 +270,7 @@ macro_rules! try_convert_tuple {
     ($len:literal; $($t:ident $i:tt),+) => {
         impl<$($t: TryConvert),+> TryConvert for ($($t,)+) {
             fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-                let ary = Array::try_convert(val, mrb)?;
+                let ary = RArray::try_convert(val, mrb)?;
                 if ary.len() != $len {
                     return Err(length_error(mrb, $len));
                 }
@@ -300,7 +300,7 @@ where
 {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        Hash::try_convert(val, mrb)?.to_hash_map(mrb)
+        RHash::try_convert(val, mrb)?.to_hash_map(mrb)
     }
 }
 
@@ -311,6 +311,6 @@ where
 {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        Hash::try_convert(val, mrb)?.to_btree_map(mrb)
+        RHash::try_convert(val, mrb)?.to_btree_map(mrb)
     }
 }

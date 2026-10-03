@@ -1,7 +1,7 @@
 use crate::support::open_mrb;
 use beni::prelude::*;
 use beni::scan_args::{get_kwargs, scan_args};
-use beni::{Array, Error, FromValue, Hash, IntoValue, Mrb, Proc, Value};
+use beni::{Error, FromValue, IntoValue, Mrb, Proc, RArray, RHash, Value};
 
 /// Define `name` on `Object` as a `-1` method running `body`.
 fn define(mrb: &Mrb, name: &core::ffi::CStr, def: beni::MethodDef) {
@@ -49,7 +49,7 @@ fn positionals_fill_required_and_trailing_before_optional_and_splat() {
     let mrb = open_mrb();
     define(&mrb, c"parts", beni::method!(every_positional_part, -1));
 
-    let read = |src| eval::<Array>(&mrb, src).as_value().inspect(&mrb);
+    let read = |src| eval::<RArray>(&mrb, src).as_value().inspect(&mrb);
     assert_eq!(read("parts(1, 2)"), "[1, -1, 2]");
     assert_eq!(read("parts(1, 2, 3)"), "[1, 2, 3]");
     assert_eq!(read("parts(1, 2, 3, 4, 5)"), "[1, 2, 3, 4, 5]");
@@ -94,7 +94,7 @@ fn a_positional_of_the_wrong_type_is_a_type_error() {
 
 // def m(*rest, **kw) — answered as [rest.size, kw].
 fn keyword_bucket(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    let args = scan_args::<(), (), Array, (), Hash, ()>(mrb)?;
+    let args = scan_args::<(), (), RArray, (), RHash, ()>(mrb)?;
     Ok(mrb
         .ary_new_from_values(&[
             (args.splat.len() as i32).into_value(mrb),
@@ -108,7 +108,7 @@ fn the_keyword_bucket_holds_keywords_apart_from_the_positionals() {
     let mrb = open_mrb();
     define(&mrb, c"kw", beni::method!(keyword_bucket, -1));
 
-    let read = |src| eval::<Array>(&mrb, src).as_value().inspect(&mrb);
+    let read = |src| eval::<RArray>(&mrb, src).as_value().inspect(&mrb);
     assert_eq!(read("kw(1, a: 2)"), "[1, {a: 2}]");
     assert_eq!(read("kw(1, {a: 2})"), "[2, {}]");
     assert_eq!(read("kw"), "[0, {}]");
@@ -116,7 +116,7 @@ fn the_keyword_bucket_holds_keywords_apart_from_the_positionals() {
 
 // def m(*rest) — answered as the splat itself.
 fn splat_only(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    Ok(scan_args::<(), (), Array, (), (), Option<Proc>>(mrb)?
+    Ok(scan_args::<(), (), RArray, (), (), Option<Proc>>(mrb)?
         .splat
         .as_value())
 }
@@ -127,7 +127,7 @@ fn without_a_keyword_part_the_keywords_read_as_the_last_positional() {
     define(&mrb, c"splat", beni::method!(splat_only, -1));
 
     assert_eq!(
-        eval::<Array>(&mrb, "splat(1, a: 2)")
+        eval::<RArray>(&mrb, "splat(1, a: 2)")
             .as_value()
             .inspect(&mrb),
         "[1, {a: 2}]"
@@ -145,13 +145,13 @@ fn an_array_splat_and_an_optional_block_fit_every_call() {
         "splat(a: 1) { }",
         "splat(*(1..20), k: 1)",
     ] {
-        eval::<Array>(&mrb, src);
+        eval::<RArray>(&mrb, src);
     }
 }
 
 // Holds the splat across a full collection and a dispatch before reading it.
 fn splat_across_reentry(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    let splat = scan_args::<(), (), Array, (), (), ()>(mrb)?.splat;
+    let splat = scan_args::<(), (), RArray, (), (), ()>(mrb)?.splat;
     mrb.full_gc();
     splat.as_value().funcall(mrb, "inspect", &[])?;
     Ok(splat.as_value())
@@ -163,7 +163,7 @@ fn an_array_splat_survives_a_collection_and_a_reentry() {
     define(&mrb, c"held", beni::method!(splat_across_reentry, -1));
 
     assert_eq!(
-        eval::<Array>(&mrb, "held('a' * 3, 'b' * 3)")
+        eval::<RArray>(&mrb, "held('a' * 3, 'b' * 3)")
             .as_value()
             .inspect(&mrb),
         r#"["aaa", "bbb"]"#
@@ -240,9 +240,9 @@ fn or_nil(mrb: &Mrb, value: Option<impl IntoValue>) -> Value {
 
 // def t(a:, b:, c: nil, **rest) — answered as [a, b, c, rest].
 fn named_keywords(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    let bucket = scan_args::<(), (), (), (), Hash, ()>(mrb)?.keywords;
+    let bucket = scan_args::<(), (), (), (), RHash, ()>(mrb)?.keywords;
     let kw =
-        get_kwargs::<_, (String, i32), (Option<bool>,), Hash>(mrb, bucket, &["a", "b"], &["c"])?;
+        get_kwargs::<_, (String, i32), (Option<bool>,), RHash>(mrb, bucket, &["a", "b"], &["c"])?;
     let (a, b) = kw.required;
     let (c,) = kw.optional;
     Ok(mrb
@@ -260,7 +260,7 @@ fn named_keywords_bind_required_optional_and_rest() {
     let mrb = open_mrb();
     define(&mrb, c"named", beni::method!(named_keywords, -1));
 
-    let read = |src| eval::<Array>(&mrb, src).as_value().inspect(&mrb);
+    let read = |src| eval::<RArray>(&mrb, src).as_value().inspect(&mrb);
     assert_eq!(
         read("named(a: 'x', b: 1, c: true, d: 2)"),
         r#"["x", 1, true, {d: 2}]"#
@@ -275,7 +275,7 @@ fn named_keywords_bind_required_optional_and_rest() {
 
 // def t(c: nil, d: nil) — answered as [c, d, the bucket's size afterwards].
 fn optional_keywords(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    let bucket = scan_args::<(), (), (), (), Hash, ()>(mrb)?.keywords;
+    let bucket = scan_args::<(), (), (), (), RHash, ()>(mrb)?.keywords;
     let kw = get_kwargs::<_, (), (Option<i32>, Option<i32>), ()>(mrb, bucket, &[], &["c", "d"])?;
     let (c, d) = kw.optional;
     Ok(mrb
@@ -293,7 +293,7 @@ fn an_optional_keyword_the_hash_lacks_binds_none_and_the_hash_stays_whole() {
     define(&mrb, c"optional_kw", beni::method!(optional_keywords, -1));
 
     assert_eq!(
-        eval::<Array>(&mrb, "optional_kw(d: 4)")
+        eval::<RArray>(&mrb, "optional_kw(d: 4)")
             .as_value()
             .inspect(&mrb),
         "[nil, 4, 1]"

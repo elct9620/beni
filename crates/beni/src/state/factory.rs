@@ -3,14 +3,14 @@
 //! `str_new` / `str_new_cstr` construct mruby Strings from Rust byte
 //! slices or a NUL-terminated `&CStr`; `str_new_static` aliases a
 //! `'static` buffer without copying. `ary_new` / `hash_new` return
-//! typed `Array` / `Hash` newtypes, and `range_new` returns a typed
+//! typed `RArray` / `RHash` newtypes, and `range_new` returns a typed
 //! `Range` — per-collection operations (`push`, `set`, `get`, `keys`,
 //! the range bound reads) live on the value newtype rather than on
 //! `Mrb` so the call shape mirrors Ruby (`arr.push(x)`, not
 //! `mrb.ary_push(arr, x)`). `range_new` is the one factory that can
 //! raise — comparing incomparable bounds — so it returns a `Result`.
 
-use crate::{sys::AsRawValue, Array, Error, Hash, Mrb, RString, Range, Value};
+use crate::{sys::AsRawValue, Error, Mrb, RArray, RHash, RString, Range, Value};
 use beni_sys as sys;
 
 impl Mrb {
@@ -98,14 +98,14 @@ impl Mrb {
     }
 
     /// `mrb_ary_new(mrb)` — construct a fresh empty mruby `Array` as
-    /// a typed `Array`. Element operations (`push`, `entry`) live
+    /// a typed `RArray`. Element operations (`push`, `entry`) live
     /// on the returned newtype.
     #[inline]
-    pub fn ary_new(&self) -> Array {
+    pub fn ary_new(&self) -> RArray {
         // SAFETY: `self` is alive; `mrb_ary_new` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new(self.as_ptr())))
+            RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new(self.as_ptr())))
         }
     }
 
@@ -114,12 +114,12 @@ impl Mrb {
     /// a run of `push` onto a fresh array would otherwise trigger.
     /// `capa` saturates to the archive's `mrb_int` width.
     #[inline]
-    pub fn ary_new_capa(&self, capa: usize) -> Array {
+    pub fn ary_new_capa(&self, capa: usize) -> RArray {
         let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
         // SAFETY: `self` is alive; `mrb_ary_new_capa` always returns
         // an Array-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new_capa(
+            RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new_capa(
                 self.as_ptr(),
                 capa,
             )))
@@ -130,14 +130,14 @@ impl Mrb {
     /// `Array` holding a copy of `values`, in order. `values.len()`
     /// saturates to the archive's `mrb_int` width.
     #[inline]
-    pub fn ary_new_from_values(&self, values: &[Value]) -> Array {
+    pub fn ary_new_from_values(&self, values: &[Value]) -> RArray {
         let len = values.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
         // SAFETY: `self` is alive; `Value` is `#[repr(transparent)]`
         // over `mrb_value` (pinned by the ABI test), so the slice
         // pointer is a valid `*const mrb_value` for `len` elements,
         // which the call copies before returning.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new_from_values(
+            RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new_from_values(
                 self.as_ptr(),
                 len,
                 values.as_ptr() as *const sys::mrb_value,
@@ -146,14 +146,14 @@ impl Mrb {
     }
 
     /// `mrb_hash_new(mrb)` — construct a fresh empty mruby `Hash` as
-    /// a typed `Hash`. Element operations (`set`, `get`, `keys`)
+    /// a typed `RHash`. Element operations (`set`, `get`, `keys`)
     /// live on the returned newtype.
     #[inline]
-    pub fn hash_new(&self) -> Hash {
+    pub fn hash_new(&self) -> RHash {
         // SAFETY: `self` is alive; `mrb_hash_new` always returns a
         // Hash-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Hash::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_new(self.as_ptr())))
+            RHash::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_new(self.as_ptr())))
         }
     }
 
@@ -162,12 +162,12 @@ impl Mrb {
     /// a run of `set` onto a fresh hash would otherwise trigger. `capa`
     /// saturates to the archive's `mrb_int` width.
     #[inline]
-    pub fn hash_new_capa(&self, capa: usize) -> Hash {
+    pub fn hash_new_capa(&self, capa: usize) -> RHash {
         let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
         // SAFETY: `self` is alive; `mrb_hash_new_capa` always returns
         // a Hash-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Hash::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_new_capa(
+            RHash::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_new_capa(
                 self.as_ptr(),
                 capa,
             )))
@@ -178,12 +178,12 @@ impl Mrb {
     /// `Array` `[car, cdr]`. A pure allocation that copies the two values
     /// into a fresh array, so it never raises.
     #[inline]
-    pub fn assoc_new(&self, car: Value, cdr: Value) -> Array {
+    pub fn assoc_new(&self, car: Value, cdr: Value) -> RArray {
         // SAFETY: `self` is alive; `car` and `cdr` share the VM by the
         // single-VM contract. `mrb_assoc_new` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_assoc_new(
+            RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_assoc_new(
                 self.as_ptr(),
                 car.as_raw(),
                 cdr.as_raw(),

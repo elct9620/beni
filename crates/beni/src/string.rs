@@ -346,7 +346,7 @@ impl RString {
     /// the embed-vs-heap length read matches the linked archive's
     /// layout). It is a byte count, not a character count, and is never
     /// negative, so the result is returned as `usize`. Mirrors
-    /// `Array::len`; cheaper than an owned read's length, which copies
+    /// `RArray::len`; cheaper than an owned read's length, which copies
     /// the buffer out first.
     #[inline]
     pub fn len(self) -> usize {
@@ -363,7 +363,7 @@ impl RString {
 
     /// `mrb_str_dup(mrb, self)` — a copy with its own buffer, Ruby's
     /// `String#dup`. It does not mutate the receiver, so it never fails.
-    /// Mirrors `Array::dup` / `Hash::dup`; mruby has no copy-on-write
+    /// Mirrors `RArray::dup` / `RHash::dup`; mruby has no copy-on-write
     /// share here, so the bytes are copied outright.
     #[inline]
     pub fn dup(self, mrb: &Mrb) -> RString {

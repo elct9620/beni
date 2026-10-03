@@ -12,7 +12,7 @@
 //!
 //! Scope covers `Value` itself, the scalar leaf types (the Rust
 //! integers, `f64`, `bool`), an owned `String` or byte vector, the
-//! typed handles (`RString` / `Array` / `Hash` / `RClass` / `RModule` /
+//! typed handles (`RString` / `RArray` / `RHash` / `RClass` / `RModule` /
 //! `ExceptionClass` / `Proc` / `Symbol` / `Range`), and an `Option` of
 //! any of them that reads `nil` as `None`: every handle converts into
 //! the value naming its object, and back through a checked downcast
@@ -21,7 +21,7 @@
 //! rather than borrowing VM storage.
 
 use crate::{
-    sys, Array, ExceptionClass, Hash, Mrb, Proc, RClass, RModule, RString, Range, ReprValue,
+    sys, ExceptionClass, Mrb, Proc, RArray, RClass, RHash, RModule, RString, Range, ReprValue,
     Symbol, Value,
 };
 
@@ -219,14 +219,14 @@ impl IntoValue for RString {
     }
 }
 
-impl IntoValue for Array {
+impl IntoValue for RArray {
     #[inline]
     fn into_value(self, _mrb: &Mrb) -> Value {
         self.as_value()
     }
 }
 
-impl IntoValue for Hash {
+impl IntoValue for RHash {
     #[inline]
     fn into_value(self, _mrb: &Mrb) -> Value {
         self.as_value()
@@ -348,25 +348,25 @@ impl FromValue for bool {
     }
 }
 
-impl FromValue for Array {
+impl FromValue for RArray {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the wrap precondition (MRB_TT_ARRAY tagging) is
         // established by the `is_array` guard immediately before it.
         value
             .is_array()
-            .then(|| unsafe { Array::from_value_unchecked(value) })
+            .then(|| unsafe { RArray::from_value_unchecked(value) })
     }
 }
 
-impl FromValue for Hash {
+impl FromValue for RHash {
     #[inline]
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: the wrap precondition (MRB_TT_HASH tagging) is
         // established by the `is_hash` guard immediately before it.
         value
             .is_hash()
-            .then(|| unsafe { Hash::from_value_unchecked(value) })
+            .then(|| unsafe { RHash::from_value_unchecked(value) })
     }
 }
 

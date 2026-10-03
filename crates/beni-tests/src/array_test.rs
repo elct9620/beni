@@ -105,7 +105,7 @@ fn len_and_is_empty_track_the_element_count() {
 
 #[test]
 fn push_surfaces_frozen_receiver_as_err() {
-    use beni::{Array, Ccontext, FromValue};
+    use beni::{Ccontext, FromValue, RArray};
 
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_ary.rb").expect("allocating the context must succeed");
@@ -113,7 +113,7 @@ fn push_surfaces_frozen_receiver_as_err() {
     // A frozen Array still carries the Array tag, so the downcast
     // holds, but pushing to it raises FrozenError — which protect
     // catches into Err rather than long-jumping.
-    let frozen = Array::from_value(
+    let frozen = RArray::from_value(
         cxt.load_nstring(b"[].freeze")
             .expect("the test source must compile and run"),
     )
@@ -277,7 +277,7 @@ fn splice_inserts_replaces_and_deletes_in_place() {
 
 #[test]
 fn splice_surfaces_raising_edges_as_err() {
-    use beni::{Array, Ccontext, FromValue};
+    use beni::{Ccontext, FromValue, RArray};
 
     let mrb = open_mrb();
     let ary = mrb.ary_new();
@@ -306,7 +306,7 @@ fn splice_surfaces_raising_edges_as_err() {
     // routes through mrb_ary_modify like the other mutators.
     let cxt =
         Ccontext::new(&mrb, c"frozen_splice.rb").expect("allocating the context must succeed");
-    let frozen = Array::from_value(
+    let frozen = RArray::from_value(
         cxt.load_nstring(b"[1].freeze")
             .expect("the test source must compile and run"),
     )
@@ -370,14 +370,14 @@ fn join_renders_elements_with_a_separator() {
 
 #[test]
 fn join_surfaces_a_raising_element_to_s_as_err() {
-    use beni::{Array, Ccontext, FromValue};
+    use beni::{Ccontext, FromValue, RArray};
 
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"join_raise.rb").expect("allocating the context must succeed");
 
     // An element whose to_s raises long-jumps out of mrb_ary_join;
     // protect catches it into Err rather than unwinding across FFI.
-    let ary = Array::from_value(
+    let ary = RArray::from_value(
         cxt.load_nstring(b"o = Object.new; def o.to_s; raise 'boom'; end; [o]")
             .expect("the test source must compile and run"),
     )
@@ -387,14 +387,14 @@ fn join_surfaces_a_raising_element_to_s_as_err() {
 
 #[test]
 fn pop_surfaces_frozen_receiver_as_err() {
-    use beni::{Array, Ccontext, FromValue};
+    use beni::{Ccontext, FromValue, RArray};
 
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_pop.rb").expect("allocating the context must succeed");
 
     // pop checks frozen state before touching the elements, so even a
     // populated frozen array surfaces FrozenError as Err.
-    let frozen = Array::from_value(
+    let frozen = RArray::from_value(
         cxt.load_nstring(b"[1].freeze")
             .expect("the test source must compile and run"),
     )
@@ -404,7 +404,7 @@ fn pop_surfaces_frozen_receiver_as_err() {
 
 #[test]
 fn remaining_mutators_surface_frozen_receiver_as_err() {
-    use beni::{Array, Ccontext, FromValue};
+    use beni::{Ccontext, FromValue, RArray};
 
     let mrb = open_mrb();
     let cxt =
@@ -413,7 +413,7 @@ fn remaining_mutators_surface_frozen_receiver_as_err() {
     // Every mutator routes through mrb_ary_modify, which raises
     // FrozenError on a frozen receiver — protect catches each into Err.
     // push and pop are pinned separately; this covers the rest.
-    let frozen = Array::from_value(
+    let frozen = RArray::from_value(
         cxt.load_nstring(b"[1].freeze")
             .expect("the test source must compile and run"),
     )

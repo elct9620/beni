@@ -2,7 +2,7 @@
 //!
 //! This crate owns every Rust-level abstraction above the mruby C
 //! API: the `Mrb` / `Ccontext` RAII types, the `Value` / `RClass` /
-//! `RModule` / `Array` / `Hash` handles, the `IntoValue` / `FromValue`
+//! `RModule` / `RArray` / `RHash` handles, the `IntoValue` / `FromValue`
 //! / `TryConvert` conversion seam, and the `scan_args` reads of a
 //! call's arguments. The sibling `beni-sys` crate keeps only the
 //! bindgen-generated `extern "C"` declarations and the layout-safe C
@@ -61,7 +61,7 @@
 
 // Safe-layer modules. These hold the typed abstractions over the
 // bindgen FFI surface: `Mrb` / `Ccontext` RAII, typed `Value` /
-// `RClass` / `RModule` / `Array` / `Hash` newtypes, and the `cstr!` / `cstr_ptr`
+// `RClass` / `RModule` / `RArray` / `RHash` newtypes, and the `cstr!` / `cstr_ptr`
 // C-string helpers.
 
 pub mod array;
@@ -100,13 +100,13 @@ pub use state::{Mrb, MrbOpenError};
 #[cfg(feature = "compiler")]
 pub use ccontext::Ccontext;
 
-pub use array::Array;
+pub use array::RArray;
 pub use class::{ExceptionClass, Module, Object, RClass, RModule};
 pub use convert::{FromValue, IntoValue};
 pub use data::DataType;
 pub use error::Error;
 pub use gem::Gem;
-pub use hash::{ForEach, Hash};
+pub use hash::{ForEach, RHash};
 pub use inline_struct::{Inline, InlineStruct, InlineType};
 pub use method::{MethodDef, MethodReturn};
 pub use parse::ParseMessage;

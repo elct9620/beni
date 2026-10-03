@@ -9,7 +9,7 @@
 //! name carries no `$`, which no Ruby program can write.
 
 use crate::{
-    sys::AsRawValue, Array, Error, FromValue as _, Hash, Mrb, RClass, ReprValue, Symbol,
+    sys::AsRawValue, Error, FromValue as _, Mrb, RArray, RClass, RHash, ReprValue, Symbol,
     TryConvert, Value,
 };
 use beni_sys as sys;
@@ -61,7 +61,7 @@ impl Mrb {
     /// and nothing when `mark_carrier` has put none there.
     pub fn carrier(&self, path: &'static CStr) -> Option<RClass> {
         let name = self.intern_static(RECORD_GLOBAL).ok()?;
-        let record = Hash::from_value(self.gv_get(name))?;
+        let record = RHash::from_value(self.gv_get(name))?;
         let held = record.get(self, self.carrier_key(path).ok()?).ok()?;
         RClass::try_convert(held, self).ok()
     }
@@ -102,7 +102,7 @@ impl Mrb {
 
     /// The pairs `[class, tag, …]` the record holds for inline-struct
     /// types, created on first use.
-    fn inline_owners(&self) -> Result<Array, Error> {
+    fn inline_owners(&self) -> Result<RArray, Error> {
         if let Some(owners) = self.held_inline_owners() {
             return Ok(owners);
         }
@@ -112,10 +112,10 @@ impl Mrb {
         Ok(owners)
     }
 
-    fn held_inline_owners(&self) -> Option<Array> {
+    fn held_inline_owners(&self) -> Option<RArray> {
         let name = self.intern_static(RECORD_GLOBAL).ok()?;
-        let record = Hash::from_value(self.gv_get(name))?;
-        Array::from_value(record.get(self, self.inline_key().ok()?).ok()?)
+        let record = RHash::from_value(self.gv_get(name))?;
+        RArray::from_value(record.get(self, self.inline_key().ok()?).ok()?)
     }
 
     /// The key the pairs sit under: a name no constant path can spell,
@@ -127,9 +127,9 @@ impl Mrb {
     /// The record, created on first use and kept reachable for the
     /// interpreter's lifetime by the global it is stored under — which
     /// is also what keeps every class it holds reachable.
-    fn carrier_record(&self) -> Result<Hash, Error> {
+    fn carrier_record(&self) -> Result<RHash, Error> {
         let name = self.intern_static(RECORD_GLOBAL)?;
-        if let Some(record) = Hash::from_value(self.gv_get(name)) {
+        if let Some(record) = RHash::from_value(self.gv_get(name)) {
             return Ok(record);
         }
         let record = self.hash_new();
@@ -156,7 +156,7 @@ impl Mrb {
 
 /// The tag `owners` holds for `class`, compared by class pointer. The
 /// record keeps every entry reachable, so the reads take no arena slot.
-fn owner_of(owners: Array, class: *mut sys::RClass) -> Option<*const ()> {
+fn owner_of(owners: RArray, class: *mut sys::RClass) -> Option<*const ()> {
     let entry = |index: usize| {
         // SAFETY: `owners` is the record's live array and `index` lies
         // inside it.

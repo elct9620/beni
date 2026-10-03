@@ -1,8 +1,8 @@
-//! Typed `Array` newtype around an Array-tagged `Value`.
+//! Typed `RArray` newtype around an Array-tagged `Value`.
 //!
-//! `Array` is `#[repr(transparent)]` over `Value` (which is itself
+//! `RArray` is `#[repr(transparent)]` over `Value` (which is itself
 //! `#[repr(transparent)]` over `mrb_value`). The two share their
-//! in-memory layout — `Array` is exactly an `mrb_value` known to carry
+//! in-memory layout — `RArray` is exactly an `mrb_value` known to carry
 //! an mruby `Array`. Construction is by explicit unchecked cast from
 //! `Value`; element operations cluster on the resulting newtype.
 //!
@@ -19,15 +19,15 @@ use beni_sys as sys;
 /// `Value` so the C ABI is preserved.
 ///
 /// Construct via `Mrb::ary_new` (fresh array), the checked
-/// `FromValue` downcast (`Array::from_value`, tag-discriminated), or
-/// `Array::from_value_unchecked` (assert that a `Value` you
+/// `FromValue` downcast (`RArray::from_value`, tag-discriminated), or
+/// `RArray::from_value_unchecked` (assert that a `Value` you
 /// already hold is Array-tagged). Round-trip back to a generic
 /// `Value` via `ReprValue::as_value` for APIs that take any value.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Array(pub(crate) Value);
+pub struct RArray(pub(crate) Value);
 
-impl Array {
+impl RArray {
     /// Wrap a `Value` that the caller has already determined to be
     /// Array-tagged (e.g. via a `classname` check or because it came
     /// straight from `mrb_ary_new` / a host array decoder).
@@ -172,7 +172,7 @@ impl Array {
     /// Ruby's `Array#concat`. Concatenating into a frozen array raises
     /// `FrozenError`, surfaced as `Err`.
     #[inline]
-    pub fn concat(self, mrb: &Mrb, other: Array) -> Result<(), Error> {
+    pub fn concat(self, mrb: &Mrb, other: RArray) -> Result<(), Error> {
         mrb.protect(|mrb| {
             // SAFETY: as `push`; `self` and `other` are Array-tagged
             // and share the VM. `mrb_ary_concat` modifies `self` and
@@ -187,7 +187,7 @@ impl Array {
     /// a copy of `other`'s, in place, Ruby's `Array#replace`. Replacing a
     /// frozen receiver raises `FrozenError`, surfaced as `Err`.
     #[inline]
-    pub fn replace(self, mrb: &Mrb, other: Array) -> Result<(), Error> {
+    pub fn replace(self, mrb: &Mrb, other: RArray) -> Result<(), Error> {
         mrb.protect(|mrb| {
             // SAFETY: as `concat`; `self` and `other` are Array-tagged
             // and share the VM. `mrb_ary_replace` modifies `self` and
@@ -274,12 +274,12 @@ impl Array {
     /// `mrb_ary_dup(mrb, self)` — a shallow copy, Ruby's `Array#dup`. It
     /// does not mutate the receiver, so it never fails.
     #[inline]
-    pub fn dup(self, mrb: &Mrb) -> Array {
+    pub fn dup(self, mrb: &Mrb) -> RArray {
         // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
         // contract; `mrb_ary_dup` returns a fresh Array-tagged value,
         // so the unchecked wrap is sound.
         unsafe {
-            Array::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_dup(
+            RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_dup(
                 mrb.as_ptr(),
                 self.0.as_raw(),
             )))
@@ -343,14 +343,14 @@ impl Array {
     }
 }
 
-/// Iterator returned by `Array::entries`. Reads each slot through `entry`
+/// Iterator returned by `RArray::entries`. Reads each slot through `entry`
 /// against the length fixed when the walk began, yielding `nil` for any
 /// position the array no longer reaches. `ExactSizeIterator` reports that
 /// fixed length: exactly as many items as the array held at the walk's
 /// start, regardless of a mutation during it.
 pub struct Entries<'mrb> {
     mrb: &'mrb Mrb,
-    ary: Array,
+    ary: RArray,
     idx: usize,
     len: usize,
 }

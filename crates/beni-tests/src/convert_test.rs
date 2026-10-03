@@ -1,7 +1,7 @@
 use crate::support::OwnedBytes;
 use crate::support::{open_mrb, same_object};
 use beni::prelude::*;
-use beni::{Array, ExceptionClass, FromValue, Hash, IntoValue, RClass, RModule, RString, Value};
+use beni::{ExceptionClass, FromValue, IntoValue, RArray, RClass, RHash, RModule, RString, Value};
 
 // Boxes through mruby's generic `mrb_int_value` / `mrb_float_value`
 // constructors and unboxes through the macro-expanding C helpers —
@@ -89,16 +89,16 @@ fn container_downcasts_discriminate_by_tag() {
     let ary = mrb.ary_new().as_value();
     let hash = mrb.hash_new().as_value();
 
-    assert!(Array::from_value(ary).is_some());
-    assert!(Hash::from_value(hash).is_some());
+    assert!(RArray::from_value(ary).is_some());
+    assert!(RHash::from_value(hash).is_some());
 
     // The wrong container tag — and a non-container tag — both
     // reject instead of wrapping a value the `mrb_ary_*` /
     // `mrb_hash_*` calls would misread.
-    assert!(Array::from_value(hash).is_none());
-    assert!(Hash::from_value(ary).is_none());
-    assert!(Array::from_value(42i32.into_value(&mrb)).is_none());
-    assert!(Hash::from_value(42i32.into_value(&mrb)).is_none());
+    assert!(RArray::from_value(hash).is_none());
+    assert!(RHash::from_value(ary).is_none());
+    assert!(RArray::from_value(42i32.into_value(&mrb)).is_none());
+    assert!(RHash::from_value(42i32.into_value(&mrb)).is_none());
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn container_downcast_includes_subclass_instances() {
     // The tag, not the classname, decides: the instance reports
     // its subclass name yet converts and operates as an Array.
     assert_eq!(sub.classname(&mrb), "MyAry");
-    let ary = Array::from_value(sub).expect("subclass instance carries MRB_TT_ARRAY");
+    let ary = RArray::from_value(sub).expect("subclass instance carries MRB_TT_ARRAY");
     ary.push(&mrb, mrb.str_new(b"x").as_value())
         .expect("push to a fresh array succeeds");
     assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "x");

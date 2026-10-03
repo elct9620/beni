@@ -37,7 +37,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_block_given_p` | fn | ✅ | ✅ | `Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises |
 | `mrb_bug` | fn | ✅ | ❌ |  |
 | `mrb_calloc` | fn | ✅ | 🚫 | declined: VM allocator — see `mrb_malloc` |
-| `mrb_check_array_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `Array` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it |
+| `mrb_check_array_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `RArray` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it |
 | `mrb_check_convert_type` | macro | ❌ | ❌ |  |
 | `mrb_check_frozen` | fn | ✅ | 🚫 | declined: takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `Value::check_frozen` |
 | `mrb_check_frozen_value` | fn | ✅ | ✅ | `Value::check_frozen` — the frozen-state precondition guard, the `mrb_value` form a typed caller can reach |
@@ -86,9 +86,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_define_private_method_id` | fn | ✅ | ✅ | `Module::define_private_method` with an `Id` key (the symbol-or-name key) |
 | `mrb_define_singleton_method` | fn | ✅ | ✅ | `Object::define_singleton_method` with a name key — interns and routes through `mrb_define_singleton_method_id` |
 | `mrb_define_singleton_method_id` | fn | ✅ | ✅ | `Object::define_singleton_method` with an `Id` key (the symbol-or-name key) |
-| `mrb_ensure_array_type` | fn | ✅ | ✅ | `Value::ensure_array` — the raising Array-tag coercion to an `Array` handle |
+| `mrb_ensure_array_type` | fn | ✅ | ✅ | `Value::ensure_array` — the raising Array-tag coercion to an `RArray` handle |
 | `mrb_ensure_float_type` | fn | ✅ | ✅ | `Value::ensure_float` — the raising numeric-tag coercion to a Float `Value` (Float unchanged, Integer widened); distinct from the exact-tag `FromValue` -> float downcast, which coerces nothing |
-| `mrb_ensure_hash_type` | fn | ✅ | ✅ | `Value::ensure_hash` — the raising Hash-tag coercion to a `Hash` handle |
+| `mrb_ensure_hash_type` | fn | ✅ | ✅ | `Value::ensure_hash` — the raising Hash-tag coercion to an `RHash` handle |
 | `mrb_ensure_int_type` | fn | ✅ | ✅ | `Value::ensure_int` — the raising numeric-tag coercion to an Integer `Value` (Integer unchanged, Float truncated toward zero), narrowing to one that fits the configured integer width; distinct from the exact-tag `FromValue` -> integer downcast, which coerces nothing |
 | `mrb_ensure_integer_type` | fn | ✅ | ✅ | `Value::ensure_int` — the un-narrowed Integer coercion that `mrb_ensure_int_type` wraps; same raising numeric-tag coercion, surfaced through the single `Value::ensure_int` |
 | `mrb_ensure_string_type` | fn | ✅ | ✅ | `Value::ensure_string` — the raising String-tag coercion to an `RString` handle |
@@ -234,29 +234,29 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `RARRAY_LEN` | macro | ✅ | ✅ | `Array::len` |
+| `RARRAY_LEN` | macro | ✅ | ✅ | `RArray::len` |
 | `RARRAY_PTR` | macro | ❌ | ❌ |  |
-| `mrb_ary_clear` | fn | ✅ | ✅ | `Array::clear` |
-| `mrb_ary_concat` | fn | ✅ | ✅ | `Array::concat` |
-| `mrb_ary_dup` | fn | ✅ | ✅ | `Array::dup` |
-| `mrb_ary_entry` | fn | ✅ | ✅ | `Array::entry`, `Value::ary_entry` |
-| `mrb_ary_join` | fn | ✅ | ✅ | `Array::join` |
+| `mrb_ary_clear` | fn | ✅ | ✅ | `RArray::clear` |
+| `mrb_ary_concat` | fn | ✅ | ✅ | `RArray::concat` |
+| `mrb_ary_dup` | fn | ✅ | ✅ | `RArray::dup` |
+| `mrb_ary_entry` | fn | ✅ | ✅ | `RArray::entry`, `Value::ary_entry` |
+| `mrb_ary_join` | fn | ✅ | ✅ | `RArray::join` |
 | `mrb_ary_make_shared_copy` | fn | ✅ | ❌ |  |
 | `mrb_ary_modify` | fn | ✅ | ❌ |  |
 | `mrb_ary_new` | fn | ✅ | ✅ | `Mrb::ary_new` |
 | `mrb_ary_new_capa` | fn | ✅ | ✅ | `Mrb::ary_new_capa` |
 | `mrb_ary_new_from_values` | fn | ✅ | ✅ | `Mrb::ary_new_from_values` |
-| `mrb_ary_pop` | fn | ✅ | ✅ | `Array::pop` |
+| `mrb_ary_pop` | fn | ✅ | ✅ | `RArray::pop` |
 | `mrb_ary_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RArray*` — see `mrb_str_ptr` |
-| `mrb_ary_push` | fn | ✅ | ✅ | `Array::push` |
+| `mrb_ary_push` | fn | ✅ | ✅ | `RArray::push` |
 | `mrb_ary_ref` | macro | ❌ | ✅ | defined as `mrb_ary_entry` |
-| `mrb_ary_replace` | fn | ✅ | ✅ | `Array::replace` |
-| `mrb_ary_resize` | fn | ✅ | ✅ | `Array::resize` |
-| `mrb_ary_set` | fn | ✅ | ✅ | `Array::store` |
-| `mrb_ary_shift` | fn | ✅ | ✅ | `Array::shift` |
-| `mrb_ary_splat` | fn | ✅ | ✅ | `Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `Array`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `Array` downcast (the tag-test that reads a non-Array as absent) |
-| `mrb_ary_splice` | fn | ✅ | ✅ | `Array::splice` |
-| `mrb_ary_unshift` | fn | ✅ | ✅ | `Array::unshift` |
+| `mrb_ary_replace` | fn | ✅ | ✅ | `RArray::replace` |
+| `mrb_ary_resize` | fn | ✅ | ✅ | `RArray::resize` |
+| `mrb_ary_set` | fn | ✅ | ✅ | `RArray::store` |
+| `mrb_ary_shift` | fn | ✅ | ✅ | `RArray::shift` |
+| `mrb_ary_splat` | fn | ✅ | ✅ | `Value::to_ary` — the splat (`*`) coercion, dispatching `to_a` and always yielding an `RArray`; distinct from `Value::ensure_array` (the dispatch-free Array-tag coercion) and the `FromValue` -> `RArray` downcast (the tag-test that reads a non-Array as absent) |
+| `mrb_ary_splice` | fn | ✅ | ✅ | `RArray::splice` |
+| `mrb_ary_unshift` | fn | ✅ | ✅ | `RArray::unshift` |
 | `mrb_ary_value` | macro | ❌ | ✅ | defined as `mrb_obj_value` |
 | `mrb_assoc_new` | fn | ✅ | ✅ | `Mrb::assoc_new` |
 ## mruby/class.h
@@ -355,23 +355,23 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_hash_clear` | fn | ✅ | ✅ | `Hash::clear` |
-| `mrb_hash_delete_key` | fn | ✅ | ✅ | `Hash::delete` |
-| `mrb_hash_dup` | fn | ✅ | ✅ | `Hash::dup` |
-| `mrb_hash_empty_p` | fn | ✅ | ✅ | `Hash::is_empty` |
-| `mrb_hash_fetch` | fn | ✅ | ✅ | `Hash::fetch` |
-| `mrb_hash_foreach` | fn | ✅ | ✅ | `Hash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); runs under `protect` and returns a `Result` because a closure that re-enters the VM to mutate the hash trips mruby's in-walk modify guard (`H_CHECK_MODIFIED`), which raises and would `longjmp` across the FFI boundary unprotected, surfaced instead as `Err` |
-| `mrb_hash_get` | fn | ✅ | ✅ | `Hash::get` |
-| `mrb_hash_key_p` | fn | ✅ | ✅ | `Hash::contains_key` |
-| `mrb_hash_keys` | fn | ✅ | ✅ | `Hash::keys` |
-| `mrb_hash_merge` | fn | ✅ | ✅ | `Hash::update` |
+| `mrb_hash_clear` | fn | ✅ | ✅ | `RHash::clear` |
+| `mrb_hash_delete_key` | fn | ✅ | ✅ | `RHash::delete` |
+| `mrb_hash_dup` | fn | ✅ | ✅ | `RHash::dup` |
+| `mrb_hash_empty_p` | fn | ✅ | ✅ | `RHash::is_empty` |
+| `mrb_hash_fetch` | fn | ✅ | ✅ | `RHash::fetch` |
+| `mrb_hash_foreach` | fn | ✅ | ✅ | `RHash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); runs under `protect` and returns a `Result` because a closure that re-enters the VM to mutate the hash trips mruby's in-walk modify guard (`H_CHECK_MODIFIED`), which raises and would `longjmp` across the FFI boundary unprotected, surfaced instead as `Err` |
+| `mrb_hash_get` | fn | ✅ | ✅ | `RHash::get` |
+| `mrb_hash_key_p` | fn | ✅ | ✅ | `RHash::contains_key` |
+| `mrb_hash_keys` | fn | ✅ | ✅ | `RHash::keys` |
+| `mrb_hash_merge` | fn | ✅ | ✅ | `RHash::update` |
 | `mrb_hash_new` | fn | ✅ | ✅ | `Mrb::hash_new` |
 | `mrb_hash_new_capa` | fn | ✅ | ✅ | `Mrb::hash_new_capa` |
 | `mrb_hash_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RHash*` — see `mrb_str_ptr` |
-| `mrb_hash_set` | fn | ✅ | ✅ | `Hash::set` |
-| `mrb_hash_size` | fn | ✅ | ✅ | `Hash::len` |
+| `mrb_hash_set` | fn | ✅ | ✅ | `RHash::set` |
+| `mrb_hash_size` | fn | ✅ | ✅ | `RHash::len` |
 | `mrb_hash_value` | macro | ❌ | ✅ | defined as `mrb_obj_value` |
-| `mrb_hash_values` | fn | ✅ | ✅ | `Hash::values` |
+| `mrb_hash_values` | fn | ✅ | ✅ | `RHash::values` |
 ## mruby/irep.h
 
 | Symbol | Kind | sys | typed | Note |
@@ -562,11 +562,11 @@ covered (✅); the Via column names the surface that covers each one.
 | `o` | ✅ | scan_args required / optional / trailing parts, or the typed method registration |
 | `C` | ✅ | scan_args + FromValue<RClass> / FromValue<RModule>, or Value::is_class / is_sclass / is_module |
 | `S` | ✅ | scan_args + FromValue<RString>, or Value::ensure_string |
-| `A` | ✅ | scan_args + FromValue<Array> / Value::ensure_array |
-| `H` | ✅ | scan_args + FromValue<Hash> / Value::ensure_hash |
+| `A` | ✅ | scan_args + FromValue<RArray> / Value::ensure_array |
+| `H` | ✅ | scan_args + FromValue<RHash> / Value::ensure_hash |
 | `s` | ✅ | scan_args + FromValue<Vec<u8>> — a copy of the String argument's bytes |
 | `z` | ✅ | scan_args + RString::to_cstr |
-| `a` | ✅ | scan_args + Array::entries |
+| `a` | ✅ | scan_args + RArray::entries |
 | `c` | ✅ | scan_args + FromValue<RClass> / FromValue<RModule> |
 | `f` | ✅ | scan_args + FromValue<f64> / Value::ensure_float |
 | `i` | ✅ | scan_args + FromValue<i32> / FromValue<i64> / Value::ensure_int |
@@ -574,7 +574,7 @@ covered (✅); the Via column names the surface that covers each one.
 | `n` | ✅ | scan_args + FromValue<Symbol> |
 | `d` | ✅ | scan_args + TryConvert for &T / Obj<T> |
 | `&` | ✅ | scan_args block part, or block-accepting registration |
-| `*` | ✅ | scan_args splat part — an Array handle or a converted Vec |
+| `*` | ✅ | scan_args splat part — an `RArray` handle or a converted Vec |
 | `\|` | ✅ | scan_args optional part, or optional-positional registration |
 | `?` | ✅ | the Option a scan_args optional part or an optional-positional registration binds |
 | `:` | ✅ | scan_args keyword part, then get_kwargs by name |
@@ -596,7 +596,6 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | Item | Description |
 |------|-------------|
 | `ArenaScope` | RAII GC-arena bracket over `mrb_gc_arena_save`/`mrb_gc_arena_restore` with a `mrb_gc_protect` keep — a safety guard with no single C API. |
-| `Array::entries` | `ExactSizeIterator` walk of an array by C-level index: composes the already-graduated `Array::entry` (`mrb_ary_entry`) and `Array::len` (`RARRAY_LEN`) over a length snapshot taken when the walk begins, binding no new C symbol. A live view rather than a content snapshot — a re-entrant mutation is only partly visible, and a position the array no longer reaches reads `nil` — dispatching no Ruby, the idiomatic Rust surface over mruby's caller-side index loop (which the C API has no iterator primitive for). |
 | `DataType` | Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`, reached through `TypedData`, magnus's shape: a Rust type names its own `DataType` and class, so a wrap and a read take no descriptor. The class mark is a separate class-setup step (`RClass::set_instance_data_tt`) that magnus has no counterpart for, since mruby allocates a carrier only from a marked class; `TypedData`'s unsafe contract makes every class it names a marked one, which keeps wrapping infallible. The mark is refused unless the class allocates plain objects or is already a carrier, so no built-in layout is read as a carrier. The `DataType::dfree` release hook wraps the payload drop in `catch_unwind` so a panicking `T::drop` cannot unwind across the C frame of mruby's GC sweep, where unwinding is undefined. |
 | `Error` | Result-based error model: a handler's `Err(Error)` is raised into the VM by the dispatch bridge (`mrb_exc_raise`), and a VM raise is caught back into `Err` by exception protection (`mrb_protect_error`), which `sys::protect` offers a raw call. `Error::is_kind_of` asks the carried exception Ruby's `is_a?` (`mrb_obj_is_kind_of`). `Error::new` builds an exception error from a class and a message (via `ExceptionClass::exc_new`) for a handler to raise its own exception, and `Error::argnum` builds the canonical wrong-argument-count `ArgumentError` (via `mrb_argnum_error`) for a handler validating its own arity. |
 | `Error::backtrace` | An exception's frames as rendered strings. Composes the already-graduated `Value::funcall`, `Value::ensure_array`, and the String-tag read rather than binding a C symbol — `mrb_exc_backtrace` is declared in `include/mruby/internal.h`, outside the embedder API the measure covers. Whatever holds no frames answers an empty list. |
@@ -606,6 +605,7 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
 | `IntoId` | The symbol-or-name key, magnus's `IntoId`: resolves a `&CStr`, a Rust string, an `Id`, or a `Symbol` to the `Id` every name-keyed operation routes through mruby's `_id`-suffixed C variant with. Binds no C symbol of its own — it composes the interns — and is what keeps the raw id out of those operations' signatures. |
 | `ParseMessage` | One compiler diagnostic's line, column, and text, read through accessors. mruby publishes `struct mrb_parser_message` as a parser field rather than through any call, so there is no C API to bind: the typed surface copies the slot out while the parser is alive and hands back an owned value that outlives it. `Ccontext::load_nstring` returns the first recorded error as `Error::Syntax`, and `Ccontext::warnings` answers the load's warnings. |
+| `RArray::entries` | `ExactSizeIterator` walk of an array by C-level index: composes the already-graduated `RArray::entry` (`mrb_ary_entry`) and `RArray::len` (`RARRAY_LEN`) over a length snapshot taken when the walk begins, binding no new C symbol. A live view rather than a content snapshot — a re-entrant mutation is only partly visible, and a position the array no longer reaches reads `nil` — dispatching no Ruby, the idiomatic Rust surface over mruby's caller-side index loop (which the C API has no iterator primitive for). |
 | `ReprValue` | Sealed trait over every typed handle that stands for a value, magnus's `ReprValue`: `as_value` answers that value — a class handle boxing its class through `mrb_obj_value` — and `sys::AsRawValue` reads the raw form out of any of them. Binds no C symbol of its own. |
 | `convert` | `IntoValue` / `FromValue` trait conversions (magnus-style) layered on the value box/unbox primitives, including `FromValue for String` and `Vec<u8>` (an mruby string copied out as an owned UTF-8 `String` or as arbitrary owned bytes). Which numeric types convert follows the configured integer and float widths: a type converts only where it and the width hold every value of each other. |
 | `prelude` | magnus's `prelude`: the method-carrying traits (`ReprValue`, `Module`, `Object`, `FromValue`) imported anonymously in one line. |

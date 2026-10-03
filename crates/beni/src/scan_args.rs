@@ -18,7 +18,7 @@
 use crate::state::args::{capture_all_kwargs, slice_from_argv};
 use crate::try_convert::argument_error;
 use crate::{
-    Array, Error, FromValue, Hash, IntoId, Mrb, Proc, ReprValue, Symbol, TryConvert, Value,
+    Error, FromValue, IntoId, Mrb, Proc, RArray, RHash, ReprValue, Symbol, TryConvert, Value,
 };
 use beni_sys as sys;
 
@@ -76,7 +76,7 @@ mod private {
         const REQ: bool;
 
         /// `bucket` is the keyword bucket exactly when `REQ` is set.
-        fn from_bucket(bucket: Option<Hash>) -> Self;
+        fn from_bucket(bucket: Option<RHash>) -> Self;
     }
 
     pub trait ScanArgsBlock: Sized {
@@ -137,7 +137,7 @@ mod private {
         }
     }
 
-    impl ScanArgsSplat for Array {
+    impl ScanArgsSplat for RArray {
         const REQ: bool = true;
 
         fn from_slice(mrb: &Mrb, vals: &[Value]) -> Result<Self, Error> {
@@ -156,13 +156,13 @@ mod private {
     impl ScanArgsKw for () {
         const REQ: bool = false;
 
-        fn from_bucket(_: Option<Hash>) -> Self {}
+        fn from_bucket(_: Option<RHash>) -> Self {}
     }
 
-    impl ScanArgsKw for Hash {
+    impl ScanArgsKw for RHash {
         const REQ: bool = true;
 
-        fn from_bucket(bucket: Option<Hash>) -> Self {
+        fn from_bucket(bucket: Option<RHash>) -> Self {
             bucket.expect("a keyword part reads the keyword bucket")
         }
     }
@@ -197,13 +197,13 @@ impl<T: private::ScanArgsRequired> ScanArgsRequired for T {}
 pub trait ScanArgsOpt: private::ScanArgsOpt {}
 impl<T: private::ScanArgsOpt> ScanArgsOpt for T {}
 
-/// The splat of `scan_args`: `()`, an `Array` handle, or a `Vec` of a
+/// The splat of `scan_args`: `()`, an `RArray` handle, or a `Vec` of a
 /// `TryConvert` type.
 pub trait ScanArgsSplat: private::ScanArgsSplat {}
 impl<T: private::ScanArgsSplat> ScanArgsSplat for T {}
 
 /// The keyword bucket of `scan_args`, or the unnamed keywords of
-/// `get_kwargs`: `()` or a `Hash`.
+/// `get_kwargs`: `()` or an `RHash`.
 pub trait ScanArgsKw: private::ScanArgsKw {}
 impl<T: private::ScanArgsKw> ScanArgsKw for T {}
 
@@ -274,11 +274,11 @@ where
 /// let kw = beni::scan_args::get_kwargs(mrb, bucket, &["a", "b"], &["c"])?;
 /// let (a, b): (String, usize) = kw.required;
 /// let (c,): (Option<bool>,) = kw.optional;
-/// let rest: Hash = kw.splat;
+/// let rest: RHash = kw.splat;
 /// ```
 pub fn get_kwargs<K, Req, Opt, Splat>(
     mrb: &Mrb,
-    kw: Hash,
+    kw: RHash,
     required: &[K],
     optional: &[K],
 ) -> Result<KwArgs<Req, Opt, Splat>, Error>
@@ -332,7 +332,7 @@ where
 /// slot.
 pub(crate) struct Frame {
     pub(crate) positionals: Vec<Value>,
-    pub(crate) keywords: Option<Hash>,
+    pub(crate) keywords: Option<RHash>,
     pub(crate) block: Value,
 }
 
@@ -375,7 +375,7 @@ pub(crate) fn read_call(mrb: &Mrb, keywords: bool) -> Frame {
         // SAFETY: the capture-all read fills `bucket` with a Hash, an
         // empty one when the call passed no keywords.
         keywords: keywords
-            .then(|| unsafe { Hash::from_value_unchecked(Value::from_raw_unchecked(bucket)) }),
+            .then(|| unsafe { RHash::from_value_unchecked(Value::from_raw_unchecked(bucket)) }),
         block: Value::from_raw_unchecked(block),
     }
 }

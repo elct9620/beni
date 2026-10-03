@@ -32,7 +32,7 @@
 //!
 //! ## No typed wrappers here
 //!
-//! The typed `Value` / `RClass` / `Array` / `Hash` newtypes, the
+//! The typed `Value` / `RClass` / `RArray` / `RHash` newtypes, the
 //! `Mrb` / `Ccontext` RAII wrappers, the `IntoValue` / `FromValue`
 //! trait seams, and the `scan_args` reads all live in the sibling
 //! `beni` crate. This crate stays a pure FFI surface: bindgen
