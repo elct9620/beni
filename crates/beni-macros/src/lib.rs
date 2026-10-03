@@ -4,6 +4,7 @@
 
 use proc_macro::TokenStream;
 
+mod attr;
 mod inline_struct;
 mod typed_data;
 

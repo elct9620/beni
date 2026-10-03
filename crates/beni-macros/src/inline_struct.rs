@@ -1,4 +1,4 @@
-use crate::typed_data::{
+use crate::attr::{
     beni_attribute, carrier_path, class_and_name, read_carrier, reject_field_attributes,
 };
 use proc_macro2::TokenStream;
