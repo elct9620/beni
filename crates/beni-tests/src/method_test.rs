@@ -610,7 +610,7 @@ fn receiver_len(_mrb: &Mrb, rb_self: RString, suffix: i32) -> i32 {
     rb_self.len() as i32 + suffix
 }
 
-fn any_arity_receiver_len(_mrb: &Mrb, rb_self: RString) -> i32 {
+fn any_arity_receiver_len(_mrb: &Mrb, rb_self: RString, _args: &[Value]) -> i32 {
     rb_self.len() as i32
 }
 

@@ -33,7 +33,7 @@ fn ints(mrb: &Mrb, values: &[i32]) -> Value {
 }
 
 // def m(a, b = nil, *rest, c) — answered as [a, b || -1, *rest, c].
-fn every_positional_part(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn every_positional_part(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let args = scan_args::<(i32,), (Option<i32>,), Vec<i32>, (i32,), (), ()>(mrb)?;
     let (a,) = args.required;
     let (b,) = args.optional;
@@ -56,7 +56,7 @@ fn positionals_fill_required_and_trailing_before_optional_and_splat() {
 }
 
 // def m(a, b = nil)
-fn bounded(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn bounded(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     scan_args::<(Value,), (Option<Value>,), (), (), (), ()>(mrb)?;
     Ok(beni::value::qnil().as_value())
 }
@@ -93,7 +93,7 @@ fn a_positional_of_the_wrong_type_is_a_type_error() {
 }
 
 // def m(*rest, **kw) — answered as [rest.size, kw].
-fn keyword_bucket(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn keyword_bucket(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let args = scan_args::<(), (), RArray, (), RHash, ()>(mrb)?;
     Ok(mrb
         .ary_new_from_values(&[
@@ -115,7 +115,7 @@ fn the_keyword_bucket_holds_keywords_apart_from_the_positionals() {
 }
 
 // def m(*rest) — answered as the splat itself.
-fn splat_only(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn splat_only(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     Ok(scan_args::<(), (), RArray, (), (), Option<Proc>>(mrb)?
         .splat
         .as_value())
@@ -150,7 +150,7 @@ fn an_array_splat_and_an_optional_block_fit_every_call() {
 }
 
 // Holds the splat across a full collection and a dispatch before reading it.
-fn splat_across_reentry(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn splat_across_reentry(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let splat = scan_args::<(), (), RArray, (), (), ()>(mrb)?.splat;
     mrb.full_gc();
     splat.as_value().funcall(mrb, "inspect", &[])?;
@@ -170,19 +170,19 @@ fn an_array_splat_survives_a_collection_and_a_reentry() {
     );
 }
 
-fn required_block(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn required_block(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let block = scan_args::<(), (), (), (), (), Proc>(mrb)?.block;
     block.call(mrb, &[])
 }
 
-fn optional_block(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn optional_block(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     Ok(scan_args::<(), (), (), (), (), Option<Proc>>(mrb)?
         .block
         .is_some()
         .into_value(mrb))
 }
 
-fn ignored_block(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn ignored_block(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     scan_args::<(), (), (), (), (), ()>(mrb)?;
     Ok(beni::value::qnil().as_value())
 }
@@ -216,7 +216,7 @@ impl Drop for ReadGuard {
     }
 }
 
-fn guarded(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn guarded(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let _guard = ReadGuard;
     scan_args::<(i32,), (), (), (), (), Proc>(mrb)?;
     Ok(beni::value::qnil().as_value())
@@ -241,7 +241,7 @@ fn or_nil(mrb: &Mrb, value: Option<impl IntoValue>) -> Value {
 }
 
 // def t(a:, b:, c: nil, **rest) — answered as [a, b, c, rest].
-fn named_keywords(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn named_keywords(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let bucket = scan_args::<(), (), (), (), RHash, ()>(mrb)?.keywords;
     let kw =
         get_kwargs::<_, (String, i32), (Option<bool>,), RHash>(mrb, bucket, &["a", "b"], &["c"])?;
@@ -276,7 +276,7 @@ fn named_keywords_bind_required_optional_and_rest() {
 }
 
 // def t(c: nil, d: nil) — answered as [c, d, the bucket's size afterwards].
-fn optional_keywords(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn optional_keywords(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let bucket = scan_args::<(), (), (), (), RHash, ()>(mrb)?.keywords;
     let kw = get_kwargs::<_, (), (Option<i32>, Option<i32>), ()>(mrb, bucket, &[], &["c", "d"])?;
     let (c, d) = kw.optional;
@@ -313,7 +313,7 @@ fn a_keyword_no_list_names_is_an_argument_error_without_a_rest() {
     );
 }
 
-fn mismatched_names(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn mismatched_names(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let bucket = mrb.hash_new();
     get_kwargs::<_, (i32, i32), (), ()>(mrb, bucket, &["a"], &[])?;
     Ok(beni::value::qnil().as_value())

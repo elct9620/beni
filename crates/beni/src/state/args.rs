@@ -1,6 +1,6 @@
 //! Reads of the current call frame beside `scan_args`: the single
-//! required argument, the argument count and array, and whether a block
-//! was passed.
+//! required argument, the arguments an any-arity method receives, and
+//! whether a block was passed.
 
 use crate::{Error, Mrb, ReprValue, Value};
 use beni_sys as sys;
@@ -39,29 +39,36 @@ impl Mrb {
         // total — it inspects the current call and never raises.
         unsafe { sys::mrb_block_given_p(self.as_ptr()) }
     }
+}
 
-    /// Read the number of arguments passed to the call frame, splat
-    /// arguments counted as their expanded length and a non-empty keyword
-    /// hash as one trailing positional, whatever read ran before. Total:
-    /// it never fails, and a later read sees the frame unchanged.
-    #[inline]
-    pub fn argc(&self) -> usize {
-        self.argv().len()
-    }
+/// Arguments held inline before the copy spills to the heap.
+const INLINE_ARGS: usize = 8;
 
-    /// Read the call frame's arguments as a copy of their own, the
-    /// companion to `Mrb::argc`: the positionals, then a non-empty keyword
-    /// hash as one trailing value. The copy stays valid whatever the body
-    /// re-enters — the values are the frame's, kept alive for the whole
-    /// call. An empty argument list yields an empty copy. Total: it never
-    /// fails, and a later read sees the frame unchanged.
-    pub fn argv(&self) -> Vec<Value> {
-        let call = crate::scan_args::read_call(self, true);
-        let mut args = call.positionals;
-        if let Some(keywords) = call.keywords.filter(|keywords| !keywords.is_empty(self)) {
-            args.push(keywords.as_value());
+/// Run `body` over a copy of the call's arguments: the positionals, then
+/// the call's own keyword hash as one trailing value when it is
+/// non-empty. The frame is read once and left as it was, so a later
+/// frame read still finds the keywords; the copy stays valid whatever
+/// `body` re-enters, the values being the frame's, kept alive for the
+/// whole call.
+pub(crate) fn with_args<R>(mrb: &Mrb, body: impl FnOnce(&[Value]) -> R) -> R {
+    let call = crate::scan_args::read_raw(mrb, true);
+    let keywords = call
+        .keywords
+        .filter(|keywords| !keywords.is_empty(mrb))
+        .map(ReprValue::as_value);
+    let len = call.positionals.len() + usize::from(keywords.is_some());
+    if len <= INLINE_ARGS {
+        let mut args = [crate::value::qnil().as_value(); INLINE_ARGS];
+        args[..call.positionals.len()].copy_from_slice(call.positionals);
+        if let Some(keywords) = keywords {
+            args[len - 1] = keywords;
         }
-        args
+        body(&args[..len])
+    } else {
+        let mut args = Vec::with_capacity(len);
+        args.extend_from_slice(call.positionals);
+        args.extend(keywords);
+        body(&args)
     }
 }
 

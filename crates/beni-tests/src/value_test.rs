@@ -9,7 +9,7 @@ use beni::{
 /// Yielder method in the boundary-terminating shape kobako uses:
 /// read the captured (non-orphan) block, yield it, and on a real
 /// `break` report its carried value back as the method's result.
-fn report_break(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
+fn report_break(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let block = scan_args::<(Symbol,), (), RArray, (), (), Proc>(mrb)?.block;
     Ok(match block.call(mrb, &[]) {
         Ok(_) => (-1i32).into_value(mrb),

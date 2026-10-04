@@ -340,6 +340,25 @@ pub(crate) struct Frame {
 /// `keywords` is set, which leaves the frame as it was, and otherwise
 /// letting mruby fold a non-empty keyword hash into the positionals.
 pub(crate) fn read_call(mrb: &Mrb, keywords: bool) -> Frame {
+    let call = read_raw(mrb, keywords);
+    Frame {
+        positionals: call.positionals.to_vec(),
+        keywords: call.keywords,
+        block: call.block,
+    }
+}
+
+/// As `Frame`, the positionals borrowed from the VM stack: valid only
+/// until the body next re-enters the VM, so a caller copies them out
+/// before running anything.
+pub(crate) struct RawFrame<'a> {
+    pub(crate) positionals: &'a [Value],
+    pub(crate) keywords: Option<RHash>,
+    pub(crate) block: Value,
+}
+
+/// `read_call` without the copy.
+pub(crate) fn read_raw<'a>(mrb: &'a Mrb, keywords: bool) -> RawFrame<'a> {
     let mut argv: *const sys::mrb_value = core::ptr::null();
     let mut argc: sys::mrb_int = 0;
     let mut bucket = sys::mrb_value::zeroed();
@@ -370,8 +389,8 @@ pub(crate) fn read_call(mrb: &Mrb, keywords: bool) -> Frame {
             );
         }
     }
-    Frame {
-        positionals: slice_from_argv(argv, argc).to_vec(),
+    RawFrame {
+        positionals: slice_from_argv(argv, argc),
         // SAFETY: the capture-all read fills `bucket` with a Hash, an
         // empty one when the call passed no keywords.
         keywords: keywords

@@ -247,7 +247,7 @@ pub trait Dup: Sized {
     /// Copy the receiver as mruby's `clone` does — singleton class and
     /// frozen state kept, `initialize_copy` run — carrying a clone of
     /// its payload. Takes no arguments, as mruby's `clone` does not.
-    fn clone(mrb: &Mrb, rb_self: Obj<Self>) -> Result<Obj<Self>, Error>;
+    fn clone(mrb: &Mrb, rb_self: Obj<Self>, args: &[Value]) -> Result<Obj<Self>, Error>;
 }
 
 impl<T: Clone + TypedData> Dup for T {
@@ -255,7 +255,7 @@ impl<T: Clone + TypedData> Dup for T {
         rb_self.clone()
     }
 
-    fn clone(mrb: &Mrb, rb_self: Obj<Self>) -> Result<Obj<Self>, Error> {
+    fn clone(mrb: &Mrb, rb_self: Obj<Self>, _args: &[Value]) -> Result<Obj<Self>, Error> {
         crate::scan_args::scan_args::<(), (), (), (), (), ()>(mrb)?;
         let copy = rb_self.as_value().obj_clone(mrb)?;
         let payload = Box::into_raw(Box::new((*rb_self).clone()));

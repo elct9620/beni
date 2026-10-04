@@ -513,21 +513,23 @@ define_method_req_block_trait!(
 );
 
 /// Typed crossing for an any-arity method (`method!(f, -1)`): the
-/// wrapped function reads the call frame itself via
-/// `scan_args::scan_args` and friends, and registration
-/// uses the any-arguments aspec. The panic boundary and return seam
-/// still apply.
+/// wrapped function receives the call's arguments as a slice — the
+/// positionals, then a non-empty keyword hash — and registration uses
+/// the any-arguments aspec. The panic boundary and return seam still
+/// apply. Mirrors magnus's `method!(f, -1)`.
 pub trait MethodAny<S, Res>
 where
-    Self: Sized + Fn(&Mrb, S) -> Res,
+    Self: Sized + Fn(&Mrb, S, &[Value]) -> Res,
     S: TryConvert,
     Res: MethodReturn,
 {
-    /// Convert the receiver, run the wrapped function, and project its
-    /// return.
+    /// Convert the receiver, run the wrapped function over the call's
+    /// arguments, and project its return.
     #[doc(hidden)]
     fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
-        (self)(mrb, S::try_convert(self_, mrb)?).into_method_return(mrb)
+        let rb_self = S::try_convert(self_, mrb)?;
+        crate::state::args::with_args(mrb, |args| (self)(mrb, rb_self, args))
+            .into_method_return(mrb)
     }
 
     /// Bridge entry: `call_convert_value` inside the panic boundary,
@@ -545,7 +547,7 @@ where
 
 impl<Func, S, Res> MethodAny<S, Res> for Func
 where
-    Func: Fn(&Mrb, S) -> Res,
+    Func: Fn(&Mrb, S, &[Value]) -> Res,
     S: TryConvert,
     Res: MethodReturn,
 {
@@ -555,8 +557,9 @@ where
 ///
 /// The arity follows the function: `0..=4` for that many required
 /// positional arguments (each converted through `TryConvert` before
-/// the function runs), or `-1` for a function that reads the call
-/// frame itself via `scan_args::scan_args`. The receiver, the parameter
+/// the function runs), or `-1` for a function taking the call's
+/// arguments as a trailing `&[Value]`, reading any further shape from
+/// the frame via `scan_args::scan_args`. The receiver, the parameter
 /// after `&Mrb`, converts through `TryConvert` too, so a method takes it
 /// as the handle or Rust value it expects, as magnus's typed `self`.
 ///
@@ -607,8 +610,7 @@ macro_rules! method {
             let mrb = unsafe { $crate::Mrb::borrow_raw(&mrb) };
             // SAFETY: this is the bridge frame the raise contract
             // names. The explicit trait path disambiguates from the
-            // fixed-arity traits, whose zero-argument shape shares
-            // this signature.
+            // fixed-arity traits, which carry methods of the same name.
             unsafe { $crate::method::MethodAny::call_handle_error(f, mrb, self_) }
         }
         $crate::method::MethodDef::new(bridge, -1)

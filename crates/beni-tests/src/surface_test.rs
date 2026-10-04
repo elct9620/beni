@@ -157,7 +157,7 @@ fn full_api_surface_is_reachable_from_outside() {
     fn _surface_typed(_mrb: &Mrb, _self: Value, _a: i32) -> i32 {
         0
     }
-    fn _surface_any(_mrb: &Mrb, _self: Value) -> Value {
+    fn _surface_any(_mrb: &Mrb, _self: Value, _args: &[Value]) -> Value {
         Value::zeroed()
     }
     let _ = beni::method!(_surface_typed, 1);
@@ -276,8 +276,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = MethodDef::new_with_block;
     let _ = MethodDef::new_with_opt;
     let _ = Mrb::arg1;
-    let _ = Mrb::argc;
-    let _ = Mrb::argv;
     let _ = Mrb::ary_new_capa;
     let _ = Mrb::ary_new_from_values;
     let _ = Mrb::assoc_new;
