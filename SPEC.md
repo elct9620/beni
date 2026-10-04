@@ -1291,16 +1291,22 @@ A registered method asks whether it was called with a block through a total pred
 
 ##### Call frame reads
 
-A method registered for any arity receives the call's arguments as a slice, mirroring `magnus`'s `method!(f, -1)`. The slice holds the positionals, then the call's own keyword hash as one trailing value when the call passed a non-empty one, and is empty for an empty argument list. The slice itself is the method's own copy, valid whatever the body re-enters. Handing it over changes nothing a frame read in the same call sees, so a scan read still finds the call's keywords.
+A method registered for any arity receives the call's arguments as a slice, mirroring `magnus`'s `method!(f, -1)`. The slice is the method's own copy, valid whatever the body re-enters.
 
-The body reads any further shape from its own call frame.
+| Call passes | Slice holds |
+|---|---|
+| positionals | each, in order |
+| a non-empty keyword hash | the call's own hash, as one trailing value |
+| no arguments | nothing |
+
+Handing the slice over leaves the frame unchanged, so a scan read still finds the call's keywords. The body reads any further shape from its frame.
 
 | Read | Returns | Failure |
 |---|---|---|
 | scan read | the frame projected into typed parts | `Result` |
 | single-argument read | the one required argument | `Result` |
 
-A call not fitting a read's shape surfaces as an `Err` carrying the exception raised for the mismatch. Mismatches are too few or too many positionals, an argument of the wrong type, or a missing required block. Nothing raises past the body, which decides how the failure leaves it. The single-argument read's shape is exactly one positional; the keyword hash stands in for it when the call passed keywords and no positional.
+A call not fitting a read's shape surfaces as an `Err` carrying the exception raised for the mismatch. Mismatches are too few or too many positionals, a wrong argument type, or a missing required block. Nothing raises past the body, which decides how the failure leaves it. The single-argument read's shape is exactly one positional; the keyword hash stands in for it when the call passed keywords and no positional.
 
 ##### Scan read
 
