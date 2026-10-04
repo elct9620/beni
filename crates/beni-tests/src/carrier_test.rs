@@ -78,6 +78,28 @@ fn an_unmarked_path_is_held_by_nothing() {
 }
 
 #[test]
+fn reading_an_unmarked_path_runs_no_ruby_a_program_defines() {
+    let mrb = open_mrb();
+    define(
+        &mrb,
+        b"class BeniCarrierHeld; end; class BeniCarrierUnheld; end",
+    );
+    mrb.mark_carrier(c"BeniCarrierHeld").expect("names a class");
+    define(
+        &mrb,
+        b"class Hash; def default(*) = $beni_default_ran = true; end",
+    );
+
+    let held = mrb.carrier(c"BeniCarrierUnheld");
+
+    assert!(held.is_none());
+    assert!(mrb
+        .load_string(b"$beni_default_ran")
+        .expect("reading a global succeeds")
+        .is_nil());
+}
+
+#[test]
 fn a_path_naming_no_class_holds_nothing() {
     let mrb = open_mrb();
     define(&mrb, b"BeniCarrierNotAClass = 1");

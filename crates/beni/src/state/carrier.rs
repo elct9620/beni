@@ -5,8 +5,13 @@
 //! names its class by path. The path resolves once, when the embedder
 //! marks the type's carriers, and every later naming reads the class
 //! out of the record — so a constant a Ruby program binds over that
-//! path reaches no wrap. The record is stored under a global whose
-//! name carries no `$`, which no Ruby program can write.
+//! path reaches no wrap. The record — the class each path names, and
+//! the classes inline-struct types own — is stored under globals whose
+//! names carry no `$`, which no Ruby program can write.
+//!
+//! A read is a symbol check, a global read, and a hash fetch keyed by
+//! symbol: none allocates, raises, or dispatches, so a read runs no
+//! Ruby a program could define and needs no protect frame.
 
 use crate::{
     sys::AsRawValue, Error, FromValue as _, Mrb, RArray, RClass, RHash, ReprValue, Symbol,
@@ -15,11 +20,11 @@ use crate::{
 use beni_sys as sys;
 use core::ffi::CStr;
 
-/// The global holding this interpreter's carrier record.
+/// The global holding the class each path names.
 const RECORD_GLOBAL: &[u8] = b"beni_carriers";
 
-/// The record entry holding the classes inline-struct types own.
-const INLINE_KEY: &[u8] = b"beni_inline";
+/// The global holding the classes inline-struct types own.
+const INLINE_GLOBAL: &[u8] = b"beni_inline";
 
 impl Mrb {
     /// Resolve `path` from `Object`, prepare the class it names to
@@ -50,11 +55,21 @@ impl Mrb {
     /// The class this interpreter's carrier record holds for `path`,
     /// and nothing when `mark_carrier` has put none there.
     pub fn carrier(&self, path: &'static CStr) -> Option<RClass> {
-        let held = self
-            .held_record()?
-            .get(self, self.carrier_key(path).ok()?)
-            .ok()?;
-        RClass::try_convert(held, self).ok()
+        let record = self.held_record()?;
+        let key = Symbol::from(self.intern_check(path.to_bytes())?).as_value();
+        // SAFETY: `record` is the live record Hash; a symbol key is hashed
+        // and compared by its id, and `mrb_hash_fetch` answers the given
+        // default for an absent key without consulting the Hash's own, so
+        // the fetch neither raises nor dispatches.
+        let held = unsafe {
+            sys::mrb_hash_fetch(
+                self.as_ptr(),
+                record.as_raw(),
+                key.as_raw(),
+                crate::value::qnil().as_value().as_raw(),
+            )
+        };
+        RClass::from_value(Value::from_raw_unchecked(held))
     }
 
     /// Hold `class` in the record as belonging to the inline-struct type
@@ -91,30 +106,20 @@ impl Mrb {
         None
     }
 
-    /// The pairs `[class, tag, …]` the record holds for inline-struct
-    /// types, created on first use.
+    /// The pairs `[class, tag, …]` held for inline-struct types, created
+    /// on first use and kept reachable — with every class they hold — by
+    /// the global they are stored under.
     fn inline_owners(&self) -> Result<RArray, Error> {
         if let Some(owners) = self.held_inline_owners() {
             return Ok(owners);
         }
         let owners = self.ary_new();
-        self.carrier_record()?
-            .set(self, self.inline_key()?, owners.as_value())?;
+        self.gv_set(self.intern_static(INLINE_GLOBAL)?, owners.as_value())?;
         Ok(owners)
     }
 
     fn held_inline_owners(&self) -> Option<RArray> {
-        let held = self
-            .held_record()?
-            .get(self, self.inline_key().ok()?)
-            .ok()?;
-        RArray::from_value(held)
-    }
-
-    /// The key the pairs sit under: a name no constant path can spell,
-    /// so no class path's entry collides with it.
-    fn inline_key(&self) -> Result<Value, Error> {
-        Ok(Symbol::from(self.intern_static(INLINE_KEY)?).as_value())
+        RArray::from_value(self.held_global(INLINE_GLOBAL)?)
     }
 
     /// The record, created on first use and kept reachable for the
@@ -131,8 +136,18 @@ impl Mrb {
 
     /// The record, and nothing before anything has been marked.
     fn held_record(&self) -> Option<RHash> {
-        let name = self.intern_static(RECORD_GLOBAL).ok()?;
-        RHash::from_value(self.gv_get(name))
+        RHash::from_value(self.held_global(RECORD_GLOBAL)?)
+    }
+
+    /// The value of the global `name`, and nothing before it was set:
+    /// a name never interned names no global. The global keeps the value
+    /// reachable, so the read takes no arena slot.
+    fn held_global(&self, name: &'static [u8]) -> Option<Value> {
+        let name = self.intern_check(name)?;
+        // SAFETY: `self` is alive and `name` was interned against it.
+        Some(Value::from_raw_unchecked(unsafe {
+            sys::mrb_gv_get(self.as_ptr(), name.to_raw())
+        }))
     }
 
     /// Resolve `path`, mark the class it names with `mark`, undefine its
