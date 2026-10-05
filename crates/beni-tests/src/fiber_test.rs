@@ -303,6 +303,24 @@ fn a_method_returning_a_fiber_yield_suspends_its_fiber() {
 }
 
 #[test]
+fn a_fiber_yield_carries_every_argument_however_many() {
+    let mrb = open_mrb();
+    with_pause(&mrb);
+
+    let results = mrb
+        .load_string(
+            b"f = Fiber.new { Object.pause; Object.pause(*(1..8)); Object.pause(*(1..9)) }
+              [f.resume, f.resume, f.resume]",
+        )
+        .unwrap();
+
+    assert_eq!(
+        inspect(&mrb, results),
+        "[nil, [1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8, 9]]"
+    );
+}
+
+#[test]
 fn a_fiber_yield_suspends_a_fiber_ruby_resumes() {
     let mrb = open_mrb();
     with_pause(&mrb);

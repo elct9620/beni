@@ -9,6 +9,7 @@
 //! raises `FiberError` for a block backed by a C function).
 
 use crate::method::private::{Bridge, ReturnValue};
+use crate::state::args::ArgsCopy;
 use crate::value::private::ReprValue as _;
 use crate::{sys::AsRawValue, Error, Fiber, Mrb, Proc, ReprValue, TryConvert, Value};
 use beni_sys as sys;
@@ -65,7 +66,7 @@ impl Mrb {
     /// ```
     pub fn fiber_yield(&self, args: &[Value]) -> FiberYield {
         FiberYield {
-            args: args.to_vec(),
+            args: ArgsCopy::new(args, None),
         }
     }
 }
@@ -91,12 +92,12 @@ impl Mrb {
 /// }
 /// ```
 pub struct FiberYield {
-    args: Vec<Value>,
+    args: ArgsCopy,
 }
 
 impl ReturnValue for FiberYield {
     fn into_return_value(self, mrb: &Mrb, _: Bridge) -> Result<Value, Error> {
-        let args = self.args;
+        let args = self.args.as_slice();
         mrb.protect(|inner| {
             // SAFETY: `inner` is the live VM inside the protected frame;
             // every `args` entry comes from the same VM; this projection

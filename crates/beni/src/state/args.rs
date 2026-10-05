@@ -62,7 +62,7 @@ pub(crate) fn with_args<R>(mrb: &Mrb, body: impl FnOnce(&[Value]) -> R) -> R {
             sys::mrb_get_argc(mrb.as_ptr()),
         )
     };
-    with_copy(positionals, None, body)
+    body(ArgsCopy::new(positionals, None).as_slice())
 }
 
 /// As `with_args`, also handing over the call's block: the `Proc` the
@@ -77,7 +77,7 @@ pub(crate) fn with_call<R>(mrb: &Mrb, body: impl FnOnce(&[Value], Option<crate::
         .keywords
         .filter(|keywords| !keywords.is_empty(mrb))
         .map(ReprValue::as_value);
-    with_copy(call.positionals, keywords, |args| body(args, block))
+    body(ArgsCopy::new(call.positionals, keywords).as_slice(), block)
 }
 
 /// Whether the current call passed keywords.
@@ -86,26 +86,42 @@ fn keywords_given(mrb: &Mrb) -> bool {
     unsafe { sys::mrb_ci_keywords_given_func(mrb.as_ptr()) }
 }
 
-/// Run `body` over `positionals` followed by `keywords`, copied out of
-/// the frame so a VM re-entry that moves its stack leaves them valid.
-fn with_copy<R>(
-    positionals: &[Value],
-    keywords: Option<Value>,
-    body: impl FnOnce(&[Value]) -> R,
-) -> R {
-    let len = positionals.len() + usize::from(keywords.is_some());
-    if len <= INLINE_ARGS {
-        let mut args = [crate::value::qnil().as_value(); INLINE_ARGS];
-        args[..positionals.len()].copy_from_slice(positionals);
-        if let Some(keywords) = keywords {
-            args[len - 1] = keywords;
+/// A copy of a call's arguments, `positionals` followed by `keywords`,
+/// out of the frame so a VM re-entry that moves its stack leaves them
+/// valid. A short list is held inline and allocates nothing.
+pub(crate) enum ArgsCopy {
+    Inline {
+        len: usize,
+        values: [Value; INLINE_ARGS],
+    },
+    Heap(Vec<Value>),
+}
+
+impl ArgsCopy {
+    #[inline]
+    pub(crate) fn new(positionals: &[Value], keywords: Option<Value>) -> Self {
+        let len = positionals.len() + usize::from(keywords.is_some());
+        if len <= INLINE_ARGS {
+            let mut values = [crate::value::qnil().as_value(); INLINE_ARGS];
+            values[..positionals.len()].copy_from_slice(positionals);
+            if let Some(keywords) = keywords {
+                values[len - 1] = keywords;
+            }
+            ArgsCopy::Inline { len, values }
+        } else {
+            let mut values = Vec::with_capacity(len);
+            values.extend_from_slice(positionals);
+            values.extend(keywords);
+            ArgsCopy::Heap(values)
         }
-        body(&args[..len])
-    } else {
-        let mut args = Vec::with_capacity(len);
-        args.extend_from_slice(positionals);
-        args.extend(keywords);
-        body(&args)
+    }
+
+    #[inline]
+    pub(crate) fn as_slice(&self) -> &[Value] {
+        match self {
+            ArgsCopy::Inline { len, values } => &values[..*len],
+            ArgsCopy::Heap(values) => values,
+        }
     }
 }
 
