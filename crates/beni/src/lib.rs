@@ -110,7 +110,7 @@ pub use error::Error;
 pub use gem::Gem;
 pub use hash::{ForEach, RHash};
 pub use inline_struct::{Inline, InlineStruct, InlineType};
-pub use method::{MethodDef, MethodReturn};
+pub use method::{MethodDef, ReturnValue};
 pub use module::Module;
 pub use object::Object;
 pub use parse::ParseMessage;

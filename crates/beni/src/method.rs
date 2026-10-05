@@ -22,7 +22,7 @@
 //!   3. call the function inside `catch_unwind` — a Rust panic is
 //!      converted to a `RuntimeError` raised to the Ruby caller
 //!      instead of unwinding into mruby's C frames,
-//!   4. convert the return value through `MethodReturn`
+//!   4. convert the return value through `ReturnValue`
 //!      (`IntoValue`, or `Result<IntoValue, Error>` for fallible
 //!      bodies, whose `Err` raises to the Ruby caller).
 //!
@@ -38,7 +38,7 @@
 //! because the expansion nests it inside an `extern "C" fn`.
 
 use crate::state::args::read_frame;
-use crate::{sys::AsRawValue, Error, IntoValue, Mrb, TryConvert, Value};
+use crate::{sys::AsRawValue, Error, Mrb, TryConvert, Value};
 use beni_sys as sys;
 
 /// Bridge + arity pair produced by the `method!` macro and
@@ -97,33 +97,51 @@ impl MethodDef {
     }
 }
 
-/// Return seam for registered methods — beni's mirror of magnus's
-/// `ReturnValue`. Implemented for every `IntoValue` type (infallible
-/// bodies) and for `Result<IntoValue, Error>` (fallible bodies,
-/// whose `Err` is raised to the Ruby caller).
-pub trait MethodReturn {
-    /// Project the body's return into the value domain, or the error
-    /// the bridge raises to the Ruby caller.
-    fn into_method_return(self, mrb: &Mrb) -> Result<Value, Error>;
-}
+/// Return seam for registered methods — magnus's `ReturnValue`.
+/// Implemented for every `IntoValue` type (infallible bodies) and for
+/// `Result<IntoValue, Error>` (fallible bodies, whose `Err` is raised
+/// to the Ruby caller). Sealed: the set of return kinds is closed.
+///
+/// ```compile_fail
+/// struct Custom;
+/// impl beni::ReturnValue for Custom {
+///     fn into_return_value(self, _: &beni::Mrb) -> Result<beni::Value, beni::Error> {
+///         unimplemented!()
+///     }
+/// }
+/// ```
+pub trait ReturnValue: private::ReturnValue {}
 
-impl<T> MethodReturn for Result<T, Error>
-where
-    T: IntoValue,
-{
-    #[inline]
-    fn into_method_return(self, mrb: &Mrb) -> Result<Value, Error> {
-        self.map(|val| val.into_value(mrb))
+impl<T> ReturnValue for T where T: private::ReturnValue {}
+
+pub(crate) mod private {
+    use crate::{Error, IntoValue, Mrb, Value};
+
+    /// The projection sealing `ReturnValue` to this crate.
+    pub trait ReturnValue {
+        /// Project the body's return into the value domain, or the
+        /// error the bridge raises to the Ruby caller.
+        fn into_return_value(self, mrb: &Mrb) -> Result<Value, Error>;
     }
-}
 
-impl<T> MethodReturn for T
-where
-    T: IntoValue,
-{
-    #[inline]
-    fn into_method_return(self, mrb: &Mrb) -> Result<Value, Error> {
-        Ok(self.into_value(mrb))
+    impl<T> ReturnValue for Result<T, Error>
+    where
+        T: IntoValue,
+    {
+        #[inline]
+        fn into_return_value(self, mrb: &Mrb) -> Result<Value, Error> {
+            self.map(|val| val.into_value(mrb))
+        }
+    }
+
+    impl<T> ReturnValue for T
+    where
+        T: IntoValue,
+    {
+        #[inline]
+        fn into_return_value(self, mrb: &Mrb) -> Result<Value, Error> {
+            Ok(self.into_value(mrb))
+        }
     }
 }
 
@@ -206,7 +224,7 @@ macro_rules! define_method_trait {
             Self: Sized + Fn(&Mrb, S $(, $t)*) -> Res,
             S: TryConvert,
             $($t: TryConvert,)*
-            Res: MethodReturn,
+            Res: ReturnValue,
         {
             /// Read and convert the call-frame arguments, run the
             /// wrapped function, and project its return. A failed
@@ -231,7 +249,7 @@ macro_rules! define_method_trait {
                 $(
                     let $arg = $t::try_convert(Value::from_raw_unchecked($arg), mrb)?;
                 )*
-                (self)(mrb, self_ $(, $arg)*).into_method_return(mrb)
+                (self)(mrb, self_ $(, $arg)*).into_return_value(mrb)
             }
 
             /// Bridge entry: `call_convert_value` inside the panic
@@ -252,7 +270,7 @@ macro_rules! define_method_trait {
             Func: Fn(&Mrb, S $(, $t)*) -> Res,
             S: TryConvert,
             $($t: TryConvert,)*
-            Res: MethodReturn,
+            Res: ReturnValue,
         {
         }
     };
@@ -319,7 +337,7 @@ macro_rules! define_method_req_opt_trait {
             S: TryConvert,
             $($rt: TryConvert,)*
             $($ot: TryConvert,)*
-            Res: MethodReturn,
+            Res: ReturnValue,
         {
             /// Read and convert the call-frame arguments, run the
             /// wrapped function, and project its return. A failed
@@ -359,7 +377,7 @@ macro_rules! define_method_req_opt_trait {
                         )
                     };
                 )*
-                (self)(mrb, self_ $(, $req)* $(, $opt)*).into_method_return(mrb)
+                (self)(mrb, self_ $(, $req)* $(, $opt)*).into_return_value(mrb)
             }
 
             /// Bridge entry: `call_convert_value` inside the panic
@@ -381,7 +399,7 @@ macro_rules! define_method_req_opt_trait {
             S: TryConvert,
             $($rt: TryConvert,)*
             $($ot: TryConvert,)*
-            Res: MethodReturn,
+            Res: ReturnValue,
         {
         }
     };
@@ -425,7 +443,7 @@ macro_rules! define_method_req_block_trait {
             Self: Sized + Fn(&Mrb, S $(, $rt)*, Option<crate::Proc>) -> Res,
             S: TryConvert,
             $($rt: TryConvert,)*
-            Res: MethodReturn,
+            Res: ReturnValue,
         {
             /// Read and convert the call-frame arguments and the block,
             /// run the wrapped function, and project its return. A
@@ -463,7 +481,7 @@ macro_rules! define_method_req_block_trait {
                     // by mruby's call convention.
                     Some(unsafe { crate::Proc::from_value_unchecked(Value::from_raw_unchecked(block)) })
                 };
-                (self)(mrb, self_ $(, $req)*, block).into_method_return(mrb)
+                (self)(mrb, self_ $(, $req)*, block).into_return_value(mrb)
             }
 
             /// Bridge entry: `call_convert_value` inside the panic
@@ -484,7 +502,7 @@ macro_rules! define_method_req_block_trait {
             Func: Fn(&Mrb, S $(, $rt)*, Option<crate::Proc>) -> Res,
             S: TryConvert,
             $($rt: TryConvert,)*
-            Res: MethodReturn,
+            Res: ReturnValue,
         {
         }
     };
@@ -521,15 +539,14 @@ pub trait MethodAny<S, Res>
 where
     Self: Sized + Fn(&Mrb, S, &[Value]) -> Res,
     S: TryConvert,
-    Res: MethodReturn,
+    Res: ReturnValue,
 {
     /// Convert the receiver, run the wrapped function over the call's
     /// arguments, and project its return.
     #[doc(hidden)]
     fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
         let rb_self = S::try_convert(self_, mrb)?;
-        crate::state::args::with_args(mrb, |args| (self)(mrb, rb_self, args))
-            .into_method_return(mrb)
+        crate::state::args::with_args(mrb, |args| (self)(mrb, rb_self, args)).into_return_value(mrb)
     }
 
     /// Bridge entry: `call_convert_value` inside the panic boundary,
@@ -549,7 +566,7 @@ impl<Func, S, Res> MethodAny<S, Res> for Func
 where
     Func: Fn(&Mrb, S, &[Value]) -> Res,
     S: TryConvert,
-    Res: MethodReturn,
+    Res: ReturnValue,
 {
 }
 
