@@ -1688,7 +1688,6 @@ The body receives the interpreter handle, the call's arguments as a slice laid o
 |---|---|
 | an `IntoValue` value | the converted value |
 | a `Result` of an `IntoValue` value | the converted `Ok` value; an `Err` raised |
-| a fiber yield, or a `Result` of one | as a registered method returning it |
 
 A raise from the body reaches the proc's caller: a Ruby caller sees the exception, and `Proc::call` answers it as an `Err`. A closure called again while it is already running, through its proc or a copy of it, raises `RuntimeError` to that second caller, and the running call is unaffected.
 
