@@ -116,6 +116,16 @@ impl Mrb {
         (sym != 0).then(|| Id::from_raw_unchecked(sym))
     }
 
+    /// `Mrb::check_id` answered as the `Symbol` value boxing the id, as
+    /// mruby's `mrb_check_intern` boxes `mrb_intern_check`'s: `Some` when
+    /// `name`'s bytes are already interned, `None` otherwise. Like
+    /// `check_id`, it never creates a symbol, dispatches nothing, and
+    /// never raises.
+    #[inline]
+    pub fn check_symbol(&self, name: &[u8]) -> Option<Symbol> {
+        self.check_id(name).map(Symbol::from)
+    }
+
     /// `mrb_sym_name(mrb, sym)` — return the name of `sym` as an owned
     /// `String`, or `None` if mruby yields a NULL pointer (e.g. uninterned
     /// id). A short symbol name unpacks into a per-read scratch buffer the

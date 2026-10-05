@@ -282,6 +282,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::block_given;
     let _ = Mrb::carrier;
     let _ = Mrb::check_id;
+    let _ = Mrb::check_symbol;
     let _ = Mrb::class_defined::<&core::ffi::CStr>;
     let _ = Mrb::class_new;
     let _ = Mrb::exc_get::<&core::ffi::CStr>;

@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 307 | 306 (100%) | 227 (74%) |
+| function | 307 | 306 (100%) | 230 (75%) |
 | macro | 106 | 28 (26%) | 77 (73%) |
-| total | 413 | 334 (81%) | 304 (74%) |
+| total | 413 | 334 (81%) | 307 (74%) |
 
 ## mruby.h
 
@@ -42,9 +42,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_check_frozen` | fn | ✅ | 🚫 | declined: takes the object as `void*` and casts it to `struct RBasic*` unchecked (`vendor/mruby/src/error.c:671-676`) — see `mrb_str_ptr`; the `mrb_value` form that a typed caller can reach is graduated as `ReprValue::check_frozen` |
 | `mrb_check_frozen_value` | fn | ✅ | ✅ | `ReprValue::check_frozen` — the frozen-state precondition guard, the `mrb_value` form a typed caller can reach |
 | `mrb_check_hash_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `RHash` — the nil-returning Hash tag check (`vendor/mruby/src/object.c:815-819`), see `mrb_check_array_type` |
-| `mrb_check_intern` | fn | ✅ | ❌ |  |
-| `mrb_check_intern_cstr` | fn | ✅ | ❌ |  |
-| `mrb_check_intern_str` | fn | ✅ | ❌ |  |
+| `mrb_check_intern` | fn | ✅ | ✅ | `Mrb::check_symbol` — `mrb_intern_check`'s answer boxed as the Symbol value, `None` where it answers nil |
+| `mrb_check_intern_cstr` | fn | ✅ | ✅ | `Mrb::check_symbol` — a NUL-terminated name is bytes passed to the check this convenience wrapper forwards to |
+| `mrb_check_intern_str` | fn | ✅ | ✅ | `Mrb::check_symbol` — an mruby String value's bytes pass to the check this convenience wrapper forwards to |
 | `mrb_check_string_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type` |
 | `mrb_check_type` | fn | ✅ | ✅ | subsumed: the `FromValue` downcasts — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot |
 | `mrb_class_defined` | fn | ✅ | ✅ | `Mrb::class_defined` with a name key — interns and routes through `mrb_class_defined_id` |

@@ -56,7 +56,7 @@ impl Mrb {
     /// and nothing when `mark_carrier` has put none there.
     pub fn carrier(&self, path: &'static CStr) -> Option<RClass> {
         let record = self.held_record()?;
-        let key = Symbol::from(self.check_id(path.to_bytes())?).as_value();
+        let key = self.check_symbol(path.to_bytes())?.as_value();
         // SAFETY: `record` is the live record Hash; a symbol key is hashed
         // and compared by its id, and `mrb_hash_fetch` answers the given
         // default for an absent key without consulting the Hash's own, so

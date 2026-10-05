@@ -111,6 +111,26 @@ fn check_id_finds_an_interned_name_and_misses_an_uninterned_one() {
 }
 
 #[test]
+fn check_symbol_answers_the_symbol_of_an_interned_name_and_misses_an_uninterned_one() {
+    let mrb = open_mrb();
+
+    // A name no one has interned yet has no symbol, and the check leaves
+    // it uninterned.
+    assert!(mrb.check_symbol(b"beni_unseen_symbol").is_none());
+    assert!(mrb.check_id(b"beni_unseen_symbol").is_none());
+
+    // Once the name is interned, the check answers the symbol value
+    // boxing the id the creating intern produced.
+    let seen = mrb
+        .intern_cstr(c"beni_seen_symbol")
+        .expect("the name interns");
+    assert_eq!(
+        mrb.check_symbol(b"beni_seen_symbol"),
+        Some(Symbol::from(seen))
+    );
+}
+
+#[test]
 fn sym_dump_quotes_a_non_identifier_name() {
     let mrb = open_mrb();
 
@@ -192,6 +212,7 @@ fn check_id_misses_a_name_too_long_to_intern_without_raising() {
     let too_long = vec![b'a'; TOO_LONG];
 
     assert!(mrb.check_id(&too_long).is_none());
+    assert!(mrb.check_symbol(&too_long).is_none());
 }
 
 #[test]
