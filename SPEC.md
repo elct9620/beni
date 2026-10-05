@@ -298,9 +298,9 @@ failure is reported in stays outside it too, being a result shape. Disabling
 default features is how a consumer that never compiles Ruby at run time says so.
 
 `fiber` is a capability feature, enabled by default. It carries exactly the
-function surface mruby's fiber gem defines: creating, resuming, testing, and
-yielding a fiber. The `Fiber` handle and its downcast, which reads only the
-value tag, stay outside it.
+surface mruby's fiber gem defines: creating, resuming, testing, and yielding a
+fiber, and reading the current one. The `Fiber` handle and its downcast, which
+reads only the value tag, stay outside it.
 
 ##### Dependency features
 
@@ -917,7 +917,7 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Operation kind | Surfaces `Err` | Returns |
 |---|---|---|
 | Mutates a receiver: array append / remove / extend / replace / clear; array indexed write and resize; hash assign / delete / merge / clear; string append and resize; instance-variable assignment and removal; class-variable assignment; constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range (a negative index past the beginning, or one too large); a string resize also when the requested length is negative or overflows | `Result` |
-| Dispatches Ruby: a method call; `==` / `eql?`; a `<=>` comparison; an object `dup`; string coercion; a splat coercion to an array running a non-array's `to_a`; an array join rendering each element via `to_s`; an instance construction running `initialize`; a constant fetch running a `const_missing` hook; a constant assignment running a `const_added` hook; a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`; a hash read running a `default` lookup for an absent key; a range construction comparing its two bounds | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared | `Result`; a `<=>` comparison yields nothing when the two values are incomparable |
+| Dispatches Ruby: a method call; `==` / `eql?`; a `<=>` comparison; an object `dup`; string coercion; a splat coercion to an array running a non-array's `to_a`; an array join rendering each element via `to_s`; an instance construction running `initialize`; a constant fetch running a `const_missing` hook; a constant assignment running a `const_added` hook; a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`; a hash read running a `default` lookup for an absent key; a range construction comparing its two bounds; a current-fiber read running `Fiber.current` | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared; a current-fiber read also when `Fiber` names no class, or `Fiber.current` answers anything but a Fiber (`TypeError`) | `Result`; a `<=>` comparison yields nothing when the two values are incomparable |
 | Reads a named variable that raises on absence: a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read converted to a requested type; an Integer read out as `i64`; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an arbitrary-width Integer beyond the configured integer width read out (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width (`RangeError`) | `Result` |
 | Interns a name, creating its symbol: a C-string, byte-slice, String-value, or static-buffer intern; a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (`ArgumentError`) | `Result` |
@@ -1695,6 +1695,7 @@ A `Fiber` handle runs a Ruby-defined block as a fiber, mirroring `magnus`'s
 | resume | starts the fiber with an argument slice as its block's arguments, or continues a suspended one with the slice as the value its pending yield answers; answers the value the fiber next yields, or its block's value once the block finishes |
 | alive test | whether the fiber can still be resumed — false once its block has finished |
 | fiber yield | built from an argument slice on the `Mrb` handle and returned from a registered method running inside a resumed fiber; the return suspends the fiber and hands the slice to its resumer |
+| current | on the `Mrb` handle, the fiber `Fiber.current` answers when dispatched — the running fiber, or the root fiber outside any resumed one |
 
 A slice handed across a switch arrives as one value:
 
@@ -1705,9 +1706,8 @@ A slice handed across a switch arrives as one value:
 | several values | an Array of them |
 
 A fiber yield answers Rust no resumed value: the value the next resume passes
-reaches the method's Ruby caller. Reading the current fiber is a dispatch of
-`Fiber.current`. Transferring to a fiber and raising into a fiber are not
-carried.
+reaches the method's Ruby caller. Transferring to a fiber and raising into a
+fiber are not carried.
 
 #### User data
 
@@ -2058,7 +2058,7 @@ measures complete.
 | An exception raised by a raw binding inside a `sys::protect` body | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle; never unwinds past the caller |
 | An allocation the interpreter cannot satisfy, inside a typed operation | mruby's out-of-memory raise, outside every total or never-raising statement. An operation that surfaces `Err` surfaces it as one carrying that exception; inside one that surfaces none — a conversion into a value, a read or render stated to never raise — it reaches the nearest mruby frame that rescues it, and ends the process where none does |
 | A typed array, hash, or string mutated through a frozen receiver, an instance-variable or constant assignment or removal, or a class-variable assignment, to a frozen receiver, or a class-variable read resolving to no class variable | surfaced as a Rust `Err`, never unwinds across FFI |
-| A Ruby method invoked through a value's dispatch, an object `dup` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising | surfaced as a Rust `Err`, never unwinds across FFI |
+| A Ruby method invoked through a value's dispatch, an object `dup` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising; a current-fiber read finding `Fiber` naming no class, or `Fiber.current` raising or answering anything but a Fiber | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
 | A name of `UINT16_MAX` bytes or more given to a creating intern, to a string's coercion to a symbol, or as a symbol-or-name key | surfaced as a Rust `Err` carrying the `ArgumentError`, never unwinds across FFI; an operation that reports no failure answers instead as it does for a name nothing is bound under — a predicate `false`, a read `nil`, a removal a no-op |
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
