@@ -152,8 +152,9 @@ impl Fiber {
 
     /// Whether this fiber can still be resumed, mirroring magnus's
     /// `Fiber::is_alive`. A fiber `Fiber.allocate` left uninitialized
-    /// answers `FiberError` rather than a bool, as mruby's
-    /// `mrb_fiber_alive_p` raises for it.
+    /// answers `FiberError` rather than a bool: mruby's
+    /// `mrb_fiber_alive_p` raises for it, as CRuby's `rb_fiber_alive_p`
+    /// does, which magnus's unprotected `bool` read leaves unhandled.
     pub fn is_alive(self, mrb: &Mrb) -> Result<bool, Error> {
         let fiber_raw = self.as_value().as_raw();
         mrb.protect(|inner| {
