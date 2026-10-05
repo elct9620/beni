@@ -318,6 +318,30 @@ impl RArray {
         (unsafe { sys::mrb_rarray_len_func(self.0.as_raw()) }) as usize
     }
 
+    /// The elements in place, mirroring magnus's `RArray::as_slice`.
+    /// For an owned copy that outlives later calls, convert through
+    /// `RArray::to_vec`.
+    ///
+    /// # Safety
+    ///
+    /// Caller must not invoke another mruby API that could change or
+    /// move the array's elements before consuming the slice.
+    #[inline]
+    pub unsafe fn as_slice(self, _mrb: &Mrb) -> &[Value] {
+        // SAFETY: `self` is Array-tagged by the newtype contract; the
+        // shims expand `RARRAY_PTR` / `RARRAY_LEN` against mruby's own
+        // headers, and `Value` is `#[repr(transparent)]` over
+        // `mrb_value`.
+        let ptr = unsafe { sys::mrb_rarray_ptr_func(self.0.as_raw()) } as *const Value;
+        let len = self.len();
+        if len == 0 || ptr.is_null() {
+            return &[];
+        }
+        // SAFETY: the pair describes the elements mruby owns, alive
+        // while the borrowed `&Mrb` outlives this slice.
+        unsafe { core::slice::from_raw_parts(ptr, len) }
+    }
+
     /// TRUE when the array holds no elements.
     #[inline]
     pub fn is_empty(self) -> bool {

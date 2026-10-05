@@ -77,6 +77,15 @@ mrb_rarray_len_func(mrb_value a)
   return RARRAY_LEN(a);
 }
 
+/* Element pointer of an Array-tagged mrb_value. Counterpart to the
+ * `RARRAY_PTR(a)` macro, which branches between the embedded buffer
+ * and the heap pointer on the same header flags as `mrb_rarray_len_func`. */
+static inline const mrb_value *
+mrb_rarray_ptr_func(mrb_value a)
+{
+  return RARRAY_PTR(a);
+}
+
 /* Object pointer extractor from an object-tagged mrb_value.
  * Counterpart to the `mrb_obj_ptr(v)` macro in <mruby/value.h>,
  * which expands via `mrb_val_union(v).p`. Folding the union read

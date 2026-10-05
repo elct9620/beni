@@ -70,6 +70,7 @@ typed:
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
   MRB_UNDEF_ALLOCATOR: RClass::undef_default_alloc_func
   RARRAY_LEN: RArray::len
+  RARRAY_PTR: RArray::as_slice
   RSTRING_LEN: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len`"
   RSTRING_PTR: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature)"
   mrb_argnum_error: Error::argnum

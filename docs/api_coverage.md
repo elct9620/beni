@@ -10,8 +10,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
 | function | 316 | 315 (100%) | 245 (78%) |
-| macro | 106 | 28 (26%) | 85 (80%) |
-| total | 422 | 343 (81%) | 330 (78%) |
+| macro | 106 | 29 (27%) | 86 (81%) |
+| total | 422 | 344 (82%) | 331 (78%) |
 
 ## mruby.h
 
@@ -235,7 +235,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `RARRAY_LEN` | macro | ✅ | ✅ | `RArray::len` |
-| `RARRAY_PTR` | macro | ❌ | ❌ |  |
+| `RARRAY_PTR` | macro | ✅ | ✅ | `RArray::as_slice` |
 | `mrb_ary_clear` | fn | ✅ | ✅ | `RArray::clear` |
 | `mrb_ary_concat` | fn | ✅ | ✅ | `RArray::concat` |
 | `mrb_ary_dup` | fn | ✅ | ✅ | `RArray::dup` |

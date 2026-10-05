@@ -169,6 +169,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RArray::to_vec::<i64>;
     let _ = RArray::to_array::<i64, 1>;
     let _ = RArray::len;
+    let _ = RArray::as_slice;
     let _ = RArray::is_empty;
     let _ = RString::from_value_unchecked;
     let _ = RString::cat;

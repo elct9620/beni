@@ -1,7 +1,7 @@
 use crate::support::open_mrb;
 use crate::support::OwnedBytes;
 use beni::prelude::*;
-use beni::{Error, IntoValue};
+use beni::{Error, FromValue, IntoValue, RArray};
 
 #[test]
 fn push_and_entry_roundtrip_through_a_live_array() {
@@ -568,4 +568,34 @@ fn entries_reads_a_slot_changed_mid_walk_as_its_current_value() {
         "changed"
     );
     assert!(walk.next().is_none());
+}
+
+#[test]
+fn a_borrowed_slice_views_the_elements_in_place() {
+    let mrb = open_mrb();
+    let small = mrb.load_string(b"[1, :two, 'three']").unwrap();
+    let large = mrb.load_string(b"(1..20).to_a").unwrap();
+    let empty = mrb.ary_new();
+    let small = RArray::from_value(small).unwrap();
+    let large = RArray::from_value(large).unwrap();
+
+    // SAFETY: no mruby call runs while each slice is read.
+    let (small_view, large_view, empty_view) = unsafe {
+        (
+            small.as_slice(&mrb).to_vec(),
+            large.as_slice(&mrb).to_vec(),
+            empty.as_slice(&mrb).len(),
+        )
+    };
+
+    let rendered: Vec<String> = small_view.iter().map(|v| v.inspect(&mrb)).collect();
+    assert_eq!(rendered, ["1", ":two", "\"three\""]);
+    assert_eq!(
+        large_view
+            .iter()
+            .filter_map(|v| i32::from_value(*v))
+            .sum::<i32>(),
+        210
+    );
+    assert_eq!(empty_view, 0);
 }
