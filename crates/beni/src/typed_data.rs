@@ -255,8 +255,10 @@ impl<T: Clone + TypedData> Dup for T {
         rb_self.clone()
     }
 
-    fn clone(mrb: &Mrb, rb_self: Obj<Self>, _args: &[Value]) -> Result<Obj<Self>, Error> {
-        crate::scan_args::scan_args::<(), (), (), (), (), ()>(mrb)?;
+    fn clone(mrb: &Mrb, rb_self: Obj<Self>, args: &[Value]) -> Result<Obj<Self>, Error> {
+        if !args.is_empty() {
+            return Err(crate::scan_args::argnum_error(mrb, args.len(), 0, Some(0)));
+        }
         let copy = rb_self.as_value().obj_clone(mrb)?;
         let payload = Box::into_raw(Box::new((*rb_self).clone()));
         // SAFETY: `copy` is the carrier `mrb_obj_clone` just made, which

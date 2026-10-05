@@ -375,13 +375,20 @@ fn clone_takes_no_arguments() {
         })
         .as_value();
 
-    let err = original
-        .funcall(&mrb, c"clone", &[true.into_value(&mrb)])
-        .expect_err("clone rejects an argument");
-    match err {
-        Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
-        other => panic!("an argument raises ArgumentError, got {other}"),
-    }
+    mrb.define_global_const("C", original).unwrap();
+    let raised = |source: &str| {
+        mrb.load_string(source.as_bytes())
+            .map(|value| value.inspect(&mrb))
+            .map_err(|err| err.message(&mrb))
+    };
+
+    let expected = "wrong number of arguments (given 1, expected 0)";
+    assert_eq!(raised("C.clone(true)").unwrap_err(), expected);
+    assert_eq!(raised("C.clone(freeze: false)").unwrap_err(), expected);
+    assert!(
+        raised("C.clone(**{})").is_ok(),
+        "an empty keyword splat passes no argument"
+    );
 }
 
 #[test]

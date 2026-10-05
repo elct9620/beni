@@ -401,7 +401,7 @@ pub(crate) fn read_raw<'a>(mrb: &'a Mrb, keywords: bool) -> RawFrame<'a> {
 
 /// The `ArgumentError` mruby raises for `given` positionals against `min`
 /// and at most `max` of them.
-fn argnum_error(mrb: &Mrb, given: usize, min: usize, max: Option<usize>) -> Error {
+pub(crate) fn argnum_error(mrb: &Mrb, given: usize, min: usize, max: Option<usize>) -> Error {
     let max = max.map_or(-1, |max| max as core::ffi::c_int);
     // SAFETY: `mrb` is alive inside the protect frame, which catches the
     // raise `mrb_argnum_error` always ends in.
