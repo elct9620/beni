@@ -937,7 +937,7 @@ Two calls report to the process's standard error rather than to a caller:
 
 | Call | Behavior |
 |---|---|
-| warn, on the `Mrb` handle | writes `warning: `, the message's bytes whole, and a newline, mirroring mruby's `mrb_warn`; an archive built without standard I/O writes nothing |
+| warn, on the `Mrb` handle | writes `warning: `, the message's bytes whole, and a newline, mirroring mruby's `mrb_warn`; a message longer than the longest string the interpreter holds writes nothing and answers the `Err` carrying mruby's `ArgumentError`; an archive built without standard I/O writes nothing and answers `Ok` for every message |
 | bug, in `beni::error` | writes `bug: `, the message, and a newline, then ends the process with a failure status, mirroring `magnus`'s `error::bug`; it never returns; a message holding a NUL is written as `panic`; an archive built without standard I/O writes nothing and still ends the process |
 
 warn writes on every call: mruby keeps no verbose switch, where `magnus`'s `Ruby::warning` writes only when Ruby runs verbose.
@@ -2128,6 +2128,7 @@ measures complete.
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, Rust-defined proc body, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, `sys::catch_unwind`) or as an mruby exception to the caller (registered method, Rust-defined proc body); never unwinds into mruby's C frames |
 | A Rust-defined proc's closure called again, through its proc or a copy of it, while it is already running | `RuntimeError` raised to the second caller; the running call is unaffected |
+| A warning message longer than the longest string the interpreter holds, in an archive built with standard I/O | surfaced as a Rust `Err` carrying mruby's `ArgumentError`; nothing is written |
 | Rust panic raised inside a `sys::protect` body | the process aborts at the FFI boundary; never unwinds into mruby's C frames |
 | Registered method whose receiver or argument fails `TryConvert` conversion | the exception the conversion's `Err` carries raised to the Ruby caller, the closure body never runs |
 | A registered method body's scan, single-argument, or named keyword read that the call does not fit — a wrong positional count, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or an unnamed keyword with no rest to collect it | surfaced to the body as a Rust `Err` carrying the exception raised for the mismatch; nothing raises past the body |
