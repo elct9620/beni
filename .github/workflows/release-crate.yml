@@ -1,7 +1,9 @@
 # Publishes `beni-sys`, `beni-macros` and `beni` to crates.io via OIDC
-# Trusted Publishing. `cargo publish --workspace` (stable since 1.90)
-# orders the uploads by dependency (beni last) and waits for index propagation
-# between them. Its verify builds compile the packaged crates, which
+# Trusted Publishing, one crate per `cargo publish` in dependency order
+# (beni last), each waiting for its own upload to reach the index before the
+# next starts. A version already on crates.io is skipped, so re-running a
+# release that stopped partway publishes only what is missing. The verify
+# builds compile the packaged crates, which
 # needs an archive like any other build, so the gem stages one first and
 # names it through BENI_VENDOR_DIR. The manual-recovery shape mirrors the gem's —
 # `workflow_dispatch` defaults `push` to false, so a bare dispatch is a
@@ -106,4 +108,20 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
           BENI_VENDOR_DIR: ${{ github.workspace }}/vendor
-        run: cargo publish --workspace --allow-dirty
+        # `--workspace` waits on several uploads at once, and cargo 1.96
+        # aborts when one of a dependent's dependencies is confirmed
+        # before the other; a single upload per invocation never has two
+        # to wait on.
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "beni") | .version')
+          for crate in beni-sys beni-macros beni; do
+            status=$(curl -sS -o /dev/null -w '%{http_code}' \
+              -A "${GITHUB_REPOSITORY} release (https://github.com/${GITHUB_REPOSITORY})" \
+              "https://crates.io/api/v1/crates/${crate}/${version}")
+            case "$status" in
+              200) echo "${crate} ${version} is already on crates.io" ;;
+              404) cargo publish -p "$crate" --allow-dirty ;;
+              *) echo "crates.io answered ${status} for ${crate} ${version}"; exit 1 ;;
+            esac
+          done
