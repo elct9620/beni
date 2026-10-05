@@ -310,6 +310,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RString::cmp;
     let _ = RString::concat;
     let _ = RString::dup;
+    let _ = RString::new_frozen;
     let _ = RString::eq;
     let _ = RString::index;
     let _ = RString::intern;

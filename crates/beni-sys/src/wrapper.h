@@ -66,6 +66,15 @@ mrb_rstring_len_func(mrb_value s)
   return RSTRING_LEN(s);
 }
 
+/* Whether a String-tagged mrb_value is frozen. Counterpart to the
+ * `mrb_frozen_p(o)` macro from <mruby/object.h>, a bitfield read
+ * bindgen cannot expand. */
+static inline mrb_bool
+mrb_rstring_frozen_func(mrb_value s)
+{
+  return mrb_frozen_p(mrb_basic_ptr(s));
+}
+
 /* Element count of an Array-tagged mrb_value. Counterpart to the
  * `RARRAY_LEN(a)` macro from <mruby/array.h>, which branches between
  * the embedded-buffer length and the heap length on the RArray header

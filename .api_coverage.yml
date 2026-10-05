@@ -455,6 +455,11 @@ extensions:
     longer reaches reads `nil` — dispatching no Ruby, the idiomatic Rust
     surface over mruby's caller-side index loop (which the C API has no
     iterator primitive for).
+  RString::new_frozen: >-
+    magnus's frozen copy, whose CRuby call `rb_str_new_frozen` mruby has no
+    counterpart for: composes the already-graduated `RString::dup`
+    (`mrb_str_dup`) and `ReprValue::freeze` (`mrb_obj_freeze`), answering
+    the string itself when it is already frozen, as the CRuby call does.
 
 # get_args format specifiers
 # ==========================

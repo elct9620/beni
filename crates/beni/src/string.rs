@@ -378,6 +378,20 @@ impl RString {
         }
     }
 
+    /// A frozen string holding `s`'s bytes, mirroring magnus's
+    /// `RString::new_frozen`: `s` itself when it is already frozen,
+    /// otherwise a frozen copy that leaves `s` unfrozen.
+    pub fn new_frozen(mrb: &Mrb, s: RString) -> RString {
+        // SAFETY: `s` is String-tagged by the newtype contract, so its
+        // object header carries the frozen flag the shim reads.
+        if unsafe { sys::mrb_rstring_frozen_func(s.0.as_raw()) } {
+            return s;
+        }
+        let copy = s.dup(mrb);
+        copy.freeze(mrb);
+        copy
+    }
+
     /// `mrb_str_plus(mrb, self, other)` — concatenate into a fresh String
     /// holding both operands' bytes, Ruby's `String#+`. It allocates a new
     /// string and copies the bytes, mutating neither operand — the

@@ -1,5 +1,5 @@
-use crate::support::open_mrb;
 use crate::support::OwnedBytes;
+use crate::support::{open_mrb, same_object};
 use beni::prelude::*;
 use beni::{Ccontext, Error, FromValue, IntoValue, RString};
 
@@ -616,4 +616,31 @@ fn to_bytes_reads_every_byte_as_bytes() {
     let bytes: bytes::Bytes = s.to_bytes();
 
     assert_eq!(&bytes[..], raw);
+}
+
+#[test]
+fn a_frozen_copy_of_an_unfrozen_string_leaves_the_original_mutable() {
+    let mrb = open_mrb();
+    let original = mrb.str_new(b"example");
+
+    let frozen = RString::new_frozen(&mrb, original);
+    original
+        .cat(&mrb, b"!")
+        .expect("the original stays unfrozen");
+
+    assert!(frozen.check_frozen(&mrb).is_err(), "the copy is frozen");
+    assert!(!same_object(&mrb, frozen, original));
+    assert_eq!(frozen.owned_bytes(), b"example");
+    assert_eq!(original.owned_bytes(), b"example!");
+}
+
+#[test]
+fn a_frozen_copy_of_a_frozen_string_is_that_string() {
+    let mrb = open_mrb();
+    let original = mrb.str_new(b"example");
+    original.freeze(&mrb);
+
+    let frozen = RString::new_frozen(&mrb, original);
+
+    assert!(same_object(&mrb, frozen, original));
 }
