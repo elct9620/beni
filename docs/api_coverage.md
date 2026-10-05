@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 316 | 315 (100%) | 240 (76%) |
-| macro | 106 | 28 (26%) | 77 (73%) |
-| total | 422 | 343 (81%) | 317 (75%) |
+| function | 316 | 315 (100%) | 243 (77%) |
+| macro | 106 | 28 (26%) | 85 (80%) |
+| total | 422 | 343 (81%) | 328 (78%) |
 
 ## mruby.h
 
@@ -189,12 +189,12 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_state_atexit` | fn | ✅ | ❌ |  |
 | `mrb_str_new` | fn | ✅ | ✅ | `Mrb::str_new` |
 | `mrb_str_new_cstr` | fn | ✅ | ✅ | `Mrb::str_new_cstr` |
-| `mrb_str_new_cstr_frozen` | macro | ❌ | ❌ |  |
-| `mrb_str_new_frozen` | macro | ❌ | ❌ |  |
+| `mrb_str_new_cstr_frozen` | macro | ❌ | ✅ | subsumed: `Mrb::str_new_cstr`, `ReprValue::freeze` — the cstr form of `mrb_str_new_frozen` (`vendor/mruby/include/mruby.h:1237`), see it |
+| `mrb_str_new_frozen` | macro | ❌ | ✅ | subsumed: `Mrb::str_new`, `ReprValue::freeze` — the macro is `mrb_obj_freeze(mrb, mrb_str_new(mrb, p, len))` (`vendor/mruby/include/mruby.h:1236`), so the two typed calls in that order are its whole body; like `mrb_exc_new_lit` it makes two calls, so the derived alias tier does not reach it |
 | `mrb_str_new_lit` | macro | ❌ | ✅ | `Mrb::str_new_static` — the literal macro `mrb_str_new_lit(mrb, lit)` is `mrb_str_new_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
-| `mrb_str_new_lit_frozen` | macro | ❌ | ❌ |  |
+| `mrb_str_new_lit_frozen` | macro | ❌ | ✅ | subsumed: `Mrb::str_new_static`, `ReprValue::freeze` — the literal form of `mrb_str_new_frozen` over `mrb_str_new_lit` (`vendor/mruby/include/mruby.h:1239`), whose static byte literal `mrb_str_new_lit` records as `Mrb::str_new_static`; see `mrb_str_new_frozen` |
 | `mrb_str_new_static` | fn | ✅ | ✅ | `Mrb::str_new_static` |
-| `mrb_str_new_static_frozen` | macro | ❌ | ❌ |  |
+| `mrb_str_new_static_frozen` | macro | ❌ | ✅ | subsumed: `Mrb::str_new_static`, `ReprValue::freeze` — the static form of `mrb_str_new_frozen` (`vendor/mruby/include/mruby.h:1238`), see it |
 | `mrb_str_to_str` | macro | ❌ | ✅ | defined as `mrb_obj_as_string` |
 | `mrb_string_type` | macro | ❌ | ✅ | defined as `mrb_ensure_string_type` |
 | `mrb_strlen_lit` | macro | ❌ | ❌ |  |
@@ -307,22 +307,22 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `DATA_CHECK_GET_PTR` | macro | ❌ | ✅ | defined as `mrb_data_check_get_ptr` |
-| `DATA_GET_PTR` | macro | ❌ | ❌ |  |
+| `DATA_GET_PTR` | macro | ❌ | ✅ | defined as `mrb_data_get_ptr` |
 | `DATA_PTR` | macro | ❌ | 🚫 | declined: reads `RDATA(d)->data` with no type check — the checked form `mrb_data_check_get_ptr` is graduated as `TryConvert` for `&T`, which answers a `TypeError` where this returns a wrong-typed pointer |
 | `DATA_TYPE` | macro | ❌ | 🚫 | declined: reads `RDATA(d)->type` with no type check — see `DATA_PTR` |
-| `mrb_check_datatype` | macro | ❌ | ❌ |  |
-| `mrb_data_check_and_get` | macro | ❌ | ❌ |  |
+| `mrb_check_datatype` | macro | ❌ | ✅ | defined as `mrb_data_get_ptr` |
+| `mrb_data_check_and_get` | macro | ❌ | ✅ | defined as `mrb_data_get_ptr` |
 | `mrb_data_check_get_ptr` | fn | ✅ | ✅ | `TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — the type-checked read of a carrier's payload |
 | `mrb_data_check_type` | fn | ✅ | ✅ | `TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — a mismatch surfaces the `TypeError` this check raises, protected into an `Err` |
-| `mrb_data_get_ptr` | fn | ✅ | ❌ |  |
+| `mrb_data_get_ptr` | fn | ✅ | ✅ | `TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — the raising read, whose body is `mrb_data_check_type` then `DATA_PTR` (`vendor/mruby/src/etc.c:77-81`); the `TypeError` it raises is the `Err` those reads answer |
 | `mrb_data_init` | fn | ✅ | ✅ | `typed_data::Dup::clone` — installs a clone of the payload into the bare carrier `mrb_obj_clone` made, the one install on the typed surface |
 | `mrb_data_object_alloc` | fn | ✅ | ✅ | `Mrb::wrap_as`, and `wrap` / `obj_wrap` / `obj_wrap_as` through it — protected, so an unmarked class, which breaks `TypedData`'s contract, reclaims the box and panics rather than raising across the boundary |
-| `mrb_get_datatype` | macro | ❌ | ❌ |  |
+| `mrb_get_datatype` | macro | ❌ | ✅ | defined as `mrb_data_get_ptr` |
 ## mruby/dump.h
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_load_irep_file` | fn | ✅ | ❌ |  |
+| `mrb_load_irep_file` | fn | ✅ | ✅ | subsumed: `Mrb::load_bytecode` — the stream form, whose body reads the header and then the size it names from a `FILE*` and runs what it read with no context (`vendor/mruby/src/load.c:809-856`); a Rust caller reads the file through `std::fs`, and the byte slice carries what the stream yields |
 | `mrb_load_irep_file_cxt` | fn | ✅ | ❌ |  |
 | `mrb_read_irep` | fn | ✅ | ❌ |  |
 | `mrb_read_irep_buf` | fn | ✅ | ✅ | `Mrb::load_bytecode` |
@@ -379,7 +379,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_add_irep` | fn | ✅ | ❌ |  |
 | `mrb_irep_catch_handler_pack` | macro | ❌ | ❌ |  |
 | `mrb_irep_catch_handler_unpack` | macro | ❌ | ❌ |  |
-| `mrb_load_irep` | fn | ✅ | ❌ |  |
+| `mrb_load_irep` | fn | ✅ | ✅ | subsumed: `Mrb::load_bytecode` — the unbounded form of `mrb_load_irep_buf`, whose read passes `UINT32_MAX` where the buffer's size goes and trusts the header for the length (`vendor/mruby/src/load.c:732-737`, `:775-792`); a Rust byte slice carries the length the header would otherwise be trusted for, and the `undef` it answers for an unreadable blob without raising (`:778`) is the `Err` the typed load answers |
 | `mrb_load_irep_buf` | fn | ✅ | ✅ | subsumed: `Mrb::load_bytecode` — the read-and-run form, whose body is `load_irep(mrb, mrb_proc_read_irep_buf(mrb, buf, bufsize), NULL)` and nothing else (`vendor/mruby/src/load.c:783-798`); the typed load drives the read and the run itself so it can name which structural check a blob failed, where the one-call form reports every one of them as `irep load error`, and it answers the same `ScriptError` for the same condition |
 | `mrb_load_irep_buf_cxt` | fn | ✅ | ❌ |  |
 | `mrb_load_irep_cxt` | fn | ✅ | ❌ |  |
