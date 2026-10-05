@@ -239,6 +239,25 @@ fn a_method_returning_a_fiber_yield_suspends_its_fiber() {
 }
 
 #[test]
+fn a_fiber_yield_suspends_a_fiber_ruby_resumes() {
+    let mrb = open_mrb();
+    with_pause(&mrb);
+
+    let results = mrb
+        .load_string(
+            b"f = Fiber.new { a = Object.pause(1); b = Object.pause(a + 1, 3); [a, b] }
+              [f.resume, f.resume(10), f.resume(10, 10), f.alive?]",
+        )
+        .unwrap();
+
+    assert_eq!(
+        inspect(&mrb, results),
+        "[1, [11, 3], [10, [10, 10]], false]",
+        "each Ruby resume's arguments are the method's return"
+    );
+}
+
+#[test]
 fn a_fiber_yield_outside_a_resumed_fiber_raises_fiber_error() {
     let mrb = open_mrb();
     with_pause(&mrb);
