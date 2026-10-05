@@ -75,6 +75,16 @@ mrb_rstring_frozen_func(mrb_value s)
   return mrb_frozen_p(mrb_basic_ptr(s));
 }
 
+/* Whether the current call passed keywords: the `ci->nk` field of the
+ * running call info, the one `mrb_get_args` tests before folding a
+ * keyword hash into the positionals (src/class.c) and `mrb_get_arg1`
+ * reads beside them. A bitfield, so it is read in C. */
+static inline mrb_bool
+mrb_ci_keywords_given_func(mrb_state *mrb)
+{
+  return mrb->c->ci->nk > 0;
+}
+
 /* Element count of an Array-tagged mrb_value. Counterpart to the
  * `RARRAY_LEN(a)` macro from <mruby/array.h>, which branches between
  * the embedded-buffer length and the heap length on the RArray header

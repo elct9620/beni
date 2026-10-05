@@ -57,7 +57,12 @@ pub(crate) fn with_args<R>(mrb: &Mrb, body: impl FnOnce(&[Value]) -> R) -> R {
 /// As `with_args`, also handing over the call's block: the `Proc` the
 /// call passed, or `None` when it passed none.
 pub(crate) fn with_call<R>(mrb: &Mrb, body: impl FnOnce(&[Value], Option<crate::Proc>) -> R) -> R {
-    let call = crate::scan_args::read_raw(mrb, true);
+    // A call without keywords is read without the keyword bucket, which
+    // mruby fills with a fresh Hash on every call; with none to fold into
+    // the positionals, that read leaves the frame as it was too.
+    // SAFETY: `mrb` is alive, so its current call info is too.
+    let keywords_given = unsafe { sys::mrb_ci_keywords_given_func(mrb.as_ptr()) };
+    let call = crate::scan_args::read_raw(mrb, keywords_given);
     let block = crate::Proc::from_value(call.block);
     let keywords = call
         .keywords
