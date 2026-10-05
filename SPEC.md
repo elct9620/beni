@@ -29,7 +29,7 @@ Each row names a mechanism and its effect.
 | wasm32-wasip1 cross-compile settings | ship with beni and update with it, instead of living hand-maintained inside the consumer's config |
 | one installed beni release | the same `version`, `build_config`, `target`, and `toolchain` declarations always build the same way: same toolchain versions, compile flags, and staged layout |
 | documentation host | renders the published crates without an archive, so the typed surface can be read before a build chain exists to try it against |
-| disabling default features | a project embedding mruby without compiling Ruby at run time drops the surface that needs mruby's compiler gem, rather than linking a compiler it never calls |
+| disabling default features | a project embedding mruby without a gem a capability feature carries — compiling Ruby at run time, running fibers — drops the surface that needs that gem, rather than linking code it never calls |
 
 ## Success criteria
 
@@ -40,7 +40,7 @@ Beni succeeds when every condition yields its outcome.
 | fresh checkout runs `rake beni:build` | the archive and its compile-flags sidecar sit at the staged path for every target the build config defines |
 | a consumer's own cargo project depends on the `beni` crate; `BENI_VENDOR_DIR` points at that vendor tree | it links the archive and runs a Ruby surface it defined through `Mrb::open` |
 | `beni` crate behavior | verified from outside the crate, through its public paths alone, so every export those paths cross — the `sys` escape hatch among them — fails the suite the moment it stops being public |
-| default features disabled; archive built without mruby's compiler gem | the `beni` crate builds and links; none of the compiler surface is reachable |
+| default features disabled; archive built without mruby's compiler and fiber gems | the `beni` crate builds and links; none of the capability features' surface is reachable |
 | outside a documentation build; no archive discovery variable set | the build fails on every cargo target, naming the variables archive discovery consults |
 | documentation build; no archive present | renders the typed surface from documentation bindings the published package carries and the repository does not |
 | a target declaration references `wasi-sdk`; the build config defines a target cross-compiled for wasm32; `MRUBY_LIB_DIR` names that target's staged path; `WASI_SDK_PATH` names the unpacked wasi-sdk root | a `wasm32-wasip1` cross-build succeeds |
@@ -296,6 +296,11 @@ that compile Ruby source into the running interpreter. Loading precompiled
 bytecode needs no compiler and stays outside it. The parse message a compile
 failure is reported in stays outside it too, being a result shape. Disabling
 default features is how a consumer that never compiles Ruby at run time says so.
+
+`fiber` is a capability feature, enabled by default. It carries exactly the
+function surface mruby's fiber gem defines: creating, resuming, testing, and
+yielding a fiber. The `Fiber` handle and its downcast, which reads only the
+value tag, stay outside it.
 
 ##### Dependency features
 
@@ -922,6 +927,7 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Prepares an `InlineStruct` type's class in an interpreter; converts a value to an inline struct of a type; replaces an inline struct's payload | preparing: the class's instances are not plain objects and the class does not belong to the same type (`TypeError`), or the class path resolves to no class or to a value that is not a class; converting: the value is no inline struct of the type (`TypeError`); replacing: the receiver is frozen (`FrozenError`) | `Result` |
 | Reads the call's arguments by shape: a scan read or the single-argument read in a method registered for any arity; a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals; an argument or keyword value of the wrong type; a missing required block; a missing required keyword; a keyword no list names when the read collects no rest. A scan read of an array-handle splat and an optional block alone fits every call | `Result` |
 | Compiles and runs Ruby source, under a caller's compile context or one borrowed for the load | the source does not parse; the context's filename is too long to be a symbol; a codegen step fails; the program raises while it runs | `Result`; a parse failure carries a parse message, every other failure carries the exception |
+| Switches fibers: a fiber creation, resume, or alive test; a registered method's returned fiber yield | creation: the `Proc` is backed by a C function; resume: the fiber has finished, is the running fiber or one already resumed, was transferred to, or was never initialized, or its block raises; alive test: the fiber was never initialized; fiber yield: the method runs outside a resumed fiber, or a call from C or Rust code into Ruby stands between the fiber's block and the method | `Result`; a fiber yield's `Err` raised to the method's Ruby caller |
 | Reads or examines without dispatching: indexed read; keys; values; size; emptiness; container duplication; substring read by character range; substring search by byte index; byte comparison; symbol name and dump reads; range begin / end / exclusive-end reads; instance-variable, class-variable, and constant presence; `respond_to?`; `equal?`; `is_a?`; `instance_of?`; class; type downcast; `nil` test | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
@@ -1290,6 +1296,21 @@ A registered method asks whether it was called with a block through a total pred
 |---|---|---|
 | passes a block | `Some` | `true` |
 | passes none (mruby leaves the block slot nil) | `None` | `false` |
+
+##### Method returns
+
+A registered method's body returns one of a closed set, mirroring `magnus`'s
+sealed `ReturnValue`:
+
+| Body returns | The Ruby caller receives |
+|---|---|
+| an `IntoValue` value | the converted value |
+| a `Result` of an `IntoValue` value | the converted `Ok` value; an `Err` raised |
+| a fiber yield, or a `Result` of one | the value the fiber's next resume passes, the fiber suspended until then; an `Err` raised |
+
+The set is sealed: a consumer adds no return kind and converts no return
+outside the registration, so a fiber yield takes effect only as the method's
+return.
 
 ##### Call frame reads
 
@@ -1662,6 +1683,31 @@ A Proc answers its compiled form as a byte buffer of its own — the bytecode a 
 | dump mruby cannot complete | `Err` carrying an exception |
 
 Both failures surface as every other failure the typed surface reports does. A dump carries the instructions alone. The line numbers a loaded program's exceptions are backtraced from, and the local variable names, are each carried only when the caller asks for that one.
+
+#### Fibers
+
+A `Fiber` handle runs a Ruby-defined block as a fiber, mirroring `magnus`'s
+`Fiber`. Its operations are carried by the `fiber` capability feature.
+
+| Operation | Behavior |
+|---|---|
+| create | a fiber from a `Proc` handle, not yet started |
+| resume | starts the fiber with an argument slice as its block's arguments, or continues a suspended one with the slice as the value its pending yield answers; answers the value the fiber next yields, or its block's value once the block finishes |
+| alive test | whether the fiber can still be resumed — false once its block has finished |
+| fiber yield | built from an argument slice on the `Mrb` handle and returned from a registered method running inside a resumed fiber; the return suspends the fiber and hands the slice to its resumer |
+
+A slice handed across a switch arrives as one value:
+
+| Slice holds | Arrives as |
+|---|---|
+| nothing | `nil` |
+| one value | that value |
+| several values | an Array of them |
+
+A fiber yield answers Rust no resumed value: the value the next resume passes
+reaches the method's Ruby caller. Reading the current fiber is a dispatch of
+`Fiber.current`. Transferring to a fiber and raising into a fiber are not
+carried.
 
 #### User data
 
@@ -2040,7 +2086,10 @@ measures complete.
 | A load under a caller's compile context producing compiler warnings | the load's outcome is unchanged; the context answers the warnings as parse messages |
 | A load under a borrowed compile context producing compiler warnings | the load's outcome is unchanged; the warnings reach no caller, and none are written to standard error |
 | Compiling source without running it, where the source does not parse or a codegen step fails | the same `Err` a load that runs surfaces, and no compiled program is produced |
-| The `compiler` feature enabled against an archive built without mruby's compiler gem | both crates build, and the consumer's own link fails on the symbols the archive does not carry |
+| The `compiler` or `fiber` feature enabled against an archive built without the gem it carries | both crates build, and the consumer's own link fails on the symbols the archive does not carry |
+| A fiber created from a `Proc` backed by a C function; resumed when finished, running, already resumed, transferred to, or never initialized; or tested for liveness when never initialized | surfaced as a Rust `Err` carrying mruby's `FiberError`, never unwinds across FFI |
+| A fiber's block raising while a resume runs it | surfaced as a Rust `Err` carrying the exception; the resumer's fiber is current again and the interpreter stays usable |
+| A registered method returning a fiber yield outside a resumed fiber, or with a call from C or Rust code into Ruby between the fiber's block and the method | mruby's `FiberError` raised to the method's Ruby caller; no fiber switches |
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, `sys::catch_unwind`) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
 | Rust panic raised inside a `sys::protect` body | the process aborts at the FFI boundary; never unwinds into mruby's C frames |
