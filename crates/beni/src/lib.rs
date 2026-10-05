@@ -70,6 +70,8 @@ pub mod class;
 pub mod convert;
 pub mod data;
 pub mod error;
+#[cfg(feature = "fiber")]
+mod fiber;
 pub mod gem;
 pub mod hash;
 pub mod inline_struct;

@@ -42,12 +42,17 @@ crate-type = ["rlib"]
 # inventory, so what a consumer enables is what exists. Each only adds
 # surface, and every one is on by default.
 [features]
-default = ["compiler"]
+default = ["compiler", "fiber"]
 # `compiler` — mruby's compiler gem: the compile context and the loads
 # that compile Ruby source into the running interpreter. A consumer that
 # never compiles Ruby at run time turns default features off; loading
 # precompiled bytecode needs no compiler and stays outside it.
 compiler = []
+# `fiber` — mruby's fiber gem: creating and resuming fibers.
+# A consumer whose archive leaves the gem out turns default features
+# off; the `Fiber` handle and its downcast read only the value tag and
+# stay outside it.
+fiber = []
 # Dependency features carry the conversions to a third-party crate's
 # types, gated as magnus gates the same integration. Each only adds
 # surface, and every one is off by default.

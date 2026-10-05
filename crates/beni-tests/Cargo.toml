@@ -39,8 +39,9 @@ bench = false
 # surface; the shape a consumer gets with default features off is held
 # by `rake rust:check:nodefault` and the compiler-less scenario.
 [features]
-default = ["compiler", "bytes"]
+default = ["compiler", "fiber", "bytes"]
 compiler = ["beni/compiler"]
+fiber = ["beni/fiber"]
 bytes = ["beni/bytes", "dep:bytes"]
 
 [dependencies]

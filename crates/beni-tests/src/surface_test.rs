@@ -391,6 +391,16 @@ fn compiler_surface_is_reachable_from_outside() {
     let _ = Mrb::load_string;
 }
 
+/// The drift net for the `fiber` capability feature, kept apart from
+/// the ungated net as the `compiler` one is.
+#[cfg(feature = "fiber")]
+#[test]
+fn fiber_surface_is_reachable_from_outside() {
+    let _ = Mrb::fiber_new;
+    let _ = Fiber::resume::<Value>;
+    let _ = Fiber::is_alive;
+}
+
 /// The `bytes` dependency feature's inherent surface, gated as the
 /// feature gates it.
 #[cfg(feature = "bytes")]

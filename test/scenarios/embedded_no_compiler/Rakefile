@@ -5,8 +5,9 @@
 # The rust_consumer harness proves a crate outside the workspace can
 # link the staged archive and run Ruby source through it. This one
 # proves the other posture the crates offer: a build config that leaves
-# mruby's compiler gem out, and a consumer crate that turns beni's
-# default features off to match. Nothing here compiles Ruby at run
+# mruby's gems out — the compiler and fiber gems the capability features
+# carry among them — and a consumer crate that turns beni's default
+# features off to match. Nothing here compiles Ruby at run
 # time — the Ruby surface is defined from Rust and dispatched from
 # Rust — so the archive carries no compiler and the crate offers no
 # API that would need one. Run from this directory:

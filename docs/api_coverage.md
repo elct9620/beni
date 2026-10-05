@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 316 | 315 (100%) | 236 (75%) |
+| function | 316 | 315 (100%) | 239 (76%) |
 | macro | 106 | 28 (26%) | 77 (73%) |
-| total | 422 | 343 (81%) | 313 (74%) |
+| total | 422 | 343 (81%) | 316 (75%) |
 
 ## mruby.h
 
@@ -98,9 +98,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_exc_get_id` | fn | ✅ | ✅ | `Mrb::exc_get` (the symbol-or-name key) — fetch a built-in exception class, guaranteed an `Exception` subclass |
 | `mrb_exc_new` | fn | ✅ | ✅ | `Error::new` — builds the exception from a class and Rust bytes, as magnus's `Error::new` does |
 | `mrb_exc_raise` | fn | ✅ | ✅ | raised from `Err` by the dispatch bridge (see Error extension) |
-| `mrb_fiber_alive_p` | fn | ✅ | ❌ |  |
-| `mrb_fiber_new` | fn | ✅ | ❌ |  |
-| `mrb_fiber_resume` | fn | ✅ | ❌ |  |
+| `mrb_fiber_alive_p` | fn | ✅ | ✅ | `Fiber::is_alive` — carried by the `fiber` capability feature |
+| `mrb_fiber_new` | fn | ✅ | ✅ | `Mrb::fiber_new` — carried by the `fiber` capability feature |
+| `mrb_fiber_resume` | fn | ✅ | ✅ | `Fiber::resume` — carried by the `fiber` capability feature |
 | `mrb_fiber_yield` | fn | ✅ | ❌ |  |
 | `mrb_field_write_barrier` | fn | ✅ | 🚫 | declined: the two-object form, taking both as `struct RBasic*` — see `mrb_write_barrier` |
 | `mrb_field_write_barrier_value` | macro | ❌ | 🚫 | declined: the `mrb_value` form of `mrb_field_write_barrier`, still taking the owner as `struct RBasic*` — see `mrb_write_barrier` |

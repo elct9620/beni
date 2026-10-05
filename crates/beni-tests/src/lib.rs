@@ -17,6 +17,8 @@ mod data_test;
 mod define_test;
 mod error_test;
 mod factory_test;
+#[cfg(feature = "fiber")]
+mod fiber_test;
 mod gem_test;
 mod hash_test;
 // Two `f64`s outgrow a 32-bit target's inline-struct payload.
