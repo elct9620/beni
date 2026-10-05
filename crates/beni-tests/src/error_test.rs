@@ -309,3 +309,74 @@ fn is_kind_of_answers_false_for_a_break_object() {
 
     assert!(!bool::from_value(got).expect("the probe answers a boolean"));
 }
+
+/// The environment variable naming which report the child run makes.
+const REPORT: &str = "BENI_ERROR_TEST_REPORT";
+
+/// Re-run this test binary on `report_in_child` alone, which makes the
+/// report `case` names, so the stream it writes and the way the process
+/// ends can be read from outside it.
+fn report_in_a_child(case: &str) -> std::process::Output {
+    std::process::Command::new(std::env::current_exe().expect("the test binary has a path"))
+        .args(["--exact", "error_test::report_in_child", "--nocapture"])
+        .env(REPORT, case)
+        .output()
+        .expect("the test binary re-runs")
+}
+
+#[test]
+fn report_in_child() {
+    let Ok(case) = std::env::var(REPORT) else {
+        return;
+    };
+    let mrb = open_mrb();
+    match case.as_str() {
+        "warn" => mrb
+            .warn("careful\0with bytes")
+            .expect("a short warning is written"),
+        "bug" => beni::error::bug(&mrb, "broken"),
+        "bug-nul" => beni::error::bug(&mrb, "bro\0ken"),
+        other => panic!("no report named {other}"),
+    }
+}
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
+}
+
+#[test]
+fn warn_writes_the_whole_message_as_a_warning_line() {
+    let output = report_in_a_child("warn");
+
+    assert!(output.status.success());
+    assert!(contains(&output.stderr, b"warning: careful\0with bytes\n"));
+}
+
+#[test]
+fn bug_writes_the_message_and_ends_the_process_with_a_failure() {
+    let output = report_in_a_child("bug");
+
+    assert!(!output.status.success());
+    assert!(contains(&output.stderr, b"bug: broken\n"));
+}
+
+#[test]
+fn bug_writes_a_message_holding_a_nul_as_panic() {
+    let output = report_in_a_child("bug-nul");
+
+    assert!(!output.status.success());
+    assert!(contains(&output.stderr, b"bug: panic\n"));
+}
+
+#[cfg(windows)]
+#[test]
+fn warn_answers_argument_error_for_a_message_longer_than_an_mruby_string() {
+    let mrb = open_mrb();
+    let message = "x".repeat(2 * 1024 * 1024);
+
+    let err = mrb.warn(&message).expect_err("mruby caps its strings here");
+
+    assert!(err.is_kind_of(&mrb, mrb.exc_get(c"ArgumentError").unwrap()));
+}

@@ -151,6 +151,44 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+impl Mrb {
+    /// Write `warning: `, the message, and a newline to the process's
+    /// standard error, mirroring mruby's `mrb_warn`. magnus's
+    /// `Ruby::warning` writes only when Ruby runs verbose; mruby keeps no
+    /// verbose switch, so this writes on every call. A message longer than
+    /// the longest string mruby holds writes nothing and answers the `Err`
+    /// carrying its `ArgumentError`; an archive built without standard I/O
+    /// writes nothing and answers `Ok`.
+    pub fn warn(&self, msg: &str) -> Result<(), Error> {
+        self.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame; `%l` reads a
+            // pointer and a byte count, so the message is written whole, a
+            // NUL included, and a length mruby cannot hold raises, which
+            // `protect` catches.
+            unsafe {
+                sys::mrb_warn(
+                    mrb.as_ptr(),
+                    c"%l".as_ptr(),
+                    msg.as_ptr().cast::<core::ffi::c_char>(),
+                    msg.len(),
+                )
+            }
+            crate::value::qnil()
+        })
+        .map(|_| ())
+    }
+}
+
+/// Write `bug: `, the message, and a newline to the process's standard
+/// error, then end the process with a failure status, mirroring magnus's
+/// `error::bug`. A message holding a NUL is written as `panic`.
+pub fn bug(mrb: &Mrb, msg: &str) -> ! {
+    let msg = std::ffi::CString::new(msg).unwrap_or_else(|_| c"panic".to_owned());
+    // SAFETY: `mrb` is alive and `msg` is NUL-terminated. `mrb_bug` is
+    // declared `mrb_noreturn`, which the binding carries.
+    unsafe { sys::mrb_bug(mrb.as_ptr(), msg.as_ptr()) }
+}
+
 /// Render a `catch_unwind` payload as the panic message — `&str` and
 /// `String` payloads (the `panic!` macro's products) pass through,
 /// anything else falls back to a fixed marker. The message

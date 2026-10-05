@@ -18,6 +18,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::set_pending_exc;
     let _ = Mrb::clear_exc;
     let _ = Mrb::object_class;
+    let _ = Mrb::warn;
+    let _ = beni::error::bug;
     let _ = Mrb::define_module::<&core::ffi::CStr>;
     let _ = Mrb::define_class::<&core::ffi::CStr>;
     let _ = Mrb::define_error::<&core::ffi::CStr>;

@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 316 | 315 (100%) | 245 (78%) |
+| function | 316 | 315 (100%) | 247 (78%) |
 | macro | 106 | 29 (27%) | 86 (81%) |
-| total | 422 | 344 (82%) | 331 (78%) |
+| total | 422 | 344 (82%) | 333 (79%) |
 
 ## mruby.h
 
@@ -35,7 +35,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_attr_get` | fn | ✅ | ✅ | `Object::ivar_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `ivar_get` takes the same symbol-or-name key with the same absence of validation, so it yields an identical value for every key a typed caller can form and no separate item is needed |
 | `mrb_basic_alloc_func` | fn | ✅ | 🚫 | declined: the default allocator `mrb_open_allocf` installs; `Mrb::open` opens with `mrb_open`, so no typed caller reaches it |
 | `mrb_block_given_p` | fn | ✅ | ✅ | `Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises |
-| `mrb_bug` | fn | ✅ | ❌ |  |
+| `mrb_bug` | fn | ✅ | ✅ | `error::bug` — magnus's process-ending report; a message holding a NUL is written as `panic`, as magnus writes it |
 | `mrb_calloc` | fn | ✅ | 🚫 | declined: VM allocator — see `mrb_malloc` |
 | `mrb_check_array_type` | fn | ✅ | ✅ | subsumed: `FromValue` -> `RArray` — the nil-returning tag check, whose body is `mrb_array_p(ary) ? ary : mrb_nil_value()` (`vendor/mruby/src/object.c:784-788`); the `None` the downcast returns carries the `nil` the C form returns. Unlike CRuby's same-named call it dispatches no `to_ary`, so the tag check is the whole of it |
 | `mrb_check_convert_type` | macro | ❌ | ❌ |  |
@@ -225,7 +225,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_vformat` | fn | ✅ | ❌ |  |
 | `mrb_vm_exec` | fn | ✅ | ❌ |  |
 | `mrb_vm_run` | fn | ✅ | ❌ |  |
-| `mrb_warn` | fn | ✅ | ❌ |  |
+| `mrb_warn` | fn | ✅ | ✅ | `Mrb::warn` — writes the message through mruby's `%l` format, a pointer and a byte count, so a Rust string is written whole |
 | `mrb_write_barrier` | fn | ✅ | 🚫 | declined: repaints an object the collector already marked, needed only when a caller writes an object's fields directly through `struct RBasic*` — a pointer beni does not expose (see `mrb_str_ptr`); every write the typed surface reaches runs its own barrier, as `mrb_ary_set` does at `vendor/mruby/src/array.c:1123` |
 | `mrb_yield` | fn | ✅ | ✅ | subsumed: `Proc::call` — the one-argument form of `mrb_yield_argv` (`vendor/mruby/src/vm.c:1328` passes `1, &arg` to the same `yield_with_attr`); a Rust slice of one carries it |
 | `mrb_yield_argv` | fn | ✅ | ✅ | `Proc::call` |
