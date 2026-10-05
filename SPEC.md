@@ -931,6 +931,17 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Switches fibers: a fiber creation, resume, or alive test; a registered method's returned fiber yield | creation: the `Proc` is backed by a C function; resume: the fiber has finished, is the running fiber or one already resumed, was transferred to, or was never initialized, or its block raises; alive test: the fiber was never initialized; fiber yield: the method runs outside a resumed fiber, or a call from C or Rust code into Ruby stands between the fiber's block and the method | `Result`; a fiber yield's `Err` raised to the method's Ruby caller |
 | Reads or examines without dispatching: indexed read; an array's borrowed slice; keys; values; size; emptiness; container duplication; substring read by character range; substring search by byte index; byte comparison; symbol name and dump reads; range begin / end / exclusive-end reads; instance-variable, class-variable, and constant presence; `respond_to?`; `equal?`; `is_a?`; `instance_of?`; class; type downcast; `nil` test | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
+##### Warnings and bugs
+
+Two calls report to the process's standard error rather than to a caller:
+
+| Call | Behavior |
+|---|---|
+| warn, on the `Mrb` handle | writes `warning: `, the message's bytes whole, and a newline, mirroring mruby's `mrb_warn`; an archive built without standard I/O writes nothing |
+| bug, in `beni::error` | writes `bug: `, the message, and a newline, then ends the process with a failure status, mirroring `magnus`'s `error::bug`; it never returns; a message holding a NUL is written as `panic`; an archive built without standard I/O writes nothing and still ends the process |
+
+warn writes on every call: mruby keeps no verbose switch, where `magnus`'s `Ruby::warning` writes only when Ruby runs verbose.
+
 #### Containers
 
 The typed array carries Ruby `Array`'s surface:
