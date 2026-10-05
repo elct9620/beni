@@ -2086,7 +2086,7 @@ measures complete.
 | A load under a caller's compile context producing compiler warnings | the load's outcome is unchanged; the context answers the warnings as parse messages |
 | A load under a borrowed compile context producing compiler warnings | the load's outcome is unchanged; the warnings reach no caller, and none are written to standard error |
 | Compiling source without running it, where the source does not parse or a codegen step fails | the same `Err` a load that runs surfaces, and no compiled program is produced |
-| The `compiler` or `fiber` feature enabled against an archive built without the gem it carries | both crates build, and the consumer's own link fails on the symbols the archive does not carry |
+| A consumer whose code calls an operation the `compiler` or `fiber` feature carries, against an archive built without that feature's gem | both crates build, and the consumer's own link fails on the symbols the archive does not carry |
 | A fiber created from a `Proc` backed by a C function; resumed when finished, running, already resumed, transferred to, or never initialized; or tested for liveness when never initialized | surfaced as a Rust `Err` carrying mruby's `FiberError`, never unwinds across FFI |
 | A fiber's block raising while a resume runs it | surfaced as a Rust `Err` carrying the exception; the resumer's fiber is current again and the interpreter stays usable |
 | A registered method returning a fiber yield outside a resumed fiber, or with a call from C or Rust code into Ruby between the fiber's block and the method | mruby's `FiberError` raised to the method's Ruby caller; no fiber switches |
