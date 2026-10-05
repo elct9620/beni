@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.20.0](https://github.com/elct9620/beni/compare/v0.19.0...v0.20.0) (2026-10-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** `beni::ReturnValue` and `beni::BlockReturn` are now
+* **beni:** seal the method return seam as ReturnValue
+* **beni:** `Mrb::intern_check` is renamed to `Mrb::check_id`.
+* **beni:** a function registered through `method!(f, -1)` takes a trailing `&[Value]`, as does `Dup::clone`; `Mrb::argc` and `Mrb::argv` are removed — read the slice instead.
+
+### Features
+
+* **beni:** build a Proc whose body is a Rust function or closure ([a6c0655](https://github.com/elct9620/beni/commit/a6c06551814a3174e46a9f4b4360aaf8ae8f1037))
+* **beni:** check a name's symbol as well as its id ([cc9fb59](https://github.com/elct9620/beni/commit/cc9fb59e2df22e4599c7c05532b1f0ab3750d407))
+* **beni:** create, resume, and test fibers behind a fiber feature ([aaeb682](https://github.com/elct9620/beni/commit/aaeb682f5f88a19057dbdfa60e392b830357f92d))
+* **beni:** read the current fiber on the Mrb handle ([fdc7e4c](https://github.com/elct9620/beni/commit/fdc7e4c186adfd7c91d8d1dd47b986a71acd1201))
+* **beni:** suspend a fiber by returning a fiber yield ([f5ad4b6](https://github.com/elct9620/beni/commit/f5ad4b6ebb2181c579d675472c82665832b55bcb))
+* **beni:** take a frozen copy of a string ([a1bcb4d](https://github.com/elct9620/beni/commit/a1bcb4d4f3f90aa4ae376f14a5036b75ca942bf8))
+* **beni:** view an array's elements in place as a borrowed slice ([1b6c00a](https://github.com/elct9620/beni/commit/1b6c00a84b1e0bcaaccf14e771bffd52ee00c661))
+* **beni:** write a warning or report a bug to standard error ([6025d1a](https://github.com/elct9620/beni/commit/6025d1afb6acb7a2b1fc923ed1415545faf5b7b2))
+
+
+### Bug Fixes
+
+* **beni:** read the carrier record without dispatch or protect frames ([da3edb5](https://github.com/elct9620/beni/commit/da3edb5b34287c3465e387e9a998e2813959fca0))
+
+
+### Performance Improvements
+
+* **beni:** hold a short fiber yield's arguments without a heap allocation ([30a93f3](https://github.com/elct9620/beni/commit/30a93f3d073a2f1f6b07eb4c13f4d3e285694c3e))
+* **beni:** read a keyword-less any-arity call's arguments without a format parse ([010c706](https://github.com/elct9620/beni/commit/010c706b880ff656f9ba5d27c6a7854a740c6f08))
+* **beni:** read an any-arity call's keywords only when it passed some ([c49d321](https://github.com/elct9620/beni/commit/c49d32166defd87234028caf732074803a16bb34))
+
+
+### Code Refactoring
+
+* **beni:** hand an any-arity method its arguments as a slice ([ffffb11](https://github.com/elct9620/beni/commit/ffffb11ee113302c4fa7e84f5f98cdb5f2bce9e1))
+* **beni:** keep the return seams under beni::method as magnus does ([3f34ca2](https://github.com/elct9620/beni/commit/3f34ca2ea717b663131435d8a5a2203c37e1cd7e))
+* **beni:** name the id existence check check_id ([a125459](https://github.com/elct9620/beni/commit/a12545958cea38b050f35d90a5b33bf5026b3ce2))
+* **beni:** seal the method return seam as ReturnValue ([b40ba88](https://github.com/elct9620/beni/commit/b40ba8886d128f5db13d7c9425146ed29948a8b7))
+
 ## [0.19.0](https://github.com/elct9620/beni/compare/v0.18.0...v0.19.0) (2026-10-03)
 
 

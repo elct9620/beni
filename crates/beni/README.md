@@ -34,7 +34,7 @@ binding's raise, and `sys::catch_unwind` a C callback's panic, into an
 <!-- x-release-please-start-version -->
 ```toml
 [dependencies]
-beni = "0.19.0"
+beni = "0.20.0"
 ```
 <!-- x-release-please-end -->
 
@@ -51,7 +51,7 @@ precompiled bytecode needs no compiler and stays.
 <!-- x-release-please-start-version -->
 ```toml
 [dependencies]
-beni = { version = "0.19.0", default-features = false }
+beni = { version = "0.20.0", default-features = false }
 ```
 <!-- x-release-please-end -->
 
