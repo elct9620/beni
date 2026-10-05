@@ -24,7 +24,8 @@
 //!      instead of unwinding into mruby's C frames,
 //!   4. convert the return value through `ReturnValue`
 //!      (`IntoValue`, or `Result<IntoValue, Error>` for fallible
-//!      bodies, whose `Err` raises to the Ruby caller).
+//!      bodies, whose `Err` raises to the Ruby caller; a `FiberYield`
+//!      suspends the running fiber as the bridge returns).
 //!
 //! Unlike CRuby, mruby does not split the argv by arity at the C
 //! signature — every bridge is `(mrb_state*, mrb_value) ->
@@ -100,7 +101,8 @@ impl MethodDef {
 /// Return seam for registered methods — magnus's `ReturnValue`.
 /// Implemented for every `IntoValue` type (infallible bodies) and for
 /// `Result<IntoValue, Error>` (fallible bodies, whose `Err` is raised
-/// to the Ruby caller). Sealed: the set of return kinds is closed.
+/// to the Ruby caller), and with the `fiber` feature for `FiberYield`
+/// and its `Result`. Sealed: the set of return kinds is closed.
 ///
 /// ```compile_fail
 /// struct Custom;
