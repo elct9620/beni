@@ -2,7 +2,7 @@
 //! required argument, the arguments an any-arity method receives, and
 //! whether a block was passed.
 
-use crate::{Error, Mrb, ReprValue, Value};
+use crate::{Error, FromValue, Mrb, ReprValue, Value};
 use beni_sys as sys;
 
 /// Run a call-frame read under exception protection. `mrb_get_args`
@@ -51,7 +51,14 @@ const INLINE_ARGS: usize = 8;
 /// `body` re-enters, the values being the frame's, kept alive for the
 /// whole call.
 pub(crate) fn with_args<R>(mrb: &Mrb, body: impl FnOnce(&[Value]) -> R) -> R {
+    with_call(mrb, |args, _| body(args))
+}
+
+/// As `with_args`, also handing over the call's block: the `Proc` the
+/// call passed, or `None` when it passed none.
+pub(crate) fn with_call<R>(mrb: &Mrb, body: impl FnOnce(&[Value], Option<crate::Proc>) -> R) -> R {
     let call = crate::scan_args::read_raw(mrb, true);
+    let block = crate::Proc::from_value(call.block);
     let keywords = call
         .keywords
         .filter(|keywords| !keywords.is_empty(mrb))
@@ -63,12 +70,12 @@ pub(crate) fn with_args<R>(mrb: &Mrb, body: impl FnOnce(&[Value]) -> R) -> R {
         if let Some(keywords) = keywords {
             args[len - 1] = keywords;
         }
-        body(&args[..len])
+        body(&args[..len], block)
     } else {
         let mut args = Vec::with_capacity(len);
         args.extend_from_slice(call.positionals);
         args.extend(keywords);
-        body(&args)
+        body(&args, block)
     }
 }
 

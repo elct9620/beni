@@ -120,6 +120,22 @@ pub trait ReturnValue: private::ReturnValue {}
 
 impl<T> ReturnValue for T where T: private::ReturnValue {}
 
+/// Return seam for a Rust-defined proc's body — magnus's `BlockReturn`:
+/// an `IntoValue` value, or a `Result` of one whose `Err` is raised to
+/// the proc's caller. Sealed. A fiber yield is not among them: mruby
+/// switches fibers only from a C method's return, and its proc calls pop
+/// the call frame without the switch check (`vendor/mruby/src/vm.c`,
+/// the `OP_SEND` proc-call path and `OP_BLKCALL`).
+///
+/// ```compile_fail
+/// fn pause(mrb: &beni::Mrb) -> beni::Proc {
+///     mrb.proc_from_fn(|mrb, args, _block| mrb.fiber_yield(args))
+/// }
+/// ```
+pub trait BlockReturn: private::BlockReturn {}
+
+impl<T> BlockReturn for T where T: private::BlockReturn {}
+
 pub(crate) mod private {
     use crate::{Error, IntoValue, Mrb, Value};
 
@@ -152,6 +168,33 @@ pub(crate) mod private {
     {
         #[inline]
         fn into_return_value(self, mrb: &Mrb, _: Bridge) -> Result<Value, Error> {
+            Ok(self.into_value(mrb))
+        }
+    }
+
+    /// The projection sealing `BlockReturn` to this crate.
+    pub trait BlockReturn {
+        /// Project the body's return into the value domain, or the
+        /// error raised to the proc's caller.
+        fn into_block_return(self, mrb: &Mrb) -> Result<Value, Error>;
+    }
+
+    impl<T> BlockReturn for Result<T, Error>
+    where
+        T: IntoValue,
+    {
+        #[inline]
+        fn into_block_return(self, mrb: &Mrb) -> Result<Value, Error> {
+            self.map(|val| val.into_value(mrb))
+        }
+    }
+
+    impl<T> BlockReturn for T
+    where
+        T: IntoValue,
+    {
+        #[inline]
+        fn into_block_return(self, mrb: &Mrb) -> Result<Value, Error> {
             Ok(self.into_value(mrb))
         }
     }
@@ -213,7 +256,7 @@ unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
 /// # Safety
 ///
 /// As `raise_error`: bridge frame only.
-unsafe fn handle_error<F>(mrb: &Mrb, f: F) -> Value
+pub(crate) unsafe fn handle_error<F>(mrb: &Mrb, f: F) -> Value
 where
     F: FnOnce() -> Result<Value, Error>,
 {

@@ -143,21 +143,12 @@ fn an_uninitialized_fiber_answers_fiber_error() {
 
 #[test]
 fn a_block_backed_by_a_c_function_makes_no_fiber() {
-    unsafe extern "C" fn stub(
-        _mrb: *mut beni::sys::mrb_state,
-        self_: beni::sys::mrb_value,
-    ) -> beni::sys::mrb_value {
-        self_
+    fn body(_mrb: &Mrb, _args: &[Value], _block: Option<Proc>) -> bool {
+        true
     }
 
     let mrb = open_mrb();
-    // SAFETY: `stub` has the `mrb_func_t` ABI and is never called here;
-    // `mrb_obj_value` boxes the RProc the constructor just returned.
-    let value = unsafe {
-        let raw = beni::sys::mrb_proc_new_cfunc(mrb.as_ptr(), stub);
-        <Value as beni::sys::FromRawValue>::from_raw(beni::sys::mrb_obj_value(raw.cast()))
-    };
-    let cfunc = Proc::from_value(value).expect("the constructor answers a Proc-tagged value");
+    let cfunc = mrb.proc_new(body);
 
     let err = match mrb.fiber_new(cfunc) {
         Err(err) => err,

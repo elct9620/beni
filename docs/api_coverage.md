@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 316 | 315 (100%) | 243 (77%) |
+| function | 316 | 315 (100%) | 245 (78%) |
 | macro | 106 | 28 (26%) | 85 (80%) |
-| total | 422 | 343 (81%) | 328 (78%) |
+| total | 422 | 343 (81%) | 330 (78%) |
 
 ## mruby.h
 
@@ -411,8 +411,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_closure_new_cfunc` | fn | ✅ | ❌ |  |
 | `mrb_load_proc` | fn | ✅ | ❌ |  |
 | `mrb_proc_cfunc_env_get` | fn | ✅ | ❌ |  |
-| `mrb_proc_new_cfunc` | fn | ✅ | ❌ |  |
-| `mrb_proc_new_cfunc_with_env` | fn | ✅ | ❌ |  |
+| `mrb_proc_new_cfunc` | fn | ✅ | ✅ | subsumed: `Mrb::proc_new` — a proc whose body is a bare C function with no environment (`vendor/mruby/src/proc.c:141-152`); a Rust function carries the body the C function pointer would |
+| `mrb_proc_new_cfunc_with_env` | fn | ✅ | ✅ | `Mrb::proc_new`, `Mrb::proc_from_fn` — the Rust body rides in a data carrier held in the proc's one environment slot, which the proc and its copies share (`vendor/mruby/src/proc.c:166-190`, `:288`), so the collector drops the body with the last of them |
 | `mrb_proc_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RProc*` — see `mrb_str_ptr` |
 | `mrb_vm_ci_env_clear` | fn | ✅ | ❌ |  |
 ## mruby/range.h

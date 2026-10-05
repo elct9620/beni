@@ -181,6 +181,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Proc::from_value_unchecked;
     let _ = Proc::call;
     let _ = Proc::dump;
+    let _ = Mrb::proc_new::<Value>;
+    let _ = Mrb::proc_from_fn::<fn(&Mrb, &[Value], Option<Proc>) -> Value, Value>;
     let _ = RHash::from_value_unchecked;
     let _ = RHash::set;
     let _ = RHash::get;

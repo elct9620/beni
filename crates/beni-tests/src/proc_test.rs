@@ -1,6 +1,7 @@
 use crate::support::open_mrb;
 use beni::prelude::*;
 use beni::{Ccontext, DumpOptions, Error, FromValue, IntoValue, Mrb, Proc, Value};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn proc_from(mrb: &Mrb, src: &[u8]) -> Proc {
     let cxt =
@@ -157,4 +158,187 @@ fn a_proc_backed_by_a_c_function_has_no_bytecode() {
         err.message(&mrb).contains("C function"),
         "the error names why there is no bytecode"
     );
+}
+
+/// Bind `block` to the global `P` and run `src`, answering what it
+/// evaluates to rendered by `inspect`.
+fn run_with(mrb: &Mrb, block: Proc, src: &str) -> String {
+    mrb.define_global_const("P", block)
+        .expect("binding the proc must succeed");
+    let value = mrb
+        .load_string(src.as_bytes())
+        .expect("the test source must run without raising");
+    value.inspect(mrb)
+}
+
+fn add(_mrb: &Mrb, args: &[Value], _block: Option<Proc>) -> i32 {
+    args.iter().filter_map(|arg| i32::from_value(*arg)).sum()
+}
+
+#[test]
+fn a_proc_from_a_function_runs_it_over_the_call_arguments() {
+    let mrb = open_mrb();
+    let block = mrb.proc_new(add);
+
+    assert_eq!(run_with(&mrb, block, "[P.call(1, 2), [[3, 4]].map { |a| P.call(*a) }]"), "[3, [7]]");
+}
+
+#[test]
+fn a_proc_from_a_closure_keeps_its_state_across_calls() {
+    let mrb = open_mrb();
+    let mut count = 0;
+    let block = mrb.proc_from_fn(move |_mrb, _args, _block| {
+        count += 1;
+        count
+    });
+
+    assert_eq!(run_with(&mrb, block, "[P.call, P.call, P.dup.call]"), "[1, 2, 3]");
+}
+
+#[test]
+fn a_rust_defined_proc_receives_the_call_block() {
+    let mrb = open_mrb();
+    let block = mrb.proc_from_fn(|mrb, args, block| match block {
+        Some(block) => block.call(mrb, args),
+        None => Ok(false.into_value(mrb)),
+    });
+
+    assert_eq!(run_with(&mrb, block, "[P.call(2) { |x| x * 10 }, P.call(2)]"), "[20, false]");
+}
+
+fn refuse(mrb: &Mrb, _args: &[Value], _block: Option<Proc>) -> Result<Value, Error> {
+    Err(Error::new(mrb, mrb.exc_get("ArgumentError").unwrap(), "refused by the body"))
+}
+
+#[test]
+fn an_err_from_the_body_raises_to_the_procs_caller() {
+    let mrb = open_mrb();
+    let block = mrb.proc_new(refuse);
+
+    let rescued = run_with(&mrb, block, "begin; P.call; rescue ArgumentError => e; e.message; end");
+    let err = block.call(&mrb, &[]).expect_err("Proc::call answers the raise as Err");
+
+    assert_eq!(rescued, "\"refused by the body\"");
+    assert!(err.message(&mrb).contains("refused by the body"));
+}
+
+#[test]
+fn a_panic_in_the_body_raises_runtime_error_to_the_procs_caller() {
+    let mrb = open_mrb();
+    let block = mrb.proc_from_fn(|_mrb, _args, _block| -> i32 { panic!("body panicked") });
+
+    let rescued = run_with(&mrb, block, "begin; P.call; rescue RuntimeError => e; e.message; end");
+
+    assert!(rescued.contains("body panicked"), "got {rescued}");
+    assert_eq!(run_with(&mrb, mrb.proc_new(add), "P.call(1)"), "1", "the interpreter stays usable");
+}
+
+#[test]
+fn a_closure_called_while_it_runs_raises_runtime_error_to_the_second_caller() {
+    let mrb = open_mrb();
+    let block = mrb.proc_from_fn(|mrb, args, _block| -> Result<Value, Error> {
+        if args.is_empty() {
+            return Ok(1.into_value(mrb));
+        }
+        // Re-enter through a copy, which shares this closure.
+        let inner = mrb.load_string(b"begin; P.dup.call; rescue RuntimeError => e; e.class; end")?;
+        Ok(inner)
+    });
+
+    assert_eq!(run_with(&mrb, block, "[P.call(:outer), P.call]"), "[RuntimeError, 1]");
+}
+
+fn countdown(mrb: &Mrb, args: &[Value], _block: Option<Proc>) -> Result<Value, Error> {
+    let n = i32::from_value(args[0]).unwrap();
+    if n == 0 {
+        return Ok(0.into_value(mrb));
+    }
+    let below = mrb.load_string(format!("P.call({})", n - 1).as_bytes())?;
+    Ok((i32::from_value(below).unwrap() + n).into_value(mrb))
+}
+
+#[test]
+fn a_proc_from_a_function_may_be_called_while_it_runs() {
+    let mrb = open_mrb();
+    let block = mrb.proc_new(countdown);
+
+    assert_eq!(run_with(&mrb, block, "P.call(3)"), "6");
+}
+
+static CLOSURE_DROPS: AtomicUsize = AtomicUsize::new(0);
+
+struct Counted;
+
+impl Drop for Counted {
+    fn drop(&mut self) {
+        CLOSURE_DROPS.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[test]
+fn the_closure_is_dropped_once_the_proc_and_its_copies_are_reclaimed() {
+    CLOSURE_DROPS.store(0, Ordering::SeqCst);
+    let mrb = open_mrb();
+    {
+        let _scope = mrb.arena_scope();
+        let counted = Counted;
+        let block = mrb.proc_from_fn(move |_mrb, _args, _block| {
+            let _ = &counted;
+            true
+        });
+        mrb.define_global_const("COPY", block.as_value().funcall(&mrb, "dup", &[]).unwrap())
+            .unwrap();
+    }
+    mrb.full_gc();
+    let kept = CLOSURE_DROPS.load(Ordering::SeqCst);
+
+    mrb.object_class().const_remove(&mrb, "COPY").unwrap();
+    mrb.full_gc();
+
+    assert_eq!(kept, 0, "a live copy keeps the closure");
+    assert_eq!(CLOSURE_DROPS.load(Ordering::SeqCst), 1, "the last reclaim drops it once");
+}
+
+#[test]
+fn closing_the_interpreter_drops_a_live_closure() {
+    let drops = std::sync::Arc::new(AtomicUsize::new(0));
+    struct Flag(std::sync::Arc<AtomicUsize>);
+    impl Drop for Flag {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let flag = Flag(drops.clone());
+    let mrb = open_mrb();
+    let block = mrb.proc_from_fn(move |_mrb, _args, _block| {
+        let _ = &flag;
+        true
+    });
+    mrb.define_global_const("P", block).unwrap();
+
+    drop(mrb);
+
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_rust_defined_proc_has_no_dump() {
+    let mrb = open_mrb();
+    let block = mrb.proc_new(add);
+
+    assert!(block.dump(&mrb, DumpOptions::default()).is_err());
+}
+
+#[test]
+fn a_rust_defined_proc_runs_as_a_method_body_and_under_instance_exec() {
+    let mrb = open_mrb();
+    let block = mrb.proc_new(add);
+
+    let got = run_with(
+        &mrb,
+        block,
+        "class Adder; define_method(:sum, &P); end; [Adder.new.sum(1, 2), 1.instance_exec(3, 4, &P)]",
+    );
+
+    assert_eq!(got, "[3, 7]");
 }
