@@ -33,6 +33,20 @@ impl Mrb {
         })
     }
 
+    /// The running fiber, or the root fiber outside any resumed one,
+    /// mirroring magnus's `Ruby::fiber_current`. magnus answers a
+    /// `Fiber`; mruby defines `Fiber.current` with no C function
+    /// (`mruby-fiber/src/fiber.c` keeps it static), so the read is a
+    /// dispatch and answers `Err` when `Fiber` names no class, the
+    /// dispatch raises, or it answers anything but a Fiber.
+    pub fn fiber_current(&self) -> Result<Fiber, Error> {
+        let current = self
+            .class_get("Fiber")?
+            .as_value()
+            .funcall(self, "current", &[])?;
+        Fiber::try_convert(current, self)
+    }
+
     /// A fiber yield of `args`, which a registered method returns to
     /// suspend the fiber running it — magnus's `Ruby::fiber_yield`.
     /// magnus suspends inside the call and answers the resumed value;

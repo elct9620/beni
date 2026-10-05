@@ -181,6 +181,79 @@ fn a_resumed_value_converts_to_the_requested_type() {
     );
 }
 
+fn current(mrb: &Mrb, _self: Value) -> Result<Fiber, Error> {
+    mrb.fiber_current()
+}
+
+#[test]
+fn the_current_fiber_is_the_root_outside_any_resumed_fiber() {
+    let mrb = open_mrb();
+    let root = mrb.load_string(b"Fiber.current").unwrap();
+
+    let current = mrb.fiber_current().unwrap();
+
+    assert!(same_object(&mrb, root, current));
+}
+
+#[test]
+fn the_current_fiber_inside_a_resumed_fiber_is_that_fiber() {
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_singleton_method(&mrb, "rust_current", beni::method!(current, 0))
+        .unwrap();
+
+    let found = mrb
+        .load_string(b"f = Fiber.new { Object.rust_current }; f.resume.equal?(f)")
+        .unwrap();
+
+    assert!(found.to_bool(), "the read answers the resumed fiber");
+}
+
+#[test]
+fn a_redefined_current_fiber_read_surfaces_its_failure() {
+    let mrb = open_mrb();
+    mrb.load_string(b"def Fiber.current; :not_a_fiber; end")
+        .unwrap();
+
+    let Err(err) = mrb.fiber_current() else {
+        panic!("the read answered a Fiber");
+    };
+
+    let type_error = mrb.exc_get("TypeError").unwrap();
+    assert!(
+        err.is_kind_of(&mrb, type_error),
+        "got {}",
+        err.message(&mrb)
+    );
+
+    mrb.load_string(b"def Fiber.current; raise ArgumentError, 'no fiber'; end")
+        .unwrap();
+
+    let Err(err) = mrb.fiber_current() else {
+        panic!("the read answered a Fiber");
+    };
+
+    assert!(err.message(&mrb).contains("no fiber"));
+}
+
+#[test]
+fn a_current_fiber_read_without_a_fiber_class_surfaces_name_error() {
+    let mrb = open_mrb();
+    mrb.load_string(b"Object.send(:remove_const, :Fiber)")
+        .unwrap();
+
+    let Err(err) = mrb.fiber_current() else {
+        panic!("the read answered a Fiber");
+    };
+
+    let name_error = mrb.exc_get("NameError").unwrap();
+    assert!(
+        err.is_kind_of(&mrb, name_error),
+        "got {}",
+        err.message(&mrb)
+    );
+}
+
 fn pause(mrb: &Mrb, _self: Value, args: &[Value]) -> FiberYield {
     mrb.fiber_yield(args)
 }

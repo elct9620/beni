@@ -397,6 +397,7 @@ fn compiler_surface_is_reachable_from_outside() {
 #[test]
 fn fiber_surface_is_reachable_from_outside() {
     let _ = Mrb::fiber_new;
+    let _ = Mrb::fiber_current;
     let _ = Fiber::resume::<Value>;
     let _ = Fiber::is_alive;
     let _ = Mrb::fiber_yield;
