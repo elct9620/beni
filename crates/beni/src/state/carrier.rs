@@ -56,7 +56,7 @@ impl Mrb {
     /// and nothing when `mark_carrier` has put none there.
     pub fn carrier(&self, path: &'static CStr) -> Option<RClass> {
         let record = self.held_record()?;
-        let key = Symbol::from(self.intern_check(path.to_bytes())?).as_value();
+        let key = Symbol::from(self.check_id(path.to_bytes())?).as_value();
         // SAFETY: `record` is the live record Hash; a symbol key is hashed
         // and compared by its id, and `mrb_hash_fetch` answers the given
         // default for an absent key without consulting the Hash's own, so
@@ -143,7 +143,7 @@ impl Mrb {
     /// a name never interned names no global. The global keeps the value
     /// reachable, so the read takes no arena slot.
     fn held_global(&self, name: &'static [u8]) -> Option<Value> {
-        let name = self.intern_check(name)?;
+        let name = self.check_id(name)?;
         // SAFETY: `self` is alive and `name` was interned against it.
         Some(Value::from_raw_unchecked(unsafe {
             sys::mrb_gv_get(self.as_ptr(), name.to_raw())

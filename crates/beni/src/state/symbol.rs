@@ -98,7 +98,7 @@ impl Mrb {
     /// `mrb_intern_check_cstr` (NUL-terminated) and `mrb_intern_check_str`
     /// (an mruby String value) both forward to.
     #[inline]
-    pub fn intern_check(&self, name: &[u8]) -> Option<Id> {
+    pub fn check_id(&self, name: &[u8]) -> Option<Id> {
         // mruby raises for a name of `UINT16_MAX` bytes or more
         // (`sym_validate_len`) and so never interns one.
         if name.len() >= u16::MAX as usize {

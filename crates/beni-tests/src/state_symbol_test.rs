@@ -98,16 +98,16 @@ fn sym_name_len_carries_the_full_bytes_past_an_embedded_nul() {
 }
 
 #[test]
-fn intern_check_finds_an_interned_name_and_misses_an_uninterned_one() {
+fn check_id_finds_an_interned_name_and_misses_an_uninterned_one() {
     let mrb = open_mrb();
 
     // A name no one has interned yet has no symbol, so the check misses.
-    assert!(mrb.intern_check(b"beni_unseen").is_none());
+    assert!(mrb.check_id(b"beni_unseen").is_none());
 
     // Once the name is interned, the check finds it and reports the
     // same symbol the creating intern produced.
     let seen = mrb.intern_cstr(c"beni_seen").expect("the name interns");
-    assert_eq!(mrb.intern_check(b"beni_seen"), Some(seen));
+    assert_eq!(mrb.check_id(b"beni_seen"), Some(seen));
 }
 
 #[test]
@@ -187,11 +187,11 @@ fn sym_dump_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
 }
 
 #[test]
-fn intern_check_misses_a_name_too_long_to_intern_without_raising() {
+fn check_id_misses_a_name_too_long_to_intern_without_raising() {
     let mrb = open_mrb();
     let too_long = vec![b'a'; TOO_LONG];
 
-    assert!(mrb.intern_check(&too_long).is_none());
+    assert!(mrb.check_id(&too_long).is_none());
 }
 
 #[test]

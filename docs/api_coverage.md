@@ -132,9 +132,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_inspect` | fn | ✅ | ✅ | `ReprValue::inspect` |
 | `mrb_int` | macro | ✅ | ✅ | defined as `mrb_as_int` |
 | `mrb_intern` | fn | ✅ | ✅ | `Mrb::intern` — the general byte-taking creating intern: interns the exact bytes a borrowed slice spans (length-based, so a name embedding a NUL or not NUL-terminated interns whole), creating the Symbol when absent where `mrb_intern_check` only tests |
-| `mrb_intern_check` | fn | ✅ | ✅ | `Mrb::intern_check` — the non-creating presence test over name bytes, `Some` `Id` when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to |
-| `mrb_intern_check_cstr` | fn | ✅ | ✅ | `Mrb::intern_check` — a NUL-terminated name is bytes passed to the check primitive this convenience wrapper forwards to |
-| `mrb_intern_check_str` | fn | ✅ | ✅ | `Mrb::intern_check` — an mruby String value's bytes pass to the check primitive this convenience wrapper forwards to |
+| `mrb_intern_check` | fn | ✅ | ✅ | `Mrb::check_id` — the non-creating presence test over name bytes, `Some` `Id` when already interned and `None` otherwise; the byte-taking primitive the cstr/str check variants forward to |
+| `mrb_intern_check_cstr` | fn | ✅ | ✅ | `Mrb::check_id` — a NUL-terminated name is bytes passed to the check primitive this convenience wrapper forwards to |
+| `mrb_intern_check_str` | fn | ✅ | ✅ | `Mrb::check_id` — an mruby String value's bytes pass to the check primitive this convenience wrapper forwards to |
 | `mrb_intern_cstr` | fn | ✅ | ✅ | `Mrb::intern_cstr` |
 | `mrb_intern_lit` | macro | ❌ | ✅ | `Mrb::intern_static` — the literal macro `mrb_intern_lit(mrb, lit)` is `mrb_intern_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_intern_static` | fn | ✅ | ✅ | `Mrb::intern_static` |
