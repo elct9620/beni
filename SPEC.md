@@ -1673,6 +1673,29 @@ A typed `Proc` handle wraps an mruby block. `Proc::call` invokes it with an argu
 
 Whether a break is a real `break`, a `return` aimed past a frame, or a plain raise is the consumer's classification. The call-info frame indices that distinguish those cases are mruby VM internals with no stable public accessor. The typed surface does not expose them, so a consumer that must classify reaches them through the `beni::sys` escape hatch.
 
+##### Rust-defined procs
+
+The `Mrb` handle builds a `Proc` whose body is Rust, mirroring `magnus`'s `Ruby::proc_new` and `Ruby::proc_from_fn`. Building one never fails.
+
+| Operation | Body |
+|---|---|
+| proc from a function | a plain function |
+| proc from a closure | a closure that may be called more than once and can cross threads |
+
+The body receives the interpreter handle, the call's arguments as a slice laid out as a method registered for any arity receives them, and the call's block as an `Option<Proc>`. It returns one of a closed set, mirroring `magnus`'s sealed `BlockReturn`:
+
+| Body returns | The proc's caller receives |
+|---|---|
+| an `IntoValue` value | the converted value |
+| a `Result` of an `IntoValue` value | the converted `Ok` value; an `Err` raised |
+| a fiber yield, or a `Result` of one | as a registered method returning it |
+
+A raise from the body reaches the proc's caller: a Ruby caller sees the exception, and `Proc::call` answers it as an `Err`. A closure called again while it is already running, through its proc or a copy of it, raises `RuntimeError` to that second caller, and the running call is unaffected.
+
+A proc and every copy made of it share one closure. The interpreter drops the closure once it has reclaimed all of them, or when it closes. The collector never traces into a closure, so a value the closure captures stays valid only through a root.
+
+A Rust-defined proc is backed by a C function: dumping it and creating a fiber from it each answer `Err`.
+
 ##### Proc dumps
 
 A Proc answers its compiled form as a byte buffer of its own — the bytecode a bytecode load reads back.
@@ -2091,7 +2114,8 @@ measures complete.
 | A fiber's block raising while a resume runs it | surfaced as a Rust `Err` carrying the exception; the resumer's fiber is current again and the interpreter stays usable |
 | A registered method returning a fiber yield outside a resumed fiber, or with a call from C or Rust code into Ruby between the fiber's block and the method | mruby's `FiberError` raised to the method's Ruby caller; no fiber switches |
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
-| Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, `sys::catch_unwind`) or as an mruby exception to the Ruby caller (registered method); never unwinds into mruby's C frames |
+| Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, Rust-defined proc body, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, `sys::catch_unwind`) or as an mruby exception to the caller (registered method, Rust-defined proc body); never unwinds into mruby's C frames |
+| A Rust-defined proc's closure called again, through its proc or a copy of it, while it is already running | `RuntimeError` raised to the second caller; the running call is unaffected |
 | Rust panic raised inside a `sys::protect` body | the process aborts at the FFI boundary; never unwinds into mruby's C frames |
 | Registered method whose receiver or argument fails `TryConvert` conversion | the exception the conversion's `Err` carries raised to the Ruby caller, the closure body never runs |
 | A registered method body's scan, single-argument, or named keyword read that the call does not fit — a wrong positional count, an argument or keyword value of the wrong type, a missing required block, a missing required keyword, or an unnamed keyword with no rest to collect it | surfaced to the body as a Rust `Err` carrying the exception raised for the mismatch; nothing raises past the body |
