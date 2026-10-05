@@ -928,7 +928,7 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Reads the call's arguments by shape: a scan read or the single-argument read in a method registered for any arity; a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals; an argument or keyword value of the wrong type; a missing required block; a missing required keyword; a keyword no list names when the read collects no rest. A scan read of an array-handle splat and an optional block alone fits every call | `Result` |
 | Compiles and runs Ruby source, under a caller's compile context or one borrowed for the load | the source does not parse; the context's filename is too long to be a symbol; a codegen step fails; the program raises while it runs | `Result`; a parse failure carries a parse message, every other failure carries the exception |
 | Switches fibers: a fiber creation, resume, or alive test; a registered method's returned fiber yield | creation: the `Proc` is backed by a C function; resume: the fiber has finished, is the running fiber or one already resumed, was transferred to, or was never initialized, or its block raises; alive test: the fiber was never initialized; fiber yield: the method runs outside a resumed fiber, or a call from C or Rust code into Ruby stands between the fiber's block and the method | `Result`; a fiber yield's `Err` raised to the method's Ruby caller |
-| Reads or examines without dispatching: indexed read; keys; values; size; emptiness; container duplication; substring read by character range; substring search by byte index; byte comparison; symbol name and dump reads; range begin / end / exclusive-end reads; instance-variable, class-variable, and constant presence; `respond_to?`; `equal?`; `is_a?`; `instance_of?`; class; type downcast; `nil` test | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
+| Reads or examines without dispatching: indexed read; an array's borrowed slice; keys; values; size; emptiness; container duplication; substring read by character range; substring search by byte index; byte comparison; symbol name and dump reads; range begin / end / exclusive-end reads; instance-variable, class-variable, and constant presence; `respond_to?`; `equal?`; `is_a?`; `instance_of?`; class; type downcast; `nil` test | never | a bare value, or the absent value when the substring range or an absent symbol name falls outside the read |
 
 #### Containers
 
@@ -939,6 +939,7 @@ The typed array carries Ruby `Array`'s surface:
 | construct | empty, with a preallocated capacity, from a slice of values, or as a pair of two given values |
 | append | add a value to the end |
 | indexed read | the element, or `nil` when the index is out of range |
+| borrowed slice | the elements in place, mirroring `magnus`'s `unsafe` `RArray::as_slice`; the view holds until a call that could change or move them |
 | index walk | visit the elements from first to last |
 | indexed write | Ruby's `ary[i] = v`, growing with `nil` to reach past the end |
 | resize | set the length: grow with `nil` to a longer length, truncate to a shorter one |
