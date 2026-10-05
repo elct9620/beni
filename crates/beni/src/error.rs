@@ -181,7 +181,9 @@ impl Mrb {
 
 /// Write `bug: `, the message, and a newline to the process's standard
 /// error, then end the process with a failure status, mirroring magnus's
-/// `error::bug`. A message holding a NUL is written as `panic`.
+/// `error::bug`. It takes the `Mrb` that magnus's does not because
+/// mruby's `mrb_bug` declares the state (`include/mruby.h`). A message
+/// holding a NUL is written as `panic`.
 pub fn bug(mrb: &Mrb, msg: &str) -> ! {
     let msg = std::ffi::CString::new(msg).unwrap_or_else(|_| c"panic".to_owned());
     // SAFETY: `mrb` is alive and `msg` is NUL-terminated. `mrb_bug` is
