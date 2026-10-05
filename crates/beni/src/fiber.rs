@@ -76,7 +76,7 @@ impl Mrb {
 /// Nothing but the method's return projects it:
 ///
 /// ```compile_fail
-/// fn early<R: beni::ReturnValue>(suspension: R, mrb: &beni::Mrb) {
+/// fn early<R: beni::method::ReturnValue>(suspension: R, mrb: &beni::Mrb) {
 ///     let _ = suspension.into_return_value(mrb);
 /// }
 /// ```

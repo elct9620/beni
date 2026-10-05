@@ -114,7 +114,7 @@ pub use error::Error;
 pub use gem::Gem;
 pub use hash::{ForEach, RHash};
 pub use inline_struct::{Inline, InlineStruct, InlineType};
-pub use method::{BlockReturn, MethodDef, ReturnValue};
+pub use method::MethodDef;
 pub use module::Module;
 pub use object::Object;
 pub use parse::ParseMessage;

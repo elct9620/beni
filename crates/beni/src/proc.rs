@@ -10,10 +10,9 @@
 //! the block lives here, beside the `Mrb` constructors that build a
 //! `Proc` whose body is Rust.
 
+use crate::method::BlockReturn;
 use crate::try_convert::type_error;
-use crate::{
-    sys::AsRawValue, BlockReturn, DataType, Error, FromValue, Mrb, ReprValue, TryConvert, Value,
-};
+use crate::{sys::AsRawValue, DataType, Error, FromValue, Mrb, ReprValue, TryConvert, Value};
 use beni_sys as sys;
 use core::cell::{Cell, UnsafeCell};
 
