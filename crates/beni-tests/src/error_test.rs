@@ -315,13 +315,23 @@ const REPORT: &str = "BENI_ERROR_TEST_REPORT";
 
 /// Re-run this test binary on `report_in_child` alone, which makes the
 /// report `case` names, so the stream it writes and the way the process
-/// ends can be read from outside it.
+/// ends can be read from outside it. The C runtime writes the platform's
+/// newline, `\r\n` on Windows's text-mode stderr, so the stream comes
+/// back with each one read as `\n`.
 fn report_in_a_child(case: &str) -> std::process::Output {
-    std::process::Command::new(std::env::current_exe().expect("the test binary has a path"))
-        .args(["--exact", "error_test::report_in_child", "--nocapture"])
-        .env(REPORT, case)
-        .output()
-        .expect("the test binary re-runs")
+    let mut output =
+        std::process::Command::new(std::env::current_exe().expect("the test binary has a path"))
+            .args(["--exact", "error_test::report_in_child", "--nocapture"])
+            .env(REPORT, case)
+            .output()
+            .expect("the test binary re-runs");
+    output.stderr = output
+        .stderr
+        .split(|&byte| byte == b'\n')
+        .map(|line| line.strip_suffix(b"\r").unwrap_or(line))
+        .collect::<Vec<_>>()
+        .join(&b'\n');
+    output
 }
 
 #[test]
