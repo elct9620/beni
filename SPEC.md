@@ -752,17 +752,19 @@ convenience that borrows a string literal.
 
 ##### Intern Outcomes
 
-The interns and the existence check behave as follows. None dispatches.
+The interns and the existence checks behave as follows. None dispatches.
 
 | Operation | Yields | `Err` |
 |---|---|---|
 | intern | the `Id` the name interns to, creating the symbol when none exists yet | the `ArgumentError` mruby raises for a name of `UINT16_MAX` bytes or more |
-| existence check | the already-interned `Id`, or nothing when no such symbol exists | never raises |
+| id existence check | the `Id` the name already interns to, or nothing | never raises |
+| symbol existence check | the `Symbol` boxing the `Id` the name already interns to, or nothing | never raises |
 
-The interns mirror `magnus`'s `intern`. A name of `UINT16_MAX` bytes or more is
-too long to be a symbol; every shorter name interns. The existence check
-resolves the bytes to the id they name when mruby has interned it before, and
-never creates one.
+The interns mirror `magnus`'s `intern`, and the existence checks its `check_id`
+and `check_symbol`. A name of `UINT16_MAX` bytes or more is too long to be a
+symbol; every shorter name interns. An existence check takes the name as a
+length-carrying byte slice and never creates a symbol. It answers nothing for a
+name not yet interned, and nothing for a name too long to be a symbol.
 
 ##### Id Equality
 
