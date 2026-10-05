@@ -51,7 +51,18 @@ const INLINE_ARGS: usize = 8;
 /// `body` re-enters, the values being the frame's, kept alive for the
 /// whole call.
 pub(crate) fn with_args<R>(mrb: &Mrb, body: impl FnOnce(&[Value]) -> R) -> R {
-    with_call(mrb, |args, _| body(args))
+    if keywords_given(mrb) {
+        return with_call(mrb, |args, _| body(args));
+    }
+    // SAFETY: `mrb` is alive inside a C function's call; mruby's own
+    // argument accessors read its current call info and never raise.
+    let positionals = unsafe {
+        slice_from_argv(
+            sys::mrb_get_argv(mrb.as_ptr()),
+            sys::mrb_get_argc(mrb.as_ptr()),
+        )
+    };
+    with_copy(positionals, None, body)
 }
 
 /// As `with_args`, also handing over the call's block: the `Proc` the
@@ -60,27 +71,41 @@ pub(crate) fn with_call<R>(mrb: &Mrb, body: impl FnOnce(&[Value], Option<crate::
     // A call without keywords is read without the keyword bucket, which
     // mruby fills with a fresh Hash on every call; with none to fold into
     // the positionals, that read leaves the frame as it was too.
-    // SAFETY: `mrb` is alive, so its current call info is too.
-    let keywords_given = unsafe { sys::mrb_ci_keywords_given_func(mrb.as_ptr()) };
-    let call = crate::scan_args::read_raw(mrb, keywords_given);
+    let call = crate::scan_args::read_raw(mrb, keywords_given(mrb));
     let block = crate::Proc::from_value(call.block);
     let keywords = call
         .keywords
         .filter(|keywords| !keywords.is_empty(mrb))
         .map(ReprValue::as_value);
-    let len = call.positionals.len() + usize::from(keywords.is_some());
+    with_copy(call.positionals, keywords, |args| body(args, block))
+}
+
+/// Whether the current call passed keywords.
+fn keywords_given(mrb: &Mrb) -> bool {
+    // SAFETY: `mrb` is alive, so its current call info is too.
+    unsafe { sys::mrb_ci_keywords_given_func(mrb.as_ptr()) }
+}
+
+/// Run `body` over `positionals` followed by `keywords`, copied out of
+/// the frame so a VM re-entry that moves its stack leaves them valid.
+fn with_copy<R>(
+    positionals: &[Value],
+    keywords: Option<Value>,
+    body: impl FnOnce(&[Value]) -> R,
+) -> R {
+    let len = positionals.len() + usize::from(keywords.is_some());
     if len <= INLINE_ARGS {
         let mut args = [crate::value::qnil().as_value(); INLINE_ARGS];
-        args[..call.positionals.len()].copy_from_slice(call.positionals);
+        args[..positionals.len()].copy_from_slice(positionals);
         if let Some(keywords) = keywords {
             args[len - 1] = keywords;
         }
-        body(&args[..len], block)
+        body(&args[..len])
     } else {
         let mut args = Vec::with_capacity(len);
-        args.extend_from_slice(call.positionals);
+        args.extend_from_slice(positionals);
         args.extend(keywords);
-        body(&args, block)
+        body(&args)
     }
 }
 

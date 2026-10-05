@@ -330,6 +330,21 @@ fn the_argument_slice_ends_with_the_keyword_hash() {
     );
 }
 
+#[test]
+fn the_argument_slice_holds_every_positional_mruby_packs_into_one_array() {
+    use beni::Module;
+
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"args_inspect", beni::method!(args_inspect, -1))
+        .expect("registering the bridge must succeed");
+
+    assert_eq!(
+        eval(&mrb, "[args_inspect(*(1..16)), args_inspect(1, 2)]").inspect(&mrb),
+        "[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2]]"
+    );
+}
+
 // Clears the keyword hash the slice ends with, then answers the size of
 // the keyword bucket a scan read finds.
 fn clear_then_scan(mrb: &Mrb, _self: Value, args: &[Value]) -> Result<Value, Error> {
