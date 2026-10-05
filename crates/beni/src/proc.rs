@@ -14,8 +14,8 @@ use crate::try_convert::type_error;
 use crate::{
     sys::AsRawValue, BlockReturn, DataType, Error, FromValue, Mrb, ReprValue, TryConvert, Value,
 };
-use core::cell::{Cell, UnsafeCell};
 use beni_sys as sys;
+use core::cell::{Cell, UnsafeCell};
 
 /// Typed handle on an mruby `Proc` (a block). `#[repr(transparent)]`
 /// over `Value` so the C ABI is preserved.

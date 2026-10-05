@@ -180,7 +180,14 @@ fn a_proc_from_a_function_runs_it_over_the_call_arguments() {
     let mrb = open_mrb();
     let block = mrb.proc_new(add);
 
-    assert_eq!(run_with(&mrb, block, "[P.call(1, 2), [[3, 4]].map { |a| P.call(*a) }]"), "[3, [7]]");
+    assert_eq!(
+        run_with(
+            &mrb,
+            block,
+            "[P.call(1, 2), [[3, 4]].map { |a| P.call(*a) }]"
+        ),
+        "[3, [7]]"
+    );
 }
 
 #[test]
@@ -192,7 +199,10 @@ fn a_proc_from_a_closure_keeps_its_state_across_calls() {
         count
     });
 
-    assert_eq!(run_with(&mrb, block, "[P.call, P.call, P.dup.call]"), "[1, 2, 3]");
+    assert_eq!(
+        run_with(&mrb, block, "[P.call, P.call, P.dup.call]"),
+        "[1, 2, 3]"
+    );
 }
 
 #[test]
@@ -203,11 +213,18 @@ fn a_rust_defined_proc_receives_the_call_block() {
         None => Ok(false.into_value(mrb)),
     });
 
-    assert_eq!(run_with(&mrb, block, "[P.call(2) { |x| x * 10 }, P.call(2)]"), "[20, false]");
+    assert_eq!(
+        run_with(&mrb, block, "[P.call(2) { |x| x * 10 }, P.call(2)]"),
+        "[20, false]"
+    );
 }
 
 fn refuse(mrb: &Mrb, _args: &[Value], _block: Option<Proc>) -> Result<Value, Error> {
-    Err(Error::new(mrb, mrb.exc_get("ArgumentError").unwrap(), "refused by the body"))
+    Err(Error::new(
+        mrb,
+        mrb.exc_get("ArgumentError").unwrap(),
+        "refused by the body",
+    ))
 }
 
 #[test]
@@ -215,8 +232,14 @@ fn an_err_from_the_body_raises_to_the_procs_caller() {
     let mrb = open_mrb();
     let block = mrb.proc_new(refuse);
 
-    let rescued = run_with(&mrb, block, "begin; P.call; rescue ArgumentError => e; e.message; end");
-    let err = block.call(&mrb, &[]).expect_err("Proc::call answers the raise as Err");
+    let rescued = run_with(
+        &mrb,
+        block,
+        "begin; P.call; rescue ArgumentError => e; e.message; end",
+    );
+    let err = block
+        .call(&mrb, &[])
+        .expect_err("Proc::call answers the raise as Err");
 
     assert_eq!(rescued, "\"refused by the body\"");
     assert!(err.message(&mrb).contains("refused by the body"));
@@ -227,10 +250,18 @@ fn a_panic_in_the_body_raises_runtime_error_to_the_procs_caller() {
     let mrb = open_mrb();
     let block = mrb.proc_from_fn(|_mrb, _args, _block| -> i32 { panic!("body panicked") });
 
-    let rescued = run_with(&mrb, block, "begin; P.call; rescue RuntimeError => e; e.message; end");
+    let rescued = run_with(
+        &mrb,
+        block,
+        "begin; P.call; rescue RuntimeError => e; e.message; end",
+    );
 
     assert!(rescued.contains("body panicked"), "got {rescued}");
-    assert_eq!(run_with(&mrb, mrb.proc_new(add), "P.call(1)"), "1", "the interpreter stays usable");
+    assert_eq!(
+        run_with(&mrb, mrb.proc_new(add), "P.call(1)"),
+        "1",
+        "the interpreter stays usable"
+    );
 }
 
 #[test]
@@ -241,11 +272,15 @@ fn a_closure_called_while_it_runs_raises_runtime_error_to_the_second_caller() {
             return Ok(1.into_value(mrb));
         }
         // Re-enter through a copy, which shares this closure.
-        let inner = mrb.load_string(b"begin; P.dup.call; rescue RuntimeError => e; e.class; end")?;
+        let inner =
+            mrb.load_string(b"begin; P.dup.call; rescue RuntimeError => e; e.class; end")?;
         Ok(inner)
     });
 
-    assert_eq!(run_with(&mrb, block, "[P.call(:outer), P.call]"), "[RuntimeError, 1]");
+    assert_eq!(
+        run_with(&mrb, block, "[P.call(:outer), P.call]"),
+        "[RuntimeError, 1]"
+    );
 }
 
 fn countdown(mrb: &Mrb, args: &[Value], _block: Option<Proc>) -> Result<Value, Error> {
@@ -296,7 +331,11 @@ fn the_closure_is_dropped_once_the_proc_and_its_copies_are_reclaimed() {
     mrb.full_gc();
 
     assert_eq!(kept, 0, "a live copy keeps the closure");
-    assert_eq!(CLOSURE_DROPS.load(Ordering::SeqCst), 1, "the last reclaim drops it once");
+    assert_eq!(
+        CLOSURE_DROPS.load(Ordering::SeqCst),
+        1,
+        "the last reclaim drops it once"
+    );
 }
 
 #[test]
