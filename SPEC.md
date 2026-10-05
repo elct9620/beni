@@ -682,6 +682,7 @@ Beyond reading and appending, a string offers these operations:
 | Operation | Ruby | Result |
 |---|---|---|
 | duplicate | `String#dup` | an independent copy |
+| frozen copy | — | a frozen string holding the same bytes, mirroring `magnus`'s `RString::new_frozen`: the string itself when it is already frozen, otherwise a new copy that leaves the original unfrozen |
 | byte equality against another | `String#==` | total read; dispatches nothing, never raises |
 | byte-content order against another | `String#<=>` | total read; dispatches nothing, never raises |
 | intern own bytes | `String#intern` | the typed `Symbol` they name |
