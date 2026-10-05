@@ -1,4 +1,4 @@
-use crate::support::{open_mrb, Is};
+use crate::support::{hashes_on_the_heap, open_mrb, Is};
 use beni::prelude::*;
 use beni::scan_args::scan_args;
 use beni::{Error, FromValue, IntoValue, Mrb, RArray, Value};
@@ -387,36 +387,6 @@ fn a_scan_read_still_finds_the_keywords_after_the_slice() {
 
 fn arg_count(_mrb: &Mrb, _self: Value, args: &[Value]) -> i32 {
     args.len() as i32
-}
-
-/// The Hashes the heap holds, live or not yet collected.
-fn hashes_on_the_heap(mrb: &Mrb) -> usize {
-    unsafe extern "C" fn count(
-        _mrb: *mut beni::sys::mrb_state,
-        obj: *mut beni::sys::RBasic,
-        data: *mut core::ffi::c_void,
-    ) -> core::ffi::c_int {
-        // SAFETY: the walk hands each heap object, boxed as the value it is.
-        let value = unsafe {
-            <Value as beni::sys::FromRawValue>::from_raw(beni::sys::mrb_obj_value(obj.cast()))
-        };
-        if beni::RHash::from_value(value).is_some() {
-            // SAFETY: `data` is the counter the caller passed.
-            unsafe { *data.cast::<usize>() += 1 };
-        }
-        beni::sys::MRB_EACH_OBJ_OK as core::ffi::c_int
-    }
-    let mut hashes = 0usize;
-    // SAFETY: `mrb` is alive; the callback reads each object and writes
-    // only the counter, which outlives the walk.
-    unsafe {
-        beni::sys::mrb_objspace_each_objects(
-            mrb.as_ptr(),
-            Some(count),
-            (&mut hashes as *mut usize).cast(),
-        )
-    };
-    hashes
 }
 
 #[test]

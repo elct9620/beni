@@ -1,6 +1,6 @@
-use crate::support::open_mrb;
+use crate::support::{hashes_on_the_heap, open_mrb};
 use beni::prelude::*;
-use beni::{Ccontext, DumpOptions, Error, FromValue, IntoValue, Mrb, Proc, Value};
+use beni::{Ccontext, DumpOptions, Error, FromValue, IntoValue, Mrb, Proc, RArray, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn proc_from(mrb: &Mrb, src: &[u8]) -> Proc {
@@ -217,6 +217,41 @@ fn a_rust_defined_proc_receives_the_call_block() {
         run_with(&mrb, block, "[P.call(2) { |x| x * 10 }, P.call(2)]"),
         "[20, false]"
     );
+}
+
+fn collect(mrb: &Mrb, args: &[Value], _block: Option<Proc>) -> RArray {
+    mrb.ary_new_from_values(args)
+}
+
+#[test]
+fn a_rust_defined_proc_receives_the_call_keywords_as_its_last_argument() {
+    let mrb = open_mrb();
+    let block = mrb.proc_new(collect);
+
+    assert_eq!(
+        run_with(
+            &mrb,
+            block,
+            "a = P.call(1, k: 2); b = P.call(1, **{}); [a.size, a.last[:k], b]"
+        ),
+        "[2, 2, [1]]"
+    );
+}
+
+#[test]
+fn a_rust_defined_proc_called_without_keywords_allocates_no_hash() {
+    let mrb = open_mrb();
+    mrb.define_global_const("P", mrb.proc_new(add))
+        .expect("binding the proc must succeed");
+    let calls = mrb
+        .load_string(b"GC.disable; proc { 1000.times { P.call(1, 2) } }")
+        .unwrap();
+    let calls = Proc::from_value(calls).unwrap();
+    let before = hashes_on_the_heap(&mrb);
+
+    calls.call(&mrb, &[]).unwrap();
+
+    assert_eq!(hashes_on_the_heap(&mrb), before);
 }
 
 fn refuse(mrb: &Mrb, _args: &[Value], _block: Option<Proc>) -> Result<Value, Error> {
