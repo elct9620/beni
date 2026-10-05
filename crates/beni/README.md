@@ -18,6 +18,7 @@ Each item is reached from the crate root.
 | `TypedData` | a Rust payload read back as `&T` or `Obj<T>` |
 | `InlineStruct` | a `Pod` struct stored inside the object |
 | `method!` | registers a typed Rust function as a method |
+| `Mrb::proc_from_fn` | a `Proc` whose body is a Rust closure |
 | `beni::sys` | the raw FFI, with `protect` and `catch_unwind` |
 
 `#[beni::wrap]` and `#[derive(beni::TypedData)]` implement `TypedData`
