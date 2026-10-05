@@ -122,6 +122,7 @@ typed:
   mrb_fiber_new: "`Mrb::fiber_new` — carried by the `fiber` capability feature"
   mrb_fiber_resume: "`Fiber::resume` — carried by the `fiber` capability feature"
   mrb_fiber_alive_p: "`Fiber::is_alive` — carried by the `fiber` capability feature"
+  mrb_fiber_yield: "`Mrb::fiber_yield`, the `FiberYield` a registered method returns — carried by the `fiber` capability feature"
   mrb_check_error: Mrb::clear_exc
   mrb_check_frozen_value: "`ReprValue::check_frozen` — the frozen-state precondition guard, the `mrb_value` form a typed caller can reach"
   mrb_class_defined: "`Mrb::class_defined` with a name key — interns and routes through `mrb_class_defined_id`"

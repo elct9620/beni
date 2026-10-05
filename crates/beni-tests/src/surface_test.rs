@@ -399,6 +399,7 @@ fn fiber_surface_is_reachable_from_outside() {
     let _ = Mrb::fiber_new;
     let _ = Fiber::resume::<Value>;
     let _ = Fiber::is_alive;
+    let _ = Mrb::fiber_yield;
 }
 
 /// The `bytes` dependency feature's inherent surface, gated as the

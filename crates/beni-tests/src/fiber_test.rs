@@ -1,5 +1,5 @@
 use beni::prelude::*;
-use beni::{Error, Fiber, FromValue, IntoValue, Mrb, Proc, Value};
+use beni::{Error, Fiber, FiberYield, FromValue, IntoValue, Mrb, Proc, Value};
 
 use crate::support::{open_mrb, same_object};
 
@@ -179,4 +179,113 @@ fn a_resumed_value_converts_to_the_requested_type() {
         err.is_kind_of(&mrb, type_error),
         "the conversion's error surfaces"
     );
+}
+
+fn pause(mrb: &Mrb, _self: Value, args: &[Value]) -> FiberYield {
+    mrb.fiber_yield(args)
+}
+
+fn refuse(mrb: &Mrb, _self: Value) -> Result<FiberYield, Error> {
+    Err(Error::new(
+        mrb,
+        mrb.exc_get("RuntimeError").unwrap(),
+        "refused before yielding",
+    ))
+}
+
+fn pause_through_dispatch(mrb: &Mrb, _self: Value, arg: Value) -> Result<Value, Error> {
+    mrb.object_class().as_value().funcall(mrb, "pause", &[arg])
+}
+
+fn with_pause(mrb: &Mrb) {
+    let object = mrb.object_class();
+    object
+        .define_singleton_method(mrb, "pause", beni::method!(pause, -1))
+        .unwrap();
+    object
+        .define_singleton_method(mrb, "refuse", beni::method!(refuse, 0))
+        .unwrap();
+    object
+        .define_singleton_method(
+            mrb,
+            "pause_through_dispatch",
+            beni::method!(pause_through_dispatch, 1),
+        )
+        .unwrap();
+}
+
+#[test]
+fn a_method_returning_a_fiber_yield_suspends_its_fiber() {
+    let mrb = open_mrb();
+    with_pause(&mrb);
+    let fiber = fiber(
+        &mrb,
+        "Fiber.new { a = Object.pause(1); b = Object.pause(a + 1, 3); [a, b] }",
+    );
+    let ten = 10.into_value(&mrb);
+
+    let first = fiber.resume::<Value>(&mrb, &[]).unwrap();
+    let second = fiber.resume::<Value>(&mrb, &[ten]).unwrap();
+    let finished = fiber.resume::<Value>(&mrb, &[ten, ten]).unwrap();
+
+    assert_eq!(inspect(&mrb, first), "1");
+    assert_eq!(inspect(&mrb, second), "[11, 3]");
+    assert_eq!(
+        inspect(&mrb, finished),
+        "[10, [10, 10]]",
+        "each resume's slice is the method's return"
+    );
+    assert!(!fiber.is_alive(&mrb).unwrap());
+}
+
+#[test]
+fn a_fiber_yield_outside_a_resumed_fiber_raises_fiber_error() {
+    let mrb = open_mrb();
+    with_pause(&mrb);
+
+    let message = mrb
+        .load_string(b"begin; Object.pause(1); rescue FiberError => e; e.message; end")
+        .unwrap();
+
+    assert!(
+        inspect(&mrb, message).contains("not resumed"),
+        "got {}",
+        inspect(&mrb, message)
+    );
+}
+
+#[test]
+fn a_fiber_yield_behind_a_dispatch_from_rust_raises_fiber_error() {
+    let mrb = open_mrb();
+    with_pause(&mrb);
+    let fiber = fiber(
+        &mrb,
+        "Fiber.new { begin; Object.pause_through_dispatch(1); rescue FiberError => e; e.message; end }",
+    );
+
+    let message = fiber.resume::<Value>(&mrb, &[]).unwrap();
+
+    assert!(
+        inspect(&mrb, message).contains("C function boundary"),
+        "got {}",
+        inspect(&mrb, message)
+    );
+    assert!(
+        !fiber.is_alive(&mrb).unwrap(),
+        "the fiber ran to its end without switching"
+    );
+}
+
+#[test]
+fn an_err_before_the_fiber_yield_raises_without_suspending() {
+    let mrb = open_mrb();
+    with_pause(&mrb);
+    let fiber = fiber(
+        &mrb,
+        "Fiber.new { begin; Object.refuse; rescue => e; e.message; end }",
+    );
+
+    let message = fiber.resume::<Value>(&mrb, &[]).unwrap();
+
+    assert_eq!(inspect(&mrb, message), "\"refused before yielding\"");
 }

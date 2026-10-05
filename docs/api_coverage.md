@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 316 | 315 (100%) | 239 (76%) |
+| function | 316 | 315 (100%) | 240 (76%) |
 | macro | 106 | 28 (26%) | 77 (73%) |
-| total | 422 | 343 (81%) | 316 (75%) |
+| total | 422 | 343 (81%) | 317 (75%) |
 
 ## mruby.h
 
@@ -101,7 +101,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_fiber_alive_p` | fn | ✅ | ✅ | `Fiber::is_alive` — carried by the `fiber` capability feature |
 | `mrb_fiber_new` | fn | ✅ | ✅ | `Mrb::fiber_new` — carried by the `fiber` capability feature |
 | `mrb_fiber_resume` | fn | ✅ | ✅ | `Fiber::resume` — carried by the `fiber` capability feature |
-| `mrb_fiber_yield` | fn | ✅ | ❌ |  |
+| `mrb_fiber_yield` | fn | ✅ | ✅ | `Mrb::fiber_yield`, the `FiberYield` a registered method returns — carried by the `fiber` capability feature |
 | `mrb_field_write_barrier` | fn | ✅ | 🚫 | declined: the two-object form, taking both as `struct RBasic*` — see `mrb_write_barrier` |
 | `mrb_field_write_barrier_value` | macro | ❌ | 🚫 | declined: the `mrb_value` form of `mrb_field_write_barrier`, still taking the owner as `struct RBasic*` — see `mrb_write_barrier` |
 | `mrb_format` | fn | ✅ | ❌ |  |

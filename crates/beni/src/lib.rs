@@ -103,6 +103,8 @@ pub use state::{Mrb, MrbOpenError};
 
 #[cfg(feature = "compiler")]
 pub use ccontext::Ccontext;
+#[cfg(feature = "fiber")]
+pub use fiber::FiberYield;
 
 pub use array::RArray;
 pub use class::{ExceptionClass, RClass, RModule};

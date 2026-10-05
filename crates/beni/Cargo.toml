@@ -48,7 +48,7 @@ default = ["compiler", "fiber"]
 # never compiles Ruby at run time turns default features off; loading
 # precompiled bytecode needs no compiler and stays outside it.
 compiler = []
-# `fiber` — mruby's fiber gem: creating and resuming fibers.
+# `fiber` — mruby's fiber gem: creating, resuming, and yielding fibers.
 # A consumer whose archive leaves the gem out turns default features
 # off; the `Fiber` handle and its downcast read only the value tag and
 # stay outside it.

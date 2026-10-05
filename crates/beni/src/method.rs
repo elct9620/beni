@@ -117,11 +117,17 @@ impl<T> ReturnValue for T where T: private::ReturnValue {}
 pub(crate) mod private {
     use crate::{Error, IntoValue, Mrb, Value};
 
+    /// Proof that a registration's bridge is projecting its body's
+    /// return. Only this crate makes one, so no caller outside a
+    /// bridge can run a projection — a fiber yield's switches fibers,
+    /// which mruby allows only as a method's return.
+    pub struct Bridge(pub(super) ());
+
     /// The projection sealing `ReturnValue` to this crate.
     pub trait ReturnValue {
         /// Project the body's return into the value domain, or the
         /// error the bridge raises to the Ruby caller.
-        fn into_return_value(self, mrb: &Mrb) -> Result<Value, Error>;
+        fn into_return_value(self, mrb: &Mrb, bridge: Bridge) -> Result<Value, Error>;
     }
 
     impl<T> ReturnValue for Result<T, Error>
@@ -129,7 +135,7 @@ pub(crate) mod private {
         T: IntoValue,
     {
         #[inline]
-        fn into_return_value(self, mrb: &Mrb) -> Result<Value, Error> {
+        fn into_return_value(self, mrb: &Mrb, _: Bridge) -> Result<Value, Error> {
             self.map(|val| val.into_value(mrb))
         }
     }
@@ -139,7 +145,7 @@ pub(crate) mod private {
         T: IntoValue,
     {
         #[inline]
-        fn into_return_value(self, mrb: &Mrb) -> Result<Value, Error> {
+        fn into_return_value(self, mrb: &Mrb, _: Bridge) -> Result<Value, Error> {
             Ok(self.into_value(mrb))
         }
     }
@@ -230,8 +236,13 @@ macro_rules! define_method_trait {
             /// wrapped function, and project its return. A failed
             /// receiver or argument conversion returns `Err` before the
             /// wrapped function runs.
+            ///
+            /// # Safety
+            ///
+            /// Bridge frame only — projecting a fiber yield switches
+            /// fibers, which mruby allows only as the method's return.
             #[doc(hidden)]
-            fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
+            unsafe fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
                 $(let mut $arg = sys::mrb_value::zeroed();)*
                 read_frame(mrb, |mrb| {
                     // SAFETY: `mrb` is alive; each out-parameter is a
@@ -249,7 +260,7 @@ macro_rules! define_method_trait {
                 $(
                     let $arg = $t::try_convert(Value::from_raw_unchecked($arg), mrb)?;
                 )*
-                (self)(mrb, self_ $(, $arg)*).into_return_value(mrb)
+                (self)(mrb, self_ $(, $arg)*).into_return_value(mrb, private::Bridge(()))
             }
 
             /// Bridge entry: `call_convert_value` inside the panic
@@ -343,8 +354,13 @@ macro_rules! define_method_req_opt_trait {
             /// wrapped function, and project its return. A failed
             /// receiver or argument conversion — required or supplied
             /// optional — returns `Err` before the wrapped function runs.
+            ///
+            /// # Safety
+            ///
+            /// Bridge frame only — projecting a fiber yield switches
+            /// fibers, which mruby allows only as the method's return.
             #[doc(hidden)]
-            fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
+            unsafe fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
                 $(let mut $req = sys::mrb_value::zeroed();)*
                 // SAFETY: pure value computation; the undef sentinel
                 // marks an optional slot mruby leaves untouched.
@@ -377,7 +393,7 @@ macro_rules! define_method_req_opt_trait {
                         )
                     };
                 )*
-                (self)(mrb, self_ $(, $req)* $(, $opt)*).into_return_value(mrb)
+                (self)(mrb, self_ $(, $req)* $(, $opt)*).into_return_value(mrb, private::Bridge(()))
             }
 
             /// Bridge entry: `call_convert_value` inside the panic
@@ -449,8 +465,13 @@ macro_rules! define_method_req_block_trait {
             /// run the wrapped function, and project its return. A
             /// failed receiver or required-argument conversion returns
             /// `Err` before the wrapped function runs.
+            ///
+            /// # Safety
+            ///
+            /// Bridge frame only — projecting a fiber yield switches
+            /// fibers, which mruby allows only as the method's return.
             #[doc(hidden)]
-            fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
+            unsafe fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
                 $(let mut $req = sys::mrb_value::zeroed();)*
                 let mut block = sys::mrb_value::zeroed();
                 read_frame(mrb, |mrb| {
@@ -481,7 +502,7 @@ macro_rules! define_method_req_block_trait {
                     // by mruby's call convention.
                     Some(unsafe { crate::Proc::from_value_unchecked(Value::from_raw_unchecked(block)) })
                 };
-                (self)(mrb, self_ $(, $req)*, block).into_return_value(mrb)
+                (self)(mrb, self_ $(, $req)*, block).into_return_value(mrb, private::Bridge(()))
             }
 
             /// Bridge entry: `call_convert_value` inside the panic
@@ -543,10 +564,16 @@ where
 {
     /// Convert the receiver, run the wrapped function over the call's
     /// arguments, and project its return.
+    ///
+    /// # Safety
+    ///
+    /// Bridge frame only — projecting a fiber yield switches fibers,
+    /// which mruby allows only as the method's return.
     #[doc(hidden)]
-    fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
+    unsafe fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
         let rb_self = S::try_convert(self_, mrb)?;
-        crate::state::args::with_args(mrb, |args| (self)(mrb, rb_self, args)).into_return_value(mrb)
+        crate::state::args::with_args(mrb, |args| (self)(mrb, rb_self, args))
+            .into_return_value(mrb, private::Bridge(()))
     }
 
     /// Bridge entry: `call_convert_value` inside the panic boundary,

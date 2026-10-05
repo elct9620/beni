@@ -1,12 +1,14 @@
-//! Creating and resuming fibers — the operations magnus's `Fiber` and
-//! `Ruby::fiber_new` carry, gated behind the `fiber` capability
-//! feature because mruby keeps fibers in its `mruby-fiber` gem.
+//! Creating, resuming, and yielding fibers — the operations magnus's
+//! `Fiber`, `Ruby::fiber_new`, and `Ruby::fiber_yield` carry, gated
+//! behind the `fiber` capability feature because mruby keeps fibers in
+//! its `mruby-fiber` gem.
 //!
 //! mruby switches fibers inside its VM rather than between native
 //! stacks, so a fiber's body is a Ruby-defined block and a Rust body
 //! never runs on a fiber of its own (`mruby-fiber/src/fiber.c`
 //! raises `FiberError` for a block backed by a C function).
 
+use crate::method::private::{Bridge, ReturnValue};
 use crate::value::private::ReprValue as _;
 use crate::{sys::AsRawValue, Error, Fiber, Mrb, Proc, ReprValue, TryConvert, Value};
 use beni_sys as sys;
@@ -29,6 +31,78 @@ impl Mrb {
             // SAFETY: `mrb_fiber_new` answers a Fiber object or raises.
             unsafe { Fiber::from_value_unchecked(Value::from_raw_unchecked(raw)) }
         })
+    }
+
+    /// A fiber yield of `args`, which a registered method returns to
+    /// suspend the fiber running it — magnus's `Ruby::fiber_yield`.
+    /// magnus suspends inside the call and answers the resumed value;
+    /// mruby suspends a fiber only as a C method's return
+    /// (`include/mruby.h`, `mrb_fiber_yield`), so the suspension is the
+    /// method's return and the value the next resume passes reaches
+    /// the method's Ruby caller instead.
+    ///
+    /// ```
+    /// use beni::{FiberYield, Mrb, Value};
+    ///
+    /// fn pause(mrb: &Mrb, _self: Value, args: &[Value]) -> FiberYield {
+    ///     mrb.fiber_yield(args)
+    /// }
+    /// # let _ = beni::method!(pause, -1);
+    /// ```
+    pub fn fiber_yield(&self, args: &[Value]) -> FiberYield {
+        FiberYield {
+            args: args.to_vec(),
+        }
+    }
+}
+
+/// A suspension of the running fiber, made by `Mrb::fiber_yield` and
+/// taking effect only as a registered method's return.
+///
+/// Nothing but the method's return projects it:
+///
+/// ```compile_fail
+/// fn early<R: beni::ReturnValue>(suspension: R, mrb: &beni::Mrb) {
+///     let _ = suspension.into_return_value(mrb);
+/// }
+/// ```
+///
+/// ```compile_fail
+/// fn pause(mrb: &beni::Mrb, _self: beni::Value) -> beni::FiberYield {
+///     mrb.fiber_yield(&[])
+/// }
+///
+/// fn early(mrb: &beni::Mrb, self_: beni::Value) {
+///     let _ = beni::method::Method0::call_convert_value(pause, mrb, self_);
+/// }
+/// ```
+pub struct FiberYield {
+    args: Vec<Value>,
+}
+
+impl ReturnValue for FiberYield {
+    fn into_return_value(self, mrb: &Mrb, _: Bridge) -> Result<Value, Error> {
+        let args = self.args;
+        mrb.protect(|inner| {
+            // SAFETY: `inner` is the live VM inside the protected frame;
+            // every `args` entry comes from the same VM; this projection
+            // runs only as the bridge returns, the one place mruby lets
+            // a fiber suspend.
+            let raw = unsafe {
+                sys::mrb_fiber_yield(
+                    inner.as_ptr(),
+                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
+                    args.as_ptr() as *const sys::mrb_value,
+                )
+            };
+            Value::from_raw_unchecked(raw)
+        })
+    }
+}
+
+impl ReturnValue for Result<FiberYield, Error> {
+    fn into_return_value(self, mrb: &Mrb, bridge: Bridge) -> Result<Value, Error> {
+        self.and_then(|suspension| suspension.into_return_value(mrb, bridge))
     }
 }
 
