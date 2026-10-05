@@ -106,8 +106,12 @@ impl MethodDef {
 ///
 /// ```compile_fail
 /// struct Custom;
-/// impl beni::ReturnValue for Custom {
-///     fn into_return_value(self, _: &beni::Mrb) -> Result<beni::Value, beni::Error> {
+/// impl beni::method::private::ReturnValue for Custom {
+///     fn into_return_value(
+///         self,
+///         _: &beni::Mrb,
+///         _: beni::method::private::Bridge,
+///     ) -> Result<beni::Value, beni::Error> {
 ///         unimplemented!()
 ///     }
 /// }
