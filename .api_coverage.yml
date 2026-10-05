@@ -142,6 +142,7 @@ typed:
   mrb_const_set: Module::const_set
   mrb_cv_defined: "`Module::cvar_defined` — the value-level class-variable presence test, walking the ancestry; `mrb_mod_cv_defined` (the raw-`RClass*` form) stays in `sys`"
   mrb_cv_get: Module::cvar_get
+  mrb_mod_cv_set: "`Module::cvar_set` — `mrb_cv_set` is a forwarding wrapper whose body is `mrb_mod_cv_set(mrb, mrb_class_ptr(mod), sym, v)` (`vendor/mruby/src/variable.c:1207-1210`), so the two write alike for every class handle"
   mrb_cv_set: Module::cvar_set
   mrb_data_check_get_ptr: "`TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — the type-checked read of a carrier's payload"
   mrb_data_check_type: "`TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — a mismatch surfaces the `TypeError` this check raises, protected into an `Err`"
@@ -150,6 +151,7 @@ typed:
   mrb_istruct_size: "`InlineStruct` — the payload bound a type must fit, held at compile time"
   mrb_data_object_alloc: "`Mrb::wrap_as`, and `wrap` / `obj_wrap` / `obj_wrap_as` through it — protected, so an unmarked class, which breaks `TypedData`'s contract, reclaims the box and panics rather than raising across the boundary"
   mrb_define_alias: "`Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id`"
+  mrb_alias_method: "`Module::alias_method` — `mrb_define_alias_id` is a forwarding wrapper whose body is `mrb_alias_method(mrb, klass, a, b)` (`vendor/mruby/src/class.c:3374-3377`), taking the same arguments"
   mrb_define_alias_id: "`Module::alias_method` with `Id` keys (the symbol-or-name key, both names keyed independently)"
   mrb_define_class: "`Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id`"
   mrb_define_class_id: "`Mrb::define_class` with an `Id` key (the symbol-or-name key, magnus `IntoId`) — the create path; a name already bound is fetched as the bound class itself, as the `class` keyword fetches it, since this call answers a prepended class with its origin include class"
@@ -235,10 +237,13 @@ typed:
   mrb_intern_static: Mrb::intern_static
   mrb_intern_lit: "`Mrb::intern_static` — the literal macro `mrb_intern_lit(mrb, lit)` is `mrb_intern_static` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_intern_str: Mrb::intern_str
+  mrb_obj_iv_defined: "`Object::ivar_defined` — `mrb_iv_defined` forwards to it once `obj_iv_p` holds (`vendor/mruby/src/variable.c:820-824`), and every `Object` handle carries a tag `obj_iv_p` accepts"
   mrb_iv_defined: Object::ivar_defined
   mrb_iv_foreach: "`Object::ivar_foreach` — closure-based iteration over a snapshot of a value's set instance variables, name as a typed `Symbol`; the closure returns `ForEach::{Continue,Stop}` to proceed or end early, the iteration dispatches no Ruby so no `Result` is needed (magnus binds no ivar foreach)"
+  mrb_obj_iv_get: "`Object::ivar_get` — `mrb_iv_get` forwards to it once `obj_iv_p` holds (`vendor/mruby/src/variable.c:649-655`), see `mrb_obj_iv_defined`"
   mrb_iv_get: Object::ivar_get
   mrb_iv_remove: "`Object::ivar_remove` — the value-level instance-variable removal; yields the former value as an `Option`, the absent case as `None`"
+  mrb_obj_iv_set: "`Object::ivar_set` — `mrb_iv_set` forwards to it once `obj_iv_p` holds (`vendor/mruby/src/variable.c:770-778`), see `mrb_obj_iv_defined`"
   mrb_iv_set: Object::ivar_set
   mrb_parse_nstring: "`Ccontext::load_nstring` — carried by the `compiler` capability feature"
   mrb_load_exec: "`Ccontext::load_nstring` — carried by the `compiler` capability feature"
@@ -278,6 +283,7 @@ typed:
   mrb_read_irep_buf: Mrb::load_bytecode
   mrb_remove_method: "`Module::remove_method` — Ruby's `Module#remove_method`; deletes the method's own definition from the handle (the name reverts to an ancestor's method), distinct from `Module::undef_method` which masks ancestor lookups. The symbol-or-name key routes through this raising form, which takes a `mrb_sym` directly with no string variant"
   mrb_respond_to: ReprValue::respond_to
+  mrb_singleton_class_ptr: "`Object::singleton_class` — `mrb_singleton_class` wraps it, raising where it answers null (`vendor/mruby/src/class.c:2428-2436`); it answers null only for an immediate or an object with no class (`vendor/mruby/src/class.c:2382-2405`), neither of which an `Object` handle holds"
   mrb_singleton_class: "`Object::singleton_class` — the value's per-instance eigenclass (Ruby's `singleton_class`), returning a typed `RClass`; nil/true/false yield their predefined classes and every other immediate raises a TypeError"
   mrb_str_cat: RString::cat
   mrb_str_cat_lit: "`RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
@@ -540,16 +546,7 @@ declined:
   mrb_fixnum_p: "tests whether an Integer sits inline in the word (`vendor/mruby/include/mruby/boxing_word.h:200`) — a boxing fact, not the fixed-width-or-arbitrary split magnus's `Fixnum` draws; `Integer::from_value` discriminates the type"
   mrb_ro_data_p: "tests whether a C pointer falls in the binary's read-only section (`vendor/mruby/include/mruby/value.h:440-470`), mruby's own string-literal optimisation — it takes a pointer, not a value, and no typed caller holds one to ask about"
   mrb_cptr_value: "boxes a bare `void*` into a value — the graduation rule: a raw pointer crossing into the typed domain, and reading it back answers the same untyped pointer, so no typed shape carries more than the raw call. mruby uses it as the context an `mrb_ensure` callback reads (`vendor/mruby/mrbgems/mruby-socket/src/socket.c:222`), which a Rust closure carries; Rust data an object owns crosses through `TypedData`"
-  mrb_class: "the class a value's header points at, a singleton class included (`vendor/mruby/include/mruby/class.h:27-53`) — magnus leaves `rb_class_of` unnamed, and `ReprValue::class` answers the real class through `mrb_obj_class`"
   mrb_obj_itself: "answers its receiver (`vendor/mruby/src/object.c:879-882`), which a typed caller already holds"
-  mrb_obj_respond_to: "takes the class as a raw `struct RClass*` (`vendor/mruby/src/class.c:3018-3026`) — see `mrb_check_frozen`; the `mrb_value` form `mrb_respond_to` built on it is graduated as `ReprValue::respond_to`"
-  mrb_singleton_class_ptr: "answers a raw `struct RClass*`, null where no singleton class exists — see `mrb_check_frozen`; the `mrb_value` form `mrb_singleton_class` wraps it (`vendor/mruby/src/class.c:2428-2436`) and is graduated as `Object::singleton_class`"
-  mrb_mod_cv_set: "takes the class as a raw `struct RClass*` — see `mrb_check_frozen`; the `mrb_value` form `mrb_cv_set` forwards to it (`vendor/mruby/src/variable.c:1207-1210`) and is graduated as `Module::cvar_set`"
-  mrb_obj_iv_defined: "takes the object as a raw `struct RObject*` — see `mrb_check_frozen`; the `mrb_value` form `mrb_iv_defined` forwards to it (`vendor/mruby/src/variable.c:820-824`) and is graduated as `Object::ivar_defined`"
-  mrb_obj_iv_set: "takes the object as a raw `struct RObject*` — see `mrb_check_frozen`; the `mrb_value` form `mrb_iv_set` forwards to it (`vendor/mruby/src/variable.c:770-778`) and is graduated as `Object::ivar_set`"
-  mrb_undef_method: "undefines a C-string name without checking the method exists (`vendor/mruby/src/class.c:3491-3494`) — magnus leaves `rb_undef_method` unnamed; `Module::undef_method` is Ruby's raising `Module#undef_method` through `mrb_undef_method_id`"
-  mrb_undef_class_method: "the singleton-class form of `mrb_undef_method` — see it; `Object::undef_singleton_method` raises as `mrb_undef_class_method_id` does"
-  mrb_int_to_cstr: "formats an integer into a caller-owned C buffer with no interpreter (`vendor/mruby/src/numeric.c:1971`) — a Rust caller formats in Rust; `Integer::to_r_string_radix` renders the mruby String"
 conditional:
   mrb_bigint_p: "`MRB_USE_BIGINT` — without it `vendor/mruby/include/mruby/value.h:322` expands the macro to `FALSE`; beni's pinned ABI sets only `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`"
   mrb_locale_from_utf8: "`_WIN32` — `vendor/mruby/include/mruby.h:1248` makes it an identity macro off Windows, where there is no encoding to convert"
