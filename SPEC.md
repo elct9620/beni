@@ -1526,7 +1526,7 @@ A Rust value also backs an mruby object as an inline struct (`ISTRUCT`), mruby's
 | Constraint | Consequence |
 |---|---|
 | size exceeds three pointer widths | does not compile as an `InlineStruct` |
-| alignment exceeds one | does not compile as an `InlineStruct` |
+| alignment exceeds a pointer's | does not compile as an `InlineStruct` |
 | `Pod` admits no `Value` or typed handle | holds no value; the collector never traces its payload; no instance variables |
 
 ##### Inline struct marking
@@ -2107,7 +2107,7 @@ measures complete.
 | A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — whose path the interpreter's carrier record does not hold, or a macro-implemented `InlineStruct` type naming its class while the record holds none for it | panics, naming the `mark_carriers` call that records it; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
 | Ruby's `new` or `allocate` on a class whose default allocator is undefined | raises mruby's `TypeError` "allocator undefined for *class*"; reached through the typed surface, surfaced as a Rust `Err` |
 | A `wrap` or `TypedData` derive missing `class`, given an attribute the macros do not accept, a value holding a NUL byte, or a `class` path holding an empty segment, or applied to a type with generic parameters or lifetimes | a compile error naming the offending attribute, value, or generics; nothing is generated |
-| An `InlineStruct` derive or `wrap(inline)` applied to an enum, a union, or a type with generic parameters or lifetimes, given an attribute it does not accept, or applied to a type that is not `bytemuck::Pod` or exceeds three pointer widths in size or one in alignment | a compile error; nothing usable is generated |
+| An `InlineStruct` derive or `wrap(inline)` applied to an enum, a union, or a type with generic parameters or lifetimes, given an attribute it does not accept, or applied to a type that is not `bytemuck::Pod` or exceeds three pointer widths in size or a pointer's alignment | a compile error; nothing usable is generated |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
