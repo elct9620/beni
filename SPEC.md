@@ -1531,7 +1531,9 @@ A Rust value also backs an mruby object as an inline struct (`ISTRUCT`), mruby's
 
 ##### Inline struct marking
 
-`mark_carriers` resolves the class path as the `TypedData` macros resolve theirs, marks the class so its instances are inline structs, and undefines its default allocator. It holds the class in the interpreter's carrier record together with the type it belongs to. A class belongs to an `InlineStruct` type when the nearest class in its ancestry the record holds, the class itself or a superclass, is held for that type.
+`mark_carriers` resolves the class path as the `TypedData` macros resolve theirs, marks the class so its instances are inline structs, and undefines its default allocator. It holds the class in the interpreter's carrier record together with the type it belongs to, and as that type's class, replacing the class an earlier `mark_carriers` of the type held. A class belongs to an `InlineStruct` type when the nearest class in its ancestry the record holds, the class itself or a superclass, is held for that type.
+
+A generated `InlineStruct::class` answers the type's class the record holds, and panics naming `mark_carriers` when the record holds none.
 
 | Class | Outcome |
 |---|---|
@@ -1553,7 +1555,7 @@ An inline struct converts back only to the type its class belongs to. A value co
 | `set` | replaces the whole payload |
 | `set` on a frozen receiver | surfaces mruby's `FrozenError`; payload unchanged |
 
-Wrapping into a class that does not belong to the type breaks the trait's contract, and the wrap panics rather than raising across the boundary. mruby's `dup` and `clone` of an inline struct copy its payload, so a copy converts as the original does. Ruby's `new` and `allocate` raise as for any class whose allocator is undefined, so a type defines the constructor its Ruby callers use.
+Wrapping into a class whose instances are not inline structs breaks the trait's contract, and the wrap panics rather than raising across the boundary. Wrapping into an inline-struct class of another type breaks it too: the wrap completes, and the value converts as that type, its payload read as plain bytes. mruby's `dup` and `clone` of an inline struct copy its payload, so a copy converts as the original does. Ruby's `new` and `allocate` raise as for any class whose allocator is undefined, so a type defines the constructor its Ruby callers use.
 
 ##### Inline struct macros
 
@@ -2100,9 +2102,9 @@ measures complete.
 | A `TypedData` value wrapped as an instance of a class that cannot carry data — one never marked, breaking the `TypedData` contract | the payload not yet handed to a carrier is reclaimed, never leaked, and the wrap panics; nothing unwinds across FFI |
 | A `TypedData` type's carriers marked in an interpreter where a path resolves to no class, resolves to a value that is not a class, or names a class that refuses the mark | surfaced as a Rust `Err`; whichever classes it marked before the failure stay marked and held |
 | An `InlineStruct` type's class marked in an interpreter where the path resolves to no class or to a value that is not a class, or names a class whose instances are not plain objects and that does not belong to the same type | surfaced as a Rust `Err`; the class stays unmarked |
-| An `InlineStruct` value wrapped as an instance of a class that does not belong to its type, breaking the `InlineStruct` contract | the wrap panics; nothing unwinds across FFI |
+| An `InlineStruct` value wrapped as an instance of a class whose instances are not inline structs — one never marked, breaking the `InlineStruct` contract | the wrap panics; nothing unwinds across FFI |
 | A value converted to an inline struct of a type it is not, or an inline struct's payload replaced while it is frozen | surfaced as a Rust `Err` carrying the `TypeError` or `FrozenError`, never unwinds across FFI |
-| A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — whose path the interpreter's carrier record does not hold | panics, naming the `mark_carriers` call that records it; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
+| A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — whose path the interpreter's carrier record does not hold, or a macro-implemented `InlineStruct` type naming its class while the record holds none for it | panics, naming the `mark_carriers` call that records it; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
 | Ruby's `new` or `allocate` on a class whose default allocator is undefined | raises mruby's `TypeError` "allocator undefined for *class*"; reached through the typed surface, surfaced as a Rust `Err` |
 | A `wrap` or `TypedData` derive missing `class`, given an attribute the macros do not accept, a value holding a NUL byte, or a `class` path holding an empty segment, or applied to a type with generic parameters or lifetimes | a compile error naming the offending attribute, value, or generics; nothing is generated |
 | An `InlineStruct` derive or `wrap(inline)` applied to an enum, a union, or a type with generic parameters or lifetimes, given an attribute it does not accept, or applied to a type that is not `bytemuck::Pod` or exceeds three pointer widths in size or one in alignment | a compile error; nothing usable is generated |
@@ -2144,7 +2146,7 @@ measures complete.
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
 | exception class | `Exception` itself or an ordinary class descending from it — never a singleton class — so every instance it allocates is an exception; the class an `ExceptionClass` handle names |
-| carrier record | one interpreter's record of the class each `class` path of a macro-implemented `TypedData` type was marked as, and of each class an `InlineStruct` type was marked as together with the type it belongs to; `mark_carriers` writes it and every naming of such a class, and every conversion to an inline struct, reads it |
+| carrier record | one interpreter's record of the class each `class` path of a macro-implemented `TypedData` type was marked as, and of each class an `InlineStruct` type was marked as together with the type it belongs to and the class `mark_carriers` last prepared for it; `mark_carriers` writes it and every naming of such a class, and every conversion to an inline struct, reads it |
 | instance-variable holder | an object mruby lets hold instance variables — a plain object, a class or module (a singleton class included), a hash, a data carrier, or an exception; reached through `RObject`, `RClass`, `RModule`, `ExceptionClass`, `RHash`, `RTypedData`, `Obj<T>`, or `Exception` |
 | inline struct | an object in mruby's `ISTRUCT` layout, holding up to three pointer widths of plain data inside the object itself — no heap payload, no release hook, no instance variables |
 | hidden instance variable | an instance variable whose name does not begin with `@`, which no Ruby program can read, write, list, or remove; only a caller of the embedder API reaches it |
