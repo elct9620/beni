@@ -1,5 +1,5 @@
 use crate::attr::{
-    beni_attribute, carrier_path, class_and_name, read_carrier, reject_field_attributes,
+    beni_attribute, carrier_path, class_and_name, reject_field_attributes, unmarked,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -24,8 +24,8 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     reject_field_attributes(&input.data)?;
 
     let ident = &input.ident;
-    let read_class = read_carrier(&class, "InlineStruct")?;
     let path = carrier_path(&class)?;
+    let unmarked = unmarked(&class, "InlineStruct");
 
     // The bound is checked where the type is declared, so a payload too
     // large fails here rather than at its first use.
@@ -38,7 +38,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
 
         unsafe impl ::beni::InlineStruct for #ident {
             fn class(mrb: &::beni::Mrb) -> ::beni::RClass {
-                #read_class
+                mrb.inline_carrier::<Self>().unwrap_or_else(|| #unmarked)
             }
 
             fn inline_type() -> &'static ::beni::InlineType<Self> {

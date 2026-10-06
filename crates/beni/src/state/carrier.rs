@@ -1,17 +1,19 @@
-//! The carrier record: the class each `TypedData` class path was
-//! marked as in this interpreter.
+//! The carrier record: the classes `TypedData` and `InlineStruct`
+//! types were marked as in this interpreter.
 //!
 //! A type implemented by `#[beni::wrap]` or `#[derive(TypedData)]`
 //! names its class by path. The path resolves once, when the embedder
 //! marks the type's carriers, and every later naming reads the class
 //! out of the record — so a constant a Ruby program binds over that
-//! path reaches no wrap. The record — the class each path names, and
-//! the classes inline-struct types own — is stored under globals whose
-//! names carry no `$`, which no Ruby program can write.
+//! path reaches no wrap. The record — the class each path names, the
+//! classes inline-struct types own, and each inline-struct type's own
+//! class — is stored under globals whose names carry no `$`, which no
+//! Ruby program can write.
 //!
-//! A read is a symbol check, a global read, and a hash fetch keyed by
-//! symbol: none allocates, raises, or dispatches, so a read runs no
-//! Ruby a program could define and needs no protect frame.
+//! A read is a symbol check and a global read, then a hash fetch keyed
+//! by symbol or a scan of class and type pairs compared by pointer:
+//! none allocates, raises, or dispatches, so a read runs no Ruby a
+//! program could define and needs no protect frame.
 
 use crate::{
     sys::AsRawValue, Error, FromValue as _, Mrb, RArray, RClass, RHash, ReprValue, Symbol,
@@ -25,6 +27,10 @@ const RECORD_GLOBAL: &[u8] = b"beni_carriers";
 
 /// The global holding the classes inline-struct types own.
 const INLINE_GLOBAL: &[u8] = b"beni_inline";
+
+/// The global holding the class each inline-struct type was last
+/// prepared as.
+const INLINE_CLASS_GLOBAL: &[u8] = b"beni_inline_classes";
 
 impl Mrb {
     /// Resolve `path` from `Object`, prepare the class it names to
@@ -44,12 +50,32 @@ impl Mrb {
     }
 
     /// As `mark_carrier`, preparing the class `path` names so its
-    /// instances are inline structs of `T` rather than data carriers.
+    /// instances are inline structs of `T` rather than data carriers,
+    /// and holding it as `T`'s class in place of the one an earlier call
+    /// for `T` held.
     pub fn mark_inline_carrier<T: crate::InlineStruct>(
         &self,
         path: &'static CStr,
     ) -> Result<RClass, Error> {
-        self.prepare_carrier(path, |class| class.set_instance_inline_tt::<T>(self))
+        let class = self.prepare_carrier(path, |class| class.set_instance_inline_tt::<T>(self))?;
+        let classes = self.held_pairs(INLINE_CLASS_GLOBAL)?;
+        let tag = T::inline_type().tag();
+        match pairs(classes).position(|(_, held)| held == tag) {
+            Some(pair) => classes.store(self, (pair * 2) as isize, class.as_value())?,
+            None => self.push_pair(classes, class, tag)?,
+        }
+        Ok(class)
+    }
+
+    /// The class `mark_inline_carrier` last held as `T`'s in this
+    /// interpreter, and nothing when it has held none — read by pointer
+    /// identity alone, so the class belongs to `T` without a walk of its
+    /// ancestry.
+    pub fn inline_carrier<T: crate::InlineStruct>(&self) -> Option<RClass> {
+        let classes = self.held_array(INLINE_CLASS_GLOBAL)?;
+        let tag = T::inline_type().tag();
+        let (class, _) = pairs(classes).find(|(_, held)| *held == tag)?;
+        RClass::from_value(class)
     }
 
     /// The class this interpreter's carrier record holds for `path`,
@@ -78,19 +104,23 @@ impl Mrb {
         if self.inline_owner(class) == Some(tag) {
             return Ok(());
         }
-        let owners = self.inline_owners()?;
-        owners.push(self, class.as_value())?;
+        self.push_pair(self.held_pairs(INLINE_GLOBAL)?, class, tag)
+    }
+
+    /// Append the pair `class, tag` to `pairs`.
+    fn push_pair(&self, pairs: RArray, class: RClass, tag: *const ()) -> Result<(), Error> {
+        pairs.push(self, class.as_value())?;
         // SAFETY: `mrb_cptr_value` only boxes the address; the tag is a
         // `'static` descriptor's, so it outlives the interpreter.
         let boxed = unsafe { sys::mrb_cptr_value(self.as_ptr(), tag.cast_mut().cast()) };
-        owners.push(self, Value::from_raw_unchecked(boxed))
+        pairs.push(self, Value::from_raw_unchecked(boxed))
     }
 
     /// The tag of the inline-struct type `class` belongs to: the one
     /// held for the nearest class in its ancestry the record holds, read
     /// by pointer identity alone, so no Ruby a program defines runs.
     pub(crate) fn inline_owner(&self, class: RClass) -> Option<*const ()> {
-        let owners = self.held_inline_owners()?;
+        let owners = self.held_array(INLINE_GLOBAL)?;
         let mut current = class.as_internal();
         while !current.is_null() {
             // SAFETY: `current` walks the live superclass chain of a
@@ -106,20 +136,16 @@ impl Mrb {
         None
     }
 
-    /// The pairs `[class, tag, …]` held for inline-struct types, created
-    /// on first use and kept reachable — with every class they hold — by
-    /// the global they are stored under.
-    fn inline_owners(&self) -> Result<RArray, Error> {
-        if let Some(owners) = self.held_inline_owners() {
-            return Ok(owners);
+    /// The pairs `[class, tag, …]` stored under the global `name`,
+    /// created on first use and kept reachable — with every class they
+    /// hold — by that global.
+    fn held_pairs(&self, name: &'static [u8]) -> Result<RArray, Error> {
+        if let Some(pairs) = self.held_array(name) {
+            return Ok(pairs);
         }
-        let owners = self.ary_new();
-        self.gv_set(self.intern_static(INLINE_GLOBAL)?, owners.as_value())?;
-        Ok(owners)
-    }
-
-    fn held_inline_owners(&self) -> Option<RArray> {
-        RArray::from_value(self.held_global(INLINE_GLOBAL)?)
+        let pairs = self.ary_new();
+        self.gv_set(self.intern_static(name)?, pairs.as_value())?;
+        Ok(pairs)
     }
 
     /// The record, created on first use and kept reachable for the
@@ -137,6 +163,12 @@ impl Mrb {
     /// The record, and nothing before anything has been marked.
     fn held_record(&self) -> Option<RHash> {
         RHash::from_value(self.held_global(RECORD_GLOBAL)?)
+    }
+
+    /// The array stored under the global `name`, and nothing before one
+    /// was.
+    fn held_array(&self, name: &'static [u8]) -> Option<RArray> {
+        RArray::from_value(self.held_global(name)?)
     }
 
     /// The value of the global `name`, and nothing before it was set:
@@ -182,20 +214,29 @@ impl Mrb {
     }
 }
 
-/// The tag `owners` holds for `class`, compared by class pointer. The
-/// record keeps every entry reachable, so the reads take no arena slot.
+/// The tag `owners` holds for `class`, compared by class pointer.
 fn owner_of(owners: RArray, class: *mut sys::RClass) -> Option<*const ()> {
-    let entry = |index: usize| {
-        // SAFETY: `owners` is the record's live array and `index` lies
-        // inside it.
-        unsafe { sys::mrb_ary_entry(owners.as_raw(), index as sys::mrb_int) }
-    };
-    (0..owners.len() / 2).find_map(|pair| {
+    pairs(owners).find_map(|(held, tag)| {
         // SAFETY: the record holds a class at every even index.
-        let held = unsafe { sys::mrb_obj_ptr_func(entry(pair * 2)) } as *mut sys::RClass;
+        let held = unsafe { sys::mrb_obj_ptr_func(held.as_raw()) } as *mut sys::RClass;
+        (held == class).then_some(tag)
+    })
+}
+
+/// Each `class, tag` pair a record array holds, the class as its value
+/// and the tag unboxed. The record keeps every entry reachable, so the
+/// reads take no arena slot.
+fn pairs(array: RArray) -> impl Iterator<Item = (Value, *const ())> {
+    let entry = move |index: usize| {
+        // SAFETY: `array` is the record's live array and `index` lies
+        // inside it.
+        unsafe { sys::mrb_ary_entry(array.as_raw(), index as sys::mrb_int) }
+    };
+    (0..array.len() / 2).map(move |pair| {
         // SAFETY: the record pairs every class with the C pointer
-        // `hold_inline` boxed for it.
-        (held == class).then(|| unsafe { sys::mrb_cptr_func(entry(pair * 2 + 1)) } as *const ())
+        // `push_pair` boxed for it.
+        let tag = unsafe { sys::mrb_cptr_func(entry(pair * 2 + 1)) } as *const ();
+        (Value::from_raw_unchecked(entry(pair * 2)), tag)
     })
 }
 

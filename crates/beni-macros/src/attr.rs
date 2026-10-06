@@ -30,15 +30,21 @@ pub fn class_and_name(attr: &Attribute) -> Result<(LitStr, Literal), Error> {
 /// Nothing resolves here: the path resolved when the type's carriers
 /// were marked, so what a Ruby program binds over it reaches no wrap.
 pub fn read_carrier(path: &LitStr, trait_name: &str) -> Result<TokenStream, Error> {
-    let text = path.value();
     let literal = carrier_path(path)?;
+    let unmarked = unmarked(path, trait_name);
+    Ok(quote! {
+        mrb.carrier(#literal).unwrap_or_else(|| #unmarked)
+    })
+}
+
+/// The panic naming the `mark_carriers` call that holds `path`'s class.
+pub fn unmarked(path: &LitStr, trait_name: &str) -> TokenStream {
+    let text = path.value();
     let message = format!(
         "{{}} was never marked as a carrier class in this interpreter; \
          call <Self as ::beni::{trait_name}>::mark_carriers while the gem installs"
     );
-    Ok(quote! {
-        mrb.carrier(#literal).unwrap_or_else(|| panic!(#message, #text))
-    })
+    quote! { panic!(#message, #text) }
 }
 
 /// A class path as the C string keying it, rejecting a path holding a

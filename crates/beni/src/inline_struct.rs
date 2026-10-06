@@ -103,7 +103,7 @@ impl<T> InlineType<T> {
         }
     }
 
-    fn tag(&'static self) -> *const () {
+    pub(crate) fn tag(&'static self) -> *const () {
         (self as *const Self).cast()
     }
 
@@ -133,21 +133,17 @@ impl<T: InlineStruct> Inline<T> {
     ///
     /// # Panics
     ///
-    /// When that class does not belong to `T` — it was never marked for
-    /// it, breaking `InlineStruct`'s contract.
+    /// When that class's instances are not inline structs — it was never
+    /// marked, breaking `InlineStruct`'s contract.
     pub fn new(mrb: &Mrb, data: T) -> Self {
         let () = Fits::<T>::INSIDE;
         let class = T::class(mrb);
-        assert!(
-            belongs_to::<T>(mrb, class),
-            "an InlineStruct class does not belong to {}",
-            T::inline_type().name()
-        );
         let value = mrb
             .protect(|mrb| {
                 // SAFETY: `mrb` is alive inside the protect frame and
-                // `class` allocates inline structs; only exhausting
-                // memory raises, caught by `protect`.
+                // `class` is from the same VM; allocating against a class
+                // whose instances are not inline structs raises a
+                // `TypeError`, caught by `protect`.
                 let object = unsafe {
                     sys::mrb_obj_alloc(mrb.as_ptr(), sys::MRB_TT_ISTRUCT, class.as_internal())
                 };
@@ -155,7 +151,10 @@ impl<T: InlineStruct> Inline<T> {
                 Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(object.cast()) })
             })
             .unwrap_or_else(|err| {
-                panic!("allocating an inline struct raised: {}", err.message(mrb))
+                panic!(
+                    "an InlineStruct class cannot carry inline structs: {}",
+                    err.message(mrb)
+                )
             });
         let inline = Self {
             value,

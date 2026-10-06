@@ -99,6 +99,7 @@ fn full_api_surface_is_reachable_from_outside() {
         struct Inlined(u32);
         let _ = Inline::<Inlined>::new;
         let _ = Mrb::mark_inline_carrier::<Inlined>;
+        let _ = Mrb::inline_carrier::<Inlined>;
     }
     let _ = DataType::<i32>::new;
     {

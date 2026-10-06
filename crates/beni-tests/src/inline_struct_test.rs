@@ -359,7 +359,74 @@ fn a_path_bound_to_another_class_after_marking_reaches_no_wrap() {
 }
 
 #[test]
-#[should_panic(expected = "does not belong to Vector2D")]
+fn marking_again_holds_the_class_the_path_now_names() {
+    let mrb = open_mrb();
+    define_point(&mrb);
+    mrb.load_string(b"Object.send(:remove_const, :BeniPoint2D); class BeniPoint2D; end")
+        .expect("rebinding the constant runs");
+    let remarked = mrb
+        .class_get(c"BeniPoint2D")
+        .expect("the path names the new class");
+
+    Point2D::mark_carriers(&mrb).expect("the new class accepts the mark");
+    let value = Point2D { x: 1.0, y: 2.0 }.into_value(&mrb);
+
+    assert!(value
+        .class(&mrb)
+        .as_value()
+        .is_equal(&mrb, remarked.as_value()));
+}
+
+#[test]
+fn the_type_class_is_held_per_interpreter_once_marked() {
+    let first = open_mrb();
+    let second = open_mrb();
+    define_point(&first);
+    define(&second, c"BeniPoint2D");
+
+    assert!(first.inline_carrier::<Point2D>().is_some());
+    assert!(second.inline_carrier::<Point2D>().is_none());
+}
+
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(C)]
+struct Stray {
+    x: f64,
+    y: f64,
+}
+
+static STRAY: InlineType<Stray> = InlineType::new(c"Stray");
+
+// SAFETY: deliberately broken — names the vector's class — to observe
+// what a wrap into another type's class does.
+unsafe impl InlineStruct for Stray {
+    fn class(mrb: &Mrb) -> RClass {
+        mrb.class_get(c"BeniVector2D")
+            .expect("the vector class is defined before it is named")
+    }
+
+    fn inline_type() -> &'static InlineType<Self> {
+        &STRAY
+    }
+}
+
+#[test]
+fn wrapping_into_another_types_class_converts_as_that_type() {
+    let mrb = open_mrb();
+    prepared(&mrb);
+
+    let value = Inline::new(&mrb, Stray { x: 1.0, y: 2.0 }).as_value();
+
+    assert_eq!(
+        Inline::<Vector2D>::try_convert(value, &mrb)
+            .expect("the class belongs to Vector2D")
+            .get(),
+        Vector2D { x: 1.0, y: 2.0 }
+    );
+}
+
+#[test]
+#[should_panic(expected = "cannot carry inline structs")]
 fn wrapping_into_a_class_never_marked_for_the_type_panics() {
     let mrb = open_mrb();
     define(&mrb, c"BeniVector2D");
