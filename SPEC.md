@@ -512,11 +512,17 @@ applies — mruby has no `to_path`.
 
 A sequence surfaces the first element's `Err`, a map the first `Err`. A
 fixed-length target converts an Array of exactly its length, and surfaces the
-`TypeError` "expected Array of length *N*" for any other. A sequence or map
-target holds any element type `TryConvert` converts to, a `Value` or typed
-handle included. Each element crosses out to Rust and stays reachable as the
-Garbage collection section promises for every value that does, wherever the
-Rust side stores it.
+`TypeError` "expected Array of length *N*" for any other.
+
+| Target | Element types | An element stays reachable |
+|---|---|---|
+| `Vec<T>`, `HashMap<K, V>`, `BTreeMap<K, V>` | owned types only | while its own conversion runs |
+| `[T; N]`, a tuple | any type `TryConvert` converts to, a `Value` or typed handle included | as the Garbage collection section promises for every value that crosses out |
+
+An owned target's conversion therefore grows the arena by at most one element
+or pair, whatever the length. The `unsafe` `TryConvertOwned` trait marks the
+owned types, mirroring `magnus`'s; a fixed-length array or a tuple is itself an
+owned type when every element type is.
 
 ##### TryConvert data
 
@@ -1001,7 +1007,7 @@ Conversion to a Rust sequence converts each element through `TryConvert`, mirror
 
 | Target | Condition | `Err` surfaced |
 |---|---|---|
-| a Rust vector | any length | the first element's `Err` |
+| a Rust vector of an owned type | any length | the first element's `Err` |
 | a fixed-length Rust array | the array holds exactly that many elements | the first element's `Err` |
 | a fixed-length Rust array | any other length | `TypeError` "expected Array of length *N*" |
 
@@ -1021,20 +1027,21 @@ A typed hash constructs empty, or empty with a preallocated capacity. The capaci
 | duplicate | copy it |
 | keys / values | read as typed arrays |
 | size / emptiness | the entry count, and whether it holds no entries |
-| convert to a Rust map | each key and value through `TryConvert`, as a Rust hash map or ordered map; surfaces the first `Err` |
+| convert to a Rust map | each key and value through `TryConvert` into owned types, as a Rust hash map or ordered map, converting each pair as the walk visits it; surfaces the first `Err`, and a conversion's panic as iterate surfaces a closure's |
 | iterate | visit each key-value pair in insertion order |
 
 The Rust map conversion mirrors `magnus`'s `RHash::to_hash_map` and `to_btree_map`.
 
 ##### Hash iteration
 
-Iterate hands each key-value pair, in insertion order, to a closure that signals whether to continue or stop. It returns a `Result`. The walk dispatches no Ruby of its own.
+Iterate mirrors `magnus`'s `RHash::foreach` without its delete signal, which mruby's walk has no path for. It hands each key-value pair, in insertion order, to a closure, each converted through `TryConvert` into the types the closure takes. The closure answers whether to continue or stop, or an `Err`, and iterate returns a `Result`. The walk dispatches no Ruby of its own. A pair handed to the closure stays reachable as every value that crosses out does.
 
-| Closure action | Outcome |
+| During the walk | Outcome |
 |---|---|
-| stops | the walk ends before the remaining pairs |
-| re-enters the VM to mutate the hash's table | `Err` carrying the `RuntimeError` mruby raises for the in-walk modification |
-| panics | the walk stops; the panic resurfaces on the Rust side once the walk unwinds, never crossing into mruby's frames |
+| the closure stops | the walk ends before the remaining pairs |
+| a pair fails its conversion, or the closure answers an `Err` | the walk ends before the remaining pairs; iterate surfaces that `Err` |
+| the closure or a conversion re-enters the VM to mutate the hash's table | `Err` carrying the `RuntimeError` mruby raises for the in-walk modification |
+| the closure or a conversion panics | the walk ends before the remaining pairs; iterate surfaces an `Err` carrying the panic's message, and the panic never crosses into mruby's frames |
 
 #### Value operations
 
@@ -1389,7 +1396,7 @@ The scan read mirrors `magnus`'s `scan_args`, reading the frame where magnus rea
 |---|---|
 | required positionals | each through `TryConvert` |
 | optional positionals | `Some` of the converted value when supplied, `None` when omitted |
-| splat | the remaining positionals: an array handle, or values each through `TryConvert` |
+| splat | the remaining positionals: an array handle, or values each through `TryConvert` into an owned type |
 | trailing required positionals | after the splat, each through `TryConvert` |
 | keyword bucket | the call's keyword arguments, always as a hash |
 | block | a required block (absent: `ArgumentError`) or an optional one (absent: `None`) |
@@ -2158,7 +2165,7 @@ measures complete.
 | An `InlineStruct` derive or `wrap(inline)` applied to an enum, a union, or a type with generic parameters or lifetimes, given an attribute it does not accept, or applied to a type that is not `bytemuck::Pod` or exceeds three pointer widths in size or a pointer's alignment | a compile error; nothing usable is generated |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
 | Installing a payload into a data carrier that already holds one | refused; the offered payload handed back and the held payload unchanged |
-| A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
+| A hash whose table is mutated while it is walked — by its iterate closure or by a pair's conversion re-entering the VM — raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
 | A precompiled bytecode blob the interpreter cannot read as a program | surfaced as a Rust `Err` carrying a `ScriptError` whose message names which structural check failed; nothing runs |
 | A precompiled bytecode program raising while it runs | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle |
@@ -2177,7 +2184,7 @@ measures complete.
 | A fiber's block raising while a resume runs it | surfaced as a Rust `Err` carrying the exception; the resumer's fiber is current again and the interpreter stays usable |
 | A registered method returning a fiber yield outside a resumed fiber, or with a call from C or Rust code into Ruby between the fiber's block and the method | mruby's `FiberError` raised to the method's Ruby caller; no fiber switches |
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
-| Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, Rust-defined proc body, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, `sys::catch_unwind`) or as an mruby exception to the caller (registered method, Rust-defined proc body); never unwinds into mruby's C frames |
+| Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, Rust-defined proc body, hash iterate closure, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, hash iterate closure, `sys::catch_unwind`) or as an mruby exception to the caller (registered method, Rust-defined proc body); never unwinds into mruby's C frames |
 | A Rust-defined proc's closure called again, through its proc or a copy of it, while it is already running | `RuntimeError` raised to the second caller; the running call is unaffected |
 | A warning message longer than the longest string the interpreter holds, in an archive built with standard I/O | surfaced as a Rust `Err` carrying mruby's `ArgumentError`; nothing is written |
 | Rust panic raised inside a `sys::protect` body | the process aborts at the FFI boundary; never unwinds into mruby's C frames |
@@ -2222,6 +2229,7 @@ measures complete.
 | documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable and builds on one platform, `x86_64-unknown-linux-gnu` |
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
 | documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated from an mruby built with the upstream default configuration, and carrying what the generating host decides alongside it — type widths, the form of `va_list`, the constants its headers define. Never hand-written and never tracked by the repository: the published package carries the copy a release generated, and every other copy is generated where it is read |
+| owned type | a type whose values hold no `Value`, so a Rust heap structure may store them past the arena: Rust numbers, `bool`, `String`, `char`, `PathBuf`, `Bytes`, a non-zero integer, the payload copy a macro-implemented inline struct converts to, and an `Option`, `Vec`, map, tuple, or fixed-length array of owned types; a consumer marks its own type as one only when the type holds no `Value` |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
 | capability feature | a cargo feature on the `beni` crate carrying a capability mruby keeps in a gem rather than its core — declared by the consumer rather than probed from the archive, enabled by default, and additive, so enabling one only adds surface |
