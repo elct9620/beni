@@ -66,15 +66,7 @@ pub(crate) fn with_args<R>(mrb: &Mrb, body: impl FnOnce(&[Value]) -> R) -> R {
     if keywords_given(mrb) {
         return with_call(mrb, |args, _| body(args));
     }
-    // SAFETY: `mrb` is alive inside a C function's call; mruby's own
-    // argument accessors read its current call info and never raise.
-    let positionals = unsafe {
-        slice_from_argv(
-            sys::mrb_get_argv(mrb.as_ptr()),
-            sys::mrb_get_argc(mrb.as_ptr()),
-        )
-    };
-    body(ArgsCopy::new(positionals, None).as_slice())
+    body(ArgsCopy::new(frame_positionals(mrb), None).as_slice())
 }
 
 /// The call's positionals as `N` slots, read without a format parse when
@@ -89,14 +81,7 @@ pub(crate) fn frame_args<const N: usize>(mrb: &Mrb, required: usize) -> Option<[
     if keywords_given(mrb) {
         return None;
     }
-    // SAFETY: `mrb` is alive inside a C function's call; mruby's own
-    // argument accessors read its current call info and never raise.
-    let positionals = unsafe {
-        slice_from_argv(
-            sys::mrb_get_argv(mrb.as_ptr()),
-            sys::mrb_get_argc(mrb.as_ptr()),
-        )
-    };
+    let positionals = frame_positionals(mrb);
     if positionals.len() == N {
         return positionals.try_into().ok();
     }
@@ -143,6 +128,18 @@ pub(crate) fn with_call<R>(mrb: &Mrb, body: impl FnOnce(&[Value], Option<crate::
         .filter(|keywords| !keywords.is_empty(mrb))
         .map(ReprValue::as_value);
     body(ArgsCopy::new(call.positionals, keywords).as_slice(), block)
+}
+
+/// The current call's positionals as they stand in its frame.
+fn frame_positionals(mrb: &Mrb) -> &[Value] {
+    // SAFETY: `mrb` is alive inside a C function's call; mruby's own
+    // argument accessors read its current call info and never raise.
+    unsafe {
+        slice_from_argv(
+            sys::mrb_get_argv(mrb.as_ptr()),
+            sys::mrb_get_argc(mrb.as_ptr()),
+        )
+    }
 }
 
 /// Whether the current call passed keywords.
