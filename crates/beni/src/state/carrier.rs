@@ -110,9 +110,8 @@ impl Mrb {
         Ok(class)
     }
 
-    /// The whole path as the symbol keying it in the record. A symbol
-    /// key is hashed and compared by its id, so reading the record
-    /// runs no Ruby a program could define.
+    /// The class `path` names, each segment fetched as a constant of
+    /// the one before it, starting from `Object`.
     fn resolve_carrier(&self, path: &'static CStr) -> Result<RClass, Error> {
         let mut named = self.object_class().as_value();
         for segment in segments(path.to_bytes()) {

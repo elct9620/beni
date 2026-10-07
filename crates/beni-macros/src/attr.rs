@@ -61,8 +61,8 @@ pub fn unmarked(path: &LitStr, trait_name: &str) -> TokenStream {
     quote! { panic!(#message, #text) }
 }
 
-/// A class path as the C string keying it, rejecting a path holding a
-/// segment no constant fetch could resolve.
+/// A class path as the C string a carrier mark resolves, rejecting a
+/// path holding a segment no constant fetch could resolve.
 pub fn carrier_path(path: &LitStr) -> Result<Literal, Error> {
     let text = path.value();
     if text.split("::").any(str::is_empty) {

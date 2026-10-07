@@ -12,7 +12,7 @@ beni   ──over──▶ beni-sys    (mruby)
 
 ## Surface
 
-Each item is reached from the crate root.
+Each item is named by its path from the crate root.
 
 | Item | What it is |
 |---|---|
@@ -26,7 +26,7 @@ Each item is reached from the crate root.
 | `InlineStruct` | a `Pod` struct stored inside the object |
 | `method!` | registers a typed Rust function as a method |
 | `Mrb::proc_from_fn` | a `Proc` whose body is a Rust closure |
-| `beni::sys` | the raw FFI, with `protect` and `catch_unwind` |
+| `sys` | the raw FFI, with `protect` and `catch_unwind` |
 
 `#[beni::wrap]` and `#[derive(beni::TypedData)]` implement `TypedData`
 for the class `mark_carriers` prepares from the gem's `init`.
