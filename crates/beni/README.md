@@ -5,7 +5,7 @@ Typed Rust wrapper over the mruby C API, the Rust half of
 [beni-sys](https://crates.io/crates/beni-sys) carries the bindgen FFI
 surface and this crate owns every abstraction above it.
 
-```
+```text
 magnus ──over──▶ rb-sys      (CRuby)
 beni   ──over──▶ beni-sys    (mruby)
 ```

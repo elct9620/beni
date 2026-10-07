@@ -71,11 +71,12 @@ fn a_held_value_outlives_the_scope_that_computed_it() {
 
 #[test]
 fn every_record_beni_keeps_shares_one_global() {
+    static ROOTED_DROPS: AtomicUsize = AtomicUsize::new(0);
     let mrb = open_mrb();
     mrb.define_class(c"BeniLazyCarrier", mrb.object_class())
         .expect("defining the carrier class must succeed");
     Probe::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
-    let wrapped = mrb.wrap(Probe(&DROPS));
+    let wrapped = mrb.wrap(Probe(&ROOTED_DROPS));
     let _root = mrb
         .gc_root(wrapped.as_value())
         .expect("rooting the carrier must succeed");
