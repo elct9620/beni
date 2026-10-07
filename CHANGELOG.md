@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.21.0](https://github.com/elct9620/beni/compare/v0.20.0...v0.21.0) (2026-10-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** Value::zeroed is removed; return () or
+* **beni:** Mrb::mark_carrier, Mrb::carrier, Mrb::mark_inline_carrier, and Mrb::inline_carrier are removed. A type's class is read through its own TypedData::class or InlineStruct::class; a hand-written implementation holds its class in a Lazy of its own.
+* **beni:** RHash::each is now RHash::foreach; its closure takes the pair as TryConvert types and returns Result<ForEach, Error>, and a closure panic surfaces as Err(Error::Panic) instead of resuming.
+* **beni:** Vec<T>, HashMap<K, V>, BTreeMap<K, V>, RArray::to_vec, RHash::to_hash_map, RHash::to_btree_map, and a scan_args splat Vec<T> require TryConvertOwned element types; read Values or handles through
+
+### Features
+
+* **beni:** convert into heap collections only what holds no Value ([569428f](https://github.com/elct9620/beni/commit/569428ff948f55ba795ce79c49a356c3bb200ebc))
+* **beni:** convert the unit value into nil ([a3e3e5f](https://github.com/elct9620/beni/commit/a3e3e5f45b84dd9c60fbcc41e11196efa3ec9752))
+* **beni:** drop Value::zeroed ([5c2abff](https://github.com/elct9620/beni/commit/5c2abff4c092c95bd70fb88b140f17c9376683bb))
+* **beni:** hand out the undefined value and read it back unsafely ([43757cd](https://github.com/elct9620/beni/commit/43757cd3535a16ce10ce96eb2b835cba3a603b02))
+* **beni:** hold carrier classes in per-interpreter Lazy statics ([a5964e2](https://github.com/elct9620/beni/commit/a5964e2813397fb864e841916396d9349171f954))
+* **beni:** hold each inline struct type's class for one-lookup naming ([ee3afcb](https://github.com/elct9620/beni/commit/ee3afcbc0d72077f5e70217f25d098980b567d40))
+* **beni:** install a payload into a data carrier holding none ([394b072](https://github.com/elct9620/beni/commit/394b07283918548d2aa61f4a47f4873c7aa729f5))
+* **beni:** name an accessor for each core exception class ([150ed72](https://github.com/elct9620/beni/commit/150ed72cd1bdc88e9f7311a6f0b323c7d9cc747c))
+* **beni:** read the name a method's call reached it by ([df1bde3](https://github.com/elct9620/beni/commit/df1bde3e71a043fcd954d059aadc6fb36851b164))
+* **beni:** walk a hash's pairs through magnus's foreach ([34b856f](https://github.com/elct9620/beni/commit/34b856ffb626b851887eb2be533ac48cece72e9a))
+
+
+### Bug Fixes
+
+* **beni-tests:** count each lazy test's drops apart and keep the README diagram out of doctests ([32f7649](https://github.com/elct9620/beni/commit/32f76490c1b35740b9bb87619d154e44924d9810))
+* **beni-tests:** force an uncounted lazy value in the one-global test ([e85cf2d](https://github.com/elct9620/beni/commit/e85cf2d2624dce182c091617917b65e114e924a2))
+* **beni:** name the classes of beni's own exceptions as mruby's raises do ([228e201](https://github.com/elct9620/beni/commit/228e201592651e50ea7e449d7184213d36f9de02))
+
+
+### Performance Improvements
+
+* **beni:** read a fixed-arity call of exactly its arity without a format parse ([754d0af](https://github.com/elct9620/beni/commit/754d0af4c0bb241e081245f7c260a4dc67688bf1))
+* **beni:** read an optional-arity call within its range without a format parse ([118b3fd](https://github.com/elct9620/beni/commit/118b3fd12219fb3cbae02601c6847a563a8645ed))
+* **beni:** read scan_args parts without allocating on the heap ([28517a8](https://github.com/elct9620/beni/commit/28517a81c8ae5f326a1ff50aa174f38cd487d211))
+* **beni:** refuse a wrap's class from its flags instead of a protect frame ([5e343ab](https://github.com/elct9620/beni/commit/5e343abedba3085c34644f6f506901d35dbf9251))
+
 ## [0.20.0](https://github.com/elct9620/beni/compare/v0.19.0...v0.20.0) (2026-10-05)
 
 
