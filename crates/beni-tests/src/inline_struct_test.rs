@@ -252,9 +252,9 @@ fn point_x(_mrb: &Mrb, rb_self: Point2D) -> i32 {
     rb_self.x as i32
 }
 
-fn point_set_x(mrb: &Mrb, rb_self: Inline<Point2D>, x: f64) -> Result<Value, Error> {
+fn point_set_x(mrb: &Mrb, rb_self: Inline<Point2D>, x: f64) -> Result<(), Error> {
     rb_self.set(mrb, Point2D { x, ..rb_self.get() })?;
-    Ok(beni::value::qnil().as_value())
+    Ok(())
 }
 
 fn define_point(mrb: &Mrb) {

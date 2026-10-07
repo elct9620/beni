@@ -56,9 +56,9 @@ fn positionals_fill_required_and_trailing_before_optional_and_splat() {
 }
 
 // def m(a, b = nil)
-fn bounded(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
+fn bounded(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<(), Error> {
     scan_args::<(Value,), (Option<Value>,), (), (), (), ()>(mrb)?;
-    Ok(beni::value::qnil().as_value())
+    Ok(())
 }
 
 #[test]
@@ -182,9 +182,9 @@ fn optional_block(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Err
         .into_value(mrb))
 }
 
-fn ignored_block(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
+fn ignored_block(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<(), Error> {
     scan_args::<(), (), (), (), (), ()>(mrb)?;
-    Ok(beni::value::qnil().as_value())
+    Ok(())
 }
 
 #[test]
@@ -216,10 +216,10 @@ impl Drop for ReadGuard {
     }
 }
 
-fn guarded(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
+fn guarded(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<(), Error> {
     let _guard = ReadGuard;
     scan_args::<(i32,), (), (), (), (), Proc>(mrb)?;
-    Ok(beni::value::qnil().as_value())
+    Ok(())
 }
 
 #[test]
@@ -313,10 +313,10 @@ fn a_keyword_no_list_names_is_an_argument_error_without_a_rest() {
     );
 }
 
-fn mismatched_names(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
+fn mismatched_names(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<(), Error> {
     let bucket = mrb.hash_new();
     get_kwargs::<_, (i32, i32), (), ()>(mrb, bucket, &["a"], &[])?;
-    Ok(beni::value::qnil().as_value())
+    Ok(())
 }
 
 #[test]

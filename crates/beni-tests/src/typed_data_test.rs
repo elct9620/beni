@@ -460,10 +460,9 @@ fn seed_n(_mrb: &Mrb, rb_self: &Seed) -> i32 {
     rb_self.n
 }
 
-fn seed_initialize(mrb: &Mrb, rb_self: RTypedData, n: i32) -> Result<Value, Error> {
+fn seed_initialize(mrb: &Mrb, rb_self: RTypedData, n: i32) -> Result<(), Error> {
     rb_self
         .init(mrb, Seed { n })
-        .map(|()| beni::value::qnil().as_value())
         .map_err(|offered| refused(mrb, offered))
 }
 
@@ -481,10 +480,9 @@ fn tally_n(_mrb: &Mrb, rb_self: &Tally) -> i32 {
     rb_self.n
 }
 
-fn tally_initialize_copy(mrb: &Mrb, rb_self: RTypedData, orig: &Tally) -> Result<Value, Error> {
+fn tally_initialize_copy(mrb: &Mrb, rb_self: RTypedData, orig: &Tally) -> Result<(), Error> {
     rb_self
         .init(mrb, Tally { n: orig.n })
-        .map(|()| beni::value::qnil().as_value())
         .map_err(|offered| refused(mrb, offered))
 }
 
@@ -580,10 +578,9 @@ fn ledger_n(_mrb: &Mrb, rb_self: &Ledger) -> i32 {
     rb_self.n
 }
 
-fn ledger_initialize_copy(mrb: &Mrb, rb_self: RTypedData, orig: &Ledger) -> Result<Value, Error> {
+fn ledger_initialize_copy(mrb: &Mrb, rb_self: RTypedData, orig: &Ledger) -> Result<(), Error> {
     rb_self
         .init(mrb, Ledger { n: orig.n + 100 })
-        .map(|()| beni::value::qnil().as_value())
         .map_err(|offered| refused(mrb, offered))
 }
 
