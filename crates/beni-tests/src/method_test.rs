@@ -386,6 +386,27 @@ fn result_returning_method_raises_its_err() {
     );
 }
 
+fn settle(_mrb: &Mrb, _self: Value) -> Result<(), Error> {
+    Ok(())
+}
+
+#[test]
+fn unit_returning_method_answers_nil() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniSettled");
+    class
+        .define_method(&mrb, c"settle", beni::method!(settle, 0))
+        .expect("registering the unit-returning method must succeed");
+
+    let receiver = class
+        .new_instance(&mrb, &[])
+        .expect("the receiver constructs without raising");
+    let answer = receiver
+        .funcall(&mrb, c"settle", &[])
+        .expect("an Ok body must not raise");
+    assert!(answer.is_nil());
+}
+
 fn echo_string(_mrb: &Mrb, _self: Value, v: beni::RString) -> beni::RString {
     v
 }

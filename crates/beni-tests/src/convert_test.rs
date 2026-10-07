@@ -42,6 +42,13 @@ fn bool_round_trips_and_converts_totally() {
 }
 
 #[test]
+fn unit_converts_into_nil() {
+    let mrb = open_mrb();
+
+    assert!(().into_value(&mrb).is_nil());
+}
+
+#[test]
 fn string_converts_utf8_and_rejects_otherwise() {
     let mrb = open_mrb();
 

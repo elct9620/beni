@@ -176,6 +176,15 @@ impl IntoValue for bool {
     }
 }
 
+impl IntoValue for () {
+    // A body with nothing to answer returns `()`, which Ruby reads as
+    // `nil` — magnus's `IntoValue for ()`.
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        crate::value::qnil().as_value()
+    }
+}
+
 // A handle on a Ruby object converts into the value naming that same
 // object: the `Value`-newtype handles unwrap it, the class handles box
 // their pointer.

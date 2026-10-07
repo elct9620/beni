@@ -254,6 +254,14 @@ fn a_rust_defined_proc_called_without_keywords_allocates_no_hash() {
     assert_eq!(hashes_on_the_heap(&mrb), before);
 }
 
+#[test]
+fn a_rust_defined_proc_returning_unit_answers_nil() {
+    let mrb = open_mrb();
+    let block = mrb.proc_new(|_mrb: &Mrb, _args: &[Value], _block: Option<Proc>| ());
+
+    assert_eq!(run_with(&mrb, block, "P.call"), "nil");
+}
+
 fn refuse(mrb: &Mrb, _args: &[Value], _block: Option<Proc>) -> Result<Value, Error> {
     Err(Error::new(
         mrb,
