@@ -5,6 +5,11 @@ Typed Rust wrapper over the mruby C API, the Rust half of
 [beni-sys](https://crates.io/crates/beni-sys) carries the bindgen FFI
 surface and this crate owns every abstraction above it.
 
+```
+magnus ──over──▶ rb-sys      (CRuby)
+beni   ──over──▶ beni-sys    (mruby)
+```
+
 ## Surface
 
 Each item is reached from the crate root.
@@ -15,6 +20,8 @@ Each item is reached from the crate root.
 | `Value` and its handles | `RClass`, `RArray`, `Integer`, … — one per type tag |
 | `FromValue` | the downcast that tells a value's type |
 | `IntoValue` / `TryConvert` | Rust into a value; the argument conversion |
+| `TryConvertOwned` | the owned targets a `Vec` or map converts to |
+| `value::Lazy` | a value a `static` names, held per interpreter |
 | `TypedData` | a Rust payload read back as `&T` or `Obj<T>` |
 | `InlineStruct` | a `Pod` struct stored inside the object |
 | `method!` | registers a typed Rust function as a method |
@@ -86,4 +93,4 @@ with its ABI. Behavior contracts live in the repository's
 
 ## License
 
-Apache-2.0
+Licensed under [Apache-2.0](LICENSE).
