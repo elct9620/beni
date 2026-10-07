@@ -101,6 +101,24 @@ impl RArray {
         }))
     }
 
+    /// The element at `index`, or `nil` past the end, read without
+    /// taking an arena slot.
+    ///
+    /// # Safety
+    ///
+    /// The caller keeps the element reachable for as long as it uses
+    /// the value, as a record beni holds for the interpreter's lifetime
+    /// keeps every element it holds.
+    #[inline]
+    pub(crate) unsafe fn entry_unheld(self, index: usize) -> Value {
+        // SAFETY: `self` is Array-tagged by the `from_value_unchecked`
+        // contract; `mrb_ary_entry` is bounds-tolerant and neither
+        // raises nor dispatches.
+        Value::from_raw_unchecked(unsafe {
+            sys::mrb_ary_entry(self.0.as_raw(), index as sys::mrb_int)
+        })
+    }
+
     /// `mrb_ary_set(mrb, self, idx, val)` — write `val` at `idx`,
     /// following Ruby's `ary[idx] = val`: a positive index past the end
     /// grows the array with `nil`, and a negative index counts from the

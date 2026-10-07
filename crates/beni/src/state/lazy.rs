@@ -105,11 +105,11 @@ impl Mrb {
         if index >= record.len() {
             return None;
         }
-        // SAFETY: `record` is the live record Array and `index` lies within
-        // it; the read neither raises nor dispatches.
-        let held = unsafe { sys::mrb_ary_entry(record.as_raw(), index as sys::mrb_int) };
+        // SAFETY: the record, held under its global for the interpreter's
+        // lifetime, keeps every value it holds reachable.
+        let held = unsafe { record.entry_unheld(index) };
         // SAFETY: pure tag check.
-        (!unsafe { sys::mrb_undef_p_func(held) }).then(|| Value::from_raw_unchecked(held))
+        (!unsafe { sys::mrb_undef_p_func(held.as_raw()) }).then_some(held)
     }
 
     fn set_lazy_slot(&self, index: usize, value: Value) {

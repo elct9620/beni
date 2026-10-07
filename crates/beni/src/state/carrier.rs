@@ -134,16 +134,13 @@ fn owner_of(owners: RArray, class: *mut sys::RClass) -> Option<*const ()> {
 /// and the tag unboxed. The record keeps every entry reachable, so the
 /// reads take no arena slot.
 fn pairs(array: RArray) -> impl Iterator<Item = (Value, *const ())> {
-    let entry = move |index: usize| {
-        // SAFETY: `array` is the record's live array and `index` lies
-        // inside it.
-        unsafe { sys::mrb_ary_entry(array.as_raw(), index as sys::mrb_int) }
-    };
+    // SAFETY: the record keeps every entry reachable.
+    let entry = move |index: usize| unsafe { array.entry_unheld(index) };
     (0..array.len() / 2).map(move |pair| {
         // SAFETY: the record pairs every class with the C pointer
         // `push_pair` boxed for it.
-        let tag = unsafe { sys::mrb_cptr_func(entry(pair * 2 + 1)) } as *const ();
-        (Value::from_raw_unchecked(entry(pair * 2)), tag)
+        let tag = unsafe { sys::mrb_cptr_func(entry(pair * 2 + 1).as_raw()) } as *const ();
+        (entry(pair * 2), tag)
     })
 }
 
