@@ -13,9 +13,10 @@
 //!   1. read the call-frame arguments — straight from the argument
 //!      vector when the call passed no keywords and a count the arity
 //!      accepts, otherwise via `mrb_get_args` (the `"o"` format repeated
-//!      per arity) under exception protection, which enforces the count: a
-//!      mismatch comes back as an `ArgumentError` `Err` before any
-//!      `TryConvert` conversion runs,
+//!      per arity) under exception protection; a block-accepting arity
+//!      reads once through a format that accepts every count and checks
+//!      the count itself. A mismatch comes back as mruby's `ArgumentError`
+//!      `Err` before any `TryConvert` conversion runs,
 //!   2. convert the receiver, then each argument, through `TryConvert`
 //!      — mirroring magnus's typed `self` — a failed conversion
 //!      raises its exception to the Ruby caller **before** the wrapped
@@ -506,15 +507,15 @@ define_method_req_opt_trait!(
 /// registered function with `$req` required positionals followed by a
 /// block parameter. The block is an `Option<Proc>` trailing parameter
 /// on the wrapped function — `Some` when the caller passed a block,
-/// `None` when none was passed. The format string ends in `&`,
-/// mruby's block marker, which reads the call's block slot.
+/// `None` when none was passed. The frame is read once by
+/// `frame_args_with_block`, which checks the count itself.
 ///
 /// mruby leaves the block slot nil when no block is passed, so a nil
 /// slot is the `None` case; any other value is a `Proc` the slot is
 /// guaranteed to carry, wrapped through the unchecked downcast.
 macro_rules! define_method_req_block_trait {
     (
-        $(#[$attr:meta])* $name:ident, $fmt:literal,
+        $(#[$attr:meta])* $name:ident,
         [$(($req:ident, $rt:ident)),*]
     ) => {
         $(#[$attr])*
@@ -536,35 +537,21 @@ macro_rules! define_method_req_block_trait {
             /// fibers, which mruby allows only as the method's return.
             #[doc(hidden)]
             unsafe fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
-                $(let mut $req = sys::mrb_value::zeroed();)*
-                let mut block = sys::mrb_value::zeroed();
-                read_frame(mrb, |mrb| {
-                    // SAFETY: `mrb` is alive; each out-parameter is a
-                    // valid `*mut mrb_value`; the format string holds
-                    // one `o` per required out-parameter and a trailing
-                    // `&` for the block slot.
-                    unsafe {
-                        sys::mrb_get_args(
-                            mrb.as_ptr(),
-                            $fmt.as_ptr()
-                            $(, &mut $req as *mut sys::mrb_value)*,
-                            &mut block as *mut sys::mrb_value,
-                        );
-                    }
-                })?;
+                let (args, block) = crate::state::args::frame_args_with_block(mrb)?;
+                let [$($req),*] = args;
                 let self_ = S::try_convert(self_, mrb)?;
                 $(
-                    let $req = $rt::try_convert(Value::from_raw_unchecked($req), mrb)?;
+                    let $req = $rt::try_convert($req, mrb)?;
                 )*
                 // SAFETY: `mrb` is alive; `block` is a valid value.
-                let block = if unsafe { sys::mrb_nil_p_func(block) } {
+                let block = if unsafe { sys::mrb_nil_p_func(block.as_raw()) } {
                     None
                 } else {
                     // The block slot carries a Proc whenever it is
                     // not nil, so the unchecked downcast is sound.
                     // SAFETY: the non-nil block slot is Proc-tagged
                     // by mruby's call convention.
-                    Some(unsafe { crate::Proc::from_value_unchecked(Value::from_raw_unchecked(block)) })
+                    Some(unsafe { crate::Proc::from_value_unchecked(block) })
                 };
                 (self)(mrb, self_ $(, $req)*, block).into_return_value(mrb, private::Bridge(()))
             }
@@ -597,21 +584,18 @@ define_method_req_block_trait!(
     /// Typed crossing for a method that accepts a block and no
     /// required positionals.
     Method0Block,
-    c"&",
     []
 );
 define_method_req_block_trait!(
     /// Typed crossing for a method with one required positional and a
     /// block.
     Method1Block,
-    c"o&",
     [(a, T0)]
 );
 define_method_req_block_trait!(
     /// Typed crossing for a method with two required positionals and a
     /// block.
     Method2Block,
-    c"oo&",
     [(a, T0), (b, T1)]
 );
 

@@ -109,6 +109,27 @@ pub(crate) fn frame_args<const N: usize>(mrb: &Mrb, required: usize) -> Option<[
     Some(slots)
 }
 
+/// The call's `N` positionals and its block slot, read without a protect
+/// frame: the uncopied-rest read accepts every count and folds a keyword
+/// hash into the positionals as a fixed-count read does, so the count is
+/// checked here and a mismatch answers the `ArgumentError` mruby's own
+/// read raises for it.
+#[inline]
+pub(crate) fn frame_args_with_block<const N: usize>(
+    mrb: &Mrb,
+) -> Result<([Value; N], Value), Error> {
+    let call = crate::scan_args::read_raw(mrb, false);
+    match call.positionals.try_into() {
+        Ok(positionals) => Ok((positionals, call.block)),
+        Err(_) => Err(crate::scan_args::argnum_error(
+            mrb,
+            call.positionals.len(),
+            N,
+            Some(N),
+        )),
+    }
+}
+
 /// As `with_args`, also handing over the call's block: the `Proc` the
 /// call passed, or `None` when it passed none.
 pub(crate) fn with_call<R>(mrb: &Mrb, body: impl FnOnce(&[Value], Option<crate::Proc>) -> R) -> R {

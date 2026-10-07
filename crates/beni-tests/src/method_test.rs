@@ -688,6 +688,28 @@ fn optional_arity_reads_a_splat_and_folds_keywords_into_the_next_slot() {
 }
 
 #[test]
+fn block_accepting_arity_reads_a_splat_and_keywords_with_its_block() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniBlockSpread");
+    class
+        .define_method(&mrb, c"apply", beni::method!(apply_block, 1, &))
+        .expect("registering the typed method must succeed");
+
+    let got = mrb
+        .load_string(b"BeniBlockSpread.new.apply(*[4]) { |a| a * 10 }")
+        .expect("a splat spreading one value fills the parameter beside the block");
+    assert_eq!(i32::from_value(got), Some(40));
+
+    let err = mrb
+        .load_string(b"BeniBlockSpread.new.apply(a: 2) { |a| a }")
+        .expect_err("the keyword hash fills the parameter, which wants an Integer");
+    let Error::Exception(exc) = err else {
+        panic!("a failed conversion must raise, got {err}");
+    };
+    assert_eq!(exc.classname(&mrb), "TypeError");
+}
+
+#[test]
 fn block_accepting_arity_raises_argument_error_on_wrong_count() {
     let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniBlockArity");
