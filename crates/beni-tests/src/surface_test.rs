@@ -166,7 +166,7 @@ fn full_api_surface_is_reachable_from_outside() {
         0
     }
     fn _surface_any(_mrb: &Mrb, _self: Value, _args: &[Value]) -> Value {
-        Value::zeroed()
+        beni::value::qnil().as_value()
     }
     let _ = beni::method!(_surface_typed, 1);
     let _ = beni::method!(_surface_any, -1);
@@ -398,7 +398,7 @@ fn typed_mrb_func_t_coerces_from_value_bridge() {
     // UB — this and `value_shares_abi_with_mrb_value` are the guard
     // rail.
     unsafe extern "C" fn _stub(_mrb: *mut beni::sys::mrb_state, _self_: Value) -> Value {
-        Value::zeroed()
+        beni::value::qnil().as_value()
     }
     let _f: beni::mrb_func_t = _stub;
 }

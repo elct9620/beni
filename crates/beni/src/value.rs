@@ -731,19 +731,6 @@ impl Value {
         Self(v)
     }
 
-    /// All-zero `Value`. Under word boxing this matches
-    /// `mrb_nil_value()` (MRB_Qnil = 0), but callers that need a
-    /// guaranteed nil should prefer
-    /// `value::qnil` which reads through the mruby shim. The
-    /// zeroed form exists for out-parameter initialization
-    /// (`mrb_get_args` writes to it).
-    #[inline]
-    pub fn zeroed() -> Self {
-        Self(sys::mrb_value::zeroed())
-    }
-}
-
-impl Value {
     /// `mrb_int_value(mrb, n)` — construct an mruby Integer from `n`,
     /// via mruby's own boxing-agnostic `MRB_INLINE` constructor
     /// (reached through bindgen's static-fn trampoline, compiled with
