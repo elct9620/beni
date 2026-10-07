@@ -1,6 +1,4 @@
-use crate::attr::{
-    beni_attribute, carrier_path, class_and_name, reject_field_attributes, unmarked,
-};
+use crate::attr::{beni_attribute, carrier_site, class_and_name, reject_field_attributes};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{spanned::Spanned, Data, DeriveInput, Error};
@@ -24,8 +22,12 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     reject_field_attributes(&input.data)?;
 
     let ident = &input.ident;
-    let path = carrier_path(&class)?;
-    let unmarked = unmarked(&class, "InlineStruct");
+    let site = carrier_site(
+        proc_macro2::Ident::new("CLASS", proc_macro2::Span::call_site()),
+        &class,
+        "InlineStruct",
+    )?;
+    let (site_decl, site_ident, path) = (&site.decl, &site.ident, &site.path);
 
     // The bound is checked where the type is declared, so a payload too
     // large fails here rather than at its first use.
@@ -36,9 +38,12 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             "an InlineStruct payload fits three pointer widths at pointer alignment",
         );
 
+        const _: () = {
+        #site_decl
+
         unsafe impl ::beni::InlineStruct for #ident {
             fn class(mrb: &::beni::Mrb) -> ::beni::RClass {
-                mrb.inline_carrier::<Self>().unwrap_or_else(|| #unmarked)
+                mrb.get_inner(&#site_ident)
             }
 
             fn inline_type() -> &'static ::beni::InlineType<Self> {
@@ -47,10 +52,11 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             }
 
             fn mark_carriers(mrb: &::beni::Mrb) -> ::core::result::Result<(), ::beni::Error> {
-                mrb.mark_inline_carrier::<Self>(#path)?;
+                mrb.mark_inline_carrier_site::<Self>(&#site_ident, #path)?;
                 ::core::result::Result::Ok(())
             }
         }
+        };
 
         impl ::beni::TryConvert for #ident {
             fn try_convert(

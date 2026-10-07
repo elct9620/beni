@@ -53,6 +53,7 @@ pub mod carrier;
 pub mod define;
 pub mod exception;
 pub mod factory;
+pub mod lazy;
 pub mod load;
 pub mod protect;
 pub mod root;

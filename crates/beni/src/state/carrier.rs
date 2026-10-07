@@ -1,43 +1,36 @@
 //! The carrier record: the classes `TypedData` and `InlineStruct`
 //! types were marked as in this interpreter.
 //!
-//! A type implemented by `#[beni::wrap]` or `#[derive(TypedData)]`
-//! names its class by path. The path resolves once, when the embedder
-//! marks the type's carriers, and every later naming reads the class
-//! out of the record — so a constant a Ruby program binds over that
-//! path reaches no wrap. The record — the class each path names, the
-//! classes inline-struct types own, and each inline-struct type's own
-//! class — is stored under globals whose names carry no `$`, which no
-//! Ruby program can write.
+//! A type implemented by `#[beni::wrap]`, `#[derive(TypedData)]`, or
+//! `#[derive(InlineStruct)]` names each class by path at a naming site —
+//! the type's own `class` or an enum variant's — that holds a `Lazy`. The
+//! path resolves once, when the embedder marks the type's carriers, and
+//! every later naming reads the class the site's `Lazy` holds, so a
+//! constant a Ruby program binds over that path reaches no wrap. The
+//! classes inline-struct types own are kept beside it under a global
+//! whose name carries no `$`, which no Ruby program can write.
 //!
-//! A read is a symbol check and a global read, then a hash fetch keyed
-//! by symbol or a scan of class and type pairs compared by pointer:
-//! none allocates, raises, or dispatches, so a read runs no Ruby a
-//! program could define and needs no protect frame.
+//! A read checks a symbol and reads a global, then indexes an Array or
+//! scans class and type pairs compared by pointer: none allocates,
+//! raises, or dispatches, so a read runs no Ruby a program could define
+//! and needs no protect frame.
 
+use crate::value::Lazy;
 use crate::{
-    sys::AsRawValue, Error, FromValue as _, Mrb, RArray, RClass, RHash, ReprValue, Symbol,
-    TryConvert, Value,
+    sys::AsRawValue, Error, FromValue as _, Mrb, RArray, RClass, ReprValue, TryConvert, Value,
 };
 use beni_sys as sys;
 use core::ffi::CStr;
 
-/// The global holding the class each path names.
-const RECORD_GLOBAL: &[u8] = b"beni_carriers";
-
 /// The global holding the classes inline-struct types own.
 const INLINE_GLOBAL: &[u8] = b"beni_inline";
 
-/// The global holding the class each inline-struct type was last
-/// prepared as.
-const INLINE_CLASS_GLOBAL: &[u8] = b"beni_inline_classes";
-
 impl Mrb {
-    /// Resolve `path` from `Object`, prepare the class it names to
-    /// carry Rust data — marked as a carrier, its default allocator
-    /// undefined — and hold it in this interpreter's carrier record
-    /// under `path`. The class the record already held for `path`, if
-    /// any, is replaced.
+    /// Resolve `path` from `Object`, prepare the class it names to carry
+    /// Rust data — marked as a carrier, its default allocator undefined —
+    /// and hold it as `site`'s class in this interpreter, in place of any
+    /// class `site` held. The `TypedData` macros mark each class they name
+    /// through it.
     ///
     /// Each segment of `path` is fetched as a constant of the segment
     /// before it, the first as a constant of `Object`, so
@@ -45,57 +38,29 @@ impl Mrb {
     /// segment resolves to no constant, when the path resolves to a
     /// value that is not a class, or when that class refuses the
     /// carrier mark.
-    pub fn mark_carrier(&self, path: &'static CStr) -> Result<RClass, Error> {
-        self.prepare_carrier(path, |class| class.set_instance_data_tt(self))
-    }
-
-    /// As `mark_carrier`, preparing the class `path` names so its
-    /// instances are inline structs of `T` rather than data carriers,
-    /// and holding it as `T`'s class in place of the one an earlier call
-    /// for `T` held.
-    pub fn mark_inline_carrier<T: crate::InlineStruct>(
+    #[doc(hidden)]
+    pub fn mark_carrier_site(
         &self,
+        site: &Lazy<RClass>,
         path: &'static CStr,
     ) -> Result<RClass, Error> {
-        let class = self.prepare_carrier(path, |class| class.set_instance_inline_tt::<T>(self))?;
-        let classes = self.held_pairs(INLINE_CLASS_GLOBAL)?;
-        let tag = T::inline_type().tag();
-        match pairs(classes).position(|(_, held)| held == tag) {
-            Some(pair) => classes.store(self, (pair * 2) as isize, class.as_value())?,
-            None => self.push_pair(classes, class, tag)?,
-        }
+        let class = self.prepare_carrier(path, |class| class.set_instance_data_tt(self))?;
+        Lazy::hold(site, self, class);
         Ok(class)
     }
 
-    /// The class `mark_inline_carrier` last held as `T`'s in this
-    /// interpreter, and nothing when it has held none — read by pointer
-    /// identity alone, so the class belongs to `T` without a walk of its
-    /// ancestry.
-    pub fn inline_carrier<T: crate::InlineStruct>(&self) -> Option<RClass> {
-        let classes = self.held_array(INLINE_CLASS_GLOBAL)?;
-        let tag = T::inline_type().tag();
-        let (class, _) = pairs(classes).find(|(_, held)| *held == tag)?;
-        RClass::from_value(class)
-    }
-
-    /// The class this interpreter's carrier record holds for `path`,
-    /// and nothing when `mark_carrier` has put none there.
-    pub fn carrier(&self, path: &'static CStr) -> Option<RClass> {
-        let record = self.held_record()?;
-        let key = self.check_symbol(path.to_bytes())?.as_value();
-        // SAFETY: `record` is the live record Hash; a symbol key is hashed
-        // and compared by its id, and `mrb_hash_fetch` answers the given
-        // default for an absent key without consulting the Hash's own, so
-        // the fetch neither raises nor dispatches.
-        let held = unsafe {
-            sys::mrb_hash_fetch(
-                self.as_ptr(),
-                record.as_raw(),
-                key.as_raw(),
-                crate::value::qnil().as_value().as_raw(),
-            )
-        };
-        RClass::from_value(Value::from_raw_unchecked(held))
+    /// As `mark_carrier_site`, preparing the class `path` names so its
+    /// instances are inline structs of `T` rather than data carriers. The
+    /// `InlineStruct` macros mark the class they name through it.
+    #[doc(hidden)]
+    pub fn mark_inline_carrier_site<T: crate::InlineStruct>(
+        &self,
+        site: &Lazy<RClass>,
+        path: &'static CStr,
+    ) -> Result<RClass, Error> {
+        let class = self.prepare_carrier(path, |class| class.set_instance_inline_tt::<T>(self))?;
+        Lazy::hold(site, self, class);
+        Ok(class)
     }
 
     /// Hold `class` in the record as belonging to the inline-struct type
@@ -151,22 +116,6 @@ impl Mrb {
     /// The record, created on first use and kept reachable for the
     /// interpreter's lifetime by the global it is stored under — which
     /// is also what keeps every class it holds reachable.
-    fn carrier_record(&self) -> Result<RHash, Error> {
-        if let Some(record) = self.held_record() {
-            return Ok(record);
-        }
-        let record = self.hash_new();
-        self.gv_set(self.intern_static(RECORD_GLOBAL)?, record.as_value())?;
-        Ok(record)
-    }
-
-    /// The record, and nothing before anything has been marked.
-    fn held_record(&self) -> Option<RHash> {
-        RHash::from_value(self.held_global(RECORD_GLOBAL)?)
-    }
-
-    /// The array stored under the global `name`, and nothing before one
-    /// was.
     fn held_array(&self, name: &'static [u8]) -> Option<RArray> {
         RArray::from_value(self.held_global(name)?)
     }
@@ -192,19 +141,12 @@ impl Mrb {
         let class = self.resolve_carrier(path)?;
         mark(class)?;
         class.undef_default_alloc_func(self);
-        let record = self.carrier_record()?;
-        record.set(self, self.carrier_key(path)?, class.as_value())?;
         Ok(class)
     }
 
     /// The whole path as the symbol keying it in the record. A symbol
     /// key is hashed and compared by its id, so reading the record
     /// runs no Ruby a program could define.
-    fn carrier_key(&self, path: &'static CStr) -> Result<Value, Error> {
-        Ok(Symbol::from(self.intern_static(path.to_bytes())?).as_value())
-    }
-
-    /// Walk `path` from `Object`, one constant fetch per segment.
     fn resolve_carrier(&self, path: &'static CStr) -> Result<RClass, Error> {
         let mut named = self.object_class().as_value();
         for segment in segments(path.to_bytes()) {

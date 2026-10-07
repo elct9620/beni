@@ -11,6 +11,8 @@ use beni_sys as sys;
 use crate::{sys::AsRawValue, Error, Module, Mrb, RClass};
 use crate::{FromValue, RString};
 
+pub use crate::state::lazy::Lazy;
+
 // --------------------------------------------------------------------
 // Immediates cache.
 // --------------------------------------------------------------------

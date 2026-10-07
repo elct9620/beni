@@ -99,10 +99,12 @@ fn full_api_surface_is_reachable_from_outside() {
         #[repr(C)]
         struct Inlined(u32);
         let _ = Inline::<Inlined>::new;
-        let _ = Mrb::mark_inline_carrier::<Inlined>;
-        let _ = Mrb::inline_carrier::<Inlined>;
+        let _ = Mrb::mark_inline_carrier_site::<Inlined>;
     }
     let _ = DataType::<i32>::new;
+    let _ = beni::value::Lazy::<RClass>::new;
+    let _ = beni::value::Lazy::<RClass>::force;
+    let _ = beni::value::Lazy::<RClass>::try_get_inner;
     {
         #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
         #[repr(C)]
@@ -288,7 +290,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::assoc_new;
     let _ = Mrb::block_given;
     let _ = Mrb::mid;
-    let _ = Mrb::carrier;
+    let _ = Mrb::get_inner::<RClass>;
     let _ = Mrb::check_id;
     let _ = Mrb::check_symbol;
     let _ = Mrb::class_defined::<&core::ffi::CStr>;
@@ -325,7 +327,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::incremental_gc;
     let _ = Mrb::intern;
     let _ = Mrb::intern_static;
-    let _ = Mrb::mark_carrier;
+    let _ = Mrb::mark_carrier_site;
     let _ = Mrb::module_new;
     let _ = Mrb::str_new_static;
     let _ = Mrb::sym_dump;

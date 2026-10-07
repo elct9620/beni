@@ -384,8 +384,13 @@ fn the_type_class_is_held_per_interpreter_once_marked() {
     define_point(&first);
     define(&second, c"BeniPoint2D");
 
-    assert!(first.inline_carrier::<Point2D>().is_some());
-    assert!(second.inline_carrier::<Point2D>().is_none());
+    let _ = Point2D::class(&first);
+    let unmarked =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Point2D::class(&second)));
+    assert!(
+        unmarked.is_err(),
+        "the second interpreter holds no class for the type"
+    );
 }
 
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]

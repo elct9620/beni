@@ -1,10 +1,31 @@
-//! `Mrb::mark_carrier` / `Mrb::carrier`: the record of which class each
-//! `TypedData` class path was marked as, and what a Ruby program can
-//! do to it.
+//! The carrier record: the class each `TypedData` naming site was marked
+//! as, held in the site's `Lazy`, and what a Ruby program can do to it.
 
 use crate::support::open_mrb;
 use beni::prelude::*;
-use beni::{DataType, Mrb, RClass, TryConvert, TypedData};
+use beni::value::Lazy;
+use beni::{DataType, Error, Mrb, RClass, TryConvert, TypedData};
+use core::ffi::CStr;
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+/// The naming site standing for `path` in these cases, one per path.
+fn site(path: &'static CStr) -> &'static Lazy<RClass> {
+    static SITES: Mutex<Option<HashMap<&'static CStr, &'static Lazy<RClass>>>> = Mutex::new(None);
+    let mut sites = SITES.lock().expect("no case panics holding the sites");
+    sites
+        .get_or_insert_with(HashMap::new)
+        .entry(path)
+        .or_insert_with(|| Box::leak(Box::new(Lazy::new(|_| panic!("unmarked site")))))
+}
+
+fn mark(mrb: &Mrb, path: &'static CStr) -> Result<RClass, Error> {
+    mrb.mark_carrier_site(site(path), path)
+}
+
+fn held(mrb: &Mrb, path: &'static CStr) -> Option<RClass> {
+    Lazy::try_get_inner(site(path), mrb)
+}
 
 fn define(mrb: &Mrb, source: &[u8]) {
     mrb.load_string(source)
@@ -39,12 +60,9 @@ fn a_marked_path_answers_its_class_and_carries_data() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniCarrierPoint; end");
 
-    let marked = mrb
-        .mark_carrier(c"BeniCarrierPoint")
-        .expect("names a class");
+    let marked = mark(&mrb, c"BeniCarrierPoint").expect("names a class");
 
-    assert!(mrb
-        .carrier(c"BeniCarrierPoint")
+    assert!(held(&mrb, c"BeniCarrierPoint")
         .is_some_and(|held| held.as_value().is_equal(&mrb, marked.as_value())));
     let err = mrb
         .load_string(b"BeniCarrierPoint.new")
@@ -60,9 +78,7 @@ fn a_nested_path_resolves_one_constant_per_segment() {
     let mrb = open_mrb();
     define(&mrb, b"module BeniCarrierOuter; class Inner; end; end");
 
-    let marked = mrb
-        .mark_carrier(c"BeniCarrierOuter::Inner")
-        .expect("names a nested class");
+    let marked = mark(&mrb, c"BeniCarrierOuter::Inner").expect("names a nested class");
 
     assert!(marked
         .as_value()
@@ -74,7 +90,7 @@ fn an_unmarked_path_is_held_by_nothing() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniCarrierUnmarked; end");
 
-    assert!(mrb.carrier(c"BeniCarrierUnmarked").is_none());
+    assert!(held(&mrb, c"BeniCarrierUnmarked").is_none());
 }
 
 #[test]
@@ -84,13 +100,13 @@ fn reading_an_unmarked_path_runs_no_ruby_a_program_defines() {
         &mrb,
         b"class BeniCarrierHeld; end; class BeniCarrierUnheld; end",
     );
-    mrb.mark_carrier(c"BeniCarrierHeld").expect("names a class");
+    mark(&mrb, c"BeniCarrierHeld").expect("names a class");
     define(
         &mrb,
         b"class Hash; def default(*) = $beni_default_ran = true; end",
     );
 
-    let held = mrb.carrier(c"BeniCarrierUnheld");
+    let held = held(&mrb, c"BeniCarrierUnheld");
 
     assert!(held.is_none());
     assert!(mrb
@@ -104,37 +120,29 @@ fn a_path_naming_no_class_holds_nothing() {
     let mrb = open_mrb();
     define(&mrb, b"BeniCarrierNotAClass = 1");
 
-    let missing = mrb
-        .mark_carrier(c"BeniCarrierMissing")
-        .expect_err("no constant is bound under the path");
-    let not_a_class = mrb
-        .mark_carrier(c"BeniCarrierNotAClass")
-        .expect_err("the constant is not a class");
-    let refused = mrb
-        .mark_carrier(c"String")
-        .expect_err("a string's layout refuses the carrier mark");
+    let missing =
+        mark(&mrb, c"BeniCarrierMissing").expect_err("no constant is bound under the path");
+    let not_a_class = mark(&mrb, c"BeniCarrierNotAClass").expect_err("the constant is not a class");
+    let refused = mark(&mrb, c"String").expect_err("a string's layout refuses the carrier mark");
 
     assert!(missing.message(&mrb).contains("BeniCarrierMissing"));
     assert_eq!(not_a_class.message(&mrb), "1 is not a class");
     assert!(refused.message(&mrb).contains("carry Rust data"));
-    assert!(mrb.carrier(c"BeniCarrierMissing").is_none());
-    assert!(mrb.carrier(c"BeniCarrierNotAClass").is_none());
+    assert!(held(&mrb, c"BeniCarrierMissing").is_none());
+    assert!(held(&mrb, c"BeniCarrierNotAClass").is_none());
 }
 
 #[test]
 fn marking_a_held_path_again_replaces_what_it_holds() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniCarrierFirst; end");
-    mrb.mark_carrier(c"BeniCarrierFirst")
-        .expect("names a class");
+    mark(&mrb, c"BeniCarrierFirst").expect("names a class");
     define(
         &mrb,
         b"BeniCarrierOther = Class.new; Object.const_set(:BeniCarrierFirst, BeniCarrierOther)",
     );
 
-    let remarked = mrb
-        .mark_carrier(c"BeniCarrierFirst")
-        .expect("the path now names the other class");
+    let remarked = mark(&mrb, c"BeniCarrierFirst").expect("the path now names the other class");
 
     assert!(remarked
         .as_value()
@@ -145,14 +153,11 @@ fn marking_a_held_path_again_replaces_what_it_holds() {
 fn no_ruby_program_reaches_the_record_through_a_global() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniCarrierGuarded; end");
-    let marked = mrb
-        .mark_carrier(c"BeniCarrierGuarded")
-        .expect("names a class");
+    let marked = mark(&mrb, c"BeniCarrierGuarded").expect("names a class");
 
-    define(&mrb, b"$beni_carriers = nil; beni_carriers = nil");
+    define(&mrb, b"$beni_lazy = nil; beni_lazy = nil");
 
-    assert!(mrb
-        .carrier(c"BeniCarrierGuarded")
+    assert!(held(&mrb, c"BeniCarrierGuarded")
         .is_some_and(|held| held.as_value().is_equal(&mrb, marked.as_value())));
 }
 
@@ -163,12 +168,10 @@ fn each_interpreter_holds_its_own_record() {
     define(&first, b"class BeniCarrierPerState; end");
     define(&second, b"class BeniCarrierPerState; end");
 
-    first
-        .mark_carrier(c"BeniCarrierPerState")
-        .expect("names a class");
+    mark(&first, c"BeniCarrierPerState").expect("names a class");
 
-    assert!(first.carrier(c"BeniCarrierPerState").is_some());
-    assert!(second.carrier(c"BeniCarrierPerState").is_none());
+    assert!(held(&first, c"BeniCarrierPerState").is_some());
+    assert!(held(&second, c"BeniCarrierPerState").is_none());
 }
 
 #[test]
@@ -195,13 +198,12 @@ fn a_hand_written_implementation_marks_the_class_it_names() {
 fn the_record_keeps_its_class_through_a_collection() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniCarrierHeld; end");
-    let marked = mrb.mark_carrier(c"BeniCarrierHeld").expect("names a class");
+    let marked = mark(&mrb, c"BeniCarrierHeld").expect("names a class");
 
     define(&mrb, b"Object.const_set(:BeniCarrierHeld, Class.new)");
     mrb.full_gc();
 
-    let held = mrb
-        .carrier(c"BeniCarrierHeld")
+    let held = held(&mrb, c"BeniCarrierHeld")
         .expect("the record still holds the class the constant let go of");
     assert!(held.as_value().is_equal(&mrb, marked.as_value()));
     assert_eq!(

@@ -1,6 +1,6 @@
 //! The `#[beni(...)]` attribute reading both derives share.
 
-use proc_macro2::{Literal, TokenStream};
+use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{quote, ToTokens};
 use std::ffi::CString;
 use syn::{spanned::Spanned, Attribute, Data, Error, Field, LitStr};
@@ -26,14 +26,28 @@ pub fn class_and_name(attr: &Attribute) -> Result<(LitStr, Literal), Error> {
     Ok((class, name))
 }
 
-/// Read the class `path` was marked as in the interpreter at hand.
-/// Nothing resolves here: the path resolved when the type's carriers
-/// were marked, so what a Ruby program binds over it reaches no wrap.
-pub fn read_carrier(path: &LitStr, trait_name: &str) -> Result<TokenStream, Error> {
+/// A naming site: the `Lazy` static `ident` holding, in each
+/// interpreter, the class `path` was marked as. Read before it is marked,
+/// it panics naming the `mark_carriers` call that marks it. Nothing
+/// resolves on a read: the path resolved when the type's carriers were
+/// marked, so what a Ruby program binds over it reaches no wrap.
+pub struct CarrierSite {
+    pub ident: Ident,
+    pub path: Literal,
+    pub decl: TokenStream,
+}
+
+pub fn carrier_site(ident: Ident, path: &LitStr, trait_name: &str) -> Result<CarrierSite, Error> {
     let literal = carrier_path(path)?;
     let unmarked = unmarked(path, trait_name);
-    Ok(quote! {
-        mrb.carrier(#literal).unwrap_or_else(|| #unmarked)
+    let decl = quote! {
+        static #ident: ::beni::value::Lazy<::beni::RClass> =
+            ::beni::value::Lazy::new(|_| #unmarked);
+    };
+    Ok(CarrierSite {
+        ident,
+        path: literal,
+        decl,
     })
 }
 

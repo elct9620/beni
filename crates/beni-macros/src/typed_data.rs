@@ -1,7 +1,8 @@
 use crate::attr::{
-    beni_attribute, carrier_path, class_and_name, nul_free, read_carrier, reject_field_attributes,
-    unsupported,
+    beni_attribute, carrier_site, class_and_name, nul_free, reject_field_attributes, unsupported,
+    CarrierSite,
 };
+use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::parse::Parser;
@@ -48,67 +49,76 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let (class, name) = class_and_name(attr)?;
 
     let ident = &input.ident;
-    let read_class = read_carrier(&class, "TypedData")?;
-    let class_for = class_for(&input.data)?;
-    let mark_carriers = mark_carriers(&class, &input.data)?;
+    let own = carrier_site(site_ident("CLASS"), &class, "TypedData")?;
+    let variants = variant_sites(&input.data)?;
+    let class_for = class_for(&variants);
     reject_field_attributes(&input.data)?;
+
+    let own_site = &own.ident;
+    let sites = core::iter::once(&own).chain(variants.iter().map(|(_, site)| site));
+    let decls = sites.clone().map(|site| &site.decl);
+    let marks = sites.map(|CarrierSite { ident, path, .. }| {
+        quote! { mrb.mark_carrier_site(&#ident, #path)?; }
+    });
 
     // Every class the implementation names is marked as it is named,
     // which is the contract `unsafe impl TypedData` asks of it.
     Ok(quote! {
-        unsafe impl ::beni::TypedData for #ident {
-            fn class(mrb: &::beni::Mrb) -> ::beni::RClass {
-                #read_class
-            }
+        const _: () = {
+            #(#decls)*
 
-            fn data_type() -> &'static ::beni::DataType<Self> {
-                static DATA_TYPE: ::beni::DataType<#ident> = ::beni::DataType::new(#name);
-                &DATA_TYPE
-            }
+            unsafe impl ::beni::TypedData for #ident {
+                fn class(mrb: &::beni::Mrb) -> ::beni::RClass {
+                    mrb.get_inner(&#own_site)
+                }
 
-            fn mark_carriers(mrb: &::beni::Mrb) -> ::core::result::Result<(), ::beni::Error> {
-                #mark_carriers
-                ::core::result::Result::Ok(())
-            }
+                fn data_type() -> &'static ::beni::DataType<Self> {
+                    static DATA_TYPE: ::beni::DataType<#ident> = ::beni::DataType::new(#name);
+                    &DATA_TYPE
+                }
 
-            #class_for
-        }
+                fn mark_carriers(mrb: &::beni::Mrb) -> ::core::result::Result<(), ::beni::Error> {
+                    #(#marks)*
+                    ::core::result::Result::Ok(())
+                }
+
+                #class_for
+            }
+        };
     })
 }
 
-/// Mark every class this implementation names — the type's own and
-/// each variant's — so naming one afterwards reads a prepared class.
-fn mark_carriers(class: &LitStr, data: &Data) -> Result<TokenStream, Error> {
-    let mut paths = vec![carrier_path(class)?];
-    if let Data::Enum(data) = data {
-        for variant in &data.variants {
-            if let Some(path) = variant_class(variant)? {
-                paths.push(carrier_path(&path)?);
-            }
+fn site_ident(name: &str) -> proc_macro2::Ident {
+    proc_macro2::Ident::new(name, Span::call_site())
+}
+
+/// The naming site of each enum variant carrying `#[beni(class = "...")]`,
+/// beside the variant it names.
+fn variant_sites(data: &Data) -> Result<Vec<(&syn::Ident, CarrierSite)>, Error> {
+    let Data::Enum(data) = data else {
+        return Ok(Vec::new());
+    };
+    let mut sites = Vec::new();
+    for (index, variant) in data.variants.iter().enumerate() {
+        if let Some(class) = variant_class(variant)? {
+            let ident = site_ident(&format!("VARIANT_{index}"));
+            sites.push((&variant.ident, carrier_site(ident, &class, "TypedData")?));
         }
     }
-    Ok(quote! { #(mrb.mark_carrier(#paths)?;)* })
+    Ok(sites)
 }
 
 /// `class_for` answering each variant's own class, for an enum whose
 /// variants carry `#[beni(class = "...")]`; nothing otherwise.
-fn class_for(data: &Data) -> Result<TokenStream, Error> {
-    let Data::Enum(data) = data else {
-        return Ok(TokenStream::new());
-    };
-    let mut arms = Vec::new();
-    for variant in &data.variants {
-        let Some(class) = variant_class(variant)? else {
-            continue;
-        };
-        let ident = &variant.ident;
-        let read_class = read_carrier(&class, "TypedData")?;
-        arms.push(quote! { Self::#ident { .. } => #read_class });
+fn class_for(variants: &[(&syn::Ident, CarrierSite)]) -> TokenStream {
+    if variants.is_empty() {
+        return TokenStream::new();
     }
-    if arms.is_empty() {
-        return Ok(TokenStream::new());
-    }
-    Ok(quote! {
+    let arms = variants.iter().map(|(variant, site)| {
+        let site = &site.ident;
+        quote! { Self::#variant { .. } => mrb.get_inner(&#site) }
+    });
+    quote! {
         fn class_for(mrb: &::beni::Mrb, value: &Self) -> ::beni::RClass {
             #[allow(unreachable_patterns)]
             match value {
@@ -116,7 +126,7 @@ fn class_for(data: &Data) -> Result<TokenStream, Error> {
                 _ => <Self as ::beni::TypedData>::class(mrb),
             }
         }
-    })
+    }
 }
 
 /// The class path one enum variant names, and nothing when it carries
