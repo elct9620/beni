@@ -274,7 +274,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RHash::contains_key;
     let _ = RHash::delete;
     let _ = RHash::dup;
-    let _ = RHash::each::<fn(Value, Value) -> ForEach>;
+    let _ = RHash::foreach::<fn(Value, Value) -> Result<ForEach, beni::Error>, Value, Value>;
     let _ = RHash::fetch;
     let _ = RHash::is_empty;
     let _ = RHash::len;

@@ -360,7 +360,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_hash_dup` | fn | ✅ | ✅ | `RHash::dup` |
 | `mrb_hash_empty_p` | fn | ✅ | ✅ | `RHash::is_empty` |
 | `mrb_hash_fetch` | fn | ✅ | ✅ | `RHash::fetch` |
-| `mrb_hash_foreach` | fn | ✅ | ✅ | `RHash::each` — closure returns `ForEach::{Continue,Stop}`, mirroring the C `int` 0/non-zero stop signal (magnus's `Delete` is dropped: mruby's foreach has no delete path); runs under `protect` and returns a `Result` because a closure that re-enters the VM to mutate the hash trips mruby's in-walk modify guard (`H_CHECK_MODIFIED`), which raises and would `longjmp` across the FFI boundary unprotected, surfaced instead as `Err` |
+| `mrb_hash_foreach` | fn | ✅ | ✅ | `RHash::foreach` — magnus's shape: each pair converted through `TryConvert`, the closure answering `ForEach::{Continue,Stop}` or an `Err` (magnus's `Delete` is dropped: mruby's foreach has no delete path); a closure `Err` or panic stops the walk and surfaces as `Err`; runs under `protect` so mruby's in-walk modify guard (`H_CHECK_MODIFIED`) surfaces as `Err`; `RHash::to_hash_map` / `to_btree_map` convert each pair inside the same walk |
 | `mrb_hash_get` | fn | ✅ | ✅ | `RHash::get` |
 | `mrb_hash_key_p` | fn | ✅ | ✅ | `RHash::contains_key` |
 | `mrb_hash_keys` | fn | ✅ | ✅ | `RHash::keys` |

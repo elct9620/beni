@@ -14,7 +14,7 @@ use crate::{
 };
 use beni_sys as sys;
 
-/// Signal an `RHash::each` closure returns to steer the walk. Mirrors
+/// Signal an `RHash::foreach` closure returns to steer the walk. Mirrors
 /// magnus's `ForEach`, minus its CRuby-only `Delete` (mruby's
 /// `mrb_hash_foreach` has no delete-and-continue path).
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -242,113 +242,32 @@ impl RHash {
         }
     }
 
-    /// `mrb_hash_foreach(mrb, self, …)` — visit each `(key, value)` pair
-    /// in insertion order, handing both to `body`. Returning
-    /// `ForEach::Stop` ends the walk before the remaining pairs;
-    /// `ForEach::Continue` proceeds. Mirrors magnus's `RHash::foreach`,
-    /// narrowed to the continue/stop signal mruby's C foreach supports.
+    /// `mrb_hash_foreach(mrb, self, …)` — visit each pair in insertion
+    /// order, converted through `TryConvert` into the types `func` takes.
+    /// `func` answers `ForEach::Continue` to proceed, `ForEach::Stop` to
+    /// end the walk, or an `Err`, which ends it and surfaces here. Mirrors
+    /// magnus's `RHash::foreach`, without its `Delete`: mruby's walk has no
+    /// path to delete the pair it stands on.
     ///
-    /// The walk dispatches no Ruby of its own, but a `body` that
-    /// re-enters the VM to mutate this hash's table trips mruby's in-walk
-    /// modification guard, which surfaces here as `Err` carrying the
-    /// `RuntimeError` mruby raises — the call runs under exception protection,
-    /// so that raise is caught rather than long-jumping.
-    ///
-    /// A panic in `body` is caught at the FFI boundary, stops the walk,
-    /// and resurfaces here once the walk unwinds — it never unwinds into
-    /// mruby's C frames.
+    /// A pair that fails its conversion ends the walk with that `Err`, and
+    /// a panic in `func` or a conversion ends it with an `Err` carrying the
+    /// panic's message, never unwinding into mruby's frames. The walk
+    /// dispatches no Ruby of its own; `func` re-entering the VM to mutate
+    /// this hash's table trips mruby's in-walk modification guard, surfaced
+    /// as the `Err` carrying its `RuntimeError`. Each pair handed to `func`
+    /// stays reachable as every value that crosses out does, even once
+    /// this hash lets it go.
     #[inline]
-    pub fn each<F>(self, mrb: &Mrb, body: F) -> Result<(), Error>
+    pub fn foreach<F, K, V>(self, mrb: &Mrb, mut func: F) -> Result<(), Error>
     where
-        F: FnMut(Value, Value) -> ForEach,
+        F: FnMut(K, V) -> Result<ForEach, Error>,
+        K: TryConvert,
+        V: TryConvert,
     {
-        // Park the closure beside a panic slot in a stack local. The
-        // trampoline borrows it per pair; on a panic it stashes the
-        // unwind payload here and reports `Stop`, so the C walk ends
-        // without a panic crossing its frames. The payload resumes
-        // below once control is back on the Rust side. `held` keeps
-        // every pair handed to `body` reachable once the walk's protect
-        // frame has released its arena, even after this hash lets it go.
-        struct Walk<F> {
-            body: F,
-            panic: Option<Box<dyn std::any::Any + Send>>,
-            held: RArray,
-        }
-
-        unsafe extern "C" fn trampoline<F>(
-            mrb: *mut sys::mrb_state,
-            key: sys::mrb_value,
-            val: sys::mrb_value,
-            data: *mut core::ffi::c_void,
-        ) -> core::ffi::c_int
-        where
-            F: FnMut(Value, Value) -> ForEach,
-        {
-            // SAFETY: `data` is the `&mut Walk<F>` handed to
-            // `mrb_hash_foreach` below; the foreach call borrows it
-            // for the duration of the walk on this same thread.
-            let walk: &mut Walk<F> = unsafe { &mut *(data as *mut Walk<F>) };
-            // SAFETY: `mrb` is the live state driving the walk and `held`
-            // a fresh Array from it; a push that raises long-jumps to the
-            // walk's protect frame across no value that needs dropping.
-            unsafe {
-                sys::mrb_ary_push(mrb, walk.held.as_raw(), key);
-                sys::mrb_ary_push(mrb, walk.held.as_raw(), val);
-            }
-            let key = Value::from_raw_unchecked(key);
-            let val = Value::from_raw_unchecked(val);
-            // Catch here so a `body` panic stops the walk instead of
-            // unwinding through `mrb_hash_foreach`'s C frame.
-            // AssertUnwindSafe matches the crate's other panic
-            // boundaries: the parked payload is the only state that
-            // survives the catch. A non-zero return stops the C walk,
-            // so the trampoline is not re-entered after `Stop` or a
-            // parked panic.
-            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (walk.body)(key, val))) {
-                Ok(ForEach::Continue) => 0,
-                Ok(ForEach::Stop) => 1,
-                Err(payload) => {
-                    walk.panic = Some(payload);
-                    1
-                }
-            }
-        }
-
-        let mut walk = Walk {
-            body,
-            panic: None,
-            held: mrb.ary_new(),
-        };
-        // Run the whole walk under `protect`: `H_CHECK_MODIFIED` raises
-        // `RuntimeError` when `body` re-enters the VM and mutates this
-        // hash mid-walk, and that raise long-jumps out of
-        // `mrb_hash_foreach`. The protect frame catches it into `Err`.
-        let walk_ptr = &mut walk as *mut Walk<F> as *mut core::ffi::c_void;
-        let result = mrb.protect(|mrb| {
-            // SAFETY: `self` is Hash-tagged by the
-            // `from_value_unchecked` contract, so the object pointer is
-            // an `RHash`; both `mrb_obj_ptr_func` and the C
-            // `mrb_hash_ptr` macro read the same union pointer,
-            // differing only in the cast. `mrb` is alive inside the
-            // protect frame; `trampoline::<F>` upholds the
-            // `mrb_hash_foreach_func` ABI; `walk_ptr` points to `walk`
-            // on this frame, which outlives the call. bindgen wraps the
-            // function-typedef parameter in `Option`, so the trampoline
-            // is passed via `Some`.
-            unsafe {
-                let hash = sys::mrb_obj_ptr_func(self.0.as_raw()) as *mut sys::RHash;
-                sys::mrb_hash_foreach(mrb.as_ptr(), hash, Some(trampoline::<F>), walk_ptr);
-            }
-            crate::value::qnil().as_value()
-        });
-        // A `body` panic and an mruby raise cannot both fire in one
-        // callback, but each leaves its own channel: resurface a parked
-        // panic first (it preempts any `Err`), then return protect's
-        // Result for the modify-raise path.
-        if let Some(payload) = walk.panic {
-            std::panic::resume_unwind(payload);
-        }
-        result.map(|_| ())
+        let held = mrb.ary_new();
+        self.walk(mrb, Some(held), |key, val| {
+            func(K::try_convert(key, mrb)?, V::try_convert(val, mrb)?)
+        })
     }
 
     /// The pairs, each key and value converted through `TryConvert`, as a
@@ -373,23 +292,117 @@ impl RHash {
         self.converted_pairs(mrb)
     }
 
-    /// Walk the pairs first and convert after, since a conversion's `Err`
-    /// cannot leave the walk's closure.
+    /// Convert each pair as the walk visits it. The converted pair holds no
+    /// `Value`, so the pair holds the arena only while it converts.
     fn converted_pairs<K, V, C>(self, mrb: &Mrb) -> Result<C, Error>
     where
-        K: TryConvert,
-        V: TryConvert,
-        C: FromIterator<(K, V)>,
+        K: TryConvertOwned,
+        V: TryConvertOwned,
+        C: Default + Extend<(K, V)>,
     {
-        let mut pairs = Vec::with_capacity(self.len(mrb));
-        self.each(mrb, |key, val| {
-            pairs.push((key, val));
-            ForEach::Continue
+        let mut pairs = C::default();
+        self.walk(mrb, None, |key, val| {
+            let _held_while_converting = mrb.arena_scope();
+            let key = K::try_convert(mrb.hold(key), mrb)?;
+            let val = V::try_convert(mrb.hold(val), mrb)?;
+            pairs.extend(core::iter::once((key, val)));
+            Ok(ForEach::Continue)
         })?;
-        pairs
-            .into_iter()
-            .map(|(key, val)| Ok((K::try_convert(key, mrb)?, V::try_convert(val, mrb)?)))
-            .collect()
+        Ok(pairs)
+    }
+
+    /// Run `visit` over each pair under exception protection, pushing each
+    /// pair into `held` first when one is given. A `visit` `Err` or panic
+    /// is parked and stops the walk, then surfaces once the walk returns.
+    fn walk<F>(self, mrb: &Mrb, held: Option<RArray>, visit: F) -> Result<(), Error>
+    where
+        F: FnMut(Value, Value) -> Result<ForEach, Error>,
+    {
+        struct Walk<F> {
+            visit: F,
+            held: Option<RArray>,
+            parked: Option<Error>,
+        }
+
+        // A raise long-jumps across this frame only from the pushes, so it
+        // holds no value that needs dropping; the visit runs one frame up.
+        unsafe extern "C" fn trampoline<F>(
+            mrb: *mut sys::mrb_state,
+            key: sys::mrb_value,
+            val: sys::mrb_value,
+            data: *mut core::ffi::c_void,
+        ) -> core::ffi::c_int
+        where
+            F: FnMut(Value, Value) -> Result<ForEach, Error>,
+        {
+            // SAFETY: `data` is the `&mut Walk<F>` handed to
+            // `mrb_hash_foreach` below, borrowed for the walk on this
+            // thread.
+            let walk: &mut Walk<F> = unsafe { &mut *(data as *mut Walk<F>) };
+            if let Some(held) = walk.held {
+                // SAFETY: `mrb` is the live state driving the walk and
+                // `held` an Array from it; a push that raises long-jumps to
+                // the walk's protect frame across no value needing a drop.
+                unsafe {
+                    sys::mrb_ary_push(mrb, held.as_raw(), key);
+                    sys::mrb_ary_push(mrb, held.as_raw(), val);
+                }
+            }
+            visit_pair(
+                walk,
+                Value::from_raw_unchecked(key),
+                Value::from_raw_unchecked(val),
+            )
+        }
+
+        fn visit_pair<F>(walk: &mut Walk<F>, key: Value, val: Value) -> core::ffi::c_int
+        where
+            F: FnMut(Value, Value) -> Result<ForEach, Error>,
+        {
+            let visit = &mut walk.visit;
+            match crate::sys::catch_unwind(std::panic::AssertUnwindSafe(|| visit(key, val)))
+                .and_then(|res| res)
+            {
+                Ok(ForEach::Continue) => 0,
+                Ok(ForEach::Stop) => 1,
+                Err(err) => {
+                    walk.parked = Some(err);
+                    1
+                }
+            }
+        }
+
+        let mut walk = Walk {
+            visit,
+            held,
+            parked: None,
+        };
+        let walk_ptr = &mut walk as *mut Walk<F> as *mut core::ffi::c_void;
+        // `H_CHECK_MODIFIED` raises when a visit mutates this hash's table
+        // mid-walk; the protect frame catches that raise into `Err`.
+        let result = mrb.protect(|mrb| {
+            // SAFETY: `self` is Hash-tagged, so its object pointer is an
+            // `RHash`; `mrb` is alive inside the protect frame;
+            // `trampoline::<F>` upholds the `mrb_hash_foreach_func` ABI;
+            // `walk_ptr` points to `walk` on this frame, which outlives the
+            // call. bindgen wraps the callback parameter in `Option`.
+            unsafe {
+                let hash = sys::mrb_obj_ptr_func(self.0.as_raw()) as *mut sys::RHash;
+                sys::mrb_hash_foreach(mrb.as_ptr(), hash, Some(trampoline::<F>), walk_ptr);
+            }
+            crate::value::qnil().as_value()
+        });
+        match walk.parked {
+            Some(err) => {
+                // The protect frame released the arena the visit held this
+                // exception in; hold it again as it crosses out.
+                if let Error::Exception(exc) = err {
+                    mrb.hold(exc);
+                }
+                Err(err)
+            }
+            None => result.map(|_| ()),
+        }
     }
 }
 

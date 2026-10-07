@@ -6,7 +6,7 @@ use crate::support::{open_mrb, Is};
 use beni::prelude::*;
 use beni::{
     Error, ExceptionClass, Mrb, Proc, RArray, RClass, RHash, RModule, RString, Range, Symbol,
-    TryConvert, Value,
+    TryConvert, TryConvertOwned, Value,
 };
 use core::num::{NonZeroI32, NonZeroU8};
 use std::collections::{BTreeMap, HashMap};
@@ -239,6 +239,40 @@ fn an_owned_sequence_holds_the_arena_by_one_element_whatever_its_length() {
     assert_eq!(
         after, before,
         "no element stays in the arena once converted"
+    );
+}
+
+/// An owned target recording the arena index each of its conversions
+/// sees, so a test reads how far a conversion has grown the arena while
+/// it is still running.
+struct ArenaProbe(core::ffi::c_int);
+
+impl TryConvert for ArenaProbe {
+    fn try_convert(_val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        // SAFETY: `mrb` is alive; the read only loads the arena index.
+        Ok(Self(unsafe {
+            beni::sys::mrb_gc_arena_save_func(mrb.as_ptr())
+        }))
+    }
+}
+
+// SAFETY: an `ArenaProbe` holds an integer and no `Value`.
+unsafe impl TryConvertOwned for ArenaProbe {}
+
+#[test]
+fn an_owned_map_holds_the_arena_by_one_pair_whatever_its_size() {
+    let mrb = open_mrb();
+    let hash = eval(&mrb, "(0...1000).to_h { |i| [i.to_s, i.to_s] }");
+
+    let converted =
+        HashMap::<String, ArenaProbe>::try_convert(hash, &mrb).expect("every key is a String");
+
+    let seen = || converted.values().map(|probe| probe.0);
+    assert_eq!(converted.len(), 1000);
+    assert_eq!(
+        seen().min(),
+        seen().max(),
+        "every pair converts at the same arena index"
     );
 }
 

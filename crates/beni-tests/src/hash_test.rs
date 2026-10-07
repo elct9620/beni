@@ -1,6 +1,6 @@
 use crate::support::open_mrb;
 use beni::prelude::*;
-use beni::IntoValue;
+use beni::{IntoValue, Value};
 
 #[test]
 fn set_and_get_roundtrip_with_nil_for_an_absent_key() {
@@ -327,54 +327,50 @@ fn update_surfaces_frozen_receiver_as_err() {
     ));
 }
 
+fn abc_hash(mrb: &beni::Mrb) -> beni::RHash {
+    let hash = mrb.hash_new();
+    for (key, val) in [(b"a", 1i32), (b"b", 2), (b"c", 3)] {
+        hash.set(mrb, mrb.str_new(key).as_value(), val.into_value(mrb))
+            .expect("set succeeds");
+    }
+    hash
+}
+
 #[test]
-fn each_visits_every_pair_in_insertion_order() {
+fn foreach_hands_each_pair_converted_in_insertion_order() {
     use beni::ForEach;
 
     let mrb = open_mrb();
-    let hash = mrb.hash_new();
-    hash.set(&mrb, mrb.str_new(b"a").as_value(), 1i32.into_value(&mrb))
-        .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"b").as_value(), 2i32.into_value(&mrb))
-        .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"c").as_value(), 3i32.into_value(&mrb))
-        .expect("set succeeds");
+    let hash = abc_hash(&mrb);
 
     let mut seen = Vec::new();
-    hash.each(&mrb, |key, val| {
-        seen.push((key.to_string(&mrb), val.to_string(&mrb)));
-        ForEach::Continue
+    hash.foreach(&mrb, |key: String, val: i32| {
+        seen.push((key, val));
+        Ok(ForEach::Continue)
     })
     .expect("a read-only walk does not raise");
 
     assert_eq!(
         seen,
         vec![
-            ("a".to_owned(), "1".to_owned()),
-            ("b".to_owned(), "2".to_owned()),
-            ("c".to_owned(), "3".to_owned()),
+            ("a".to_owned(), 1),
+            ("b".to_owned(), 2),
+            ("c".to_owned(), 3)
         ]
     );
 }
 
 #[test]
-fn each_stops_early_on_stop() {
+fn foreach_stops_early_on_stop() {
     use beni::ForEach;
 
     let mrb = open_mrb();
-    let hash = mrb.hash_new();
-    hash.set(&mrb, mrb.str_new(b"a").as_value(), 1i32.into_value(&mrb))
-        .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"b").as_value(), 2i32.into_value(&mrb))
-        .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"c").as_value(), 3i32.into_value(&mrb))
-        .expect("set succeeds");
+    let hash = abc_hash(&mrb);
 
-    // Stopping at the first pair leaves the rest unvisited.
     let mut count = 0;
-    hash.each(&mrb, |_, _| {
+    hash.foreach(&mrb, |_: Value, _: Value| {
         count += 1;
-        ForEach::Stop
+        Ok(ForEach::Stop)
     })
     .expect("an early-stopping walk does not raise");
 
@@ -382,30 +378,54 @@ fn each_stops_early_on_stop() {
 }
 
 #[test]
-fn each_surfaces_an_in_walk_modification_as_err() {
+fn foreach_ends_with_a_conversion_or_closure_err() {
     use beni::{Error, ForEach};
 
     let mrb = open_mrb();
-    let hash = mrb.hash_new();
-    hash.set(&mrb, mrb.str_new(b"a").as_value(), 1i32.into_value(&mrb))
-        .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"b").as_value(), 2i32.into_value(&mrb))
-        .expect("set succeeds");
+    let hash = abc_hash(&mrb);
+
+    let mut visited = 0;
+    let err = hash
+        .foreach(&mrb, |_: i32, _: i32| {
+            visited += 1;
+            Ok(ForEach::Continue)
+        })
+        .expect_err("a String key does not convert to i32");
+    assert_eq!(
+        visited, 0,
+        "the walk ends at the pair that fails to convert"
+    );
+    assert_eq!(err.message(&mrb), "String cannot be converted to Integer");
+
+    let mut visited = 0;
+    let err = hash
+        .foreach(&mrb, |_: Value, _: Value| -> Result<ForEach, Error> {
+            visited += 1;
+            Err(Error::Panic("stop here".to_owned()))
+        })
+        .expect_err("the closure's Err surfaces");
+    assert_eq!(visited, 1);
+    assert!(matches!(err, Error::Panic(msg) if msg == "stop here"));
+}
+
+#[test]
+fn foreach_surfaces_an_in_walk_modification_as_err() {
+    use beni::{Error, ForEach};
+
+    let mrb = open_mrb();
+    let hash = abc_hash(&mrb);
 
     // A closure that re-enters the VM to clear the hash it is walking
-    // resets the entry table, so the guard mruby runs before the next
-    // callback raises RuntimeError. protect catches that into Err
-    // rather than letting it long-jump across mrb_hash_foreach's FFI
-    // frame.
-    let result = hash.each(&mrb, |_, _| {
+    // resets the entry table, so the guard mruby runs after the callback
+    // raises RuntimeError, caught into Err rather than long-jumping across
+    // mrb_hash_foreach's FFI frame.
+    let result = hash.foreach(&mrb, |_: Value, _: Value| {
         hash.clear(&mrb)
             .expect("the in-walk clear itself does not raise");
-        ForEach::Continue
+        Ok(ForEach::Continue)
     });
     assert!(matches!(result, Err(Error::Exception(_))));
 
-    // The VM survives the caught raise and stays usable: a fresh
-    // operation runs without crashing.
     let other = mrb.hash_new();
     other
         .set(&mrb, mrb.str_new(b"x").as_value(), 9i32.into_value(&mrb))
@@ -414,37 +434,21 @@ fn each_surfaces_an_in_walk_modification_as_err() {
 }
 
 #[test]
-fn each_resurfaces_a_closure_panic_on_the_rust_side() {
+fn foreach_answers_a_closure_panic_as_err() {
+    use beni::Error;
+
     let mrb = open_mrb();
-    let hash = mrb.hash_new();
-    hash.set(&mrb, mrb.str_new(b"a").as_value(), 1i32.into_value(&mrb))
-        .expect("set succeeds");
-    hash.set(&mrb, mrb.str_new(b"b").as_value(), 2i32.into_value(&mrb))
-        .expect("set succeeds");
+    let hash = abc_hash(&mrb);
 
-    // A panic in the closure is caught at the FFI boundary, stops the
-    // walk, and resumes here once mrb_hash_foreach returns — never
-    // unwinding through mruby's C frames. catch_unwind sees the
-    // resumed panic, proving it crossed back to the Rust side intact.
     let visited = std::cell::Cell::new(0u32);
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        // The closure panic resurfaces before `each` returns a Result,
-        // so the value is never produced — bind it to silence must_use.
-        let _ = hash.each(&mrb, |_, _| {
+    let err = hash
+        .foreach(&mrb, |_: Value, _: Value| -> Result<beni::ForEach, Error> {
             visited.set(visited.get() + 1);
-            panic!("boom in each closure");
-        });
-    }));
+            panic!("boom in foreach closure");
+        })
+        .expect_err("the closure panic surfaces as an Err");
 
-    let payload = result.expect_err("the closure panic must resurface Rust-side");
-    let msg = payload
-        .downcast_ref::<&str>()
-        .copied()
-        .expect("the original panic payload survives the round-trip");
-    assert_eq!(msg, "boom in each closure");
-    // The walk stopped at the first pair rather than running on.
-    assert_eq!(visited.get(), 1);
-
-    // The VM survives the caught panic.
-    assert_eq!(hash.len(&mrb), 2);
+    assert!(matches!(err, Error::Panic(msg) if msg == "boom in foreach closure"));
+    assert_eq!(visited.get(), 1, "the walk stopped at the first pair");
+    assert_eq!(hash.len(&mrb), 3, "the VM survives the caught panic");
 }

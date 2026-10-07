@@ -121,9 +121,9 @@ fn a_walked_hash_value_outlives_the_hash_clearing() {
     });
 
     let mut read = beni::value::qnil().as_value();
-    hash.each(&mrb, |_, val| {
+    hash.foreach(&mrb, |_: Value, val: Value| {
         read = val;
-        ForEach::Continue
+        Ok(ForEach::Continue)
     })
     .expect("walking an unmodified hash must succeed");
     hash.clear(&mrb)
@@ -132,6 +132,28 @@ fn a_walked_hash_value_outlives_the_hash_clearing() {
 
     assert_held(&DROPS, "a walked hash value");
     assert!(!read.is_nil());
+}
+
+#[test]
+fn a_walk_err_exception_outlives_the_walk() {
+    static DROPS: AtomicUsize = AtomicUsize::new(0);
+    let mrb = open_mrb();
+    let hash = mrb.hash_new();
+    hash.set(&mrb, true.into_value(&mrb), true.into_value(&mrb))
+        .expect("set must succeed");
+    mrb.define_class(c"BeniReachCarrier", mrb.object_class())
+        .expect("defining the carrier class must succeed");
+    Probe::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
+
+    let err = hash
+        .foreach(&mrb, |_: Value, _: Value| -> Result<ForEach, beni::Error> {
+            Err(beni::Error::Exception(mrb.wrap(Probe(&DROPS)).as_value()))
+        })
+        .expect_err("the closure's Err surfaces");
+    mrb.full_gc();
+
+    assert_held(&DROPS, "a walk's Err exception");
+    assert!(matches!(err, beni::Error::Exception(_)));
 }
 
 #[test]
