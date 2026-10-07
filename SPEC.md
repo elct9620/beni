@@ -1232,7 +1232,7 @@ A key too long to intern names no symbol.
 
 ##### Exception classes
 
-An exception class has a typed handle of its own, `ExceptionClass`, mirroring `magnus::ExceptionClass`. Building and raising an exception take this handle rather than the general class handle. A built-in exception-class lookup on `Mrb` yields one; it is the typed path to a built-in exception class (`RuntimeError`, `ArgumentError`, `TypeError`) for raising from registered code.
+An exception class has a typed handle of its own, `ExceptionClass`, mirroring `magnus::ExceptionClass`. Building and raising an exception take this handle rather than the general class handle. A built-in exception-class lookup on `Mrb` yields one; it is the typed path to a built-in exception class (`RuntimeError`, `ArgumentError`, `TypeError`) for raising from registered code. It reads the constant under `Object` as mruby's own raises do, never calling `const_missing`, so it runs no Ruby a program defines.
 
 | Built-in lookup finds | Result |
 |---|---|
@@ -1267,6 +1267,8 @@ Each exception class mruby's core defines also has an accessor on `Mrb`, named a
 | `exception_sys_stack_error` | `SystemStackError` |
 | `exception_type_error` | `TypeError` |
 | `exception_zero_div_error` | `ZeroDivisionError` |
+
+An exception beni builds on its own — a conversion's `TypeError`, a missing block's `ArgumentError`, a panic's `RuntimeError`, a parse failure's `SyntaxError` — names its class through the built-in lookup, as mruby's own raises name theirs. Where that class's constant is missing or names no exception class, the `Exception` mruby raises for the lookup stands in its place, so naming the class never raises past beni's own frames.
 
 A consumer's own exception class is defined under a name from an exception-class superclass, yielding the handle directly, mirroring `magnus`'s `define_error`. Definition is top-level on the `Mrb` handle and within a namespace through the `Module` trait, symbol-or-name keyed. A name already bound resolves exactly as class definition resolves it: the bound ordinary class itself when its superclass is the one given, an `Err` otherwise. The handle registers methods and binds constants through the `Module` and `Object` traits, and yields the class handle for any operation that takes one.
 
@@ -2200,6 +2202,7 @@ measures complete.
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, Rust-defined proc body, hash iterate closure, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, hash iterate closure, `sys::catch_unwind`) or as an mruby exception to the caller (registered method, Rust-defined proc body); never unwinds into mruby's C frames |
 | A Rust-defined proc's closure called again, through its proc or a copy of it, while it is already running | `RuntimeError` raised to the second caller; the running call is unaffected |
+| An exception beni builds on its own whose class constant is missing or names no exception class | the `Exception` mruby raises for that constant, surfaced where the original exception would have been — a Rust `Err` or a raise to the Ruby caller; no `const_missing` runs and nothing unwinds across FFI |
 | A warning message longer than the longest string the interpreter holds, in an archive built with standard I/O | surfaced as a Rust `Err` carrying mruby's `ArgumentError`; nothing is written |
 | Rust panic raised inside a `sys::protect` body | the process aborts at the FFI boundary; never unwinds into mruby's C frames |
 | Registered method whose receiver or argument fails `TryConvert` conversion | the exception the conversion's `Err` carries raised to the Ruby caller, the closure body never runs |
