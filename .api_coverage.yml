@@ -116,7 +116,7 @@ typed:
   mrb_symbol_p: "`Symbol::from_value`, the downcast reading the value tag"
   mrb_object_p: "`RObject::from_value`, the downcast reading the value tag"
   mrb_fiber_p: "`Fiber::from_value`, the downcast reading the value tag"
-  mrb_undef_p: "`Qundef::from_value` — the handle never converts back into a value, as magnus's `Qundef::as_value` is `unsafe`"
+  mrb_undef_p: "`Qundef::from_value`, the downcast reading the value tag"
   mrb_break_value_get: Break::value
   mrb_ccontext_filename: "`Ccontext::new` — carried by the `compiler` capability feature"
   mrb_ccontext_free: "`Ccontext::drop` — carried by the `compiler` capability feature"

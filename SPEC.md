@@ -338,7 +338,7 @@ names and rejects every other value:
 | Handle | Accepts |
 |---|---|
 | `Qnil` / `Qtrue` / `Qfalse` | `nil` / `true` / `false` |
-| `Qundef` | the undefined value no Ruby code can name; the handle never converts back into a value |
+| `Qundef` | the undefined value no Ruby code can name; `value::qundef()` returns it, and it converts back into a value only through an `unsafe` `as_value` whose caller keeps that value from reaching Ruby code, mirroring `magnus` |
 | `Integer` | an Integer, of the fixed-width or the arbitrary-width tag |
 | `Float` / `Symbol` | a Float / a Symbol |
 | `RString` / `RArray` / `RHash` | a String / Array / Hash, subclass instances included |

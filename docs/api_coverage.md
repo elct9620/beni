@@ -522,7 +522,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_test` | macro | ✅ | ✅ | `ReprValue::to_bool` |
 | `mrb_true_p` | macro | ✅ | ✅ | `Qtrue::from_value` |
 | `mrb_true_value` | fn | ✅ | ✅ | `value::qtrue` |
-| `mrb_undef_p` | macro | ✅ | ✅ | `Qundef::from_value` — the handle never converts back into a value, as magnus's `Qundef::as_value` is `unsafe` |
+| `mrb_undef_p` | macro | ✅ | ✅ | `Qundef::from_value`, the downcast reading the value tag |
 | `mrb_undef_value` | fn | ✅ | ❌ |  |
 ## mruby/variable.h
 
