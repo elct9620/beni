@@ -450,7 +450,8 @@ unsafe impl TypedData for Seed {
 fn refused<T: core::fmt::Debug>(mrb: &Mrb, offered: T) -> Error {
     Error::new(
         mrb,
-        mrb.exc_get(c"RuntimeError").expect("RuntimeError is defined"),
+        mrb.exc_get(c"RuntimeError")
+            .expect("RuntimeError is defined"),
         &format!("already holds a payload, refused {offered:?}"),
     )
 }
@@ -494,7 +495,11 @@ fn define_tally(mrb: &Mrb) -> RClass {
         .define_method(mrb, c"n", beni::method!(tally_n, 0))
         .expect("registering n must succeed");
     class
-        .define_method(mrb, c"initialize_copy", beni::method!(tally_initialize_copy, 1))
+        .define_method(
+            mrb,
+            c"initialize_copy",
+            beni::method!(tally_initialize_copy, 1),
+        )
         .expect("registering initialize_copy must succeed");
     class
 }
@@ -592,7 +597,11 @@ fn dup_clone_keeps_the_payload_initialize_copy_installed() {
         .define_method(&mrb, c"n", beni::method!(ledger_n, 0))
         .expect("registering n must succeed");
     class
-        .define_method(&mrb, c"initialize_copy", beni::method!(ledger_initialize_copy, 1))
+        .define_method(
+            &mrb,
+            c"initialize_copy",
+            beni::method!(ledger_initialize_copy, 1),
+        )
         .expect("registering initialize_copy must succeed");
     class
         .define_method(&mrb, c"clone", beni::method!(<Ledger as Dup>::clone, -1))
