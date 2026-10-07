@@ -121,6 +121,61 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
 }
 
 #[test]
+fn fixed_arity_reads_a_splatted_call_by_its_spread_count() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniSplatAdder");
+    class
+        .define_method(&mrb, c"add", beni::method!(add, 2))
+        .expect("registering the fixed-arity method must succeed");
+
+    let got = mrb
+        .load_string(b"BeniSplatAdder.new.add(*[1, 2])")
+        .expect("a splat spreading two values fills both parameters");
+    assert_eq!(i32::from_value(got), Some(3));
+
+    let err = mrb
+        .load_string(b"BeniSplatAdder.new.add(*[1, 2, 3])")
+        .expect_err("a splat spreading three values is a wrong count");
+    let Error::Exception(exc) = err else {
+        panic!("a wrong argument count must raise, got {err}");
+    };
+    assert_eq!(exc.classname(&mrb), "ArgumentError");
+}
+
+#[test]
+fn fixed_arity_takes_keywords_as_one_trailing_hash() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniKeywordPass");
+    class
+        .define_method(&mrb, c"pass", beni::method!(passthrough, 1))
+        .expect("registering the typed method must succeed");
+    class
+        .define_method(&mrb, c"add", beni::method!(add, 2))
+        .expect("registering the fixed-arity method must succeed");
+
+    let got = mrb
+        .load_string(b"BeniKeywordPass.new.pass(a: 1) == { a: 1 }")
+        .expect("keywords alone fill the one parameter");
+    assert_eq!(bool::from_value(got), Some(true));
+
+    let err = mrb
+        .load_string(b"BeniKeywordPass.new.add(1, a: 2)")
+        .expect_err("the keyword hash fills the second parameter, which wants an Integer");
+    let Error::Exception(exc) = err else {
+        panic!("a failed conversion must raise, got {err}");
+    };
+    assert_eq!(exc.classname(&mrb), "TypeError");
+
+    let err = mrb
+        .load_string(b"BeniKeywordPass.new.pass(1, a: 2)")
+        .expect_err("a full positional count plus keywords is one argument too many");
+    let Error::Exception(exc) = err else {
+        panic!("a wrong argument count must raise, got {err}");
+    };
+    assert_eq!(exc.classname(&mrb), "ArgumentError");
+}
+
+#[test]
 fn conversion_failure_raises_before_body_runs() {
     let mrb = open_mrb();
     let class = fresh_class(&mrb, c"BeniStrictAdder");

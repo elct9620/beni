@@ -10,10 +10,11 @@
 //! delegates to the matching `MethodN` trait, which owns the typed
 //! crossing:
 //!
-//!   1. read the call-frame arguments via `mrb_get_args` (the `"o"`
-//!      format repeated per arity) under exception protection — this
-//!      is also the argument-count enforcement point: a mismatched
-//!      count comes back as an `ArgumentError` `Err` before any
+//!   1. read the call-frame arguments — straight from the argument
+//!      vector when the call passed exactly the arity and no keywords,
+//!      otherwise via `mrb_get_args` (the `"o"` format repeated per
+//!      arity) under exception protection, which enforces the count: a
+//!      mismatch comes back as an `ArgumentError` `Err` before any
 //!      `TryConvert` conversion runs,
 //!   2. convert the receiver, then each argument, through `TryConvert`
 //!      — mirroring magnus's typed `self` — a failed conversion
@@ -292,22 +293,29 @@ macro_rules! define_method_trait {
             /// fibers, which mruby allows only as the method's return.
             #[doc(hidden)]
             unsafe fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
-                $(let mut $arg = sys::mrb_value::zeroed();)*
-                read_frame(mrb, |mrb| {
-                    // SAFETY: `mrb` is alive; each out-parameter is a
-                    // valid `*mut mrb_value`; the format string holds
-                    // one `o` per out-parameter.
-                    unsafe {
-                        sys::mrb_get_args(
-                            mrb.as_ptr(),
-                            $fmt.as_ptr()
-                            $(, &mut $arg as *mut sys::mrb_value)*
-                        );
+                let args = match crate::state::args::fixed_args(mrb) {
+                    Some(args) => args,
+                    None => {
+                        $(let mut $arg = sys::mrb_value::zeroed();)*
+                        read_frame(mrb, |mrb| {
+                            // SAFETY: `mrb` is alive; each out-parameter
+                            // is a valid `*mut mrb_value`; the format
+                            // string holds one `o` per out-parameter.
+                            unsafe {
+                                sys::mrb_get_args(
+                                    mrb.as_ptr(),
+                                    $fmt.as_ptr()
+                                    $(, &mut $arg as *mut sys::mrb_value)*
+                                );
+                            }
+                        })?;
+                        [$(Value::from_raw_unchecked($arg)),*]
                     }
-                })?;
+                };
+                let [$($arg),*] = args;
                 let self_ = S::try_convert(self_, mrb)?;
                 $(
-                    let $arg = $t::try_convert(Value::from_raw_unchecked($arg), mrb)?;
+                    let $arg = $t::try_convert($arg, mrb)?;
                 )*
                 (self)(mrb, self_ $(, $arg)*).into_return_value(mrb, private::Bridge(()))
             }

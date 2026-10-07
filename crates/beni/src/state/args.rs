@@ -65,6 +65,26 @@ pub(crate) fn with_args<R>(mrb: &Mrb, body: impl FnOnce(&[Value]) -> R) -> R {
     body(ArgsCopy::new(positionals, None).as_slice())
 }
 
+/// The call's `N` positionals, read without a format parse when the call
+/// passed exactly `N` and no keywords — the one shape a fixed-arity read
+/// accepts as it stands. Any other call answers `None`, leaving the frame
+/// to `mrb_get_args`, which folds keywords into a positional or raises
+/// mruby's own count error.
+pub(crate) fn fixed_args<const N: usize>(mrb: &Mrb) -> Option<[Value; N]> {
+    if keywords_given(mrb) {
+        return None;
+    }
+    // SAFETY: `mrb` is alive inside a C function's call; mruby's own
+    // argument accessors read its current call info and never raise.
+    let positionals = unsafe {
+        slice_from_argv(
+            sys::mrb_get_argv(mrb.as_ptr()),
+            sys::mrb_get_argc(mrb.as_ptr()),
+        )
+    };
+    positionals.try_into().ok()
+}
+
 /// As `with_args`, also handing over the call's block: the `Proc` the
 /// call passed, or `None` when it passed none.
 pub(crate) fn with_call<R>(mrb: &Mrb, body: impl FnOnce(&[Value], Option<crate::Proc>) -> R) -> R {
