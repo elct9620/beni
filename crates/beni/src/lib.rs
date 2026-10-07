@@ -126,7 +126,7 @@ pub use tagged::{
     Exception, Fiber, Float, Integer, Qfalse, Qnil, Qtrue, Qundef, RComplex, RCptr, RInlineStruct,
     RObject, RRational, RSet, RStruct,
 };
-pub use try_convert::TryConvert;
+pub use try_convert::{TryConvert, TryConvertOwned};
 pub use typed_data::{RTypedData, TypedData};
 
 /// ```

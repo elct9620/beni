@@ -32,6 +32,33 @@ pub trait TryConvert: Sized {
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error>;
 }
 
+/// A `TryConvert` target whose values hold no `Value`, so a Rust heap
+/// structure may store them past the arena. Mirrors magnus's
+/// `TryConvertOwned`: it bounds the targets a `Vec` or a map converts its
+/// elements to, which keep each element reachable only while it
+/// converts.
+///
+/// A fixed-length array is owned only when its elements are, where
+/// magnus marks `[T; N]` owned for any `T`: an owned conversion releases
+/// each element's arena hold once it converts, so a `Value` inside an
+/// array element would go unprotected.
+///
+/// ```compile_fail
+/// fn owned<T: beni::TryConvertOwned>() {}
+/// owned::<Vec<beni::Value>>();
+/// ```
+///
+/// ```compile_fail
+/// fn owned<T: beni::TryConvertOwned>() {}
+/// owned::<[beni::RString; 2]>();
+/// ```
+///
+/// # Safety
+///
+/// Implement only for a type whose values hold no `Value`, directly or
+/// through any field.
+pub unsafe trait TryConvertOwned: TryConvert {}
+
 fn exception(mrb: &Mrb, class: &core::ffi::CStr, msg: &str) -> Error {
     Error::Exception(core_exception(mrb, class, msg))
 }
@@ -110,6 +137,8 @@ impl TryConvert for bool {
     }
 }
 
+unsafe impl TryConvertOwned for bool {}
+
 impl<T: TryConvert> TryConvert for Option<T> {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
@@ -118,6 +147,8 @@ impl<T: TryConvert> TryConvert for Option<T> {
             .transpose()
     }
 }
+
+unsafe impl<T: TryConvertOwned> TryConvertOwned for Option<T> {}
 
 macro_rules! try_convert_integer {
     ($($int:ty),* $(,)?) => {$(
@@ -129,6 +160,8 @@ macro_rules! try_convert_integer {
                     .map_err(|_| exception(mrb, c"RangeError", &format!("{n} out of range")))
             }
         }
+
+        unsafe impl TryConvertOwned for $int {}
     )*};
 }
 
@@ -143,6 +176,8 @@ macro_rules! try_convert_non_zero {
                     .ok_or_else(|| argument_error(mrb, "value must be non-zero"))
             }
         }
+
+        unsafe impl TryConvertOwned for $non_zero {}
     )*};
 }
 
@@ -158,6 +193,8 @@ impl TryConvert for f64 {
         crate::Float::try_convert(val, mrb).map(crate::Float::to_f64)
     }
 }
+
+unsafe impl TryConvertOwned for f64 {}
 
 impl TryConvert for f32 {
     #[inline]
@@ -181,12 +218,16 @@ macro_rules! try_convert_tagged {
 }
 pub(crate) use try_convert_tagged;
 
+unsafe impl TryConvertOwned for f32 {}
+
 impl TryConvert for String {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
         RString::try_convert(val, mrb)?.to_string(mrb)
     }
 }
+
+unsafe impl TryConvertOwned for String {}
 
 #[cfg(feature = "bytes")]
 impl TryConvert for bytes::Bytes {
@@ -196,12 +237,17 @@ impl TryConvert for bytes::Bytes {
     }
 }
 
+#[cfg(feature = "bytes")]
+unsafe impl TryConvertOwned for bytes::Bytes {}
+
 impl TryConvert for char {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
         RString::try_convert(val, mrb)?.to_char(mrb)
     }
 }
+
+unsafe impl TryConvertOwned for char {}
 
 impl TryConvert for std::path::PathBuf {
     #[inline]
@@ -219,12 +265,16 @@ impl TryConvert for std::path::PathBuf {
     }
 }
 
-impl<T: TryConvert> TryConvert for Vec<T> {
+unsafe impl TryConvertOwned for std::path::PathBuf {}
+
+impl<T: TryConvertOwned> TryConvert for Vec<T> {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
         RArray::try_convert(val, mrb)?.to_vec(mrb)
     }
 }
+
+unsafe impl<T: TryConvertOwned> TryConvertOwned for Vec<T> {}
 
 impl<T: TryConvert, const N: usize> TryConvert for [T; N] {
     #[inline]
@@ -232,6 +282,8 @@ impl<T: TryConvert, const N: usize> TryConvert for [T; N] {
         RArray::try_convert(val, mrb)?.to_array(mrb)
     }
 }
+
+unsafe impl<T: TryConvertOwned, const N: usize> TryConvertOwned for [T; N] {}
 
 macro_rules! try_convert_tuple {
     ($len:literal; $($t:ident $i:tt),+) => {
@@ -244,6 +296,8 @@ macro_rules! try_convert_tuple {
                 Ok(($($t::try_convert(ary.entry(mrb, $i), mrb)?,)+))
             }
         }
+
+        unsafe impl<$($t: TryConvertOwned),+> TryConvertOwned for ($($t,)+) {}
     };
 }
 
@@ -262,8 +316,8 @@ try_convert_tuple!(12; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 
 
 impl<K, V> TryConvert for std::collections::HashMap<K, V>
 where
-    K: TryConvert + Eq + core::hash::Hash,
-    V: TryConvert,
+    K: TryConvertOwned + Eq + core::hash::Hash,
+    V: TryConvertOwned,
 {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
@@ -271,13 +325,27 @@ where
     }
 }
 
+unsafe impl<K, V> TryConvertOwned for std::collections::HashMap<K, V>
+where
+    K: TryConvertOwned + Eq + core::hash::Hash,
+    V: TryConvertOwned,
+{
+}
+
 impl<K, V> TryConvert for std::collections::BTreeMap<K, V>
 where
-    K: TryConvert + Ord,
-    V: TryConvert,
+    K: TryConvertOwned + Ord,
+    V: TryConvertOwned,
 {
     #[inline]
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
         RHash::try_convert(val, mrb)?.to_btree_map(mrb)
     }
+}
+
+unsafe impl<K, V> TryConvertOwned for std::collections::BTreeMap<K, V>
+where
+    K: TryConvertOwned + Ord,
+    V: TryConvertOwned,
+{
 }

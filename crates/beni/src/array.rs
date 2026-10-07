@@ -12,7 +12,9 @@
 //! the type itself stay there too (`Symbol::new`).
 
 use crate::try_convert::length_error;
-use crate::{sys::AsRawValue, Error, FromValue, Mrb, RString, ReprValue, TryConvert, Value};
+use crate::{
+    sys::AsRawValue, Error, FromValue, Mrb, RString, ReprValue, TryConvert, TryConvertOwned, Value,
+};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
@@ -368,10 +370,19 @@ impl RArray {
         }
     }
 
-    /// The elements, each converted through `TryConvert`, as a Rust vector,
-    /// or the first element's `Err`. Mirrors magnus's `RArray::to_vec`.
-    pub fn to_vec<T: TryConvert>(self, mrb: &Mrb) -> Result<Vec<T>, Error> {
-        self.entries(mrb).map(|v| T::try_convert(v, mrb)).collect()
+    /// The elements, each converted through `TryConvert` into an owned
+    /// type, as a Rust vector, or the first element's `Err`. Each element
+    /// holds the arena only while it converts, so the conversion grows the
+    /// arena by at most one value whatever the length. Mirrors magnus's
+    /// `RArray::to_vec`.
+    pub fn to_vec<T: TryConvertOwned>(self, mrb: &Mrb) -> Result<Vec<T>, Error> {
+        let len = self.len();
+        let mut values = Vec::with_capacity(len);
+        for idx in 0..len {
+            let _held_while_converting = mrb.arena_scope();
+            values.push(T::try_convert(self.entry(mrb, idx as isize), mrb)?);
+        }
+        Ok(values)
     }
 
     /// The elements, each converted through `TryConvert`, as a Rust array
@@ -381,7 +392,9 @@ impl RArray {
         if self.len() != N {
             return Err(length_error(mrb, N));
         }
-        self.to_vec(mrb)?
+        self.entries(mrb)
+            .map(|v| T::try_convert(v, mrb))
+            .collect::<Result<Vec<T>, Error>>()?
             .try_into()
             .map_err(|_| length_error(mrb, N))
     }

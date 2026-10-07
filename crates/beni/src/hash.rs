@@ -9,7 +9,9 @@
 //! Mirrors magnus's `src/r_hash.rs`: factories live on `Ruby` /
 //! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
 
-use crate::{sys::AsRawValue, Error, FromValue, Mrb, RArray, ReprValue, TryConvert, Value};
+use crate::{
+    sys::AsRawValue, Error, FromValue, Mrb, RArray, ReprValue, TryConvert, TryConvertOwned, Value,
+};
 use beni_sys as sys;
 
 /// Signal an `RHash::each` closure returns to steer the walk. Mirrors
@@ -354,8 +356,8 @@ impl RHash {
     /// `RHash::to_hash_map`.
     pub fn to_hash_map<K, V>(self, mrb: &Mrb) -> Result<std::collections::HashMap<K, V>, Error>
     where
-        K: TryConvert + Eq + core::hash::Hash,
-        V: TryConvert,
+        K: TryConvertOwned + Eq + core::hash::Hash,
+        V: TryConvertOwned,
     {
         self.converted_pairs(mrb)
     }
@@ -365,8 +367,8 @@ impl RHash {
     /// `RHash::to_btree_map`.
     pub fn to_btree_map<K, V>(self, mrb: &Mrb) -> Result<std::collections::BTreeMap<K, V>, Error>
     where
-        K: TryConvert + Ord,
-        V: TryConvert,
+        K: TryConvertOwned + Ord,
+        V: TryConvertOwned,
     {
         self.converted_pairs(mrb)
     }

@@ -18,7 +18,8 @@
 use crate::state::args::{capture_all_kwargs, slice_from_argv, ArgsCopy};
 use crate::try_convert::argument_error;
 use crate::{
-    Error, FromValue, IntoId, Mrb, Proc, RArray, RHash, ReprValue, Symbol, TryConvert, Value,
+    Error, FromValue, IntoId, Mrb, Proc, RArray, RHash, ReprValue, Symbol, TryConvert,
+    TryConvertOwned, Value,
 };
 use beni_sys as sys;
 
@@ -149,7 +150,7 @@ mod private {
         }
     }
 
-    impl<T: TryConvert> ScanArgsSplat for Vec<T> {
+    impl<T: TryConvertOwned> ScanArgsSplat for Vec<T> {
         const REQ: bool = true;
 
         fn from_slice(mrb: &Mrb, vals: &[Value]) -> Result<Self, Error> {

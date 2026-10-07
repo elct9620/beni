@@ -203,8 +203,8 @@ fn a_sequence_target_converts_each_element_of_an_array() {
         convert::<(i32, String)>(&mrb, "[1, 'x']"),
         (1, "x".to_owned())
     );
-    let held = convert::<Vec<Value>>(&mrb, "[nil, :s]");
-    assert_eq!(held.len(), 2);
+    let held = convert::<[Value; 2]>(&mrb, "[nil, :s]");
+    assert!(held[0].is_nil());
     assert_eq!(
         rejection::<Vec<i32>>(&mrb, "[1, 'x']"),
         pair("TypeError", "String cannot be converted to Integer")
@@ -220,6 +220,25 @@ fn a_sequence_target_converts_each_element_of_an_array() {
     assert_eq!(
         rejection::<Vec<i32>>(&mrb, "{}"),
         pair("TypeError", "Hash cannot be converted to Array")
+    );
+}
+
+#[test]
+fn an_owned_sequence_holds_the_arena_by_one_element_whatever_its_length() {
+    let mrb = open_mrb();
+    let strings = eval(&mrb, "Array.new(1000) { |i| i.to_s }");
+    // SAFETY: `mrb` is alive; the read only loads the arena index.
+    let before = unsafe { beni::sys::mrb_gc_arena_save_func(mrb.as_ptr()) };
+
+    let converted = Vec::<String>::try_convert(strings, &mrb).expect("every element is a String");
+
+    // SAFETY: as above.
+    let after = unsafe { beni::sys::mrb_gc_arena_save_func(mrb.as_ptr()) };
+    assert_eq!(converted.len(), 1000);
+    assert_eq!(converted[999], "999");
+    assert_eq!(
+        after, before,
+        "no element stays in the arena once converted"
     );
 }
 

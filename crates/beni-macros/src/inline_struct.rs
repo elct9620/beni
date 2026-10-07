@@ -62,6 +62,10 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             }
         }
 
+        // SAFETY: an `InlineStruct` is `bytemuck::Pod`, which no type
+        // holding a `Value` is.
+        unsafe impl ::beni::TryConvertOwned for #ident {}
+
         impl ::beni::IntoValue for #ident {
             fn into_value(self, mrb: &::beni::Mrb) -> ::beni::Value {
                 ::beni::ReprValue::as_value(::beni::Inline::new(mrb, self))
