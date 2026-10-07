@@ -86,7 +86,7 @@ fn every_record_beni_keeps_shares_one_global() {
     let before = enumerated_globals(&mrb);
 
     Probe::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
-    Lazy::force(&COUNTED, &mrb);
+    Lazy::force(&FORCED, &mrb);
     let wrapped = mrb.wrap(Probe(&ROOTED_DROPS));
     let _root = mrb
         .gc_root(wrapped.as_value())
