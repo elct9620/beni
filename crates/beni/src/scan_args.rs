@@ -15,7 +15,7 @@
 //! arguments only from the frame; the `Args` it answers has magnus's shape.
 //! `get_kwargs` takes a keyword bucket apart by name, as magnus's does.
 
-use crate::state::args::{capture_all_kwargs, slice_from_argv};
+use crate::state::args::{capture_all_kwargs, slice_from_argv, ArgsCopy};
 use crate::try_convert::argument_error;
 use crate::{
     Error, FromValue, IntoId, Mrb, Proc, RArray, RHash, ReprValue, Symbol, TryConvert, Value,
@@ -49,6 +49,10 @@ pub struct KwArgs<Req, Opt, Splat> {
     /// The keywords neither list names.
     pub splat: Splat,
 }
+
+/// The most values one part holds: the largest tuple a required or
+/// optional part implements below.
+const MAX_PARTS: usize = 9;
 
 mod private {
     use super::*;
@@ -246,11 +250,14 @@ where
     let supplied = (positionals.len() - fixed).min(Opt::LEN);
     let (required, rest) = positionals.split_at(Req::LEN);
     let (optional, rest) = rest.split_at(supplied);
-    let optional: Vec<Option<Value>> = (0..Opt::LEN).map(|i| optional.get(i).copied()).collect();
+    let mut slots = [None; MAX_PARTS];
+    for (slot, value) in slots.iter_mut().zip(optional) {
+        *slot = Some(*value);
+    }
     let (splat, trailing) = rest.split_at(rest.len() - Trail::LEN);
     Ok(Args {
         required: Req::from_slice(mrb, required)?,
-        optional: Opt::from_options(mrb, &optional)?,
+        optional: Opt::from_options(mrb, &slots[..Opt::LEN])?,
         splat: Splat::from_slice(mrb, splat)?,
         trailing: Trail::from_slice(mrb, trailing)?,
         keywords: Kw::from_bucket(call.keywords),
@@ -301,28 +308,28 @@ where
         Ok((key, value))
     };
 
-    let mut required_values = Vec::with_capacity(required.len());
-    for &name in required {
+    let mut required_values = [crate::value::qnil().as_value(); MAX_PARTS];
+    for (slot, &name) in required_values.iter_mut().zip(required) {
         match take(name)? {
-            (_, Some(value)) => required_values.push(value),
+            (_, Some(value)) => *slot = value,
             (key, None) => {
                 let name = key.to_string(mrb);
                 return Err(argument_error(mrb, &format!("missing keyword: {name}")));
             }
         }
     }
-    let optional_values = optional
-        .iter()
-        .map(|&name| take(name).map(|(_, value)| value))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut optional_values = [None; MAX_PARTS];
+    for (slot, &name) in optional_values.iter_mut().zip(optional) {
+        *slot = take(name)?.1;
+    }
     if !Splat::REQ && !rest.is_empty(mrb) {
         let key = rest.keys(mrb).entry(mrb, 0).to_string(mrb);
         return Err(argument_error(mrb, &format!("unknown keyword: {key}")));
     }
 
     Ok(KwArgs {
-        required: Req::from_slice(mrb, &required_values)?,
-        optional: Opt::from_options(mrb, &optional_values)?,
+        required: Req::from_slice(mrb, &required_values[..Req::LEN])?,
+        optional: Opt::from_options(mrb, &optional_values[..Opt::LEN])?,
         splat: Splat::from_bucket(Splat::REQ.then_some(rest)),
     })
 }
@@ -331,7 +338,7 @@ where
 /// frame that keeps their values alive, the keyword bucket, and the block
 /// slot.
 pub(crate) struct Frame {
-    pub(crate) positionals: Vec<Value>,
+    pub(crate) positionals: ArgsCopy,
     pub(crate) keywords: Option<RHash>,
     pub(crate) block: Value,
 }
@@ -342,7 +349,7 @@ pub(crate) struct Frame {
 pub(crate) fn read_call(mrb: &Mrb, keywords: bool) -> Frame {
     let call = read_raw(mrb, keywords);
     Frame {
-        positionals: call.positionals.to_vec(),
+        positionals: ArgsCopy::new(call.positionals, None),
         keywords: call.keywords,
         block: call.block,
     }
