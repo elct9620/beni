@@ -1452,7 +1452,18 @@ A wrapped payload reads back as `&T` through three paths.
 | an `RTypedData` handle's read | that rule's `Result` |
 | an `Obj<T>` handle | dereferences to the payload it was converted or wrapped with |
 
-Nothing on the typed surface replaces or removes a payload once a carrier holds one. A reference therefore stays valid for as long as its carrier stays reachable.
+A payload is installed only into a carrier holding none, and nothing on the typed surface replaces or removes one once a carrier holds it. A reference therefore stays valid for as long as its carrier stays reachable.
+
+##### Payload installation
+
+mruby gives a class whose instances are data carriers no allocator of its own: its `new` and `allocate` while its default allocator stands, and mruby's `dup` and `clone` of one of its carriers, make a carrier holding no payload. A payload is installed into such a carrier through its `RTypedData` handle, so a Ruby-side `initialize` or `initialize_copy` gives the carrier its payload. `magnus` has no counterpart, CRuby's allocator filling a payload as it allocates.
+
+| Carrier | Install |
+|---|---|
+| holds no payload, frozen or not | installs the payload; the carrier converts as `T` from then on |
+| already holds a payload | refused: the offered payload handed back, the held one unchanged |
+
+The carrier's class is `T`'s class or a subclass of it, which a debug build asserts. An install into a carrier of another class completes, and the carrier converts as `T`.
 
 ##### Carrier copies
 
@@ -2109,6 +2120,7 @@ measures complete.
 | A `wrap` or `TypedData` derive missing `class`, given an attribute the macros do not accept, a value holding a NUL byte, or a `class` path holding an empty segment, or applied to a type with generic parameters or lifetimes | a compile error naming the offending attribute, value, or generics; nothing is generated |
 | An `InlineStruct` derive or `wrap(inline)` applied to an enum, a union, or a type with generic parameters or lifetimes, given an attribute it does not accept, or applied to a type that is not `bytemuck::Pod` or exceeds three pointer widths in size or a pointer's alignment | a compile error; nothing usable is generated |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
+| Installing a payload into a data carrier that already holds one | refused; the offered payload handed back and the held payload unchanged |
 | A hash mutated through its own iterate closure re-entering the VM, raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
 | A precompiled bytecode blob the interpreter cannot read as a program | surfaced as a Rust `Err` carrying a `ScriptError` whose message names which structural check failed; nothing runs |
