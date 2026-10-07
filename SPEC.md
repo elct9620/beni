@@ -382,6 +382,7 @@ raise nothing and run no Ruby:
 |---|---|---|
 | `Value` | passes through unchanged | always |
 | a scalar: `bool`, or a Rust integer or float the width rules admit | boxes into its Ruby value | always |
+| `()` | `nil` | always |
 | a typed handle on a Ruby value: every Type discrimination handle except `Qundef`, and `Obj<T>` | yields that same value | always |
 | `Id` | boxes into the symbol value it names | always |
 | `T: TypedData` | a data carrier: a new instance of the class its type names for it, as `obj_wrap` does | for every type keeping the `TypedData` contract |
