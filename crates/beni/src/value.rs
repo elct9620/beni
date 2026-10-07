@@ -17,8 +17,9 @@ pub use crate::state::lazy::Lazy;
 // Immediates cache.
 // --------------------------------------------------------------------
 //
-// `mrb_nil_value()` / `mrb_true_value()` / `mrb_false_value()` are
-// config-level constants under mruby's word-box configuration — they
+// `mrb_nil_value()` / `mrb_true_value()` / `mrb_false_value()` /
+// `mrb_undef_value()` are config-level constants under mruby's word-box
+// configuration — they
 // are decided at libmruby build time and do not vary across
 // `mrb_state` instances. Capturing them once via the C shims sidesteps
 // a cross-FFI call every time a hot path wants `nil` / `true` /
@@ -28,6 +29,7 @@ struct Immediates {
     qnil: sys::mrb_value,
     qtrue: sys::mrb_value,
     qfalse: sys::mrb_value,
+    qundef: sys::mrb_value,
 }
 
 // SAFETY: `mrb_value` under word boxing is a `#[repr(C)]` struct
@@ -42,8 +44,9 @@ impl Immediates {
     /// Return the cached snapshot, capturing it on first call.
     fn get() -> &'static Immediates {
         IMMEDIATES.get_or_init(|| {
-            // SAFETY: the three helpers are mruby's own
-            // `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`
+            // SAFETY: the four helpers are mruby's own
+            // `mrb_nil_value` / `mrb_true_value` / `mrb_false_value` /
+            // `mrb_undef_value`
             // (`MRB_INLINE`s reached through bindgen's static-fn
             // trampolines). They do not touch `mrb_state`.
             unsafe {
@@ -51,6 +54,7 @@ impl Immediates {
                     qnil: sys::mrb_nil_value(),
                     qtrue: sys::mrb_true_value(),
                     qfalse: sys::mrb_false_value(),
+                    qundef: sys::mrb_undef_value(),
                 }
             }
         })
@@ -124,6 +128,14 @@ pub fn qfalse() -> crate::Qfalse {
     unsafe {
         <crate::Qfalse as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qfalse))
     }
+}
+
+/// The undefined value, magnus's `QUNDEF`. A function rather than a
+/// constant, as `qnil` is: the word is the configured boxing's, read
+/// through mruby's own `mrb_undef_value`.
+#[inline]
+pub fn qundef() -> crate::Qundef {
+    crate::Qundef(Value(Immediates::get().qundef))
 }
 
 /// A typed handle that stands for a `Value`, carrying the operations any

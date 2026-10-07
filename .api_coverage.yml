@@ -328,6 +328,7 @@ typed:
   mrb_top_self: Mrb::load_bytecode
   mrb_true_p: Qtrue::from_value
   mrb_true_value: value::qtrue
+  mrb_undef_value: value::qundef
   mrb_undef_class_method_id: "`Object::undef_singleton_method` — undefine a class method (a class's singleton method); routes both the symbol-or-name key through the raising `_id` form"
   mrb_undef_method_id: "`Module::undef_method` — Ruby's `Module#undef_method`; both the symbol-or-name key route through the raising `_id` form"
   mrb_yield_argv: Proc::call
@@ -383,8 +384,8 @@ extensions:
     the value rooted for the interpreter's remaining lifetime —
     over-retention, never a value collected while a holder still names it.
   Immediates: >-
-    Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` /
-    `mrb_true_value` / `mrb_false_value`.
+    Cached qnil/qtrue/qfalse/qundef singletons over `mrb_nil_value` /
+    `mrb_true_value` / `mrb_false_value` / `mrb_undef_value`.
   DataType: >-
     Typed CDATA carrier over `mrb_data_type` + `mrb_data_object_alloc`,
     reached through `TypedData`, magnus's shape: a Rust type names its own

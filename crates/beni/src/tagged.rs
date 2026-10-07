@@ -154,11 +154,26 @@ tagged_handle!(
     |value| value.tag() == sys::MRB_TT_CPTR
 );
 
-/// The undefined value, which no Ruby code can name. The handle never
-/// converts back into a value. Mirrors magnus's `value::Qundef`.
+/// The undefined value, which no Ruby code can name; `value::qundef`
+/// returns it. Mirrors magnus's `value::Qundef`.
 #[derive(Copy, Clone)]
-pub struct Qundef {
-    _private: (),
+#[repr(transparent)]
+pub struct Qundef(pub(crate) Value);
+
+impl Qundef {
+    /// The undefined value as a `Value`. Mirrors magnus's
+    /// `Qundef::as_value`.
+    ///
+    /// # Safety
+    ///
+    /// The value must never reach Ruby code — returned from a method,
+    /// stored where a Ruby program reads, or passed to an operation
+    /// that hands it on. Only a few places in mruby's API take it, such
+    /// as an optional argument slot `mrb_get_args` leaves untouched.
+    #[inline]
+    pub unsafe fn as_value(self) -> Value {
+        self.0
+    }
 }
 
 impl FromValue for Qundef {
@@ -166,7 +181,7 @@ impl FromValue for Qundef {
     fn from_value(value: Value) -> Option<Self> {
         // SAFETY: mrb_undef_p is a pure read of the value and does not
         // touch `mrb_state`.
-        unsafe { sys::mrb_undef_p_func(value.as_raw()) }.then_some(Self { _private: () })
+        unsafe { sys::mrb_undef_p_func(value.as_raw()) }.then_some(Self(value))
     }
 }
 

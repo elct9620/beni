@@ -88,8 +88,9 @@ pub(crate) fn frame_args<const N: usize>(mrb: &Mrb, required: usize) -> Option<[
     if positionals.len() < required || positionals.len() > N {
         return None;
     }
-    // SAFETY: pure value computation.
-    let mut slots = [Value::from_raw_unchecked(unsafe { sys::mrb_undef_value_func() }); N];
+    // SAFETY: an absent optional's undef slot is read only by the
+    // bridge, which answers `None` for it and hands no Ruby code the value.
+    let mut slots = [unsafe { crate::value::qundef().as_value() }; N];
     slots[..positionals.len()].copy_from_slice(positionals);
     Some(slots)
 }

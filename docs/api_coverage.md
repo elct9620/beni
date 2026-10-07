@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 316 | 315 (100%) | 248 (78%) |
+| function | 316 | 315 (100%) | 249 (79%) |
 | macro | 106 | 29 (27%) | 86 (81%) |
-| total | 422 | 344 (82%) | 334 (79%) |
+| total | 422 | 344 (82%) | 335 (79%) |
 
 ## mruby.h
 
@@ -523,7 +523,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_true_p` | macro | ✅ | ✅ | `Qtrue::from_value` |
 | `mrb_true_value` | fn | ✅ | ✅ | `value::qtrue` |
 | `mrb_undef_p` | macro | ✅ | ✅ | `Qundef::from_value`, the downcast reading the value tag |
-| `mrb_undef_value` | fn | ✅ | ❌ |  |
+| `mrb_undef_value` | fn | ✅ | ✅ | `value::qundef` |
 ## mruby/variable.h
 
 | Symbol | Kind | sys | typed | Note |
@@ -602,7 +602,7 @@ Rust-native surface with no 1:1 mruby C API — not part of the ratio.
 | `ExceptionClass` | Typed handle on an exception class, magnus's `ExceptionClass`: only it builds or raises an exception, so `mrb_exc_new` / `mrb_exc_new_str` never meet a class whose instances are not exceptions. `Mrb::define_error` and `Module::define_error` compose `mrb_define_class_id` / `mrb_define_class_under_id` with an exception-class superclass. Binds no new C symbol. |
 | `GcRoot` | The releasable root: a guard holding one slot of a table the interpreter keeps, released when the guard drops. Binds no new C symbol — it composes the already-graduated array and global-variable primitives — because the C pair it would otherwise wrap cannot carry it: `mrb_gc_unregister` removes by value, so one holder's release would drop every other root over the same value. A slot is the per-root identity mruby's registry lacks, the same role the storage address plays for CRuby's `rb_gc_register_address`. Released slots go on an intrusive free list so a long-running consumer's table stops growing. A refused release leaves the value rooted for the interpreter's remaining lifetime — over-retention, never a value collected while a holder still names it. |
 | `Id` | The interned id as its own typed form, magnus's `Id`, beside the `Symbol` value handle: the two convert with `From`, boxing through `mrb_symbol_value` and unboxing through the `mrb_symbol` shim. It compares and hashes by the id — mruby publishes no C comparison to bind, interning being canonical — and a `Symbol` compares by the id it boxes. |
-| `Immediates` | Cached qnil/qtrue/qfalse singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value`. |
+| `Immediates` | Cached qnil/qtrue/qfalse/qundef singletons over `mrb_nil_value` / `mrb_true_value` / `mrb_false_value` / `mrb_undef_value`. |
 | `IntoId` | The symbol-or-name key, magnus's `IntoId`: resolves a `&CStr`, a Rust string, an `Id`, or a `Symbol` to the `Id` every name-keyed operation routes through mruby's `_id`-suffixed C variant with. Binds no C symbol of its own — it composes the interns — and is what keeps the raw id out of those operations' signatures. |
 | `ParseMessage` | One compiler diagnostic's line, column, and text, read through accessors. mruby publishes `struct mrb_parser_message` as a parser field rather than through any call, so there is no C API to bind: the typed surface copies the slot out while the parser is alive and hands back an owned value that outlives it. `Ccontext::load_nstring` returns the first recorded error as `Error::Syntax`, and `Ccontext::warnings` answers the load's warnings. |
 | `RArray::entries` | `ExactSizeIterator` walk of an array by C-level index: composes the already-graduated `RArray::entry` (`mrb_ary_entry`) and `RArray::len` (`RARRAY_LEN`) over a length snapshot taken when the walk begins, binding no new C symbol. A live view rather than a content snapshot — a re-entrant mutation is only partly visible, and a position the array no longer reaches reads `nil` — dispatching no Ruby, the idiomatic Rust surface over mruby's caller-side index loop (which the C API has no iterator primitive for). |

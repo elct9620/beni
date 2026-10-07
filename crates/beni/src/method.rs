@@ -41,7 +41,7 @@
 //! because the expansion nests it inside an `extern "C" fn`.
 
 use crate::state::args::read_frame;
-use crate::{sys::AsRawValue, Error, Mrb, TryConvert, Value};
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, Qundef, TryConvert, Value};
 use beni_sys as sys;
 
 /// Bridge + arity pair produced by the `method!` macro and
@@ -412,9 +412,9 @@ macro_rules! define_method_req_opt_trait {
                     Some(args) => args,
                     None => {
                         $(let mut $req = sys::mrb_value::zeroed();)*
-                        // SAFETY: pure value computation; the undef sentinel
-                        // marks an optional slot mruby leaves untouched.
-                        $(let mut $opt = unsafe { sys::mrb_undef_value_func() };)*
+                        // SAFETY: the undef sentinel marks an optional slot
+                        // mruby leaves untouched, answered `None` below.
+                        $(let mut $opt = unsafe { crate::value::qundef().as_value() }.as_raw();)*
                         read_frame(mrb, |mrb| {
                             // SAFETY: `mrb` is alive; each out-parameter is a
                             // valid `*mut mrb_value`; the format string holds
@@ -438,8 +438,7 @@ macro_rules! define_method_req_opt_trait {
                     let $req = $rt::try_convert($req, mrb)?;
                 )*
                 $(
-                    // SAFETY: `mrb` is alive; `$opt` is a valid value.
-                    let $opt = if unsafe { sys::mrb_undef_p_func($opt.as_raw()) } {
+                    let $opt = if Qundef::from_value($opt).is_some() {
                         None
                     } else {
                         Some($ot::try_convert($opt, mrb)?)

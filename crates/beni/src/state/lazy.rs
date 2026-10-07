@@ -8,7 +8,7 @@
 //! Ruby program can read or write. An unheld slot holds undef, a value no
 //! computed handle can be.
 
-use crate::{sys::AsRawValue, FromValue as _, Mrb, RArray, ReprValue, Value};
+use crate::{FromValue as _, Mrb, Qundef, RArray, ReprValue, Value};
 use beni_sys as sys;
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -108,8 +108,7 @@ impl Mrb {
         // SAFETY: the record, held under its global for the interpreter's
         // lifetime, keeps every value it holds reachable.
         let held = unsafe { record.entry_unheld(index) };
-        // SAFETY: pure tag check.
-        (!unsafe { sys::mrb_undef_p_func(held.as_raw()) }).then_some(held)
+        Qundef::from_value(held).is_none().then_some(held)
     }
 
     fn set_lazy_slot(&self, index: usize, value: Value) {
@@ -122,8 +121,9 @@ impl Mrb {
                 .expect("a global no Ruby program can name is never frozen");
             record
         });
-        // SAFETY: pure value computation.
-        let unheld = Value::from_raw_unchecked(unsafe { sys::mrb_undef_value_func() });
+        // SAFETY: the record no Ruby program reaches holds it, and a read
+        // answers `None` for it.
+        let unheld = unsafe { crate::value::qundef().as_value() };
         while record.len() < index {
             record
                 .push(self, unheld)

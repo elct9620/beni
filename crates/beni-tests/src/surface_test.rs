@@ -45,6 +45,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = beni::value::qnil;
     let _ = beni::value::qtrue;
     let _ = beni::value::qfalse;
+    let _ = beni::value::qundef;
+    let _ = Qundef::as_value;
     let _ = <Value as ReprValue>::to_r_string;
     let _ = <Value as ReprValue>::any_to_s;
     let _ = <Value as ReprValue>::dup;

@@ -3,8 +3,8 @@
 
 use crate::class::protect_register;
 use crate::{
-    Error, ExceptionClass, IntoId, IntoValue, MethodDef, Mrb, RClass, RModule, ReprValue,
-    TryConvert, Value,
+    Error, ExceptionClass, FromValue, IntoId, IntoValue, MethodDef, Mrb, Qundef, RClass, RModule,
+    ReprValue, TryConvert, Value,
 };
 use beni_sys as sys;
 
@@ -131,14 +131,7 @@ pub trait Object: ReprValue {
             // `FrozenError` on a frozen holder — caught by `protect`.
             Value(unsafe { sys::mrb_iv_remove(mrb.as_ptr(), self.as_value().0, sym) })
         })
-        .map(|removed| {
-            // SAFETY: a total tag read on the protected result.
-            if unsafe { sys::mrb_undef_p_func(removed.0) } {
-                None
-            } else {
-                Some(removed)
-            }
-        })
+        .map(|removed| Qundef::from_value(removed).is_none().then_some(removed))
     }
 
     /// `mrb_iv_foreach(mrb, self, …)` — visit each instance variable set

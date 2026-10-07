@@ -47,6 +47,15 @@ fn the_undefined_value_converts_into_qundef_and_nil_does_not() {
 }
 
 #[test]
+fn qundef_returns_the_undefined_value_and_converts_back_into_it() {
+    // SAFETY: the value is only read back here; no Ruby code receives it.
+    let undef = unsafe { beni::value::qundef().as_value() };
+
+    assert!(Qundef::from_value(undef).is_some());
+    assert!(Qnil::from_value(undef).is_none());
+}
+
+#[test]
 fn numbers_convert_into_the_handle_of_their_own_type() {
     let mrb = open_mrb();
     let (int, float) = (eval(&mrb, "42"), eval(&mrb, "1.5"));
