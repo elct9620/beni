@@ -77,12 +77,15 @@ pub(crate) fn with_args<R>(mrb: &Mrb, body: impl FnOnce(&[Value]) -> R) -> R {
     body(ArgsCopy::new(positionals, None).as_slice())
 }
 
-/// The call's `N` positionals, read without a format parse when the call
-/// passed exactly `N` and no keywords — the one shape a fixed-arity read
-/// accepts as it stands. Any other call answers `None`, leaving the frame
-/// to `mrb_get_args`, which folds keywords into a positional or raises
-/// mruby's own count error.
-pub(crate) fn fixed_args<const N: usize>(mrb: &Mrb) -> Option<[Value; N]> {
+/// The call's positionals as `N` slots, read without a format parse when
+/// the call passed no keywords and between `required` and `N` positionals
+/// — the shapes a read of `required` positionals and `N - required`
+/// optional ones accepts as they stand. Each slot the call left out holds
+/// undef, as `mrb_get_args` leaves an omitted optional. Any other call
+/// answers `None`, leaving the frame to `mrb_get_args`, which folds
+/// keywords into a positional or raises mruby's own count error.
+#[inline]
+pub(crate) fn frame_args<const N: usize>(mrb: &Mrb, required: usize) -> Option<[Value; N]> {
     if keywords_given(mrb) {
         return None;
     }
@@ -94,7 +97,16 @@ pub(crate) fn fixed_args<const N: usize>(mrb: &Mrb) -> Option<[Value; N]> {
             sys::mrb_get_argc(mrb.as_ptr()),
         )
     };
-    positionals.try_into().ok()
+    if positionals.len() == N {
+        return positionals.try_into().ok();
+    }
+    if positionals.len() < required || positionals.len() > N {
+        return None;
+    }
+    // SAFETY: pure value computation.
+    let mut slots = [Value::from_raw_unchecked(unsafe { sys::mrb_undef_value_func() }); N];
+    slots[..positionals.len()].copy_from_slice(positionals);
+    Some(slots)
 }
 
 /// As `with_args`, also handing over the call's block: the `Proc` the

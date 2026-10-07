@@ -11,9 +11,9 @@
 //! crossing:
 //!
 //!   1. read the call-frame arguments — straight from the argument
-//!      vector when the call passed exactly the arity and no keywords,
-//!      otherwise via `mrb_get_args` (the `"o"` format repeated per
-//!      arity) under exception protection, which enforces the count: a
+//!      vector when the call passed no keywords and a count the arity
+//!      accepts, otherwise via `mrb_get_args` (the `"o"` format repeated
+//!      per arity) under exception protection, which enforces the count: a
 //!      mismatch comes back as an `ArgumentError` `Err` before any
 //!      `TryConvert` conversion runs,
 //!   2. convert the receiver, then each argument, through `TryConvert`
@@ -293,7 +293,8 @@ macro_rules! define_method_trait {
             /// fibers, which mruby allows only as the method's return.
             #[doc(hidden)]
             unsafe fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
-                let args = match crate::state::args::fixed_args(mrb) {
+                let arity = <[&str]>::len(&[$(stringify!($arg)),*]);
+                let args = match crate::state::args::frame_args(mrb, arity) {
                     Some(args) => args,
                     None => {
                         $(let mut $arg = sys::mrb_value::zeroed();)*
@@ -418,36 +419,42 @@ macro_rules! define_method_req_opt_trait {
             /// fibers, which mruby allows only as the method's return.
             #[doc(hidden)]
             unsafe fn call_convert_value(self, mrb: &Mrb, self_: Value) -> Result<Value, Error> {
-                $(let mut $req = sys::mrb_value::zeroed();)*
-                // SAFETY: pure value computation; the undef sentinel
-                // marks an optional slot mruby leaves untouched.
-                $(let mut $opt = unsafe { sys::mrb_undef_value_func() };)*
-                read_frame(mrb, |mrb| {
-                    // SAFETY: `mrb` is alive; each out-parameter is a
-                    // valid `*mut mrb_value`; the format string holds
-                    // one `o` per out-parameter, `|` before the
-                    // optional group.
-                    unsafe {
-                        sys::mrb_get_args(
-                            mrb.as_ptr(),
-                            $fmt.as_ptr()
-                            $(, &mut $req as *mut sys::mrb_value)*
-                            $(, &mut $opt as *mut sys::mrb_value)*
-                        );
+                let required = <[&str]>::len(&[$(stringify!($req)),*]);
+                let args = match crate::state::args::frame_args(mrb, required) {
+                    Some(args) => args,
+                    None => {
+                        $(let mut $req = sys::mrb_value::zeroed();)*
+                        // SAFETY: pure value computation; the undef sentinel
+                        // marks an optional slot mruby leaves untouched.
+                        $(let mut $opt = unsafe { sys::mrb_undef_value_func() };)*
+                        read_frame(mrb, |mrb| {
+                            // SAFETY: `mrb` is alive; each out-parameter is a
+                            // valid `*mut mrb_value`; the format string holds
+                            // one `o` per out-parameter, `|` before the
+                            // optional group.
+                            unsafe {
+                                sys::mrb_get_args(
+                                    mrb.as_ptr(),
+                                    $fmt.as_ptr()
+                                    $(, &mut $req as *mut sys::mrb_value)*
+                                    $(, &mut $opt as *mut sys::mrb_value)*
+                                );
+                            }
+                        })?;
+                        [$(Value::from_raw_unchecked($req),)* $(Value::from_raw_unchecked($opt)),*]
                     }
-                })?;
+                };
+                let [$($req,)* $($opt),*] = args;
                 let self_ = S::try_convert(self_, mrb)?;
                 $(
-                    let $req = $rt::try_convert(Value::from_raw_unchecked($req), mrb)?;
+                    let $req = $rt::try_convert($req, mrb)?;
                 )*
                 $(
                     // SAFETY: `mrb` is alive; `$opt` is a valid value.
-                    let $opt = if unsafe { sys::mrb_undef_p_func($opt) } {
+                    let $opt = if unsafe { sys::mrb_undef_p_func($opt.as_raw()) } {
                         None
                     } else {
-                        Some(
-                            $ot::try_convert(Value::from_raw_unchecked($opt), mrb)?,
-                        )
+                        Some($ot::try_convert($opt, mrb)?)
                     };
                 )*
                 (self)(mrb, self_ $(, $req)* $(, $opt)*).into_return_value(mrb, private::Bridge(()))

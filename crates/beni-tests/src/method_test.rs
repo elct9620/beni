@@ -1,5 +1,5 @@
 use beni::prelude::*;
-use beni::{Error, FromValue, IntoValue, Mrb, RString, Value};
+use beni::{Error, FromValue, IntoValue, Mrb, RArray, RString, TryConvert, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::support::{open_mrb, Is};
@@ -661,6 +661,30 @@ fn optional_arity_raises_argument_error_outside_its_range() {
     let one = 1i32.into_value(&mrb);
 
     assert_each_raises_argument_error(&mrb, receiver, c"add", &[vec![], vec![one, one, one]]);
+}
+
+#[test]
+fn optional_arity_reads_a_splat_and_folds_keywords_into_the_next_slot() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniOptSpread");
+    class
+        .define_method(&mrb, c"add", beni::method!(opt_add, 1, 1))
+        .expect("registering the typed method must succeed");
+
+    let got = mrb
+        .load_string(b"[BeniOptSpread.new.add(*[4]), BeniOptSpread.new.add(*[4, 5])]")
+        .expect("a splat spreading one or two values fits the range");
+    let got = RArray::try_convert(got, &mrb).expect("the script answers an Array");
+    assert_eq!(i32::try_convert(got.entry(&mrb, 0), &mrb).ok(), Some(4));
+    assert_eq!(i32::try_convert(got.entry(&mrb, 1), &mrb).ok(), Some(9));
+
+    let err = mrb
+        .load_string(b"BeniOptSpread.new.add(1, a: 2)")
+        .expect_err("the keyword hash fills the optional slot, which wants an Integer");
+    let Error::Exception(exc) = err else {
+        panic!("a failed conversion must raise, got {err}");
+    };
+    assert_eq!(exc.classname(&mrb), "TypeError");
 }
 
 #[test]
