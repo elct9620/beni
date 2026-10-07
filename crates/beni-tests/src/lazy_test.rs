@@ -3,7 +3,7 @@
 
 use crate::support::open_mrb;
 use beni::value::Lazy;
-use beni::{RString, ReprValue, TypedData};
+use beni::{RString, ReprValue, TryConvert, TypedData};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 static COMPUTED: AtomicUsize = AtomicUsize::new(0);
@@ -69,29 +69,32 @@ fn a_held_value_outlives_the_scope_that_computed_it() {
     assert!(Lazy::try_get_inner(&PROBE, &mrb).is_some());
 }
 
+/// The globals a guest program enumerates.
+fn enumerated_globals(mrb: &beni::Mrb) -> Vec<String> {
+    let names = mrb
+        .load_string(b"global_variables.map(&:to_s)")
+        .expect("enumerating globals succeeds");
+    Vec::try_convert(names, mrb).expect("the names are strings")
+}
+
 #[test]
 fn every_record_beni_keeps_shares_one_global() {
     static ROOTED_DROPS: AtomicUsize = AtomicUsize::new(0);
     let mrb = open_mrb();
     mrb.define_class(c"BeniLazyCarrier", mrb.object_class())
         .expect("defining the carrier class must succeed");
+    let before = enumerated_globals(&mrb);
+
     Probe::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
+    Lazy::force(&COUNTED, &mrb);
     let wrapped = mrb.wrap(Probe(&ROOTED_DROPS));
     let _root = mrb
         .gc_root(wrapped.as_value())
         .expect("rooting the carrier must succeed");
 
-    assert!(mrb.check_id(b"beni_lazy").is_some());
-    for name in [
-        b"beni_gc_roots".as_slice(),
-        b"beni_carriers",
-        b"beni_inline",
-        b"beni_inline_classes",
-    ] {
-        assert!(
-            mrb.check_id(name).is_none(),
-            "{} names no global",
-            String::from_utf8_lossy(name)
-        );
-    }
+    let added: Vec<String> = enumerated_globals(&mrb)
+        .into_iter()
+        .filter(|name| !before.contains(name))
+        .collect();
+    assert_eq!(added, ["beni_lazy"]);
 }
