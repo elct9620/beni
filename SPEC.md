@@ -1551,9 +1551,9 @@ A segment is fetched as the typed surface fetches any constant. No `const_get` m
 1. Resolve the path.
 2. Mark the class to carry data.
 3. Undefine the class's default allocator.
-4. Hold the class in the interpreter's carrier record under that path.
+4. Hold the class in the interpreter's carrier record for the naming site — the type's own `class` or one enum variant's.
 
-It surfaces an `Err` when a path resolves to no class, resolves to a value that is not a class, or names a class that refuses the mark. Marking a path the record already holds resolves it again and replaces what it holds. The embedder calls `mark_carriers` for each type in each interpreter while installing its gems, before any Ruby program runs, so every path resolves against the classes the embedder defined.
+It surfaces an `Err` when a path resolves to no class, resolves to a value that is not a class, or names a class that refuses the mark. Marking a naming site the record already holds resolves its path again and replaces what it holds. The embedder calls `mark_carriers` for each type in each interpreter while installing its gems, before any Ruby program runs, so every path resolves against the classes the embedder defined.
 
 mruby hands a class its superclass's mark and allocator state when the class is defined.
 
@@ -1564,13 +1564,13 @@ mruby hands a class its superclass's mark and allocator state when the class is 
 
 ##### Carrier record use
 
-A carrier record is kept inside the interpreter holding it and keeps its class reachable for as long as that interpreter lives. It is named as no Ruby global variable, so no guest program reads or writes it. No class crosses from one interpreter to another, and each interpreter is marked on its own.
+A carrier record holds each class as a lazy value, so it is kept inside the interpreter holding it and keeps its class reachable for as long as that interpreter lives. It is named as no Ruby global variable, so no guest program reads or writes it. No class crosses from one interpreter to another, and each interpreter is marked on its own.
 
 | Reader | Answers |
 |---|---|
-| a generated `TypedData::class` | the class the carrier record holds for the path |
-| a generated enum variant's class | the class the carrier record holds for the path |
-| either, for a path the record does not hold | panics, naming the `mark_carriers` call that puts it there |
+| a generated `TypedData::class` | the class the carrier record holds for that naming site |
+| a generated enum variant's class | the class the carrier record holds for that naming site |
+| either, for a naming site the record holds no class for | panics, naming the `mark_carriers` call that puts it there |
 
 Wrapping resolves no constant and dispatches no Ruby method, so what a Ruby program binds over a path changes no class a value wraps into.
 
@@ -1631,6 +1631,7 @@ Arenas and roots govern which values stay reachable. Collection timing governs w
 |---|---|
 | Arena scope | `Mrb::arena_scope` |
 | Root | `Mrb::gc_register_forever`, `Mrb::gc_root` |
+| Lazy value | `Lazy`, `Mrb::get_inner` |
 | Collection timing | `Mrb::full_gc`, `Mrb::incremental_gc` |
 | Heap region | `Mrb::gc_add_region` |
 
@@ -1684,16 +1685,29 @@ Each guard owns one root, so roots over the same value are independent and no dr
 
 ##### Root records
 
-Rooting keeps its record inside the interpreter. A guest program that enumerates globals sees one entry per rooting shape in use.
+Rooting keeps its record inside the interpreter. A guest program that enumerates globals sees one entry per owner in use.
 
-| Rooting shape | Entry owner |
+| Holds | Entry owner |
 |---|---|
-| never-released | mruby's own |
-| releasable | beni's |
+| never-released roots | mruby's own |
+| releasable roots, lazy values, and carrier records | beni's, one entry for all three |
 
 Neither entry is named as a Ruby global variable, so no guest program can read or write the record; it is visible to enumeration alone.
 
 A consumer reaching mruby's own root registry through `beni::sys` owns an invariant the typed shapes encode. That registry is keyed by value rather than by registration. Removing a value removes every root over it, and a released root cannot be told from another holder's. `GcRoot` supplies the per-root identity that makes independent release well defined.
+
+##### Lazy values
+
+`Lazy<T>` lets a `static` name a value, mirroring `magnus`'s `Lazy`: a function computes the value from the interpreter on first use, and each later use reads the value it held.
+
+| Operation | Behavior |
+|---|---|
+| `Lazy::new` | a const constructor taking the function that computes the value |
+| `Mrb::get_inner` | the value this interpreter holds, computing and holding it first when it holds none |
+| `Lazy::force` | computes and holds the value now when this interpreter holds none |
+| `Lazy::try_get_inner` | the value when this interpreter holds one, `None` otherwise; computes nothing |
+
+Each interpreter holds its own value for each `Lazy`, kept reachable for as long as that interpreter lives; no value crosses from one interpreter to another. No `Lazy` operation recomputes a held value. No guest program reads or writes it. The value is always held, so there is no counterpart to magnus's unmarked `Lazy`.
 
 ##### Collection timing
 
@@ -2159,7 +2173,7 @@ measures complete.
 | An `InlineStruct` type's class marked in an interpreter where the path resolves to no class or to a value that is not a class, or names a class whose instances are not plain objects and that does not belong to the same type | surfaced as a Rust `Err`; the class stays unmarked |
 | An `InlineStruct` value wrapped as an instance of a class whose instances are not inline structs — one never marked, breaking the `InlineStruct` contract | the wrap panics; nothing unwinds across FFI |
 | A value converted to an inline struct of a type it is not, or an inline struct's payload replaced while it is frozen | surfaced as a Rust `Err` carrying the `TypeError` or `FrozenError`, never unwinds across FFI |
-| A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — whose path the interpreter's carrier record does not hold, or a macro-implemented `InlineStruct` type naming its class while the record holds none for it | panics, naming the `mark_carriers` call that records it; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
+| A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — at a naming site the interpreter's carrier record holds no class for, or a macro-implemented `InlineStruct` type naming its class while the record holds none for it | panics, naming the `mark_carriers` call that records it; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
 | Ruby's `new` or `allocate` on a class whose default allocator is undefined | raises mruby's `TypeError` "allocator undefined for *class*"; reached through the typed surface, surfaced as a Rust `Err` |
 | A `wrap` or `TypedData` derive missing `class`, given an attribute the macros do not accept, a value holding a NUL byte, or a `class` path holding an empty segment, or applied to a type with generic parameters or lifetimes | a compile error naming the offending attribute, value, or generics; nothing is generated |
 | An `InlineStruct` derive or `wrap(inline)` applied to an enum, a union, or a type with generic parameters or lifetimes, given an attribute it does not accept, or applied to a type that is not `bytemuck::Pod` or exceeds three pointer widths in size or a pointer's alignment | a compile error; nothing usable is generated |
@@ -2202,7 +2216,7 @@ measures complete.
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
 | exception class | `Exception` itself or an ordinary class descending from it — never a singleton class — so every instance it allocates is an exception; the class an `ExceptionClass` handle names |
-| carrier record | one interpreter's record of the class each `class` path of a macro-implemented `TypedData` type was marked as, and of each class an `InlineStruct` type was marked as together with the type it belongs to and the class `mark_carriers` last prepared for it; `mark_carriers` writes it and every naming of such a class, and every conversion to an inline struct, reads it |
+| carrier record | one interpreter's record of the class each naming site of a macro-implemented `TypedData` type — its own `class` or an enum variant's — was marked as, and of each class an `InlineStruct` type was marked as together with the type it belongs to and the class `mark_carriers` last prepared for it; `mark_carriers` writes it and every naming of such a class, and every conversion to an inline struct, reads it |
 | instance-variable holder | an object mruby lets hold instance variables — a plain object, a class or module (a singleton class included), a hash, a data carrier, or an exception; reached through `RObject`, `RClass`, `RModule`, `ExceptionClass`, `RHash`, `RTypedData`, `Obj<T>`, or `Exception` |
 | inline struct | an object in mruby's `ISTRUCT` layout, holding up to three pointer widths of plain data inside the object itself — no heap payload, no release hook, no instance variables |
 | hidden instance variable | an instance variable whose name does not begin with `@`, which no Ruby program can read, write, list, or remove; only a caller of the embedder API reaches it |
@@ -2229,6 +2243,7 @@ measures complete.
 | documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable and builds on one platform, `x86_64-unknown-linux-gnu` |
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
 | documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated from an mruby built with the upstream default configuration, and carrying what the generating host decides alongside it — type widths, the form of `va_list`, the constants its headers define. Never hand-written and never tracked by the repository: the published package carries the copy a release generated, and every other copy is generated where it is read |
+| lazy value | a value a `Lazy` names, which each interpreter computes once and holds for its own lifetime |
 | owned type | a type whose values hold no `Value`, so a Rust heap structure may store them past the arena: Rust numbers, `bool`, `String`, `char`, `PathBuf`, `Bytes`, a non-zero integer, the payload copy a macro-implemented inline struct converts to, and an `Option`, `Vec`, map, tuple, or fixed-length array of owned types; a consumer marks its own type as one only when the type holds no `Value` |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
