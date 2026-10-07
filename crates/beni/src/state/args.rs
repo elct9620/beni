@@ -1,8 +1,8 @@
 //! Reads of the current call frame beside `scan_args`: the single
-//! required argument, the arguments an any-arity method receives, and
-//! whether a block was passed.
+//! required argument, the arguments an any-arity method receives, the
+//! name the call reached its method by, and whether a block was passed.
 
-use crate::{Error, FromValue, Mrb, ReprValue, Value};
+use crate::{Error, FromValue, Id, Mrb, ReprValue, Value};
 use beni_sys as sys;
 
 /// Run a call-frame read under exception protection. `mrb_get_args`
@@ -27,6 +27,18 @@ impl Mrb {
         // SAFETY: `mrb` is alive inside the protect frame; a wrong
         // argument count raises, which `protect` catches.
         self.protect(|mrb| Value::from_raw_unchecked(unsafe { sys::mrb_get_arg1(mrb.as_ptr()) }))
+    }
+
+    /// The name the running call reached its method by — the alias
+    /// itself when called through one — so one function registered
+    /// under several names tells them apart; `None` outside any method
+    /// call. Total: it never raises. magnus names no counterpart.
+    #[inline]
+    pub fn mid(&self) -> Option<Id> {
+        // SAFETY: `self` is alive by the `&self` borrow; the read only
+        // loads the current call's method id.
+        let mid = unsafe { sys::mrb_get_mid(self.as_ptr()) };
+        (mid != 0).then(|| Id::from_raw_unchecked(mid))
     }
 
     /// Whether the current call was passed a block. A plain boolean

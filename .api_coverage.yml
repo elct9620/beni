@@ -210,6 +210,7 @@ typed:
   mrb_get_argc: "`method!(f, -1)`'s argument slice — its length is the call's argument count, a non-empty keyword hash counted as one trailing value as magnus's slice holds it; the positionals alone are a `scan_args` splat beside its keyword part; a fixed-arity `method!` reads a keyword-less call of exactly its arity by this count, with no format parse"
   mrb_get_args: "scan_args — the magnus-shaped frame read; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol"
   mrb_get_argv: "`method!(f, -1)`'s argument slice — a copy of the call's arguments, valid across a VM re-entry, a non-empty keyword hash its last value; a fixed-arity `method!`'s arguments when a keyword-less call passes exactly its arity"
+  mrb_get_mid: "`Mrb::mid` — the name the running call reached its method by, the alias itself through an alias, `None` where no method runs (the id mruby records as 0)"
   mrb_gv_get: Mrb::gv_get
   mrb_gv_remove: Mrb::gv_remove
   mrb_gv_set: Mrb::gv_set

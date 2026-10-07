@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 316 | 315 (100%) | 247 (78%) |
+| function | 316 | 315 (100%) | 248 (78%) |
 | macro | 106 | 29 (27%) | 86 (81%) |
-| total | 422 | 344 (82%) | 333 (79%) |
+| total | 422 | 344 (82%) | 334 (79%) |
 
 ## mruby.h
 
@@ -126,7 +126,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_get_args` | fn | ✅ | ✅ | scan_args — the magnus-shaped frame read; the format string's specifier vocabulary is measured in the get_args_formats lens below, not by this single symbol |
 | `mrb_get_args_a` | fn | ✅ | ❌ |  |
 | `mrb_get_argv` | fn | ✅ | ✅ | `method!(f, -1)`'s argument slice — a copy of the call's arguments, valid across a VM re-entry, a non-empty keyword hash its last value; a fixed-arity `method!`'s arguments when a keyword-less call passes exactly its arity |
-| `mrb_get_mid` | fn | ✅ | ❌ |  |
+| `mrb_get_mid` | fn | ✅ | ✅ | `Mrb::mid` — the name the running call reached its method by, the alias itself through an alias, `None` where no method runs (the id mruby records as 0) |
 | `mrb_include_module` | fn | ✅ | ✅ | `Module::include_module` |
 | `mrb_incremental_gc` | fn | ✅ | ✅ | `Mrb::incremental_gc` — advance the collector by a single step; total (returns nothing, never raises, safe whenever the VM is alive) |
 | `mrb_inspect` | fn | ✅ | ✅ | `ReprValue::inspect` |

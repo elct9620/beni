@@ -420,3 +420,50 @@ fn an_any_arity_call_without_keywords_allocates_no_hash() {
 
     assert_eq!(hashes_on_the_heap(&mrb), before);
 }
+
+// One function registered under several names, answering the name it
+// was reached by, or nil when the read finds none.
+fn called_as(mrb: &Mrb, _self: Value) -> Value {
+    mrb.mid()
+        .map_or(beni::value::qnil().as_value(), |id| id.into_value(mrb))
+}
+
+#[test]
+fn a_method_reads_the_name_its_call_reached_it_by() {
+    use beni::Module;
+    let mrb = open_mrb();
+    let class = mrb
+        .define_class(c"BeniCalledAs", mrb.object_class())
+        .expect("defining the class must succeed");
+    class
+        .define_method(&mrb, c"first", beni::method!(called_as, 0))
+        .expect("registering first must succeed");
+    class
+        .define_method(&mrb, c"second", beni::method!(called_as, 0))
+        .expect("registering second must succeed");
+
+    let got = mrb
+        .load_string(
+            b"class BeniCalledAs; alias_method :third, :first; end
+              o = BeniCalledAs.new
+              [o.first, o.second, o.third, o.send(:second)] == [:first, :second, :third, :second]",
+        )
+        .expect("each call reads its own name");
+
+    assert_eq!(bool::from_value(got), Some(true));
+}
+
+#[test]
+fn the_name_read_answers_none_outside_any_method_call() {
+    let mrb = open_mrb();
+
+    assert!(
+        mrb.mid().is_none(),
+        "Rust code outside any call has no name"
+    );
+    mrb.load_string(b"1 + 1").expect("top-level code runs");
+    assert!(
+        mrb.mid().is_none(),
+        "a finished top-level run leaves no name"
+    );
+}

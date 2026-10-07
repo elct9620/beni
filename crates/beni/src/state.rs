@@ -36,8 +36,8 @@
 //!   * `symbol` — symbol intern + name lookup
 //!   * `define` — top-level module / class / const / gvar
 //!   * `exception` — the exception classes mruby's core defines
-//!   * `args` — the single-argument, count, argument-array, and block
-//!     reads of the call frame beside `scan_args`
+//!   * `args` — the single-argument, count, argument-array, method-name,
+//!     and block reads of the call frame beside `scan_args`
 //!   * `load` — RITE bytecode loaders
 //!   * `protect` — closure-based `mrb_protect_error`
 //!   * `root` — GC roots outliving the frame that made the value
