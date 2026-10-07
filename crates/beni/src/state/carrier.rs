@@ -7,8 +7,8 @@
 //! path resolves once, when the embedder marks the type's carriers, and
 //! every later naming reads the class the site's `Lazy` holds, so a
 //! constant a Ruby program binds over that path reaches no wrap. The
-//! classes inline-struct types own are kept beside it under a global
-//! whose name carries no `$`, which no Ruby program can write.
+//! classes inline-struct types own are held beside them in a `Lazy` of
+//! the crate's own.
 //!
 //! A read checks a symbol and reads a global, then indexes an Array or
 //! scans class and type pairs compared by pointer: none allocates,
@@ -16,14 +16,12 @@
 //! and needs no protect frame.
 
 use crate::value::Lazy;
-use crate::{
-    sys::AsRawValue, Error, FromValue as _, Mrb, RArray, RClass, ReprValue, TryConvert, Value,
-};
+use crate::{sys::AsRawValue, Error, Mrb, RArray, RClass, ReprValue, TryConvert, Value};
 use beni_sys as sys;
 use core::ffi::CStr;
 
-/// The global holding the classes inline-struct types own.
-const INLINE_GLOBAL: &[u8] = b"beni_inline";
+/// The classes inline-struct types own, as pairs `[class, tag, …]`.
+static INLINE_OWNERS: Lazy<RArray> = Lazy::new(|mrb| mrb.ary_new());
 
 impl Mrb {
     /// Resolve `path` from `Object`, prepare the class it names to carry
@@ -69,7 +67,7 @@ impl Mrb {
         if self.inline_owner(class) == Some(tag) {
             return Ok(());
         }
-        self.push_pair(self.held_pairs(INLINE_GLOBAL)?, class, tag)
+        self.push_pair(self.get_inner(&INLINE_OWNERS), class, tag)
     }
 
     /// Append the pair `class, tag` to `pairs`.
@@ -85,7 +83,7 @@ impl Mrb {
     /// held for the nearest class in its ancestry the record holds, read
     /// by pointer identity alone, so no Ruby a program defines runs.
     pub(crate) fn inline_owner(&self, class: RClass) -> Option<*const ()> {
-        let owners = self.held_array(INLINE_GLOBAL)?;
+        let owners = Lazy::try_get_inner(&INLINE_OWNERS, self)?;
         let mut current = class.as_internal();
         while !current.is_null() {
             // SAFETY: `current` walks the live superclass chain of a
@@ -101,38 +99,6 @@ impl Mrb {
         None
     }
 
-    /// The pairs `[class, tag, …]` stored under the global `name`,
-    /// created on first use and kept reachable — with every class they
-    /// hold — by that global.
-    fn held_pairs(&self, name: &'static [u8]) -> Result<RArray, Error> {
-        if let Some(pairs) = self.held_array(name) {
-            return Ok(pairs);
-        }
-        let pairs = self.ary_new();
-        self.gv_set(self.intern_static(name)?, pairs.as_value())?;
-        Ok(pairs)
-    }
-
-    /// The record, created on first use and kept reachable for the
-    /// interpreter's lifetime by the global it is stored under — which
-    /// is also what keeps every class it holds reachable.
-    fn held_array(&self, name: &'static [u8]) -> Option<RArray> {
-        RArray::from_value(self.held_global(name)?)
-    }
-
-    /// The value of the global `name`, and nothing before it was set:
-    /// a name never interned names no global. The global keeps the value
-    /// reachable, so the read takes no arena slot.
-    fn held_global(&self, name: &'static [u8]) -> Option<Value> {
-        let name = self.check_id(name)?;
-        // SAFETY: `self` is alive and `name` was interned against it.
-        Some(Value::from_raw_unchecked(unsafe {
-            sys::mrb_gv_get(self.as_ptr(), name.to_raw())
-        }))
-    }
-
-    /// Resolve `path`, mark the class it names with `mark`, undefine its
-    /// default allocator, and hold it in the record under `path`.
     fn prepare_carrier(
         &self,
         path: &'static CStr,

@@ -16,7 +16,8 @@
 //! interpreter holds, so releasing one clears that slot and leaves every
 //! other slot — including another root over the same value — standing.
 
-use crate::{sys::AsRawValue, FromValue as _, RArray, ReprValue};
+use crate::value::Lazy;
+use crate::{sys::AsRawValue, FromValue as _, RArray};
 use crate::{Error, Mrb, Value};
 use beni_sys as sys;
 
@@ -57,24 +58,20 @@ impl Mrb {
     /// it is stored under. The name carries no `$`, so no Ruby program
     /// can reach the table by writing a global variable.
     fn root_table(&self) -> Result<RootTable, Error> {
-        let name = self.intern_static(TABLE_GLOBAL)?;
-        if let Some(table) = RArray::from_value(self.gv_get(name)) {
-            return Ok(RootTable(table));
-        }
-
-        let table = self.ary_new();
-        // Index 0 is the free-list head rather than a root, so a slot
-        // index is never zero and zero can mean "no free slot".
-        table.push(self, Value::from_int(self, 0))?;
-        self.gv_set(name, table.as_value())?;
-        Ok(RootTable(table))
+        Ok(RootTable(self.get_inner(&ROOT_TABLE)))
     }
 }
 
-/// The root table: an intrusive free list over an mruby array. Slot 0
-/// holds the index of the first free slot (zero when there is none),
-/// and each free slot holds the index of the next one, so a released
-/// slot is reused without scanning.
+/// The record of releasable roots: slot 0 heads the list of free slots,
+/// every other slot holds a root or the next free slot.
+static ROOT_TABLE: Lazy<RArray> = Lazy::new(|mrb| {
+    let table = mrb.ary_new();
+    table
+        .push(mrb, Value::from_int(mrb, 0))
+        .expect("a fresh Array accepts a push");
+    table
+});
+
 #[derive(Clone, Copy)]
 struct RootTable(RArray);
 
@@ -114,10 +111,6 @@ impl RootTable {
             .unwrap_or(0)
     }
 }
-
-/// The global the root table is stored under. The name carries no `$`,
-/// so no Ruby program can reach the table by writing a global variable.
-const TABLE_GLOBAL: &[u8] = b"beni_gc_roots";
 
 /// One root over one value, released when dropped. Roots over the same
 /// value are independent: each owns its own slot, so no drop releases
@@ -159,7 +152,7 @@ impl Drop for GcRoot<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{FromValue, RString};
+    use crate::{FromValue, RString, ReprValue};
 
     #[test]
     fn a_released_slot_is_reused_by_the_next_root() {

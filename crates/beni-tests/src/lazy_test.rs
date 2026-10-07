@@ -68,3 +68,29 @@ fn a_held_value_outlives_the_scope_that_computed_it() {
     assert_eq!(DROPS.load(Ordering::SeqCst), 0, "the interpreter holds it");
     assert!(Lazy::try_get_inner(&PROBE, &mrb).is_some());
 }
+
+#[test]
+fn every_record_beni_keeps_shares_one_global() {
+    let mrb = open_mrb();
+    mrb.define_class(c"BeniLazyCarrier", mrb.object_class())
+        .expect("defining the carrier class must succeed");
+    Probe::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
+    let wrapped = mrb.wrap(Probe(&DROPS));
+    let _root = mrb
+        .gc_root(wrapped.as_value())
+        .expect("rooting the carrier must succeed");
+
+    assert!(mrb.check_id(b"beni_lazy").is_some());
+    for name in [
+        b"beni_gc_roots".as_slice(),
+        b"beni_carriers",
+        b"beni_inline",
+        b"beni_inline_classes",
+    ] {
+        assert!(
+            mrb.check_id(name).is_none(),
+            "{} names no global",
+            String::from_utf8_lossy(name)
+        );
+    }
+}
