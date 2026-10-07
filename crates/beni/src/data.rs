@@ -95,11 +95,10 @@ impl RClass {
     pub fn set_instance_data_tt(self, mrb: &Mrb) -> Result<(), Error> {
         let tt = crate::class::instance_tt(self.as_internal());
         if tt != sys::MRB_TT_OBJECT && tt != sys::MRB_TT_CDATA {
-            return Err(Error::Exception(crate::method::core_exception(
+            return Err(crate::try_convert::type_error(
                 mrb,
-                c"TypeError",
                 "can't mark a class to carry Rust data unless its instances are plain objects or data carriers",
-            )));
+            ));
         }
         // SAFETY: `self` originates from the live VM borrowed as `mrb`;
         // the shim only rewrites the class's instance-tt flag bits.

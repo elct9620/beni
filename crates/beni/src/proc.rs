@@ -203,11 +203,11 @@ where
 {
     fn call(&self, mrb: &Mrb, args: &[Value], block: Option<Proc>) -> Result<Value, Error> {
         if self.running.replace(true) {
-            return Err(Error::Exception(crate::method::core_exception(
+            return Err(crate::error::core_error(
                 mrb,
                 c"RuntimeError",
                 "proc closure called while it is already running",
-            )));
+            ));
         }
         let running = Running(&self.running);
         // SAFETY: the flag admits one call at a time, so this is the only

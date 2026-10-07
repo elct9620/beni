@@ -192,13 +192,7 @@ pub(crate) fn bound_class(
     }
     Some(outer.fetch_const(mrb, name).and_then(|bound| {
         let name = crate::Symbol::from(name).name(mrb).unwrap_or_default();
-        let type_error = |message: String| {
-            Err(Error::Exception(crate::method::core_exception(
-                mrb,
-                c"TypeError",
-                &message,
-            )))
-        };
+        let type_error = |message: String| Err(crate::try_convert::type_error(mrb, &message));
         if bound.tag() != sys::MRB_TT_CLASS {
             return type_error(format!("{name} is not a class"));
         }

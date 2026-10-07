@@ -6,7 +6,7 @@
 //! conversion (`to_str`, `to_ary`, `to_proc`, `to_path`) mruby has none,
 //! so a handle converts on its type tag alone.
 
-use crate::{method::core_exception, Error, Mrb, RArray, RHash, RString, ReprValue, Value};
+use crate::{error::core_error, Error, Mrb, RArray, RHash, RString, ReprValue, Value};
 use core::num::{
     NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
     NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize,
@@ -59,16 +59,12 @@ pub trait TryConvert: Sized {
 /// through any field.
 pub unsafe trait TryConvertOwned: TryConvert {}
 
-fn exception(mrb: &Mrb, class: &core::ffi::CStr, msg: &str) -> Error {
-    Error::Exception(core_exception(mrb, class, msg))
-}
-
 pub(crate) fn type_error(mrb: &Mrb, msg: &str) -> Error {
-    exception(mrb, c"TypeError", msg)
+    core_error(mrb, c"TypeError", msg)
 }
 
 pub(crate) fn argument_error(mrb: &Mrb, msg: &str) -> Error {
-    exception(mrb, c"ArgumentError", msg)
+    core_error(mrb, c"ArgumentError", msg)
 }
 
 /// mruby's `%Y`: `nil`, `true`, or `false` itself, any other value its
@@ -157,7 +153,7 @@ macro_rules! try_convert_integer {
             fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
                 let n = crate::Integer::try_convert(val, mrb)?.to_i64(mrb)?;
                 <$int>::try_from(n)
-                    .map_err(|_| exception(mrb, c"RangeError", &format!("{n} out of range")))
+                    .map_err(|_| core_error(mrb, c"RangeError", &format!("{n} out of range")))
             }
         }
 

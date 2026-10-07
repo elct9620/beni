@@ -191,6 +191,24 @@ pub fn bug(mrb: &Mrb, msg: &str) -> ! {
     unsafe { sys::mrb_bug(mrb.as_ptr(), msg.as_ptr()) }
 }
 
+/// Build an exception of the named core exception class carrying
+/// `msg`'s bytes, copied into the VM. The class is named through
+/// `exc_get`, as mruby's own raises name theirs; where that lookup
+/// raises — the constant missing or naming no exception class — the
+/// exception it raised stands in for the one asked for.
+pub(crate) fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str) -> Value {
+    match mrb.exc_get(class_name) {
+        Ok(class) => class.exc_new(mrb, msg),
+        Err(Error::Exception(exc)) => exc,
+        Err(_) => unreachable!("the lookup surfaces only an exception"),
+    }
+}
+
+/// As `core_exception`, as the `Err` a typed operation surfaces.
+pub(crate) fn core_error(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str) -> Error {
+    Error::Exception(core_exception(mrb, class_name, msg))
+}
+
 /// Render a `catch_unwind` payload as the panic message — `&str` and
 /// `String` payloads (the `panic!` macro's products) pass through,
 /// anything else falls back to a fixed marker. The message
