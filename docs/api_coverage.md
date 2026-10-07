@@ -316,7 +316,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_data_check_type` | fn | ✅ | ✅ | `TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — a mismatch surfaces the `TypeError` this check raises, protected into an `Err` |
 | `mrb_data_get_ptr` | fn | ✅ | ✅ | `TryConvert` for `&T` / `Obj<T>` and `RTypedData::get` — the raising read, whose body is `mrb_data_check_type` then `DATA_PTR` (`vendor/mruby/src/etc.c:77-81`); the `TypeError` it raises is the `Err` those reads answer |
 | `mrb_data_init` | fn | ✅ | ✅ | `typed_data::Dup::clone` — installs a clone of the payload into the bare carrier `mrb_obj_clone` made, the one install on the typed surface |
-| `mrb_data_object_alloc` | fn | ✅ | ✅ | `Mrb::wrap_as`, and `wrap` / `obj_wrap` / `obj_wrap_as` through it — protected, so an unmarked class, which breaks `TypedData`'s contract, reclaims the box and panics rather than raising across the boundary |
+| `mrb_data_object_alloc` | fn | ✅ | ✅ | `Mrb::wrap_as`, and `wrap` / `obj_wrap` / `obj_wrap_as` through it — an unmarked class, which breaks `TypedData`'s contract, is refused from its flags before allocating, so the payload is reclaimed and the wrap panics rather than raising across the boundary |
 | `mrb_get_datatype` | macro | ❌ | ✅ | defined as `mrb_data_get_ptr` |
 ## mruby/dump.h
 

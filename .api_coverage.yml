@@ -156,7 +156,7 @@ typed:
   mrb_data_init: "`typed_data::Dup::clone` — installs a clone of the payload into the bare carrier `mrb_obj_clone` made, the one install on the typed surface"
   mrb_istruct_ptr: "`Inline::get` and `Inline::set` — read and replace the payload by copy, the only access to it the typed surface hands out"
   mrb_istruct_size: "`InlineStruct` — the payload bound a type must fit, held at compile time"
-  mrb_data_object_alloc: "`Mrb::wrap_as`, and `wrap` / `obj_wrap` / `obj_wrap_as` through it — protected, so an unmarked class, which breaks `TypedData`'s contract, reclaims the box and panics rather than raising across the boundary"
+  mrb_data_object_alloc: "`Mrb::wrap_as`, and `wrap` / `obj_wrap` / `obj_wrap_as` through it — an unmarked class, which breaks `TypedData`'s contract, is refused from its flags before allocating, so the payload is reclaimed and the wrap panics rather than raising across the boundary"
   mrb_define_alias: "`Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id`"
   mrb_alias_method: "`Module::alias_method` — `mrb_define_alias_id` is a forwarding wrapper whose body is `mrb_alias_method(mrb, klass, a, b)` (`vendor/mruby/src/class.c:3374-3377`), taking the same arguments"
   mrb_define_alias_id: "`Module::alias_method` with `Id` keys (the symbol-or-name key, both names keyed independently)"

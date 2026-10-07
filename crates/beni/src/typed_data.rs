@@ -177,43 +177,35 @@ impl Mrb {
     /// When `class` cannot carry data — it was never marked, breaking
     /// `TypedData`'s contract. The payload is dropped first.
     pub fn wrap_as<T: TypedData>(&self, data: T, class: RClass) -> RTypedData {
-        let ptr = Box::into_raw(Box::new(data)) as *mut core::ffi::c_void;
-        // `ptr` is `Copy`, so the closure captures a copy while this
-        // frame keeps the original for the reclaim path.
-        let wrapped = self.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; `class`
-            // is from the same VM; `ptr` is a freshly leaked `Box<T>`;
-            // the data type is `'static`, so it outlives the carrier.
-            // Allocating against an unmarked class raises a
-            // `TypeError`, caught by `protect`.
-            let rdata = unsafe {
-                sys::mrb_data_object_alloc(
-                    mrb.as_ptr(),
-                    class.as_internal(),
-                    ptr,
-                    T::data_type().as_raw(),
-                )
-            };
-            // SAFETY: `rdata` is a live object just allocated.
-            Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(rdata as *mut _) })
-        });
-        match wrapped {
-            Ok(value) => {
-                debug_assert!(
-                    value.is_kind_of(self, T::class(self)),
-                    "{} is not a subclass of {}",
-                    class.as_value().inspect(self),
-                    T::class(self).as_value().inspect(self),
-                );
-                RTypedData(value)
-            }
-            Err(err) => {
-                // SAFETY: the allocation raised before any carrier took
-                // the box, so this frame still owns it.
-                drop(unsafe { Box::from_raw(ptr as *mut T) });
-                panic!("a TypedData class cannot carry data: {}", err.message(self));
-            }
+        if !crate::class::allocates_as(self, class, sys::MRB_TT_CDATA) {
+            drop(data);
+            panic!(
+                "a TypedData class cannot carry data: {}",
+                class.as_value().inspect(self)
+            );
         }
+        let ptr = Box::into_raw(Box::new(data)) as *mut core::ffi::c_void;
+        // SAFETY: `self` is alive; `class` is from the same VM and
+        // allocates data carriers, so the allocation does not raise;
+        // `ptr` is a freshly leaked `Box<T>`; the data type is
+        // `'static`, so it outlives the carrier.
+        let rdata = unsafe {
+            sys::mrb_data_object_alloc(
+                self.as_ptr(),
+                class.as_internal(),
+                ptr,
+                T::data_type().as_raw(),
+            )
+        };
+        // SAFETY: `rdata` is a live object just allocated.
+        let value = Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(rdata as *mut _) });
+        debug_assert!(
+            value.is_kind_of(self, T::class(self)),
+            "{} is not a subclass of {}",
+            class.as_value().inspect(self),
+            T::class(self).as_value().inspect(self),
+        );
+        RTypedData(value)
     }
 
     /// As `wrap`, answered as the typed `Obj<T>`. Mirrors magnus's

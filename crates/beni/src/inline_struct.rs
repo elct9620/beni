@@ -138,24 +138,18 @@ impl<T: InlineStruct> Inline<T> {
     pub fn new(mrb: &Mrb, data: T) -> Self {
         let () = Fits::<T>::INSIDE;
         let class = T::class(mrb);
-        let value = mrb
-            .protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame and
-                // `class` is from the same VM; allocating against a class
-                // whose instances are not inline structs raises a
-                // `TypeError`, caught by `protect`.
-                let object = unsafe {
-                    sys::mrb_obj_alloc(mrb.as_ptr(), sys::MRB_TT_ISTRUCT, class.as_internal())
-                };
-                // SAFETY: `object` is a live object just allocated.
-                Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(object.cast()) })
-            })
-            .unwrap_or_else(|err| {
-                panic!(
-                    "an InlineStruct class cannot carry inline structs: {}",
-                    err.message(mrb)
-                )
-            });
+        if !crate::class::allocates_as(mrb, class, sys::MRB_TT_ISTRUCT) {
+            panic!(
+                "an InlineStruct class cannot carry inline structs: {}",
+                class.as_value().inspect(mrb)
+            );
+        }
+        // SAFETY: `mrb` is alive and `class` is from the same VM and
+        // allocates inline structs, so the allocation does not raise.
+        let object =
+            unsafe { sys::mrb_obj_alloc(mrb.as_ptr(), sys::MRB_TT_ISTRUCT, class.as_internal()) };
+        // SAFETY: `object` is a live object just allocated.
+        let value = Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(object.cast()) });
         let inline = Self {
             value,
             _marker: PhantomData,

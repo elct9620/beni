@@ -223,6 +223,16 @@ pub(crate) fn instance_tt(class: *mut sys::RClass) -> sys::mrb_vtype {
     unsafe { sys::mrb_instance_tt_func(class) }
 }
 
+/// Whether mruby allocates an object of type `tt` against `class` without
+/// raising: the class's instances are of that type, or the class is
+/// `Object`, which also allocates data carriers and inline structs
+/// (`vendor/mruby/src/gc.c:573-580`). Answered from flag reads alone, so a
+/// wrap refuses a class before allocating instead of catching the raise.
+pub(crate) fn allocates_as(mrb: &Mrb, class: RClass, tt: sys::mrb_vtype) -> bool {
+    instance_tt(class.as_internal()) == tt
+        || class.as_internal() == mrb.object_class().as_internal()
+}
+
 /// Whether `class` is an exception class — `Exception` itself or a class
 /// descending from it, told by the exception instance type `Exception`
 /// sets and its descendants inherit. That type is also the one
