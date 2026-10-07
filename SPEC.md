@@ -1371,6 +1371,15 @@ Handing the slice over leaves the frame unchanged, so a scan read still finds th
 
 A call not fitting a read's shape surfaces as an `Err` carrying the exception raised for the mismatch. Mismatches are too few or too many positionals, a wrong argument type, or a missing required block. Nothing raises past the body, which decides how the failure leaves it. The single-argument read's shape is exactly one positional; the keyword hash stands in for it when the call passed keywords and no positional.
 
+A registered method also reads the name its call reached it by, so one function registered under several names tells them apart. The read is a total read on the `Mrb` handle answering an `Id`, and `magnus` offers no counterpart.
+
+| Running | Name read answers |
+|---|---|
+| a registered method called by the name it was registered under | that name |
+| a registered method called through an alias of it | the alias |
+| no method: top-level code, or Rust code outside any method call | nothing |
+| anything else, such as a Rust-bodied `Proc` | the name mruby records for the running call, or nothing |
+
 ##### Scan read
 
 The scan read mirrors `magnus`'s `scan_args`, reading the frame where magnus reads an argument slice. It composes its shape from six parts, handed back separately so a body reads any argument shape mruby accepts in one read. Each part is declared by the type it hands back, and is absent when declared as `()`.
