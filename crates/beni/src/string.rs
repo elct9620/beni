@@ -155,33 +155,23 @@ impl RString {
     /// long-jumping.
     #[inline]
     pub fn resize(self, mrb: &Mrb, len: usize) -> Result<(), Error> {
+        // A `usize` past mruby's integer range is never a valid string
+        // length, so it answers the `ArgumentError` mruby raises for an
+        // overflowed one.
+        let Ok(len) = sys::mrb_int::try_from(len) else {
+            return Err(crate::try_convert::argument_error(
+                mrb,
+                "string size too large",
+            ));
+        };
         mrb.protect(|mrb| {
-            match sys::mrb_int::try_from(len) {
-                // SAFETY: `self` is String-tagged by the newtype
-                // contract; `mrb` is alive inside the protect frame.
-                // `mrb_str_resize` calls `mrb_str_modify` (raises
-                // `FrozenError` on a frozen receiver) and
-                // `str_check_length` (raises `ArgumentError` on a
-                // length at the integer maximum) — both long-jump,
-                // caught by `protect`.
-                Ok(len) => unsafe {
-                    sys::mrb_str_resize(mrb.as_ptr(), self.0.as_raw(), len);
-                },
-                // A `usize` past mruby's integer range can never be a
-                // valid string length; raise the same `ArgumentError`
-                // mruby raises for an overflowed length so the caller
-                // sees one error shape regardless of where the bound
-                // is hit.
-                Err(_) => {
-                    // SAFETY: `mrb` is alive; `E_ARGUMENT_ERROR` is a
-                    // core class so the lookup cannot fail;
-                    // `mrb_raise` long-jumps to the protect frame.
-                    unsafe {
-                        let argerr = sys::mrb_class_get(mrb.as_ptr(), c"ArgumentError".as_ptr());
-                        sys::mrb_raise(mrb.as_ptr(), argerr, c"string size too large".as_ptr());
-                    }
-                }
-            }
+            // SAFETY: `self` is String-tagged by the newtype contract;
+            // `mrb` is alive inside the protect frame. `mrb_str_resize`
+            // calls `mrb_str_modify` (raises `FrozenError` on a frozen
+            // receiver) and `str_check_length` (raises `ArgumentError` on
+            // a length at the integer maximum) — both long-jump, caught
+            // by `protect`.
+            unsafe { sys::mrb_str_resize(mrb.as_ptr(), self.0.as_raw(), len) };
             crate::value::qnil()
         })
         .map(|_| ())

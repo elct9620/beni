@@ -321,6 +321,22 @@ fn resize_surfaces_frozen_receiver_as_err() {
 }
 
 #[test]
+fn resize_past_the_integer_range_surfaces_mrubys_argument_error() {
+    let mrb = open_mrb();
+    let s = mrb.str_new(b"abc");
+
+    let Err(err) = s.resize(&mrb, usize::MAX) else {
+        panic!("no string holds usize::MAX bytes");
+    };
+
+    assert!(err.is_kind_of(
+        &mrb,
+        mrb.exception_arg_error().expect("ArgumentError is bound")
+    ));
+    assert_eq!(err.message(&mrb), "string size too large");
+}
+
+#[test]
 fn to_cstr_yields_a_nul_terminated_view() {
     let mrb = open_mrb();
 

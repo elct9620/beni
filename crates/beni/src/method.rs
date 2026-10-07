@@ -203,16 +203,16 @@ pub(crate) mod private {
 }
 
 /// Build an exception of the named core exception class carrying
-/// `msg`'s bytes, copied into the VM. The lookup cannot miss for core
-/// exception classes (`TypeError`, `RuntimeError`).
+/// `msg`'s bytes, copied into the VM. The class is named through
+/// `exc_get`, as mruby's own raises name theirs; where that lookup
+/// raises — the constant missing or naming no exception class — the
+/// exception it raised stands in for the one asked for.
 pub(crate) fn core_exception(mrb: &Mrb, class_name: &core::ffi::CStr, msg: &str) -> Value {
-    // SAFETY: `mrb` is alive; `class_name` is NUL-terminated and names a
-    // core exception class present in every VM, so the pointer is an
-    // exception class.
-    let class = crate::ExceptionClass::from_raw_unchecked(unsafe {
-        sys::mrb_class_get(mrb.as_ptr(), class_name.as_ptr())
-    });
-    class.exc_new(mrb, msg)
+    match mrb.exc_get(class_name) {
+        Ok(class) => class.exc_new(mrb, msg),
+        Err(Error::Exception(exc)) => exc,
+        Err(_) => unreachable!("the lookup surfaces only an exception"),
+    }
 }
 
 /// Convert `err` into a pending mruby exception and long-jump to the

@@ -1,6 +1,6 @@
 use crate::support::open_mrb;
 use beni::prelude::*;
-use beni::{Error, ExceptionClass, Mrb};
+use beni::{Error, ExceptionClass, Mrb, TryConvert};
 
 type Lookup = fn(&Mrb) -> Result<ExceptionClass, Error>;
 
@@ -85,4 +85,114 @@ fn the_interpreter_held_accessors_ignore_their_constants() {
         .exception_standard_error()
         .as_value()
         .is_equal(&mrb, standard_error.as_value()));
+}
+
+fn takes_array(_mrb: &Mrb, _self: beni::Value, array: beni::RArray) -> i32 {
+    array.len() as i32
+}
+
+fn panics(_mrb: &Mrb, _self: beni::Value) -> beni::Value {
+    panic!("raised as a RuntimeError");
+}
+
+/// An interpreter whose `Object` answers `takes_array`, converting its
+/// argument to an Array, and `panics`.
+fn interpreter_raising_its_own() -> Mrb {
+    let mrb = open_mrb();
+    let object = mrb.object_class();
+    object
+        .define_method(&mrb, c"takes_array", beni::method!(takes_array, 1))
+        .expect("registering the converting method must succeed");
+    object
+        .define_method(&mrb, c"panics", beni::method!(panics, 0))
+        .expect("registering the panicking method must succeed");
+    mrb
+}
+
+/// The class name and message of the exception `source` rescues.
+fn rescued(mrb: &Mrb, source: &str) -> String {
+    let rescuing =
+        format!("begin; {source}; rescue Exception => e; \"#{{e.class}}: #{{e.message}}\"; end");
+    let answered = mrb
+        .load_string(rescuing.as_bytes())
+        .unwrap_or_else(|err| panic!("{source} escaped its rescue: {}", err.message(mrb)));
+    String::try_convert(answered, mrb).expect("the rescue answers a string")
+}
+
+#[test]
+fn a_conversion_exception_names_the_class_its_constant_is_rebound_to() {
+    let mrb = interpreter_raising_its_own();
+    mrb.load_string(
+        b"class Rebound < StandardError; end; Object.send(:remove_const, :TypeError); TypeError = Rebound",
+    )
+    .expect("rebinding the constant succeeds");
+
+    assert_eq!(
+        rescued(&mrb, "takes_array(1)"),
+        "Rebound: Integer cannot be converted to Array"
+    );
+}
+
+#[test]
+fn a_conversion_exception_whose_constant_is_removed_raises_what_mruby_raises() {
+    let mrb = interpreter_raising_its_own();
+    mrb.load_string(b"Object.send(:remove_const, :TypeError)")
+        .expect("removing the constant succeeds");
+
+    assert_eq!(
+        rescued(&mrb, "takes_array(1)"),
+        rescued(&mrb, "[].concat(1)"),
+        "beni's own TypeError and mruby's own surface the same exception"
+    );
+    assert_eq!(
+        rescued(&mrb, "takes_array(1)"),
+        "Exception: exception corrupted"
+    );
+}
+
+#[test]
+fn a_conversion_outside_any_call_surfaces_the_lookup_exception_as_err() {
+    let mrb = open_mrb();
+    let one = mrb
+        .load_string(b"Object.send(:remove_const, :TypeError); 1")
+        .expect("removing the constant succeeds");
+
+    let Err(err) = beni::RArray::try_convert(one, &mrb) else {
+        panic!("an Integer is no Array");
+    };
+
+    assert!(err.is_kind_of(&mrb, mrb.exception_exception()));
+    assert_eq!(err.message(&mrb), "exception corrupted");
+}
+
+#[test]
+fn naming_a_removed_class_runs_no_const_missing() {
+    let mrb = interpreter_raising_its_own();
+    mrb.load_string(
+        b"$missing = nil; def Object.const_missing(name); $missing = name; raise 'hooked'; end; \
+          Object.send(:remove_const, :TypeError)",
+    )
+    .expect("installing the hook succeeds");
+
+    assert_eq!(
+        rescued(&mrb, "takes_array(1)"),
+        "Exception: exception corrupted"
+    );
+    let missing = mrb
+        .load_string(b"$missing")
+        .expect("reading the global succeeds");
+    assert!(
+        missing.is_nil(),
+        "const_missing ran for {}",
+        missing.inspect(&mrb)
+    );
+}
+
+#[test]
+fn a_panic_whose_runtime_error_is_removed_raises_what_mruby_raises() {
+    let mrb = interpreter_raising_its_own();
+    mrb.load_string(b"Object.send(:remove_const, :RuntimeError)")
+        .expect("removing the constant succeeds");
+
+    assert_eq!(rescued(&mrb, "panics"), "Exception: exception corrupted");
 }
