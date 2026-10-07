@@ -327,7 +327,7 @@ impl Proc {
     /// A dump that produced nothing, reported as the `Err` carrying an
     /// exception that every other failure is reported in.
     fn undumpable(mrb: &Mrb, message: &str) -> Error {
-        match mrb.exc_get(c"RuntimeError") {
+        match mrb.exception_runtime_error() {
             Ok(class) => Error::new(mrb, class, message),
             Err(err) => err,
         }

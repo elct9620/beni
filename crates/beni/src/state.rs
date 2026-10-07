@@ -35,6 +35,7 @@
 //!   * `factory` — `String` / `RArray` / `RHash` factories
 //!   * `symbol` — symbol intern + name lookup
 //!   * `define` — top-level module / class / const / gvar
+//!   * `exception` — the exception classes mruby's core defines
 //!   * `args` — the single-argument, count, argument-array, and block
 //!     reads of the call frame beside `scan_args`
 //!   * `load` — RITE bytecode loaders
@@ -50,6 +51,7 @@ pub mod arena;
 pub mod args;
 pub mod carrier;
 pub mod define;
+pub mod exception;
 pub mod factory;
 pub mod load;
 pub mod protect;

@@ -16,6 +16,7 @@ mod convert_test;
 mod data_test;
 mod define_test;
 mod error_test;
+mod exception_test;
 mod factory_test;
 #[cfg(feature = "fiber")]
 mod fiber_test;

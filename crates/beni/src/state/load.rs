@@ -67,7 +67,7 @@ impl Mrb {
             // (`vendor/mruby/src/load.c:756,764`), so the error carries
             // that class — with the structural check named, which
             // mruby's one flat message does not distinguish.
-            let script_error = self.exc_get(c"ScriptError")?;
+            let script_error = self.exception_script_error()?;
             return Err(Error::new(self, script_error, structural_failure(bytes)));
         }
 
