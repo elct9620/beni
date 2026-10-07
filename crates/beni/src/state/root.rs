@@ -43,7 +43,7 @@ impl Mrb {
     /// value standing. Fallible because taking a root grows the record
     /// of roots — no root is taken when it fails.
     pub fn gc_root(&self, v: Value) -> Result<GcRoot<'_>, Error> {
-        let table = self.root_table()?;
+        let table = RootTable(self.get_inner(&ROOT_TABLE));
         let slot = table.claim(self, v)?;
         Ok(GcRoot {
             mrb: self,
@@ -52,18 +52,11 @@ impl Mrb {
             value: v,
         })
     }
-
-    /// The array holding one slot per live root, created on first use
-    /// and kept reachable for the interpreter's lifetime by the global
-    /// it is stored under. The name carries no `$`, so no Ruby program
-    /// can reach the table by writing a global variable.
-    fn root_table(&self) -> Result<RootTable, Error> {
-        Ok(RootTable(self.get_inner(&ROOT_TABLE)))
-    }
 }
 
-/// The record of releasable roots: slot 0 heads the list of free slots,
-/// every other slot holds a root or the next free slot.
+/// The record of releasable roots, created on first use and held as a
+/// lazy value for the interpreter's lifetime: slot 0 heads the list of
+/// free slots, every other slot holds a root or the next free slot.
 static ROOT_TABLE: Lazy<RArray> = Lazy::new(|mrb| {
     let table = mrb.ary_new();
     table
