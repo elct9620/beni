@@ -1233,6 +1233,33 @@ An exception class has a typed handle of its own, `ExceptionClass`, mirroring `m
 | a class that is not an exception class | Rust `Err` |
 | an exception class | `ExceptionClass` handle |
 
+Each exception class mruby's core defines also has an accessor on `Mrb`, named as `magnus`'s `exception_*` accessor for the same class. `Exception` and `StandardError` are classes the interpreter holds itself, so their accessors answer the handle and never an `Err`, whatever their constants are later bound to. Every other accessor is the built-in lookup under its class's name and answers as that lookup does, so a constant rebound to another exception class answers that class.
+
+| Accessor | Class |
+|---|---|
+| `exception_exception` | `Exception` |
+| `exception_standard_error` | `StandardError` |
+| `exception_arg_error` | `ArgumentError` |
+| `exception_float_domain_error` | `FloatDomainError` |
+| `exception_frozen_error` | `FrozenError` |
+| `exception_index_error` | `IndexError` |
+| `exception_key_error` | `KeyError` |
+| `exception_local_jump_error` | `LocalJumpError` |
+| `exception_name_error` | `NameError` |
+| `exception_no_matching_pattern_error` | `NoMatchingPatternError` |
+| `exception_no_mem_error` | `NoMemoryError` |
+| `exception_no_method_error` | `NoMethodError` |
+| `exception_not_imp_error` | `NotImplementedError` |
+| `exception_range_error` | `RangeError` |
+| `exception_regexp_error` | `RegexpError` |
+| `exception_runtime_error` | `RuntimeError` |
+| `exception_script_error` | `ScriptError` |
+| `exception_stop_iteration` | `StopIteration` |
+| `exception_syntax_error` | `SyntaxError` |
+| `exception_sys_stack_error` | `SystemStackError` |
+| `exception_type_error` | `TypeError` |
+| `exception_zero_div_error` | `ZeroDivisionError` |
+
 A consumer's own exception class is defined under a name from an exception-class superclass, yielding the handle directly, mirroring `magnus`'s `define_error`. Definition is top-level on the `Mrb` handle and within a namespace through the `Module` trait, symbol-or-name keyed. A name already bound resolves exactly as class definition resolves it: the bound ordinary class itself when its superclass is the one given, an `Err` otherwise. The handle registers methods and binds constants through the `Module` and `Object` traits, and yields the class handle for any operation that takes one.
 
 ##### Defined-name predicate
