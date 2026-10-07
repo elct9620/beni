@@ -84,6 +84,7 @@ fn full_api_surface_is_reachable_from_outside() {
         let _ = Mrb::obj_wrap_as::<Probe>;
         let _ = RTypedData::from_value_unchecked;
         let _ = RTypedData::get::<Probe>;
+        let _ = RTypedData::init::<Probe>;
     }
     {
         #[beni::wrap(class = "Wrapped")]

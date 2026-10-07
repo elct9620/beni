@@ -420,3 +420,194 @@ fn a_data_carrier_keeps_an_instance_variable_through_either_handle() {
     assert_eq!(typed.ivar_get::<_, i32>(&mrb, name).ok(), Some(3));
     assert_eq!(untyped.ivar_get::<_, i32>(&mrb, name).ok(), Some(4));
 }
+
+#[derive(Debug, PartialEq)]
+#[beni::wrap(class = "BeniTally")]
+struct Tally {
+    n: i32,
+}
+
+// A hand-marked class keeps its default allocator, so `new` and
+// `allocate` make bare carriers its `initialize` completes.
+#[derive(Debug, PartialEq)]
+struct Seed {
+    n: i32,
+}
+
+static SEED_TYPE: DataType<Seed> = DataType::new(c"BeniSeed");
+
+// SAFETY: every test using `Seed` marks `BeniSeed` first.
+unsafe impl TypedData for Seed {
+    fn class(mrb: &Mrb) -> RClass {
+        mrb.class_get(c"BeniSeed").expect("BeniSeed is defined")
+    }
+
+    fn data_type() -> &'static DataType<Self> {
+        &SEED_TYPE
+    }
+}
+
+fn refused<T: core::fmt::Debug>(mrb: &Mrb, offered: T) -> Error {
+    Error::new(
+        mrb,
+        mrb.exc_get(c"RuntimeError").expect("RuntimeError is defined"),
+        &format!("already holds a payload, refused {offered:?}"),
+    )
+}
+
+fn seed_n(_mrb: &Mrb, rb_self: &Seed) -> i32 {
+    rb_self.n
+}
+
+fn seed_initialize(mrb: &Mrb, rb_self: RTypedData, n: i32) -> Result<Value, Error> {
+    rb_self
+        .init(mrb, Seed { n })
+        .map(|()| beni::value::qnil().as_value())
+        .map_err(|offered| refused(mrb, offered))
+}
+
+fn define_seed(mrb: &Mrb) {
+    let class = define_marked(mrb, c"BeniSeed");
+    class
+        .define_method(mrb, c"n", beni::method!(seed_n, 0))
+        .expect("registering n must succeed");
+    class
+        .define_method(mrb, c"initialize", beni::method!(seed_initialize, 1))
+        .expect("registering initialize must succeed");
+}
+
+fn tally_n(_mrb: &Mrb, rb_self: &Tally) -> i32 {
+    rb_self.n
+}
+
+fn tally_initialize_copy(mrb: &Mrb, rb_self: RTypedData, orig: &Tally) -> Result<Value, Error> {
+    rb_self
+        .init(mrb, Tally { n: orig.n })
+        .map(|()| beni::value::qnil().as_value())
+        .map_err(|offered| refused(mrb, offered))
+}
+
+fn define_tally(mrb: &Mrb) -> RClass {
+    let class = define_marked(mrb, c"BeniTally");
+    Tally::mark_carriers(mrb).expect("marking the tally's carrier must succeed");
+    class
+        .define_method(mrb, c"n", beni::method!(tally_n, 0))
+        .expect("registering n must succeed");
+    class
+        .define_method(mrb, c"initialize_copy", beni::method!(tally_initialize_copy, 1))
+        .expect("registering initialize_copy must succeed");
+    class
+}
+
+#[test]
+fn initialize_installs_the_payload_into_the_carrier_new_makes() {
+    let mrb = open_mrb();
+    define_seed(&mrb);
+
+    let n = mrb
+        .load_string(b"BeniSeed.new(5).n")
+        .expect("initialize completes the carrier new made");
+
+    assert_eq!(i32::from_value(n), Some(5));
+}
+
+#[test]
+fn mrubys_own_copies_keep_subclass_and_frozen_state_through_initialize_copy() {
+    let mrb = open_mrb();
+    let tally = define_tally(&mrb);
+    let sub = mrb
+        .define_class(c"BeniSubTally", tally)
+        .expect("defining the subclass must succeed");
+    let original = mrb.wrap_as(Tally { n: 3 }, sub).as_value();
+    mrb.define_global_const(c"BENI_TALLY", original)
+        .expect("naming the original must succeed");
+
+    let got = mrb
+        .load_string(
+            b"t = BENI_TALLY.freeze
+              d = t.dup
+              c = t.clone
+              [d.class == BeniSubTally, d.n, c.frozen?, c.n] == [true, 3, true, 3]",
+        )
+        .expect("initialize_copy completes each copy");
+
+    assert_eq!(bool::from_value(got), Some(true));
+}
+
+#[test]
+fn a_frozen_carrier_holding_no_payload_still_installs() {
+    let mrb = open_mrb();
+    define_seed(&mrb);
+    let carrier = mrb
+        .load_string(b"BeniSeed.allocate.freeze")
+        .expect("allocate makes a bare carrier");
+    let carrier = RTypedData::try_convert(carrier, &mrb).expect("a bare carrier is a data carrier");
+
+    carrier
+        .init(&mrb, Seed { n: 7 })
+        .expect("a frozen bare carrier accepts its payload");
+
+    assert_eq!(carrier.get::<Seed>(&mrb).map(|seed| seed.n).ok(), Some(7));
+}
+
+#[test]
+fn a_carrier_holding_a_payload_refuses_and_hands_the_offer_back() {
+    let mrb = open_mrb();
+    define_seed(&mrb);
+    let carrier = mrb
+        .load_string(b"BeniSeed.new(1)")
+        .expect("new completes the carrier");
+    let carrier = RTypedData::try_convert(carrier, &mrb).expect("the seed is a data carrier");
+
+    let answer = carrier.init(&mrb, Seed { n: 9 });
+
+    assert_eq!(answer, Err(Seed { n: 9 }));
+    assert_eq!(carrier.get::<Seed>(&mrb).map(|seed| seed.n).ok(), Some(1));
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[beni::wrap(class = "BeniLedger")]
+struct Ledger {
+    n: i32,
+}
+
+fn ledger_n(_mrb: &Mrb, rb_self: &Ledger) -> i32 {
+    rb_self.n
+}
+
+fn ledger_initialize_copy(mrb: &Mrb, rb_self: RTypedData, orig: &Ledger) -> Result<Value, Error> {
+    rb_self
+        .init(mrb, Ledger { n: orig.n + 100 })
+        .map(|()| beni::value::qnil().as_value())
+        .map_err(|offered| refused(mrb, offered))
+}
+
+#[test]
+fn dup_clone_keeps_the_payload_initialize_copy_installed() {
+    use beni::typed_data::Dup;
+    let mrb = open_mrb();
+    let class = define_marked(&mrb, c"BeniLedger");
+    Ledger::mark_carriers(&mrb).expect("marking the ledger's carrier must succeed");
+    class
+        .define_method(&mrb, c"n", beni::method!(ledger_n, 0))
+        .expect("registering n must succeed");
+    class
+        .define_method(&mrb, c"initialize_copy", beni::method!(ledger_initialize_copy, 1))
+        .expect("registering initialize_copy must succeed");
+    class
+        .define_method(&mrb, c"clone", beni::method!(<Ledger as Dup>::clone, -1))
+        .expect("registering clone must succeed");
+    let original = mrb.wrap(Ledger { n: 3 });
+
+    let copy = original
+        .as_value()
+        .funcall(&mrb, c"clone", &[])
+        .expect("clone completes the copy");
+
+    assert_eq!(read_ledger(&mrb, copy), 103);
+}
+
+fn read_ledger(mrb: &Mrb, obj: Value) -> i32 {
+    let n = obj.funcall(mrb, c"n", &[]).expect("n reads the payload");
+    i32::from_value(n).expect("n is an Integer")
+}

@@ -110,6 +110,37 @@ impl RTypedData {
         // while its carrier stays reachable (the GC validity rule).
         payload(self.0, mrb).map(|ptr| unsafe { &*ptr })
     }
+
+    /// Install `data` as the payload of a carrier holding none — what
+    /// mruby's `dup` and `clone` make of a carrier, as do `new` and
+    /// `allocate` while its class keeps its default allocator — so its
+    /// `initialize` or `initialize_copy` completes it. A carrier already
+    /// holding a payload refuses, handing `data` back. mruby gives a class
+    /// whose instances are data carriers no allocator to fill the payload
+    /// as it allocates, the step magnus's `define_alloc_func` takes on
+    /// CRuby.
+    pub fn init<T: TypedData>(self, mrb: &Mrb, data: T) -> Result<(), T> {
+        // SAFETY: an `RTypedData` names a live data carrier.
+        let rdata = unsafe { sys::mrb_obj_ptr_func(self.0.as_raw()) } as *mut sys::RData;
+        // SAFETY: as above; the read leaves the carrier unchanged.
+        if !unsafe { (*rdata).data }.is_null() {
+            return Err(data);
+        }
+        debug_assert!(
+            self.0.is_kind_of(mrb, T::class(mrb)),
+            "{} is not a subclass of {}",
+            self.0.class(mrb).as_value().inspect(mrb),
+            T::class(mrb).as_value().inspect(mrb),
+        );
+        let payload = Box::into_raw(Box::new(data));
+        // SAFETY: the carrier holds no payload, so nothing is released or
+        // lost; the box is handed to it under `T`'s data type, whose
+        // release hook drops it with the carrier.
+        unsafe {
+            sys::mrb_data_init(self.0.as_raw(), payload.cast(), T::data_type().as_raw());
+        }
+        Ok(())
+    }
 }
 
 /// Typed handle on a data carrier known to hold a `T`. Dereferences to
@@ -252,14 +283,11 @@ impl<T: Clone + TypedData> Dup for T {
             return Err(crate::scan_args::argnum_error(mrb, args.len(), 0, Some(0)));
         }
         let copy = rb_self.as_value().obj_clone(mrb)?;
-        let payload = Box::into_raw(Box::new((*rb_self).clone()));
-        // SAFETY: `copy` is the carrier `mrb_obj_clone` just made, which
-        // holds no payload; the box is handed to it under `T`'s data
-        // type, whose release hook drops it with the carrier.
-        unsafe {
-            sys::mrb_data_init(copy.as_raw(), payload.cast(), T::data_type().as_raw());
-        }
-        Ok(typed(RTypedData(copy)))
+        // A refusal means the copy's `initialize_copy` installed a payload
+        // itself, which the copy keeps; the conversion then confirms it is
+        // a `T` before the copy answers as one.
+        let _ = RTypedData(copy).init(mrb, (*rb_self).clone());
+        Obj::try_convert(copy, mrb)
     }
 }
 
