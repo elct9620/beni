@@ -64,8 +64,8 @@ jobs:
 
   # Integration lane: rust:verify, the full dogfooding chain, per build
   # platform and mruby release. Tarballs are not cached: a real
-  # download is what exercises each platform's detection. A final
-  # release gates. A release candidate only warns, since the crates
+  # download is what exercises each platform's detection. A release
+  # candidate's cell is experimental and only warns, since the crates
   # promise behavior on final releases alone. It skips its known
   # failures by name, so a new failure still turns it red.
   verify:
