@@ -107,7 +107,7 @@ Relative `vendor_dir` and `build_config` paths resolve against the Rakefile's wo
 | `version` | `version <string>` — the mruby release version to download | `"4.0.0"` |
 | `build_config` | `build_config <path>` — mruby build-config file path | undeclared — mruby's untouched upstream default config |
 | targets | target declaration, optionally with a block of toolchain references | `host` when no target declaration appears |
-| toolchains | toolchain reference inside a target block; toolchain definition at the top level | selection is reference-driven; every toolchain other than `mruby` defaults to its built-in pair |
+| toolchains | toolchain reference inside a target block; toolchain definition at the top level | selection is reference-driven, `prism` excepted; every toolchain other than `mruby` and `prism` defaults to its built-in pair |
 
 Target names match the `MRuby::Build.new(<name>)` names in the config; mruby names a build defined without a name `host`. Any target declaration replaces the `host` default; the declared set is the whole set.
 
@@ -132,15 +132,15 @@ The tasks keep these contracts.
 |---|---|
 | Version convergence | The vendor tree converges on each toolchain's selected version: `beni:vendor:setup` replaces a staged toolchain at any other version, and `beni:build` rebuilds the archives; a stale toolchain never survives a version change. |
 | Toolchain unpack | `beni:vendor:setup` unpacks from the tarball cache, downloading only the selected versions' tarballs it lacks; every unpacked tarball, cached or fresh, must match its toolchain's selected checksum. |
-| Toolchain selection | The selected set is every target declaration's toolchain references plus the transitive dependencies beni resolves automatically (referencing `wasi-sdk` implies `mruby`); `mruby` is always selected. A toolchain definition selects nothing by itself; one for a toolchain nothing references is inert. |
+| Toolchain selection | The selected set is every target declaration's toolchain references plus the transitive dependencies beni resolves automatically (referencing `wasi-sdk` implies `mruby`); `mruby` is always selected. A `prism` definition selects `prism`; any other toolchain definition selects nothing by itself, and one for a toolchain nothing references is inert. |
 | Build & verify | `beni:build` builds every target the build config defines, then verifies each declared target produced its compile-flags sidecar and the archive that sidecar names; a target no `target` declaration names is not verified. The config owns the target definitions; beni never reads it. |
-| Staged path | Toolchains unpack at their own names under the vendor tree (the mruby source at `mruby/`); each target's archive and compile-flags sidecar stage at `mruby/build/<name>/lib/` — the staged path. |
+| Staged path | Toolchains unpack at their own names under the vendor tree (the mruby source at `mruby/`), `prism` excepted, which unpacks as the prism tree; each target's archive and compile-flags sidecar stage at `mruby/build/<name>/lib/` — the staged path. |
 | Archive auto-discovery | The crates auto-discover only the `host` build's archive, serving host cargo targets; any other is reachable only via `MRUBY_LIB_DIR`. |
 | Compile-flags sidecar | Every build writes each archive's sidecar; it is the single ABI-alignment channel to the crates. |
 
 #### Version Selection
 
-`version` selects mruby; a toolchain definition never names `mruby`. Every other toolchain's selected version and checksum default to its built-in pair, and a toolchain definition replaces both. A toolchain released as one tarball per build platform downloads the build platform's tarball.
+`version` selects mruby; a toolchain definition never names `mruby`. `prism` has no built-in pair: its definition supplies both. Every other toolchain's selected version and checksum default to its built-in pair, and a toolchain definition replaces both. A toolchain released as one tarball per build platform downloads the build platform's tarball.
 
 | Source | Selected checksum |
 |---|---|
@@ -160,6 +160,18 @@ The wasi toolchain file carries beni's wasm32-wasip1 cross-compile settings. A r
 | Written | into the staged mruby source by every `beni:vendor:setup` run selecting `wasi-sdk` |
 | Activation | `conf.toolchain :wasi` inside the build config's cross-build definition |
 | wasi-sdk root | `WASI_SDK_PATH` when set; otherwise the vendor tree's unpacked `wasi-sdk` |
+
+#### Prism Source
+
+mruby releases whose compiler gem parses with Prism carry it as a git submodule, which a release's source tarball leaves out. A `prism` definition supplies it, so a build config including that compiler gem builds from the tarball alone.
+
+| Aspect | Contract |
+|---|---|
+| Selected | by a top-level `prism` definition, never by a toolchain reference |
+| `version` | a `ruby/prism` commit; beni stages it as given, without comparing it to the commit the mruby release's submodule records |
+| Source | that commit's `ruby/prism` source tarball, verified against the definition's `sha256` |
+| Staged | as the prism tree; a re-extracted mruby source never lacks it while `prism` is selected |
+| A release whose compiler gem does not parse with Prism | the prism tree is staged and nothing reads it |
 
 #### Config Generation
 
@@ -2168,7 +2180,8 @@ measures complete.
 
 | Scenario | Behavior |
 |---|---|
-| A toolchain reference or definition naming anything other than `mruby` or `wasi-sdk` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
+| A toolchain reference or definition naming anything other than `mruby`, `wasi-sdk`, or `prism` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
+| A toolchain reference naming `prism` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | A toolchain definition naming `mruby` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | A toolchain definition missing its `version` or `sha256` | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | A block-carrying `toolchain` declaration inside a target declaration's block | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
@@ -2181,6 +2194,7 @@ measures complete.
 | A selected toolchain whose built-in pair carries no checksum for the build platform | `beni:vendor:setup` aborts and names the toolchain and the build platform, nothing downloaded |
 | `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
 | `beni:build` with a `target` declaration naming a target the build config does not define | verification fails, each missing archive reported |
+| A build config including a compiler gem that parses with Prism, with no prism tree staged | `beni:build` aborts, mruby's own build failing to fetch the submodule |
 | A build config selecting the `wasi` toolchain with no wasi toolchain file staged | `beni:build` aborts, mruby naming the unknown toolchain |
 | `beni:config` with no `build_config` declaration | task fails, nothing generated |
 | `beni:config` with the configured `version`'s mruby source not staged | task fails and names the missing source, nothing generated |
@@ -2254,7 +2268,7 @@ measures complete.
 | Term | Meaning |
 |---|---|
 | symbol-or-name key | a name keying an operation, resolved to the `Id` it names: a string interns to it, and an already-interned `Id` or `Symbol` is reused as-is; a string key is a NUL-terminated C string, keyed on the bytes before its first NUL, or a Rust string, keyed on all of its bytes — beni's mirror of `magnus`'s `IntoId` |
-| toolchain | a vendored build dependency (mruby source, wasi-sdk) |
+| toolchain | a vendored build dependency (mruby source, wasi-sdk, prism) |
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
 | exception class | `Exception` itself or an ordinary class descending from it — never a singleton class — so every instance it allocates is an exception; the class an `ExceptionClass` handle names |
@@ -2265,7 +2279,7 @@ measures complete.
 | plain object | an instance in the ordinary object layout `Object` and `BasicObject` give their instances, rather than a built-in type's own layout (an exception, a string, a number, …) or a data carrier's; a class allocates its instances in the layout its superclass allocated in when the class was defined |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
-| toolchain definition | a top-level `toolchain <name>` block carrying `version` and `sha256` — replaces the named toolchain's built-in pair |
+| toolchain definition | a top-level `toolchain <name>` block carrying `version` and `sha256` — replaces the named toolchain's built-in pair, or for `prism`, selects it with the only pair it has |
 | built-in pair | the version and checksum pair the installed beni release vendors for a toolchain; a toolchain released as one tarball per build platform vendors one checksum per tarball, the pair carrying the build platform's |
 | build platform | the CPU architecture and operating system the Rake tasks run on; it selects which of a toolchain's per-platform tarballs is downloaded |
 | vendor tree | the directory tree the `vendor_dir` setting names |
@@ -2275,6 +2289,7 @@ measures complete.
 | archive discovery variable | `MRUBY_LIB_DIR` or `BENI_VENDOR_DIR`, the environment variables archive discovery consults |
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | staged path | `mruby/build/<name>/lib/` under the vendor tree, holding one target's archive and compile-flags sidecar |
+| prism tree | `mrbgems/mruby-compiler/lib/prism` under the staged mruby source — the path mruby's compiler gem reads its Prism submodule from, holding the `prism` definition's commit |
 | wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — beni's wasm32-wasip1 cross-compile settings, staged whenever `wasi-sdk` is selected and activated by a build config via `conf.toolchain :wasi` |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of the archive's file name, the compiler that built it, the flags that compiler was given, and the libraries it needs linked |
 | configured integer width | the bit width of mruby's integer the bindings a build uses declare — 32 or 64; mruby settles it from the archive's flags and the target, and the documentation bindings carry the 64-bit width of the upstream default configuration |
