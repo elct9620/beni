@@ -372,8 +372,7 @@ impl RHash {
                     snapshot.entry_unheld(2 * pair + 1),
                 )
             };
-            let flow = crate::sys::catch_unwind(std::panic::AssertUnwindSafe(|| visit(key, val)))
-                .and_then(|res| res)?;
+            let flow = visit_one(&mut visit, key, val)?;
             if self.len(mrb) != count {
                 return Err(crate::error::core_error(
                     mrb,
@@ -437,10 +436,7 @@ impl RHash {
         where
             F: FnMut(Value, Value) -> Result<ForEach, Error>,
         {
-            let visit = &mut walk.visit;
-            match crate::sys::catch_unwind(std::panic::AssertUnwindSafe(|| visit(key, val)))
-                .and_then(|res| res)
-            {
+            match visit_one(&mut walk.visit, key, val) {
                 Ok(ForEach::Continue) => 0,
                 Ok(ForEach::Stop) => 1,
                 Err(err) => {
@@ -483,6 +479,14 @@ impl RHash {
             None => result.map(|_| ()),
         }
     }
+}
+
+/// Run `visit` on one pair, a panic in it surfacing as an `Err`.
+fn visit_one<F>(visit: &mut F, key: Value, val: Value) -> Result<ForEach, Error>
+where
+    F: FnMut(Value, Value) -> Result<ForEach, Error>,
+{
+    crate::sys::catch_unwind(std::panic::AssertUnwindSafe(|| visit(key, val))).and_then(|res| res)
 }
 
 crate::value::value_backed_repr!(RHash);
