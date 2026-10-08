@@ -233,11 +233,7 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     if env::var_os("DOCS_RS").is_some() {
         stage_documentation_bindings(&manifest_dir, &out_dir);
-        let staged = out_dir.join("bindings.rs");
-        refuse_fixed_arena(&staged);
-        println!("{}", integer_width_directive(&staged));
-        println!("{}", float_width_directive(&staged));
-        println!("{}", release_directive(&staged));
+        check_and_publish_bindings(&out_dir.join("bindings.rs"));
         return;
     }
 
@@ -288,10 +284,7 @@ fn main() {
         &static_wrappers_c,
     );
     compile_trampolines(&include_root, &compiler, &compile_flags, &static_wrappers_c);
-    refuse_fixed_arena(&bindings_rs);
-    println!("{}", integer_width_directive(&bindings_rs));
-    println!("{}", float_width_directive(&bindings_rs));
-    println!("{}", release_directive(&bindings_rs));
+    check_and_publish_bindings(&bindings_rs);
 
     // The archive sits where discovery found it; every other library
     // its sidecar names comes from the toolchain that built it, which
@@ -315,6 +308,15 @@ fn main() {
         };
         println!("cargo:rustc-link-lib={kind}{lib}");
     }
+}
+
+/// Refuse bindings the crates above do not support, then publish the
+/// widths and release they declare as `links` metadata.
+fn check_and_publish_bindings(bindings_rs: &Path) {
+    refuse_fixed_arena(bindings_rs);
+    println!("{}", integer_width_directive(bindings_rs));
+    println!("{}", float_width_directive(bindings_rs));
+    println!("{}", release_directive(bindings_rs));
 }
 
 /// Put the documentation bindings where `src/lib.rs`
