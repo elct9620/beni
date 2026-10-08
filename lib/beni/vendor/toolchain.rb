@@ -8,8 +8,9 @@ module Beni
     # +#verify+, +#install+) that +Beni::Tasks+ wires into +file+ /
     # +task+ declarations.
     #
-    # Adding a new tarball-based vendor artifact is a single factory
-    # method in +Beni::Vendor+; the rake DSL loop in +Beni::Tasks+
+    # A new tarball-based toolchain is a factory method in +Beni::Vendor+
+    # registered in +TOOLCHAIN_FACTORIES+, with a built-in pair or a place
+    # in +SELECTED_BY_DEFINITION+; the rake DSL loop in +Beni::Tasks+
     # picks it up automatically.
     #
     # Fields:
