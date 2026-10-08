@@ -338,9 +338,25 @@ impl RHash {
     /// mruby 4.1's own walk does. mruby before 4.1 counts its walk down
     /// from the size it read at the start, so a visit that deletes a pair
     /// ahead of it would send the live walk past the hash's entries. The
-    /// copy lands in `snapshot`, which keeps every pair reachable.
+    /// copy lands in `snapshot`, which keeps every pair reachable. The
+    /// arena the visits grow is released when the walk returns, as the
+    /// protect frame around mruby's own walk releases it.
     #[cfg(mruby_lt_4_1)]
-    fn walk_snapshot<F>(self, mrb: &Mrb, snapshot: RArray, mut visit: F) -> Result<(), Error>
+    fn walk_snapshot<F>(self, mrb: &Mrb, snapshot: RArray, visit: F) -> Result<(), Error>
+    where
+        F: FnMut(Value, Value) -> Result<ForEach, Error>,
+    {
+        let scope = mrb.arena_scope();
+        match self.visit_snapshot(mrb, snapshot, visit) {
+            Err(Error::Exception(exc)) => Err(Error::Exception(scope.keep(exc))),
+            walked => walked,
+        }
+    }
+
+    /// Run `visit` over the copy of the pairs `snapshot` takes, ending
+    /// with "hash modified" when a visit changes the pair count.
+    #[cfg(mruby_lt_4_1)]
+    fn visit_snapshot<F>(self, mrb: &Mrb, snapshot: RArray, mut visit: F) -> Result<(), Error>
     where
         F: FnMut(Value, Value) -> Result<ForEach, Error>,
     {

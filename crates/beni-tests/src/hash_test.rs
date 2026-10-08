@@ -595,6 +595,52 @@ fn a_visit_swapping_pairs_hands_over_only_pairs_the_hash_held() {
     );
 }
 
+/// How far a walk over a three-pair hash grows the arena when its
+/// closure creates `per_visit` strings on each visit and, when `fails`,
+/// ends the walk on the first visit with an exception.
+fn arena_growth_of_walk(per_visit: usize, fails: bool) -> core::ffi::c_int {
+    use beni::ForEach;
+
+    let mrb = open_mrb();
+    let hash = abc_hash(&mrb);
+    // SAFETY: `mrb` is alive; the read only loads the arena index.
+    let before = unsafe { beni::sys::mrb_gc_arena_save_func(mrb.as_ptr()) };
+    let walked = hash.foreach(&mrb, |_: Value, _: Value| {
+        for _ in 0..per_visit {
+            mrb.str_new(b"made in the visit");
+        }
+        if fails {
+            let class = mrb
+                .exc_get(c"RuntimeError")
+                .expect("RuntimeError is defined");
+            return Err(beni::Error::new(&mrb, class, "from the visit"));
+        }
+        Ok(ForEach::Continue)
+    });
+    assert_eq!(walked.is_err(), fails);
+    // SAFETY: as above.
+    let after = unsafe { beni::sys::mrb_gc_arena_save_func(mrb.as_ptr()) };
+    after - before
+}
+
+#[test]
+fn a_visits_own_values_do_not_outlast_the_walk() {
+    assert_eq!(
+        arena_growth_of_walk(8, false),
+        arena_growth_of_walk(0, false)
+    );
+    assert_eq!(arena_growth_of_walk(8, true), arena_growth_of_walk(0, true));
+}
+
+#[test]
+fn an_exception_a_visit_surfaces_stays_held_past_the_walk() {
+    assert_eq!(
+        arena_growth_of_walk(8, true),
+        arena_growth_of_walk(0, false) + 1,
+        "the walk keeps exactly the exception it surfaces"
+    );
+}
+
 #[test]
 fn foreach_answers_a_closure_panic_as_err() {
     use beni::Error;
