@@ -80,10 +80,10 @@ jobs:
           - ubuntu-24.04-arm
           - macos-latest
         mruby:
-          - pinned
+          - 4.0.0
         include:
           - os: ubuntu-latest
-            mruby: pinned
+            mruby: 4.0.0
             gates: true
           - os: ubuntu-latest
             mruby: 4.1.0-rc2
@@ -97,7 +97,7 @@ jobs:
               load_string_stamps_no_filename_so_a_raise_carries_no_backtrace
               load_string_still_runs_source_the_compiler_warns_about
     env:
-      BENI_MRUBY_VERSION: ${{ matrix.mruby != 'pinned' && matrix.mruby || '' }}
+      BENI_MRUBY_VERSION: ${{ matrix.mruby }}
       BENI_TEST_SKIP: ${{ matrix.test_skip }}
 
     steps:
