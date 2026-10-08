@@ -27,7 +27,8 @@
 //   5. Refuses bindings of a configuration the crates do not support,
 //      then publishes the integer and float widths those bindings
 //      declare as `links` metadata, so a direct dependent offers only
-//      the numeric conversions those widths can hold. A documentation
+//      the numeric conversions those widths can hold, and the release
+//      they declare, so it follows that release. A documentation
 //      build checks and publishes the documentation bindings it stages
 //      instead.
 //
@@ -234,6 +235,7 @@ fn main() {
         refuse_fixed_arena(&staged);
         println!("{}", integer_width_directive(&staged));
         println!("{}", float_width_directive(&staged));
+        println!("{}", release_directive(&staged));
         return;
     }
 
@@ -287,6 +289,7 @@ fn main() {
     refuse_fixed_arena(&bindings_rs);
     println!("{}", integer_width_directive(&bindings_rs));
     println!("{}", float_width_directive(&bindings_rs));
+    println!("{}", release_directive(&bindings_rs));
 
     // The archive sits where discovery found it; every other library
     // its sidecar names comes from the toolchain that built it, which

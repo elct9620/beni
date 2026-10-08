@@ -1,5 +1,7 @@
 // The mruby release the discovered archive states, read from the
-// header tree staged beside it.
+// header tree staged beside it to hold the floor, and from the bindings
+// a build uses to publish it to the crates that depend on this one
+// directly.
 //
 // A build script is outside `cargo test`'s reach, so the parse lives
 // here and both `build.rs` and the library's test build include it.
@@ -68,9 +70,60 @@ fn require_supported_mruby(include_root: &std::path::Path) {
     }
 }
 
+/// The `links` metadata key carrying the release the bindings declare,
+/// written `major.minor`, which a direct dependent's build reads as
+/// `DEP_MRUBY_RELEASE`.
+const RELEASE_METADATA: &str = "release";
+
+/// The `(major, minor)` release the bindings declare, read from the
+/// `MRUBY_RELEASE_MAJOR` and `MRUBY_RELEASE_MINOR` constants. Bindings
+/// that declare no release fail loudly rather than letting a dependent
+/// build choose release-dependent behavior against a guess.
+fn declared_release(bindings_rs: &std::path::Path) -> (u32, u32) {
+    let undeclared = || {
+        panic!(
+            "beni-sys: {} declares no mruby release. The bindings must carry \
+             `MRUBY_RELEASE_MAJOR` and `MRUBY_RELEASE_MINOR` for the crates \
+             above to know which release they build against.",
+            bindings_rs.display()
+        )
+    };
+    let Ok(bindings) = std::fs::read_to_string(bindings_rs) else {
+        undeclared()
+    };
+    let release_number = |key: &str| {
+        bindings.lines().find_map(|line| {
+            line.trim_start()
+                .strip_prefix("pub const ")?
+                .strip_prefix(key)?
+                .strip_prefix(':')?
+                .split_once('=')?
+                .1
+                .trim()
+                .strip_suffix(';')?
+                .parse::<u32>()
+                .ok()
+        })
+    };
+    match (
+        release_number("MRUBY_RELEASE_MAJOR"),
+        release_number("MRUBY_RELEASE_MINOR"),
+    ) {
+        (Some(major), Some(minor)) => (major, minor),
+        _ => undeclared(),
+    }
+}
+
+/// The build-script directive publishing the release the bindings at
+/// `bindings_rs` declare as the release metadata.
+fn release_directive(bindings_rs: &std::path::Path) -> String {
+    let (major, minor) = declared_release(bindings_rs);
+    format!("cargo:{RELEASE_METADATA}={major}.{minor}")
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_mruby_release, require_supported_mruby};
+    use super::{parse_mruby_release, release_directive, require_supported_mruby};
 
     /// An include root holding one `mruby/version.h` with the given
     /// body, named after the case so concurrent tests cannot collide.
@@ -141,5 +194,36 @@ mod tests {
     #[should_panic(expected = "states no mruby version")]
     fn a_header_tree_without_the_version_header_stops_the_build() {
         require_supported_mruby(&headerless_root("absent"));
+    }
+
+    /// A bindings file with the given body, named after the case so
+    /// concurrent tests cannot collide.
+    fn bindings(case: &str, contents: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("beni-sys-release-{}-{}", std::process::id(), case));
+        std::fs::create_dir_all(&dir).expect("the case directory is creatable");
+        let path = dir.join("bindings.rs");
+        std::fs::write(&path, contents).expect("the bindings are writable");
+        path
+    }
+
+    #[test]
+    fn the_release_is_published_from_the_bindings() {
+        let path = bindings(
+            "4-1",
+            "pub const MRUBY_RELEASE_MAJOR: u32 = 4;\n\
+             pub const MRUBY_RELEASE_MINOR: u32 = 1;\n\
+             pub const MRUBY_RELEASE_TEENY: u32 = 0;\n",
+        );
+        assert_eq!(release_directive(&path), "cargo:release=4.1");
+    }
+
+    #[test]
+    #[should_panic(expected = "declares no mruby release")]
+    fn bindings_declaring_no_release_stop_the_build() {
+        release_directive(&bindings(
+            "no-release",
+            "pub const MRUBY_RELEASE_MAJOR: u32 = 4;\npub const MRUBY_RELEASE_NO: u32 = 40000;\n",
+        ));
     }
 }
