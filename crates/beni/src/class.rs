@@ -102,7 +102,7 @@ mod tests {
 pub(crate) mod private {
     use beni_sys as sys;
 
-    /// Plumbing supertrait sealing `Module` / `Object` to the class
+    /// Plumbing supertrait sealing `Module` / `Object` / `Class` to the class
     /// handle newtypes and giving their shared default bodies one
     /// raw-pointer accessor.
     pub trait ClassLike: Copy {
@@ -399,8 +399,8 @@ fn alloc_instance(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
 
 /// Operations on a class handle that a module handle has no use for —
 /// beni's mirror of `magnus::Class`, implemented by `RClass` and
-/// `ExceptionClass`. Every raising method runs inside exception
-/// protection, so an mruby raise surfaces as `Err(Error::Exception)`.
+/// `ExceptionClass`. An mruby raise or refusal surfaces as
+/// `Err(Error::Exception)` and never unwinds across FFI.
 pub trait Class: crate::Module {
     /// The handle an instance of the class comes back as: a `Value` for
     /// any class, an `Exception` for an exception class.
