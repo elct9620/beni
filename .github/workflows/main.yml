@@ -149,7 +149,7 @@ jobs:
   # before it is pinned, so the branches the crates keep for it compile
   # and run somewhere. The behavior the crates promise holds on final
   # releases only, so this lane warns rather than gates. Each leg runs
-  # whatever the one before it reported, and the freshness gates and
+  # even when the one before it failed, and the freshness gates and
   # per-ABI clippy stay on the pinned release they describe. Under 4.1's
   # Prism compiler the over-long filename test aborts the test process,
   # which would end every test after it, so it is skipped here.
