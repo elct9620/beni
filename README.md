@@ -6,6 +6,10 @@ the archive it builds. Extracted from the
 [kobako](https://github.com/elct9620/kobako) project; APIs follow 0.x semver
 semantics and may still evolve between minor versions.
 
+```
+beni gem ──rake beni:build──▶ archive + sidecar ──▶ beni-sys ──▶ beni crate
+```
+
 > [!WARNING]
 > The `beni` crate does not yet cover the full mruby C API. Anything missing
 > stays reachable through the unsafe `beni::sys` escape hatch — issue reports
@@ -162,11 +166,13 @@ The commit is the one the release records for
 
 beni targets plain mruby and is not bound to WebAssembly. `rust-toolchain.toml`
 keeps `wasm32-wasip1` only as a build-verification target for downstream wasi
-consumers (kobako). For that target the Rust channel and the wasi-sdk version
-move in lockstep (the wasm32-wasip1 `crt1-command.o` references
-`__wasi_init_tp` from Rust 1.96 onward; wasi-sdk 33's `libc.a` supplies that
-symbol) — bump the pair together, in both this repo and kobako. Host builds
-are unaffected by the pairing.
+consumers (kobako). For that target two pins move in lockstep, in both this
+repo and kobako; host builds are unaffected.
+
+| Pin | Lockstep reason |
+|---|---|
+| Rust channel | `crt1-command.o` references `__wasi_init_tp` from 1.96 on |
+| wasi-sdk 33 | its `libc.a` supplies `__wasi_init_tp` |
 
 ## Development
 
