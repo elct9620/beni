@@ -79,10 +79,7 @@ module BeniRust
   # target dir is split off so the MRUBY_LIB_DIR switch does not
   # invalidate the main verification cache.
   def self.default_abi_test
-    run!({ "MRUBY_LIB_DIR" => upstream_default_lib_dir },
-         "cargo", "test", "-p", "beni", "-p", "beni-tests",
-         "--target-dir", File.join(ROOT, "target", "default-abi"), *test_harness_args,
-         chdir: ROOT)
+    abi_test(upstream_default_lib_dir, "default-abi")
   end
 
   # The 32-bit-float leg: build the vendored mruby under the float32
@@ -92,23 +89,23 @@ module BeniRust
   # cargo target dir, since the MRUBY_LIB_DIR switch would otherwise
   # invalidate the main verification cache.
   def self.float32_test
-    run!({ "MRUBY_LIB_DIR" => float32_lib_dir },
+    abi_test(float32_lib_dir, "float32")
+  end
+
+  # Run the wrapper tests against the archive staged in +lib_dir+, in
+  # the cargo target dir +target+ names.
+  def self.abi_test(lib_dir, target)
+    run!({ "MRUBY_LIB_DIR" => lib_dir },
          "cargo", "test", "-p", "beni", "-p", "beni-tests",
-         "--target-dir", File.join(ROOT, "target", "float32"), *test_harness_args,
+         "--target-dir", File.join(ROOT, "target", target), *test_harness_args,
          chdir: ROOT)
   end
 
   # Build the vendored mruby under build_config/float32.rb and answer
   # the staged path.
   def self.float32_lib_dir
-    converge_build_dir(FLOAT32_BUILD_DIR)
-    lib_dir = File.join(FLOAT32_BUILD_DIR, "host", "lib")
-    run!({ "MRUBY_BUILD_DIR" => FLOAT32_BUILD_DIR,
-           "MRUBY_CONFIG" => File.join(ROOT, "build_config", "float32.rb") },
-         RbConfig.ruby, "-S", "rake", "default",
-         File.join(lib_dir, Beni::Builder::FLAGS_MAK),
-         chdir: File.join(ROOT, "vendor", "mruby"))
-    lib_dir
+    staged_abi_lib_dir(FLOAT32_BUILD_DIR,
+                       "MRUBY_CONFIG" => File.join(ROOT, "build_config", "float32.rb"))
   end
 
   # Build the vendored mruby with no MRUBY_CONFIG, so mruby's own
@@ -116,9 +113,15 @@ module BeniRust
   # The documentation bindings are generated from the same build: both
   # want the surface a consumer gets before editing anything.
   def self.upstream_default_lib_dir
-    converge_build_dir(DEFAULT_ABI_BUILD_DIR)
-    lib_dir = File.join(DEFAULT_ABI_BUILD_DIR, "host", "lib")
-    run!({ "MRUBY_BUILD_DIR" => DEFAULT_ABI_BUILD_DIR },
+    staged_abi_lib_dir(DEFAULT_ABI_BUILD_DIR)
+  end
+
+  # Build the vendored mruby into +build_dir+ under +env+, and answer
+  # the host archive's staged path.
+  def self.staged_abi_lib_dir(build_dir, env = {})
+    converge_build_dir(build_dir)
+    lib_dir = File.join(build_dir, "host", "lib")
+    run!({ "MRUBY_BUILD_DIR" => build_dir, **env },
          RbConfig.ruby, "-S", "rake", "default",
          File.join(lib_dir, Beni::Builder::FLAGS_MAK),
          chdir: File.join(ROOT, "vendor", "mruby"))
