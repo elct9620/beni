@@ -81,7 +81,7 @@ module BeniRust
   def self.default_abi_test
     run!({ "MRUBY_LIB_DIR" => upstream_default_lib_dir },
          "cargo", "test", "-p", "beni", "-p", "beni-tests",
-         "--target-dir", File.join(ROOT, "target", "default-abi"),
+         "--target-dir", File.join(ROOT, "target", "default-abi"), *test_harness_args,
          chdir: ROOT)
   end
 
@@ -94,7 +94,7 @@ module BeniRust
   def self.float32_test
     run!({ "MRUBY_LIB_DIR" => float32_lib_dir },
          "cargo", "test", "-p", "beni", "-p", "beni-tests",
-         "--target-dir", File.join(ROOT, "target", "float32"),
+         "--target-dir", File.join(ROOT, "target", "float32"), *test_harness_args,
          chdir: ROOT)
   end
 
@@ -123,6 +123,17 @@ module BeniRust
          File.join(lib_dir, Beni::Builder::FLAGS_MAK),
          chdir: File.join(ROOT, "vendor", "mruby"))
     lib_dir
+  end
+
+  # What every cargo test leg hands its test binaries: a skip for each
+  # test BENI_TEST_SKIP names, whitespace-separated. A lane running a
+  # release the crates do not support yet lists its known failures
+  # there, so the chain still fails on any other.
+  def self.test_harness_args
+    names = ENV.fetch("BENI_TEST_SKIP", "").split
+    return [] if names.empty?
+
+    ["--", *names.flat_map { |name| ["--skip", name] }]
   end
 
   # Start +build_dir+ over unless it was built from the mruby release

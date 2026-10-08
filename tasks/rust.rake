@@ -49,6 +49,10 @@
 #   $ rake rust:verify       — beni:build + the tasks above; the
 #                              single local entry point for "does the
 #                              Rust side compile and pass everywhere".
+#
+# Every cargo test leg skips the tests BENI_TEST_SKIP names, so a chain
+# run against a release the crates do not support yet can list the
+# failures it already knows.
 
 require_relative "support/beni_rust"
 
@@ -64,7 +68,7 @@ namespace :rust do
   task :test do |t|
     BeniRust.require_cargo!(t.name)
 
-    sh(BeniRust.host_env, "cargo", "test", "--workspace")
+    sh(BeniRust.host_env, "cargo", "test", "--workspace", *BeniRust.test_harness_args)
   end
 
   namespace :check do
