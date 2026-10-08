@@ -1300,6 +1300,10 @@ A class handle resolves to its real class: its singleton-class and include-class
 
 The raw class of a value before that normalization may be a singleton or include class and demands VM-internal reasoning to use. It stays behind `beni::sys`.
 
+##### Superclass read
+
+A class handle reads its superclass, mirroring `magnus`'s `superclass`: the class mruby's `Class#superclass` answers, with the include classes of modules included or prepended along the chain skipped. The read dispatches no Ruby and never raises, so it answers an optional class handle rather than a `Result`: none for `BasicObject`, where every chain ends. The class it answers stays reachable as every value that crosses out does.
+
 ##### Qualified path read
 
 A class or module handle reads its fully-qualified path: the namespace chain leading to it. This is a total non-dispatching read that never raises. A consumer reaches for it to render a handle by its place in the namespace.
