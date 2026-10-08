@@ -937,6 +937,7 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read converted to a requested type; an Integer read out as `i64`; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an arbitrary-width Integer beyond the configured integer width read out (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width (`RangeError`) | `Result` |
 | Interns a name, creating its symbol: a C-string, byte-slice, String-value, or static-buffer intern; a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (`ArgumentError`) | `Result` |
 | Reads or renders without dispatching but can still raise: a string's NUL-terminated C-string view; a strict parse of a string to an integer in a given radix, or to a float; rendering an integer to a string in a given radix; computing a Range's normalized slice of a collection length; reading an instance-variable holder's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36; a Range slice's present bound is neither an integer nor integer-convertible (`TypeError`); mruby gives the object no singleton class (`TypeError`) | `Result`; a Range slice that does not raise returns its three-way outcome: in-range with begin offset and length, out-of-range, or a non-Range mismatch |
+| Allocates an instance without dispatching: a class's bare allocation | the class is a singleton class, its default allocator is undefined, or its instances are of an immediate or C-pointer type (`TypeError`) | `Result` |
 | Marks a class so its instances carry Rust data; prepares a `TypedData` type's carrier classes in an interpreter | the class's instances are neither plain objects nor data carriers: a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (`TypeError`); preparing also when a class path resolves to no class, or to a value that is not a class | `Result` |
 | Reads a data carrier's payload through an `RTypedData` handle; copies a carrier through `typed_data::Dup`'s `clone` | the carrier holds no payload, or one of another data type (`TypeError`); `clone` also when it is passed an argument (`ArgumentError`), the copy's `initialize_copy` raises, or that `initialize_copy` installs a payload of another data type (`TypeError`) | `Result` |
 | Prepares an `InlineStruct` type's class in an interpreter; converts a value to an inline struct of a type; replaces an inline struct's payload | preparing: the class's instances are not plain objects and the class does not belong to the same type (`TypeError`), or the class path resolves to no class or to a value that is not a class; converting: the value is no inline struct of the type (`TypeError`); replacing: the receiver is frozen (`FrozenError`) | `Result` |
@@ -1194,12 +1195,13 @@ Class and module definition are methods on the live `Mrb` handle: `define_class(
 
 ##### Anonymous classes
 
-The live `Mrb` handle also creates an anonymous class, given a superclass, and an anonymous module, mirroring `magnus`'s anonymous class and module creation. The result is an unnamed `RClass` or `RModule`, reachable only through the returned handle and never registered under a name in any namespace. It gains a name only when a constant assignment later binds it.
+An anonymous class is created from a superclass through the `Class` trait, and an anonymous module on the live `Mrb` handle, mirroring `magnus`'s anonymous class and module creation. The result is unnamed, reachable only through the returned handle and never registered under a name in any namespace. It gains a name only when a constant assignment later binds it.
 
 | Creation | Outcome |
 |---|---|
-| anonymous class | Rust `Err` when mruby rejects the superclass: a non-class, a singleton class, or `Class` itself |
-| anonymous module | always succeeds |
+| anonymous class from a class handle | an `RClass`; Rust `Err` when mruby rejects the superclass: a singleton class, or `Class` itself |
+| anonymous class from an exception class | an `ExceptionClass`; always succeeds |
+| anonymous module | an `RModule`; always succeeds |
 
 ##### Module trait operations
 
@@ -1215,6 +1217,19 @@ Methods register on those handles through the `Module` trait, and singleton meth
 | remove (Ruby's `Module#remove_method`) | deletes the method's own definition from the handle; the name reverts to any ancestor's method |
 
 Removal strips the definition rather than masking ancestor lookups, which distinguishes it from undefinition. A definition, registration, alias, module inclusion or prepend, undefinition, or removal mruby rejects surfaces as a Rust `Err`. Rejections include a cyclic include or prepend and undefining a name absent from the handle and its ancestors. They also include removing a name not defined directly on the handle.
+
+##### Class trait
+
+The class handles, `RClass` and `ExceptionClass`, carry their class-only operations through the `Class` trait, mirroring `magnus::Class`; a module handle does not. Instance construction and bare allocation answer a value through `RClass` and an `Exception` through `ExceptionClass`. Every class handle also yields the general `RClass` on the same class, an `RClass` itself.
+
+| Operation | Section |
+|---|---|
+| anonymous class creation | Anonymous classes |
+| instance construction | Instance construction |
+| bare allocation | Bare allocation |
+| superclass read | Superclass read |
+| name read | Qualified path read |
+| default allocator undefinition | Allocator undefinition |
 
 ##### Name keys
 
@@ -1317,7 +1332,7 @@ A class or module handle reads its fully-qualified path: the namespace chain lea
 | top-level | the bare name |
 | anonymous, with no place in any namespace | nothing |
 
-The path is distinct from the handle's unqualified name read. The name read always answers a name, synthesizing one for an anonymous handle. The path read answers the qualified path or nothing, never a synthesized stand-in.
+A class handle also reads its name through the `Class` trait, a total non-dispatching read. The name is the qualified path when the class has one, and a synthesized `#<Class:0x…>` stand-in when the path read answers nothing.
 
 ##### Receiver conversion
 
@@ -1454,6 +1469,17 @@ A module function registers on a module handle in one call and becomes two metho
 
 Class methods need no separate form: a singleton method defined on a class is its class method, mirroring magnus.
 
+##### Bare allocation
+
+A class handle allocates an instance without running `initialize`, mirroring `magnus`'s `Class::obj_alloc`. The allocation dispatches no Ruby: a class's own `allocate` or `new`, Ruby-defined or not, is never called. The instance is the one mruby's built-in `allocate` makes. A class that refuses allocation surfaces a Rust `Err` carrying mruby's `TypeError`, checked in this order.
+
+| Class | Result |
+|---|---|
+| a singleton class | "can't create instance of singleton class" |
+| its default allocator undefined (Allocator undefinition) | "allocator undefined for *class*" |
+| instances of an immediate or C-pointer type, as for `NilClass`, `TrueClass`, `FalseClass`, and `Symbol` | "can't create instance of *class*" |
+| any other class | the instance |
+
 ##### Typed data contract
 
 A Rust-owned value backs an mruby object through the data-carrier mechanism (`CDATA`), in `magnus`'s typed-data shape. A Rust type opts in by implementing the `unsafe` `TypedData` trait.
@@ -1484,7 +1510,7 @@ A class's default allocator is undefined in one call, mirroring `magnus`'s `unde
 
 | Afterwards | Result |
 |---|---|
-| Ruby's `new` and `allocate` | mruby's `TypeError` "allocator undefined for *class*" |
+| Ruby's `new` and `allocate`, and the bare allocation | mruby's `TypeError` "allocator undefined for *class*" |
 | a wrap into it | still allocates |
 | `dup` / `clone` of one of its carriers | still allocates |
 
@@ -2189,6 +2215,7 @@ measures complete.
 | A value converted to an inline struct of a type it is not, or an inline struct's payload replaced while it is frozen | surfaced as a Rust `Err` carrying the `TypeError` or `FrozenError`, never unwinds across FFI |
 | A macro-implemented `TypedData` type naming a class — through a wrap or `TypedData::class` — at a naming site the interpreter's carrier record holds no class for, or a macro-implemented `InlineStruct` type naming its class while the record holds none for it | panics, naming the `mark_carriers` call that records it; a value being wrapped is dropped, never leaked, and nothing unwinds across FFI |
 | Ruby's `new` or `allocate` on a class whose default allocator is undefined | raises mruby's `TypeError` "allocator undefined for *class*"; reached through the typed surface, surfaced as a Rust `Err` |
+| A bare allocation of a singleton class, of a class whose default allocator is undefined, or of a class whose instances are of an immediate or C-pointer type | surfaced as a Rust `Err` carrying mruby's `TypeError`; nothing is allocated |
 | A `wrap` or `TypedData` derive missing `class`, given an attribute the macros do not accept, a value holding a NUL byte, or a `class` path holding an empty segment, or applied to a type with generic parameters or lifetimes | a compile error naming the offending attribute, value, or generics; nothing is generated |
 | An `InlineStruct` derive or `wrap(inline)` applied to an enum, a union, or a type with generic parameters or lifetimes, given an attribute it does not accept, or applied to a type that is not `bytemuck::Pod` or exceeds three pointer widths in size or a pointer's alignment | a compile error; nothing usable is generated |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
