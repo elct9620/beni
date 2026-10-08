@@ -19,11 +19,10 @@ fn configured_release(metadata: Option<&str>) -> (u32, u32) {
         Some((major.parse().ok()?, minor.parse().ok()?))
     });
     release.unwrap_or_else(|| {
-        panic!(
-            "beni: {RELEASE_METADATA} is {}, where `beni-sys` publishes the \
-             release its bindings declare as `major.minor`. Build `beni` \
-             against the `beni-sys` released beside it.",
-            metadata.map_or("unset".to_owned(), |value| format!("`{value}`"))
+        unpublished_metadata(
+            RELEASE_METADATA,
+            "the release its bindings declare as `major.minor`",
+            metadata,
         )
     })
 }

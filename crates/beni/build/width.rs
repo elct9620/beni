@@ -15,11 +15,10 @@ fn configured_mrb_int64(metadata: Option<&str>) -> bool {
     match metadata {
         Some("true") => true,
         Some("false") => false,
-        _ => panic!(
-            "beni: {INTEGER_WIDTH_METADATA} is {}, where `beni-sys` publishes \
-             `true` or `false` for the configured integer width. Build `beni` \
-             against the `beni-sys` released beside it.",
-            metadata.map_or("unset".to_owned(), |value| format!("`{value}`"))
+        _ => unpublished_metadata(
+            INTEGER_WIDTH_METADATA,
+            "`true` or `false` for the configured integer width",
+            metadata,
         ),
     }
 }
@@ -35,11 +34,10 @@ fn configured_mrb_float32(metadata: Option<&str>) -> bool {
     match metadata {
         Some("true") => true,
         Some("false") => false,
-        _ => panic!(
-            "beni: {FLOAT_WIDTH_METADATA} is {}, where `beni-sys` publishes \
-             `true` or `false` for the configured float width. Build `beni` \
-             against the `beni-sys` released beside it.",
-            metadata.map_or("unset".to_owned(), |value| format!("`{value}`"))
+        _ => unpublished_metadata(
+            FLOAT_WIDTH_METADATA,
+            "`true` or `false` for the configured float width",
+            metadata,
         ),
     }
 }

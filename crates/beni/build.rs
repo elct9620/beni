@@ -3,11 +3,13 @@
 // every value fits the width the archive was built with, and the release
 // it publishes into the `mruby_*` release cfgs.
 
+include!("build/metadata.rs");
 include!("build/release.rs");
 include!("build/width.rs");
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=build/metadata.rs");
     println!("cargo:rerun-if-changed=build/release.rs");
     println!("cargo:rerun-if-changed=build/width.rs");
     println!("cargo:rerun-if-env-changed={RELEASE_METADATA}");

@@ -363,6 +363,7 @@ pub type mrb_func_t = unsafe extern "C" fn(mrb: *mut sys::mrb_state, self_: Valu
 /// script is outside `cargo test`'s reach.
 #[cfg(test)]
 mod width {
+    include!("../build/metadata.rs");
     include!("../build/width.rs");
 }
 
@@ -370,6 +371,7 @@ mod width {
 /// as the width read above.
 #[cfg(test)]
 mod release {
+    include!("../build/metadata.rs");
     include!("../build/release.rs");
 }
 
