@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.22.0](https://github.com/elct9620/beni/compare/v0.21.0...v0.22.0) (2026-10-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** `Mrb::class_new` is `Class::new(mrb, superclass)`; `RClass::new_instance`, `RClass::undef_default_alloc_func`, and `ExceptionClass::as_r_class` move onto the `Class` trait, in the prelude; `Module::name` becomes `Class::name`, so a module handle reads its path instead.
+
+### Features
+
+* **beni-sys:** publish the mruby release the bindings declare ([66c6abc](https://github.com/elct9620/beni/commit/66c6abc997d6c6770ccb7ab8ce320b2610482332))
+* **beni-sys:** read the keyword flag mruby 4.1 keeps in call info ([1c7244b](https://github.com/elct9620/beni/commit/1c7244b1eb93e69832a7afb673e42db4d670a6ee))
+* **beni-sys:** read whether a class's default allocator is undefined ([420bebe](https://github.com/elct9620/beni/commit/420bebe3893336c120c87c5165a2ba6289e0b7b4))
+* **beni:** allocate a class's instance without running initialize ([8f094bc](https://github.com/elct9620/beni/commit/8f094bc2b549b44c3b240f457d175a828234fd51))
+* **beni:** carry class-only operations on a Class trait ([2a3077e](https://github.com/elct9620/beni/commit/2a3077e15801c75562ebffb8dd4599f49c863e95))
+* **beni:** derive release cfgs from the published mruby release ([0333594](https://github.com/elct9620/beni/commit/033359457c6691f81e05b1c69248ae80896a6676))
+* **beni:** read a class's superclass ([104404d](https://github.com/elct9620/beni/commit/104404df0414496822452f5454b627e022e788f7))
+* **vendor:** stage Prism into the mruby source from a prism definition ([e7ccace](https://github.com/elct9620/beni/commit/e7ccace631a836d40d5a3fa2977d6cb57eb3cb42))
+
+
+### Bug Fixes
+
+* **beni:** end a hash walk whose visit changes the pair count ([90c5034](https://github.com/elct9620/beni/commit/90c5034053f41f6002a1e12cf71b98e17331ddf6))
+* **beni:** release a hash walk's visit values when the walk returns ([4742bcf](https://github.com/elct9620/beni/commit/4742bcff1576bbf09eb202a06772d4dbf9e3ced8))
+* **tasks:** rebuild the per-ABI mruby trees when the staged release changes ([cbb505d](https://github.com/elct9620/beni/commit/cbb505d84b361f014536a9afc9f2e79c0d4fcd3a))
+* **tasks:** stage the whole vendor tree before a per-ABI or documentation leg ([c00e1c1](https://github.com/elct9620/beni/commit/c00e1c19f08b6c1e379a65cca7ec15a52229e1c2))
+* **vendor:** name a missing built-in checksum without calling it a pin ([000a3a6](https://github.com/elct9620/beni/commit/000a3a60de2639f623349af11a0cfbb6307ffc3f))
+* **vendor:** tell a platform without a built-in checksum how to supply one ([73941cf](https://github.com/elct9620/beni/commit/73941cffb583661b4849a90f37797b69e8422e93))
+
 ## [0.21.0](https://github.com/elct9620/beni/compare/v0.20.0...v0.21.0) (2026-10-07)
 
 
