@@ -36,12 +36,8 @@ jobs:
       - name: Run the default task
         run: bundle exec rake
 
-  # Archive-free lane: everything that can be judged without a staged
-  # archive. That is formatting, the documentation build a
-  # documentation host runs, and the contract that every other build
-  # without an archive fails. Anything needing the real FFI surface —
-  # clippy, tests, the private-item doc gate — waits for the verify
-  # lane, which stages one.
+  # Archive-free lane: what can be judged without a staged archive.
+  # Anything needing the real FFI surface waits for the verify lane.
   lint:
     runs-on: ubuntu-latest
     name: Rust lint
@@ -57,11 +53,8 @@ jobs:
           cache: "true"
       - name: cargo fmt --check
         run: cargo fmt --all -- --check
-      # Without DOCS_RS there is no second shape to fall back to, so the
-      # build fails naming what it looked for. The documentation build
-      # itself lives in the verify lane now: it reads bindings generated
-      # from an upstream-default mruby, and building one is what this
-      # lane exists not to do.
+      # Without DOCS_RS there is no shape to fall back to, so the build
+      # must fail naming what it looked for.
       - name: Build without an archive fails
         run: |
           if cargo check -p beni-sys --target-dir target/no-archive; then
@@ -69,20 +62,12 @@ jobs:
             exit 1
           fi
 
-  # Integration lane: the repo's full dogfooding chain, one cell per
-  # build platform and mruby release. rust:verify drives a real vendor
-  # download (mruby + wasi-sdk), the custom-config host + wasi cross
-  # build, cargo test against the native archive, a wasm32 check, and
-  # the per-ABI legs. Vendor tarballs are not cached here: one real
-  # download per build platform is what exercises every BUILD_PLATFORM
-  # detection branch. The pinned release gates every platform. An
-  # upcoming release runs the same chain before it is pinned, so the
-  # branches the crates keep for it compile and run somewhere; the
-  # behavior the crates promise holds on final releases only, so that
-  # cell warns rather than gates, and the tests it already knows fail
-  # are skipped by name so a new failure still turns it red. The
-  # freshness gates and the per-ABI clippy run once, on the pinned
-  # release they describe.
+  # Integration lane: rust:verify, the full dogfooding chain, per build
+  # platform and mruby release. Tarballs are not cached: a real
+  # download is what exercises each platform's detection. The pinned
+  # release gates; an upcoming one only warns, since the crates promise
+  # behavior on final releases alone, and skips by name the tests it
+  # already knows fail so that a new failure still turns it red.
   verify:
     runs-on: ${{ matrix.os }}
     name: Verify (${{ matrix.os }}, mruby ${{ matrix.mruby }})
@@ -104,8 +89,7 @@ jobs:
             mruby: 4.1.0-rc2
             experimental: true
             # Prism, 4.1's compiler, reports diagnostics and filenames
-            # differently; the compiler surface is reconciled with it
-            # when 4.1 is pinned.
+            # differently until the compile surface is reconciled with it.
             test_skip: >-
               a_filename_too_long_to_be_a_symbol
               warnings_answer_empty_before_a_load_and_after_a_clean_one
@@ -133,13 +117,9 @@ jobs:
           cache: "true"
       - name: Full compile verification
         run: bundle exec rake rust:verify
-      # clippy over the whole surface, possible only where rust:verify
-      # has staged the vendor toolchain and the upstream-default archive.
-      # Discovery is env-driven with no fallback, so the artifacts are
-      # named explicitly. One cell suffices: the lints are target-shaped,
-      # not host-shaped. The host is linted under every configured width
-      # rust:verify has staged an archive for, since the crates compile a
-      # different set of conversions under each.
+      # The gates below read what rust:verify staged and do not vary by
+      # host, so one cell runs them. clippy covers every staged width,
+      # since each compiles a different set of conversions.
       - name: cargo clippy (linked, every staged ABI + wasm32-wasip1)
         if: matrix.gates
         run: |
@@ -151,62 +131,26 @@ jobs:
             cargo clippy --workspace --all-targets --target-dir target/float32 -- -D warnings
           MRUBY_LIB_DIR="$PWD/vendor/mruby/build/wasi/lib" WASI_SDK_PATH="$PWD/vendor/wasi-sdk" \
             cargo clippy --workspace --target wasm32-wasip1 -- -D warnings
-      # Private items carry the reasoning the public surface leans on,
-      # so they are documented too — which needs the real FFI surface
-      # and therefore an archive.
+      # Private items carry the reasoning the public surface leans on.
       - name: cargo doc (private items)
         if: matrix.gates
         run: BENI_VENDOR_DIR="$PWD/vendor" cargo doc --workspace --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: -D warnings
-      # Coverage freshness: every alias relation the manifest claims must
-      # still hold in the headers (api:coverage's prerequisite), the
-      # committed report must match a fresh regeneration against the
-      # staged headers and bindings, and the manifest must name only
-      # scanned symbols. The report is platform-independent, so one cell
-      # suffices.
+      # The committed report must match one regenerated from the staged
+      # headers and bindings.
       - name: API coverage freshness
         if: matrix.gates
         run: |
           bundle exec rake api:coverage
           git diff --exit-code docs/api_coverage.md
 
-  # Consumer lane: each harness under test/scenarios/ is a
-  # consumer-shaped Rakefile run from its own directory through the
-  # gem's task interface alone (scenario:setup → beni:build →
-  # scenario:verify), plain rake without Bundler. default_host is the
-  # zero-configuration path: mruby alone, upstream default config,
-  # host target — platform-sensitive (mruby's native toolchain
-  # detection), so it runs on every OS, Windows under MSVC included.
-  # generated_config drives the rake beni:config → cross-build chain;
-  # the mechanism is platform-independent and the resulting config
-  # already builds on all three OS in the verify lane, so one OS
-  # suffices. rust_consumer carries on past the artifacts into a cargo
-  # project outside the workspace that links them; the GNU-style linkers
-  # are already covered by the verify lane, so what is new there —
-  # discovery from outside the workspace — needs one OS, plus Windows,
-  # where nothing else links against MSVC. embedded_no_compiler is the
-  # other consumer posture: a build config that leaves mruby's compiler
-  # gem out and a crate with beni's default features off to match. What
-  # it pins — that the pair links and that the compile surface is absent
-  # — is platform-independent, so one OS suffices. macos_universal is
-  # the macOS shipping posture: one mruby target per architecture and
-  # one cargo build per architecture, merged with lipo. It is the only
-  # lane exercising a cross target outside wasm32, and the pair it
-  # crosses between exists on macOS alone.
-  #
-  # The Windows cells run the MSVC chain, which is the toolchain a
-  # downstream Rust extension for Windows is built with. mruby's
-  # visualcpp toolchain names the archive and every compile flag
-  # differently from the GNU-style toolchains, and the compile-flags
-  # sidecar is where the gem and the crates read that from — so these
-  # are the cells that prove the read against a real one. Only
-  # host-target scenarios run there: wasi-sdk vendors no tarball for a
-  # Windows build platform, so a scenario declaring a wasi target is
-  # refused there by design. The Windows rust_consumer cell then runs
-  # the crates' own suite against the archive it staged: MSVC implements
-  # longjmp as a forced unwind, so only a run there exercises a raise
-  # crossing the crates' frames.
+  # Consumer lane: each test/scenarios/ harness through the gem's task
+  # interface alone, plain rake without Bundler. A scenario runs on more
+  # than one OS only where its outcome depends on the platform. Windows
+  # cells build with MSVC, the toolchain a downstream Rust extension for
+  # Windows uses; wasi-sdk has no Windows tarball, so only host-target
+  # scenarios run there.
   scenario:
     runs-on: ${{ matrix.os }}
     name: Scenario ${{ matrix.scenario }} (${{ matrix.os }})
@@ -214,6 +158,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Zero configuration: mruby's toolchain detection is the
+          # platform-sensitive part.
           - os: ubuntu-latest
             scenario: default_host
           - os: ubuntu-24.04-arm
@@ -223,8 +169,13 @@ jobs:
           - os: windows-latest
             scenario: default_host
             msvc: true
+          # beni:config → cross build; the generated config itself
+          # builds on every platform in the verify lane.
           - os: ubuntu-latest
             scenario: generated_config
+          # Discovery from outside the workspace. MSVC's longjmp unwinds
+          # the frames a raise crosses, so the Windows cell also runs the
+          # crates' suite.
           - os: ubuntu-latest
             scenario: rust_consumer
             rust: true
@@ -233,14 +184,15 @@ jobs:
             rust: true
             msvc: true
             suite: true
+          # The compiler gem left out, with beni's default features off.
           - os: ubuntu-latest
             scenario: embedded_no_compiler
             rust: true
+          # The macOS shipping posture: one build per architecture,
+          # merged with lipo; the only cross target outside wasm32.
           - os: macos-latest
             scenario: macos_universal
             rust: true
-            # The host's own target is already installed; the scenario
-            # names both so either macOS runner architecture serves.
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
 
     steps:
@@ -251,27 +203,18 @@ jobs:
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           ruby-version: '3.4'
-      # Only the scenarios that carry on into a cargo project reach for
-      # cargo.
       - name: Set up Rust
         if: matrix.rust
         uses: ./.github/actions/rust
         with:
           targets: ${{ matrix.rust_targets }}
-      # mruby selects its visualcpp toolchain off the environment vcvars
-      # sets, and the trampoline compile and binding generation read the
-      # same environment for cl.exe and the MSVC headers. The steps after
-      # it run in the runner's default shell: bash would put its GNU
-      # tools ahead of MSVC's link.exe.
+      # Later steps keep the runner's default shell: bash would put its
+      # GNU tools ahead of MSVC's link.exe.
       - name: Set up MSVC
         if: matrix.msvc
         uses: ./.github/actions/msvc
-      # The verify lane already downloads once per build platform, which
-      # is what proves the platform detection; a scenario repeating it
-      # proves nothing further and costs 174MB for wasi-sdk. The key
-      # carries the pinned versions, so a bump misses cleanly and the
-      # download runs for real — and a hit still recomputes every
-      # checksum, since only the fetch is skipped.
+      # The verify lane already proves the download per platform. The key
+      # carries the pinned versions, and a hit still verifies checksums.
       - name: Cache the scenario's toolchain tarballs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -280,9 +223,7 @@ jobs:
       - name: Build through the gem's task interface
         run: rake scenario:setup beni:build scenario:verify
         working-directory: test/scenarios/${{ matrix.scenario }}
-      # The scenario staged an upstream-default archive, so this is the
-      # default-ABI leg `rake rust:test:default` runs elsewhere, under the
-      # MSVC environment the build needed.
+      # The staged archive is upstream-default: rust:test:default's leg.
       - name: Run the crates' suite against the staged archive
         if: matrix.suite
         env:

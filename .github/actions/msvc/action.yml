@@ -7,12 +7,9 @@ description: >-
 runs:
   using: composite
   steps:
-    # vswhere ships at a fixed path, which is why no edition or version is
-    # spelled out here. Only what vcvars64 changed is exported: the other
-    # variables are the runner's own. Values go through the multiline
-    # form, and new PATH entries through GITHUB_PATH in reverse, since
-    # each line there is prepended and vcvars64's own order is the one
-    # the tools are found in.
+    # vswhere's fixed path finds whichever Visual Studio is installed.
+    # Only what vcvars64 changed is exported; new PATH entries go in
+    # reverse, since GITHUB_PATH prepends each line.
     - name: Export the vcvars64 environment
       shell: pwsh
       run: |
