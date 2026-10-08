@@ -10,8 +10,8 @@
 //! surface replaces a payload once a carrier holds one.
 
 use crate::{
-    sys::AsRawValue, DataType, Error, FromValue, IntoValue, Mrb, RClass, ReprValue, TryConvert,
-    Value,
+    sys::AsRawValue, Class, DataType, Error, FromValue, IntoValue, Mrb, RClass, ReprValue,
+    TryConvert, Value,
 };
 use beni_sys as sys;
 use core::marker::PhantomData;

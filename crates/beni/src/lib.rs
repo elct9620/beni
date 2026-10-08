@@ -24,7 +24,7 @@
 //!                      value          (Value + ReprValue, the trait
 //!                                      every handle stands for one by)
 //!                      class          (RClass / RModule / ExceptionClass
-//!                                      handles)
+//!                                      handles + Class trait)
 //!                      module / object (Module and Object traits)
 //!                      array / hash   (RArray / RHash handles)
 //!                      string / range (RString / Range handles)
@@ -94,7 +94,7 @@ pub mod value;
 /// The traits whose methods the typed handles are used through, imported
 /// anonymously — magnus's `prelude`: `use beni::prelude::*;`.
 pub mod prelude {
-    pub use crate::{FromValue as _, Module as _, Object as _, ReprValue as _};
+    pub use crate::{Class as _, FromValue as _, Module as _, Object as _, ReprValue as _};
 }
 
 pub use state::arena::ArenaScope;
@@ -107,7 +107,7 @@ pub use ccontext::Ccontext;
 pub use fiber::FiberYield;
 
 pub use array::RArray;
-pub use class::{ExceptionClass, RClass, RModule};
+pub use class::{Class, ExceptionClass, RClass, RModule};
 pub use convert::{FromValue, IntoValue};
 pub use data::DataType;
 pub use error::Error;

@@ -1,6 +1,8 @@
 use crate::support::{open_mrb, same_object, Is};
 use beni::prelude::*;
-use beni::{Error, FromValue, IntoId, IntoValue, Module, Mrb, Object, RClass, Value};
+use beni::{
+    Error, ExceptionClass, FromValue, IntoId, IntoValue, Module, Mrb, Object, RClass, Value,
+};
 
 /// Registration target answering a fixed Integer for the trait
 /// tests below.
@@ -227,7 +229,7 @@ fn module_get_fetches_a_nested_module_by_either_key() {
     let nested = outer
         .define_module(&mrb, c"Inner")
         .expect("defining the nested module must succeed");
-    assert_eq!(nested.name(&mrb), "BeniModNs::Inner");
+    assert_eq!(nested.path(&mrb).as_deref(), Some("BeniModNs::Inner"));
 
     let by_name = outer
         .module_get(&mrb, c"Inner")
@@ -238,7 +240,7 @@ fn module_get_fetches_a_nested_module_by_either_key() {
             beni::Symbol::new(&mrb, c"Inner").expect("the name interns"),
         )
         .expect("fetching the nested module by Symbol key must succeed");
-    assert_eq!(by_name.name(&mrb), "BeniModNs::Inner");
+    assert_eq!(by_name.path(&mrb).as_deref(), Some("BeniModNs::Inner"));
     assert!(same_object(&mrb, by_name, by_sym));
 }
 
@@ -891,9 +893,8 @@ fn name_survives_a_gc_cycle() {
     // keep reading correctly rather than dangle into freed storage.
     let object = mrb.object_class();
     let named = object.name(&mrb);
-    let anonymous = mrb
-        .class_new(object)
-        .expect("creating an anonymous class under Object must succeed");
+    let anonymous =
+        RClass::new(&mrb, object).expect("creating an anonymous class under Object must succeed");
     let synthesized = anonymous.name(&mrb);
 
     mrb.full_gc();
@@ -1016,9 +1017,8 @@ fn path_yields_none_for_an_anonymous_class() {
 
     // An anonymous class has no place in any namespace, so its path is
     // nothing — distinct from `name`, which synthesizes a stand-in.
-    let anon = mrb
-        .class_new(object)
-        .expect("creating an anonymous class under Object must succeed");
+    let anon =
+        RClass::new(&mrb, object).expect("creating an anonymous class under Object must succeed");
     assert_eq!(anon.path(&mrb), None);
     assert!(mrb.pending_exc().is_nil(), "path must not raise");
 }
@@ -1039,6 +1039,55 @@ fn exception_class_registers_methods_through_the_module_trait() {
         .funcall(&mrb, c"beni_code", &[])
         .expect("the registered method must be callable on the exception");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
+}
+
+#[test]
+fn exception_class_reaches_the_class_trait() {
+    let mrb = open_mrb();
+    let runtime_error = mrb
+        .exc_get(c"RuntimeError")
+        .expect("RuntimeError is present in every VM");
+
+    let anonymous = ExceptionClass::new(&mrb, runtime_error)
+        .expect("an exception class is always an inheritable superclass");
+    let parent = anonymous
+        .superclass(&mrb)
+        .expect("an anonymous exception class has a parent");
+    let exception = anonymous
+        .new_instance(&mrb, &[mrb.str_new(b"boom").as_value()])
+        .expect("Exception#initialize accepts a message");
+
+    assert!(same_object(&mrb, parent, runtime_error));
+    assert!(anonymous.name(&mrb).starts_with("#<Class:"));
+    assert!(exception.is_instance_of(&mrb, anonymous));
+    let message = exception
+        .funcall(&mrb, c"message", &[])
+        .expect("an exception answers its message");
+    assert_eq!(String::from_value(message).as_deref(), Some("boom"));
+}
+
+#[test]
+fn exception_class_undefines_its_default_allocator_through_the_class_trait() {
+    let mrb = open_mrb();
+    let runtime_error = mrb
+        .exc_get(c"RuntimeError")
+        .expect("RuntimeError is present in every VM");
+    let anonymous = ExceptionClass::new(&mrb, runtime_error)
+        .expect("an exception class is always an inheritable superclass");
+
+    anonymous.undef_default_alloc_func(&mrb);
+
+    let Err(err) = anonymous.new_instance(&mrb, &[]) else {
+        panic!("construction must refuse a class without an allocator");
+    };
+    assert!(err.message(&mrb).contains("allocator undefined"));
+    assert!(
+        anonymous
+            .new_str(&mrb, mrb.str_new(b"still built"))
+            .as_value()
+            .is_kind_of(&mrb, runtime_error),
+        "building an exception does not go through the allocator"
+    );
 }
 
 #[test]
@@ -1163,9 +1212,7 @@ fn superclass_answers_what_class_superclass_answers() {
         ruby_class(&mrb, "BeniSupChild.superclass")
     ));
 
-    let anonymous = mrb
-        .class_new(child)
-        .expect("creating an anonymous subclass must succeed");
+    let anonymous = RClass::new(&mrb, child).expect("creating an anonymous subclass must succeed");
     let read = anonymous
         .superclass(&mrb)
         .expect("the anonymous class has a superclass");

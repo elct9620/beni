@@ -1,21 +1,20 @@
 use crate::support::{open_mrb, same_object, Is};
 use beni::prelude::*;
-use beni::{FromValue, IntoValue, Module, Mrb, Value};
+use beni::{FromValue, IntoValue, Module, Mrb, RClass, Value};
 
 fn answer_seven(_mrb: &Mrb, _self: Value) -> i32 {
     7
 }
 
 #[test]
-fn class_new_creates_an_unnamed_usable_class() {
+fn new_creates_an_unnamed_usable_class() {
     let mrb = open_mrb();
 
     // An anonymous class inherits from the given superclass, carries
     // no name until bound to a constant, yet is fully usable through
     // the returned handle: a method registered on it is callable on
     // an instance.
-    let class = mrb
-        .class_new(mrb.object_class())
+    let class = RClass::new(&mrb, mrb.object_class())
         .expect("creating an anonymous class under Object must succeed");
     // An unbound class has no constant path: mruby synthesizes an
     // `#<Class:0x..>` name rather than a real one.
@@ -37,7 +36,7 @@ fn class_new_creates_an_unnamed_usable_class() {
 }
 
 #[test]
-fn class_new_surfaces_err_for_a_rejected_superclass() {
+fn new_surfaces_err_for_a_rejected_superclass() {
     let mrb = open_mrb();
 
     // mruby rejects `Class` itself as a superclass; the typed form
@@ -46,7 +45,7 @@ fn class_new_surfaces_err_for_a_rejected_superclass() {
         .class_get(c"Class")
         .expect("Class must resolve to its class object");
     assert!(
-        mrb.class_new(class_class).is_err(),
+        RClass::new(&mrb, class_class).is_err(),
         "a rejected superclass must surface as Err"
     );
 }
@@ -58,20 +57,18 @@ fn module_new_creates_an_unnamed_mixable_module() {
     // An anonymous module carries no name, yet mixing it into a class
     // makes its method reachable on that class's instances.
     let module = mrb.module_new();
-    // An unbound module has no constant path: mruby synthesizes an
-    // `#<Module:0x..>` name rather than a real one.
+    // An unbound module has no constant path.
     assert!(
-        module.name(&mrb).starts_with("#<Module:"),
+        module.path(&mrb).is_none(),
         "the module must be unnamed: {:?}",
-        module.name(&mrb)
+        module.path(&mrb)
     );
     module
         .define_method(&mrb, c"answer", beni::method!(answer_seven, 0))
         .expect("registering a method on the anonymous module must succeed");
 
-    let class = mrb
-        .class_new(mrb.object_class())
-        .expect("creating the host class must succeed");
+    let class =
+        RClass::new(&mrb, mrb.object_class()).expect("creating the host class must succeed");
     class
         .include_module(&mrb, module)
         .expect("mixing the anonymous module in must succeed");
@@ -99,7 +96,7 @@ fn module_new_takes_its_name_from_the_constant_it_is_assigned_to() {
         )
         .expect("assigning the module to a constant must succeed");
 
-    assert_eq!(module.name(&mrb), "BeniBoundModule");
+    assert_eq!(module.path(&mrb).as_deref(), Some("BeniBoundModule"));
 }
 
 #[test]
@@ -113,11 +110,11 @@ fn module_get_fetches_a_defined_module() {
     let by_name = mrb
         .module_get(c"BeniModGet")
         .expect("fetching by name must reach the defined module");
-    assert_eq!(by_name.name(&mrb), "BeniModGet");
+    assert_eq!(by_name.path(&mrb).as_deref(), Some("BeniModGet"));
     let by_sym = mrb
         .module_get(beni::Symbol::new(&mrb, c"BeniModGet").expect("the name interns"))
         .expect("fetching by Symbol key must reach the defined module");
-    assert_eq!(by_sym.name(&mrb), "BeniModGet");
+    assert_eq!(by_sym.path(&mrb).as_deref(), Some("BeniModGet"));
 }
 
 #[test]
@@ -496,8 +493,7 @@ fn const_set_names_an_anonymous_class_by_its_constant_path() {
     let outer = mrb
         .define_module(c"BeniNamingOuter")
         .expect("defining a module must succeed");
-    let anon = mrb
-        .class_new(mrb.object_class())
+    let anon = RClass::new(&mrb, mrb.object_class())
         .expect("creating an anonymous class under Object must succeed");
 
     outer

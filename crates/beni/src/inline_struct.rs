@@ -8,7 +8,7 @@
 //! own, so the interpreter's carrier record names the type each marked
 //! class belongs to.
 
-use crate::{sys::AsRawValue, Error, IntoValue, Mrb, RClass, ReprValue, TryConvert, Value};
+use crate::{sys::AsRawValue, Class, Error, IntoValue, Mrb, RClass, ReprValue, TryConvert, Value};
 use beni_sys as sys;
 use core::ffi::CStr;
 use core::marker::PhantomData;

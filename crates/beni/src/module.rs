@@ -3,8 +3,8 @@
 
 use crate::class::{bound_class, private, protect_register};
 use crate::{
-    Error, ExceptionClass, IntoId, IntoValue, MethodDef, Mrb, Object, RClass, RModule, ReprValue,
-    TryConvert, Value,
+    Class, Error, ExceptionClass, IntoId, IntoValue, MethodDef, Mrb, Object, RClass, RModule,
+    ReprValue, TryConvert, Value,
 };
 use beni_sys as sys;
 
@@ -282,35 +282,13 @@ pub trait Module: Object + private::ClassLike {
         .map(|_| ())
     }
 
-    /// `mrb_class_name(mrb, self)` — the handle's full Ruby name as an
-    /// owned `String` (e.g. `"MyService::KV"`), synthesizing a
-    /// `#<Class:0x…>` form for an anonymous handle. mruby builds the
-    /// name into a GC-managed temporary, so the bytes are copied out at
-    /// once rather than borrowed.
-    fn name(self, mrb: &Mrb) -> String {
-        // SAFETY: `mrb` is alive by the borrow; `self` originates
-        // from the same VM by the single-VM contract.
-        let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.raw()) };
-        if ptr.is_null() {
-            return String::new();
-        }
-        // SAFETY: `ptr` is a valid C string for the duration of this
-        // call; copy its bytes before the temporary it points into
-        // can be collected.
-        unsafe { core::ffi::CStr::from_ptr(ptr) }
-            .to_str()
-            .unwrap_or("")
-            .to_owned()
-    }
-
     /// `mrb_class_path(mrb, self)` — the handle's fully-qualified path,
     /// the namespace chain leading to it (`"Outer::Inner"` for a nested
     /// class, the bare name for a top-level one), or `None` when the
     /// handle is anonymous and has no place in any namespace. A total
-    /// read that never raises. Unlike `name`, which always answers a name —
-    /// synthesizing a `#<Class:0x…>` form for an anonymous handle — `path`
-    /// answers the qualified path or nothing; both return an owned `String`
-    /// copied out of mruby's freshly built string.
+    /// read that never raises, returning an owned `String` copied out of
+    /// mruby's freshly built string. A class handle's `Class::name`
+    /// answers a synthesized stand-in where this answers nothing.
     fn path(self, mrb: &Mrb) -> Option<String> {
         use crate::FromValue;
         // SAFETY: `mrb` is alive by the borrow; `self` originates

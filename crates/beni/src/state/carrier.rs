@@ -16,7 +16,7 @@
 //! and needs no protect frame.
 
 use crate::value::Lazy;
-use crate::{sys::AsRawValue, Error, Mrb, RArray, RClass, ReprValue, TryConvert, Value};
+use crate::{sys::AsRawValue, Class, Error, Mrb, RArray, RClass, ReprValue, TryConvert, Value};
 use beni_sys as sys;
 use core::ffi::CStr;
 

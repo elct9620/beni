@@ -6,8 +6,8 @@
 //!
 //!   * `mrb_define_module` / `mrb_define_class` — register a new
 //!     module or class at top level.
-//!   * `mrb_class_new` / `mrb_module_new` — create an anonymous class
-//!     or module, bound to no constant name.
+//!   * `mrb_module_new` — create an anonymous module, bound to no
+//!     constant name.
 //!   * `mrb_class_get` / `mrb_module_get` — look one up by name.
 //!   * `mrb_class_defined` — test whether one is defined by name.
 //!   * `mrb_exc_get_id` — look up a built-in exception class by name.
@@ -23,7 +23,8 @@
 //! plain table operation that cannot raise.
 
 use crate::{
-    sys::AsRawValue, Error, ExceptionClass, IntoId, Module, Mrb, RClass, RModule, ReprValue, Value,
+    sys::AsRawValue, Class, Error, ExceptionClass, IntoId, Module, Mrb, RClass, RModule, ReprValue,
+    Value,
 };
 use beni_sys as sys;
 
@@ -80,22 +81,6 @@ impl Mrb {
         // descends from it, so it is an exception class too.
         self.define_class(name, superclass.as_r_class())
             .map(|class| ExceptionClass::from_raw_unchecked(class.as_internal()))
-    }
-
-    /// `mrb_class_new(mrb, super_)` — create an anonymous class
-    /// inheriting from `super_`, bound to no constant. The class gains a
-    /// name only when later bound to a constant. mruby rejects a
-    /// superclass that is not an ordinary class — a singleton class or
-    /// `Class` itself — so the creation is fallible by contract.
-    #[inline]
-    pub fn class_new(&self, super_: RClass) -> Result<RClass, Error> {
-        self.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame;
-            // `super_` was produced by the same VM.
-            RClass::from_raw_unchecked(unsafe {
-                sys::mrb_class_new(mrb.as_ptr(), super_.as_internal())
-            })
-        })
     }
 
     /// `mrb_module_new(mrb)` — create an anonymous module, bound to no

@@ -65,10 +65,16 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Break::value;
     let _ = RClass::is_singleton;
     let _ = RClass::real;
-    let _ = RClass::new_instance;
     let _ = RClass::set_instance_data_tt;
-    let _ = RClass::superclass;
-    let _ = RClass::undef_default_alloc_func;
+    let _ = <RClass as Class>::new;
+    let _ = <RClass as Class>::new_instance;
+    let _ = <RClass as Class>::superclass;
+    let _ = <RClass as Class>::name;
+    let _ = <RClass as Class>::as_r_class;
+    let _ = <RClass as Class>::undef_default_alloc_func;
+    let _ = <ExceptionClass as Class>::new;
+    let _ = <ExceptionClass as Class>::new_instance;
+    let _ = <ExceptionClass as Class>::as_r_class;
     {
         struct Probe;
         static PROBE: DataType<Probe> = DataType::new(c"Probe");
@@ -128,7 +134,6 @@ fn full_api_surface_is_reachable_from_outside() {
         let _ = RClass::set_instance_inline_tt::<Packed>;
     }
     let _ = InlineType::<i32>::new;
-    let _ = ExceptionClass::as_r_class;
     let _ = ExceptionClass::raise;
     let _ = ExceptionClass::new_str;
     let _ = <RClass as Module>::define_class::<&core::ffi::CStr>;
@@ -139,7 +144,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <RClass as Module>::define_method::<&core::ffi::CStr>;
     let _ = <RClass as Module>::define_private_method::<&core::ffi::CStr>;
     let _ = <RClass as Module>::define_module_function::<&core::ffi::CStr>;
-    let _ = <RClass as Module>::name;
     let _ = <RModule as Module>::define_class::<&core::ffi::CStr>;
     let _ = <RModule as Module>::define_error::<&core::ffi::CStr>;
     let _ = <RModule as Module>::define_method::<&core::ffi::CStr>;
@@ -297,7 +301,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::check_id;
     let _ = Mrb::check_symbol;
     let _ = Mrb::class_defined::<&core::ffi::CStr>;
-    let _ = Mrb::class_new;
     let _ = Mrb::exc_get::<&core::ffi::CStr>;
     let _ = Mrb::exception_exception;
     let _ = Mrb::exception_standard_error;

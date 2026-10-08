@@ -68,7 +68,7 @@ typed:
   MRB_ARGS_OPT: a typed method's optional positional arity, derived by `Module::define_method` (the optional component of the `method!(f, req, opt)` aspec)
   MRB_ARGS_REQ: a typed method's positional arity, derived by `Module::define_method`
   MRB_SET_INSTANCE_TT: RClass::set_instance_data_tt
-  MRB_UNDEF_ALLOCATOR: RClass::undef_default_alloc_func
+  MRB_UNDEF_ALLOCATOR: Class::undef_default_alloc_func
   RARRAY_LEN: RArray::len
   RARRAY_PTR: RArray::as_slice
   RSTRING_LEN: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len`"
@@ -98,7 +98,7 @@ typed:
   mrb_attr_get: "`Object::ivar_get` — `mrb_attr_get(mrb, obj, id)` is a forwarding wrapper whose body is `return mrb_iv_get(mrb, obj, id)`, reading any symbol's instance slot with no `@`-prefix validation; `ivar_get` takes the same symbol-or-name key with the same absence of validation, so it yields an identical value for every key a typed caller can form and no separate item is needed"
   mrb_block_given_p: "`Mrb::block_given` — whether the current call was passed a block; a total predicate that never raises"
   mrb_break_p: ReprValue::as_break
-  mrb_class_new_instance: "`RClass::new_instance` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed"
+  mrb_class_new_instance: "`Class::new_instance` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed"
   mrb_class_p: "`RClass::from_value` with `RClass::is_singleton` false — the downcast accepts the class and singleton-class tags alike"
   mrb_data_p: "`RTypedData::from_value`, the downcast reading the value tag"
   mrb_istruct_p: "`RInlineStruct::from_value`, the downcast reading the value tag"
@@ -136,9 +136,9 @@ typed:
   mrb_class_get_under: "`Module::class_get` with a name key — interns and routes through `mrb_class_get_under_id`"
   mrb_class_get_under_id: "`Module::class_get` with an `Id` key (the symbol-or-name key)"
   mrb_class_real: "`RClass::real` — resolve a class handle to its real class, skipping singleton / include classes"
-  mrb_class_name: "`Module::name` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form"
-  mrb_class_new: "`Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant"
-  mrb_class_path: "`Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous"
+  mrb_class_name: "`Class::name` — safe and owned where magnus's borrow is `unsafe`: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form"
+  mrb_class_new: "`Class::new` — create an anonymous class under a given superclass, bound to no constant"
+  mrb_class_path: "`Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Class::name`, which always answers a class name and synthesizes a stand-in when the path is `None`"
   mrb_class_ptr: "`RClass::from_value`, `RModule::from_value`, `ExceptionClass::from_value` — the checked downcast is the typed unbox of a class value; the pointer itself stays the raw binding's to read, as magnus leaves the class struct"
   mrb_close: Mrb::drop
   mrb_const_defined: "`Module::const_defined` — the constant presence test walking the ancestry; contrast `mrb_const_defined_at`/`Module::const_defined_at`, the direct own-table-only form"
@@ -276,7 +276,7 @@ typed:
   mrb_obj_id: ReprValue::object_id
   mrb_obj_is_instance_of: ReprValue::is_instance_of
   mrb_obj_is_kind_of: "`ReprValue::is_kind_of`, `Error::is_kind_of`"
-  mrb_obj_new: RClass::new_instance
+  mrb_obj_new: Class::new_instance
   mrb_obj_to_sym: "`ReprValue::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path"
   mrb_obj_value: "`ReprValue::as_value` on `RClass`, `RModule`, and `ExceptionClass`, `Mrb::wrap_as`"
   mrb_open: Mrb::open
@@ -514,8 +514,8 @@ subsumed:
   mrb_rescue_exceptions: "`sys::protect`, `Error::is_kind_of` — `mrb_protect_error` followed by an `mrb_obj_is_kind_of` walk of the class array (`vendor/mruby/mrbgems/mruby-error/src/exception.c:109-133`). In Rust that walk and the handler are Rust control flow: a `match` on the `Err` a call answers, guarded by `Error::is_kind_of`, carries the class array and both `mrb_func_t` + `mrb_value` data pairs the C form spells out, and a typed operation answers that `Err` with no protection of the caller's own. The arena restore and exception clear that bracket the C form are `mrb_protect_error`'s own (`vendor/mruby/src/vm.c:548,566-567`), so every protected call already performs them"
   mrb_rescue: "`sys::protect`, `Error::is_kind_of` — the StandardError form of `mrb_rescue_exceptions`, whose body passes `1, &mrb->eStandardError_class` (`vendor/mruby/mrbgems/mruby-error/src/exception.c:86-89`); a `match` guard naming `StandardError` reaches it"
   mrb_raisef: "`ExceptionClass::raise`, `Error::new` — the formatting variant of `mrb_raise`, whose body builds the message through mruby's own format engine and ends in the same `mrb_exc_raise` (`vendor/mruby/src/error.c:456-468`); a Rust caller formats the message in Rust before handing it over, the magnus-aligned shape SPEC's error contract names, so the engine is a means the Rust shape already carries rather than a capability of its own"
-  mrb_name_error: "`RClass::new_instance` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef`"
-  mrb_no_method_error: "`RClass::new_instance` — `NoMethodError#initialize(message, name, args)` sets the same `@name` and `@args` the C form writes directly (`vendor/mruby/src/error.c:634-635`, `vendor/mruby/mrblib/10error.rb:11-19`); see `mrb_name_error`"
+  mrb_name_error: "`Class::new_instance` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef`"
+  mrb_no_method_error: "`Class::new_instance` — `NoMethodError#initialize(message, name, args)` sets the same `@name` and `@args` the C form writes directly (`vendor/mruby/src/error.c:634-635`, `vendor/mruby/mrblib/10error.rb:11-19`); see `mrb_name_error`"
   mrb_exc_new_lit: "`Error::new` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it"
   mrb_exc_get: "`Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it"
   mrb_str_new_frozen: "`Mrb::str_new`, `ReprValue::freeze` — the macro is `mrb_obj_freeze(mrb, mrb_str_new(mrb, p, len))` (`vendor/mruby/include/mruby.h:1236`), so the two typed calls in that order are its whole body; like `mrb_exc_new_lit` it makes two calls, so the derived alias tier does not reach it"

@@ -4,7 +4,7 @@
 //! Ruby source to evaluate.
 
 use crate::Doubler;
-use beni::{FromValue, IntoValue, Mrb, ReprValue};
+use beni::{Class, FromValue, IntoValue, Mrb, ReprValue};
 
 #[test]
 fn a_gem_answers_where_no_compiler_is_linked() {

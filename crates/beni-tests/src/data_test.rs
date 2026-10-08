@@ -137,8 +137,6 @@ fn release_hook_contains_a_panicking_drop_on_close() {
 /// `err` is the marking refusal: a `TypeError` naming the layouts that
 /// accept the mark.
 fn assert_mark_refused(mrb: &beni::Mrb, err: beni::Error) {
-    use beni::Module;
-
     let message = err.message(mrb);
     match err {
         beni::Error::Exception(exc) => assert_eq!(exc.class(mrb).name(mrb), "TypeError"),
@@ -268,8 +266,6 @@ fn a_class_defined_from_a_marked_class_carries_data_and_accepts_the_mark() {
 
 /// `err` is mruby's allocator refusal for `class`.
 fn assert_allocator_undefined(mrb: &beni::Mrb, err: beni::Error, class: &str) {
-    use beni::Module;
-
     let message = err.message(mrb);
     match err {
         beni::Error::Exception(exc) => assert_eq!(exc.class(mrb).name(mrb), "TypeError"),

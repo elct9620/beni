@@ -1,6 +1,7 @@
 //! Typed `RClass` / `RModule` / `ExceptionClass` handles — beni's mirror
 //! of `magnus::RClass` / `magnus::RModule` / `magnus::ExceptionClass`.
-//! The surface they share lives on the `Module` and `Object` traits.
+//! The surface they share lives on the `Module` and `Object` traits, and
+//! what only a class handle does on the `Class` trait.
 //!
 //! ## Why newtypes
 //!
@@ -274,51 +275,6 @@ impl RClass {
         // returns a real class pointer for any live class handle.
         RClass::from_raw_unchecked(unsafe { sys::mrb_class_real(self.0) })
     }
-
-    /// The class Ruby's `Class#superclass` answers for this one: its
-    /// parent, past the include classes that modules included or
-    /// prepended along the chain add, or `None` for `BasicObject`.
-    /// Mirrors `magnus`'s `Class::superclass`, answering an `Option`
-    /// rather than a `Result`: mruby's read never raises and answers
-    /// `nil` only at the chain's end (`vendor/mruby/src/class.c`,
-    /// `mrb_class_superclass`). The class stays reachable as every
-    /// value that crosses out does.
-    #[inline]
-    pub fn superclass(self, mrb: &Mrb) -> Option<RClass> {
-        // SAFETY: `self` is a live class handle; the shim only follows
-        // its `super` chain, which the class keeps reachable.
-        let parent = unsafe { sys::mrb_class_superclass_func(self.0) };
-        (!parent.is_null()).then(|| {
-            let parent = RClass::from_raw_unchecked(parent);
-            mrb.hold(parent.as_value());
-            parent
-        })
-    }
-
-    /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
-    /// a new instance of this class, running `initialize` with `args`.
-    /// Surfaces an `Err` when `initialize` raises. Mirrors `magnus`'s
-    /// `Class::new_instance`.
-    #[inline]
-    pub fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
-        // Value is repr(transparent) over mrb_value; the slice
-        // pointer reuses the same layout.
-        let argv = args.as_ptr() as *const sys::mrb_value;
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame;
-            // `self` and every `args` entry originate from the same
-            // VM. `mrb_obj_new` runs `initialize`, which may raise —
-            // caught by `protect`.
-            Value::from_raw_unchecked(unsafe {
-                sys::mrb_obj_new(
-                    mrb.as_ptr(),
-                    self.0,
-                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
-                    argv,
-                )
-            })
-        })
-    }
 }
 
 impl RModule {
@@ -349,13 +305,6 @@ impl ExceptionClass {
     #[inline]
     pub(crate) const fn as_internal(self) -> *mut sys::RClass {
         self.0
-    }
-
-    /// The general class handle on this same class, for the operations
-    /// that take any class. Mirrors magnus's `Class::as_r_class`.
-    #[inline]
-    pub const fn as_r_class(self) -> RClass {
-        RClass(self.0)
     }
 
     /// `mrb_raise(mrb, self, msg)` — raise an exception of this class
@@ -408,6 +357,151 @@ impl ExceptionClass {
         });
         // SAFETY: an exception class allocates exception objects.
         unsafe { <crate::Exception as crate::value::private::ReprValue>::from_value_unchecked(exc) }
+    }
+}
+
+/// Operations on a class handle that a module handle has no use for —
+/// beni's mirror of `magnus::Class`, implemented by `RClass` and
+/// `ExceptionClass`. Every raising method runs inside exception
+/// protection, so an mruby raise surfaces as `Err(Error::Exception)`.
+pub trait Class: crate::Module {
+    /// The handle an instance of the class comes back as: a `Value` for
+    /// any class, an `Exception` for an exception class.
+    type Instance;
+
+    /// `mrb_class_new(mrb, superclass)` — create an anonymous class
+    /// inheriting from `superclass`, bound to no constant. The class
+    /// gains a name only when later bound to a constant. mruby rejects a
+    /// singleton class or `Class` itself as the superclass.
+    fn new(mrb: &Mrb, superclass: Self) -> Result<Self, Error>;
+
+    /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
+    /// a new instance of this class, running `initialize` with `args`.
+    /// Surfaces an `Err` when `initialize` raises.
+    fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Self::Instance, Error>;
+
+    /// The class Ruby's `Class#superclass` answers for this one: its
+    /// parent, past the include classes that modules included or
+    /// prepended along the chain add, or `None` for `BasicObject`.
+    /// Answers an `Option` where magnus answers a `Result`: mruby's read
+    /// never raises and answers `nil` only at the chain's end
+    /// (`vendor/mruby/src/class.c`, `mrb_class_superclass`). The class
+    /// stays reachable as every value that crosses out does.
+    fn superclass(self, mrb: &Mrb) -> Option<RClass> {
+        // SAFETY: `self` is a live class handle; the shim only follows
+        // its `super` chain, which the class keeps reachable.
+        let parent = unsafe { sys::mrb_class_superclass_func(self.raw()) };
+        (!parent.is_null()).then(|| {
+            let parent = RClass::from_raw_unchecked(parent);
+            mrb.hold(parent.as_value());
+            parent
+        })
+    }
+
+    /// `mrb_class_name(mrb, self)` — the class's full Ruby name (e.g.
+    /// `"MyService::KV"`), synthesizing a `#<Class:0x…>` form for a class
+    /// with no path. Safe and owned where magnus's borrow is `unsafe`:
+    /// mruby builds the name into a GC-managed temporary, so the bytes
+    /// are copied out at once and nothing borrows from the VM.
+    fn name(self, mrb: &Mrb) -> String {
+        // SAFETY: `mrb` is alive by the borrow; `self` originates
+        // from the same VM by the single-VM contract.
+        let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.raw()) };
+        if ptr.is_null() {
+            return String::new();
+        }
+        // SAFETY: `ptr` is a valid C string for the duration of this
+        // call; copy its bytes before the temporary it points into
+        // can be collected.
+        unsafe { core::ffi::CStr::from_ptr(ptr) }
+            .to_str()
+            .unwrap_or("")
+            .to_owned()
+    }
+
+    /// The general class handle on this same class, for the operations
+    /// that take any class.
+    fn as_r_class(self) -> RClass {
+        RClass::from_raw_unchecked(self.raw())
+    }
+
+    /// Undefine the default allocator of this class and of any class
+    /// later defined from it, so Ruby's `new` and `allocate` raise while
+    /// wraps still allocate. A singleton class, which Ruby never
+    /// allocates through, is left unchanged.
+    fn undef_default_alloc_func(self, mrb: &Mrb) {
+        // The `&Mrb` borrow is what serializes this flag write: a class
+        // handle crosses threads on its own, its interpreter does not.
+        let _ = mrb;
+        if self.as_value().tag() == sys::MRB_TT_CLASS {
+            // SAFETY: `self` is a live plain class of the VM borrowed as
+            // `mrb`, the one kind `MRB_UNDEF_ALLOCATOR` accepts; the shim
+            // only sets a flag bit.
+            unsafe { sys::mrb_undef_allocator_func(self.raw()) };
+        }
+    }
+}
+
+impl Class for RClass {
+    type Instance = Value;
+
+    #[inline]
+    fn new(mrb: &Mrb, superclass: Self) -> Result<Self, Error> {
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `superclass` was produced by the same VM.
+            RClass::from_raw_unchecked(unsafe { sys::mrb_class_new(mrb.as_ptr(), superclass.0) })
+        })
+    }
+
+    #[inline]
+    fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
+        // Value is repr(transparent) over mrb_value; the slice
+        // pointer reuses the same layout.
+        let argv = args.as_ptr() as *const sys::mrb_value;
+        mrb.protect(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame;
+            // `self` and every `args` entry originate from the same
+            // VM. `mrb_obj_new` runs `initialize`, which may raise —
+            // caught by `protect`.
+            Value::from_raw_unchecked(unsafe {
+                sys::mrb_obj_new(
+                    mrb.as_ptr(),
+                    self.0,
+                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
+                    argv,
+                )
+            })
+        })
+    }
+
+    #[inline]
+    fn as_r_class(self) -> RClass {
+        self
+    }
+}
+
+impl Class for ExceptionClass {
+    type Instance = crate::Exception;
+
+    #[inline]
+    fn new(mrb: &Mrb, superclass: Self) -> Result<Self, Error> {
+        // A class defined from an exception class inherits its exception
+        // instance type, so it is an exception class too.
+        RClass::new(mrb, superclass.as_r_class())
+            .map(|class| ExceptionClass::from_raw_unchecked(class.0))
+    }
+
+    #[inline]
+    fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<crate::Exception, Error> {
+        self.as_r_class().new_instance(mrb, args).map(|instance| {
+            // SAFETY: an exception class allocates exception objects.
+            unsafe {
+                <crate::Exception as crate::value::private::ReprValue>::from_value_unchecked(
+                    instance,
+                )
+            }
+        })
     }
 }
 

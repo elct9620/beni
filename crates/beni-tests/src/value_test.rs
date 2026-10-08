@@ -575,9 +575,8 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
 
     // A `to_a` that returns `nil` falls back to wrapping the receiver
     // in a one-element array.
-    let nil_class = mrb
-        .class_new(mrb.object_class())
-        .expect("an anonymous class under Object constructs");
+    let nil_class =
+        RClass::new(&mrb, mrb.object_class()).expect("an anonymous class under Object constructs");
     nil_class
         .define_method(&mrb, c"to_a", beni::method!(to_a_returns_nil, 0))
         .expect("registering to_a must succeed");
@@ -591,9 +590,8 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
 
     // A `to_a` that returns a non-array non-`nil` value raises a
     // genuine `TypeError`, caught into the `Err` rather than wrapping.
-    let class = mrb
-        .class_new(mrb.object_class())
-        .expect("an anonymous class under Object constructs");
+    let class =
+        RClass::new(&mrb, mrb.object_class()).expect("an anonymous class under Object constructs");
     class
         .define_method(&mrb, c"to_a", beni::method!(to_a_returns_int, 0))
         .expect("registering to_a must succeed");

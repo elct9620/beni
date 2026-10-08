@@ -55,10 +55,10 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_class_get_id` | fn | ✅ | ✅ | `Mrb::class_get` with an `Id` key (the symbol-or-name key, magnus `IntoId`) |
 | `mrb_class_get_under` | fn | ✅ | ✅ | `Module::class_get` with a name key — interns and routes through `mrb_class_get_under_id` |
 | `mrb_class_get_under_id` | fn | ✅ | ✅ | `Module::class_get` with an `Id` key (the symbol-or-name key) |
-| `mrb_class_name` | fn | ✅ | ✅ | `Module::name` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form |
-| `mrb_class_new` | fn | ✅ | ✅ | `Mrb::class_new` — create an anonymous class under a given superclass, bound to no constant |
-| `mrb_class_new_instance` | fn | ✅ | ✅ | `RClass::new_instance` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed |
-| `mrb_class_path` | fn | ✅ | ✅ | `Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Module::name`, which always answers a name and synthesizes a stand-in when anonymous |
+| `mrb_class_name` | fn | ✅ | ✅ | `Class::name` — safe and owned where magnus's borrow is `unsafe`: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form |
+| `mrb_class_new` | fn | ✅ | ✅ | `Class::new` — create an anonymous class under a given superclass, bound to no constant |
+| `mrb_class_new_instance` | fn | ✅ | ✅ | `Class::new_instance` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed |
+| `mrb_class_path` | fn | ✅ | ✅ | `Module::path` — the handle's fully-qualified namespace path (`Outer::Inner`), `None` for an anonymous handle; contrast `mrb_class_name`/`Class::name`, which always answers a class name and synthesizes a stand-in when the path is `None` |
 | `mrb_close` | fn | ✅ | ✅ | `Mrb::drop` |
 | `mrb_cmp` | fn | ✅ | ✅ | `ReprValue::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable |
 | `mrb_context_run` | macro | ❌ | ❌ |  |
@@ -149,7 +149,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_module_get_under` | fn | ✅ | ✅ | `Module::module_get` with a name key — interns and routes through `mrb_module_get_under_id` |
 | `mrb_module_get_under_id` | fn | ✅ | ✅ | `Module::module_get` with an `Id` key (the symbol-or-name key) |
 | `mrb_module_new` | fn | ✅ | ✅ | `Mrb::module_new` — create an anonymous module, bound to no constant |
-| `mrb_name_error` | fn | ✅ | ✅ | subsumed: `RClass::new_instance` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef` |
+| `mrb_name_error` | fn | ✅ | ✅ | subsumed: `Class::new_instance` — `NameError` built through its own `initialize(message, name)`, which sets the `@name` the C form writes directly (`vendor/mruby/src/error.c:492`, `vendor/mruby/mrblib/10error.rb:2-9`); the message is the caller's own string on both sides, so `@name` is the whole of what this adds over `mrb_raisef` |
 | `mrb_notimplement` | fn | ✅ | ❌ |  |
 | `mrb_notimplement_m` | fn | ✅ | ❌ |  |
 | `mrb_obj_alloc` | fn | ✅ | 🚫 | declined: allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `Mrb::wrap_as` |
@@ -165,7 +165,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_obj_is_instance_of` | fn | ✅ | ✅ | `ReprValue::is_instance_of` |
 | `mrb_obj_is_kind_of` | fn | ✅ | ✅ | `ReprValue::is_kind_of`, `Error::is_kind_of` |
 | `mrb_obj_itself` | fn | ✅ | 🚫 | declined: answers its receiver (`vendor/mruby/src/object.c:879-882`), which a typed caller already holds |
-| `mrb_obj_new` | fn | ✅ | ✅ | `RClass::new_instance` |
+| `mrb_obj_new` | fn | ✅ | ✅ | `Class::new_instance` |
 | `mrb_obj_respond_to` | fn | ✅ | ❌ |  |
 | `mrb_obj_to_sym` | fn | ✅ | ✅ | `ReprValue::to_sym` — the raising coercion of an existing value into a typed `Symbol`; `Symbol::new` (interning Rust bytes) is the distinct intern path |
 | `mrb_open` | fn | ✅ | ✅ | `Mrb::open` |
@@ -264,7 +264,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `MRB_SET_INSTANCE_TT` | macro | ✅ | ✅ | `RClass::set_instance_data_tt` |
-| `MRB_UNDEF_ALLOCATOR` | macro | ✅ | ✅ | `RClass::undef_default_alloc_func` |
+| `MRB_UNDEF_ALLOCATOR` | macro | ✅ | ✅ | `Class::undef_default_alloc_func` |
 | `mrb_alias_method` | fn | ✅ | ✅ | `Module::alias_method` — `mrb_define_alias_id` is a forwarding wrapper whose body is `mrb_alias_method(mrb, klass, a, b)` (`vendor/mruby/src/class.c:3374-3377`), taking the same arguments |
 | `mrb_class` | fn | ✅ | ❌ |  |
 | `mrb_class_outer` | fn | ✅ | ❌ |  |
@@ -338,7 +338,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_exc_new_lit` | macro | ❌ | ✅ | subsumed: `Error::new` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it |
 | `mrb_exc_new_str` | fn | ✅ | ✅ | `ExceptionClass::new_str` — an `Exception` carrying an existing mruby `RString` as-is; the static String tag means the underlying type guard never fires |
 | `mrb_exc_ptr` | macro | ❌ | ❌ |  |
-| `mrb_no_method_error` | fn | ✅ | ✅ | subsumed: `RClass::new_instance` — `NoMethodError#initialize(message, name, args)` sets the same `@name` and `@args` the C form writes directly (`vendor/mruby/src/error.c:634-635`, `vendor/mruby/mrblib/10error.rb:11-19`); see `mrb_name_error` |
+| `mrb_no_method_error` | fn | ✅ | ✅ | subsumed: `Class::new_instance` — `NoMethodError#initialize(message, name, args)` sets the same `@name` and `@args` the C form writes directly (`vendor/mruby/src/error.c:634-635`, `vendor/mruby/mrblib/10error.rb:11-19`); see `mrb_name_error` |
 | `mrb_protect` | fn | ✅ | ✅ | subsumed: `sys::protect` — the older `mrb_func_t` + `mrb_value data` form, whose body is `mrb_protect_error(mrb, protect_body, &protect_data, state)` and nothing else (`vendor/mruby/mrbgems/mruby-error/src/exception.c:34-37`); a Rust closure carries the body-and-data pair the C form spells out as two arguments |
 | `mrb_protect_error` | fn | ✅ | ✅ | `sys::protect` |
 | `mrb_rescue` | fn | ✅ | ✅ | subsumed: `sys::protect`, `Error::is_kind_of` — the StandardError form of `mrb_rescue_exceptions`, whose body passes `1, &mrb->eStandardError_class` (`vendor/mruby/mrbgems/mruby-error/src/exception.c:86-89`); a `match` guard naming `StandardError` reaches it |
