@@ -138,8 +138,8 @@ module BeniRust
 
   # Start +build_dir+ over unless it was built from the mruby release
   # staged at +source_dir+. The tree lives outside the staged source, so
-  # re-extracting the source for another release leaves it in place, and
-  # mruby's make-style build would link the objects it already holds.
+  # a re-extraction leaves it in place. mruby's make-style build would
+  # then link the other release's objects.
   def self.converge_build_dir(build_dir, source_dir = File.join(ROOT, "vendor", "mruby"))
     marker = Beni::Vendor::Tarball::VERSION_MARKER
     release = File.read(File.join(source_dir, marker))

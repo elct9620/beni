@@ -6,9 +6,8 @@ require "tmpdir"
 require_relative "../../tasks/support/beni_rust"
 
 # The verification chain's own mruby build trees sit outside the staged
-# source, so a version change that re-extracts the source leaves them
-# behind; each must start over rather than reuse another release's
-# objects.
+# source, so re-extracting it for another release leaves them in place.
+# Each must start over rather than reuse that release's objects.
 class TestRustBuildDirs < Minitest::Test
   def setup
     @dir = Dir.mktmpdir("beni-rust-build")

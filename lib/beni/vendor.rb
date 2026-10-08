@@ -50,10 +50,8 @@ module Beni
     # task-definition time: referencing wasi-sdk implies mruby.
     DEPENDENCIES = { "wasi-sdk" => %w[mruby] }.freeze
 
-    # Toolchains a top-level definition selects on its own, with no
-    # reference: each completes the mruby source rather than serving a
-    # target, and vendors no built-in pair, so only its definition can
-    # name what to stage.
+    # Toolchains only a top-level definition selects. Each completes the
+    # mruby source rather than serving a target, and has no built-in pair.
     SELECTED_BY_DEFINITION = %w[prism].freeze
 
     # +RUBY_PLATFORM+ spells the same architecture and operating system
@@ -125,8 +123,8 @@ module Beni
 
     # The Prism source mruby's compiler gem carries as a git submodule,
     # which a release's source tarball leaves out. +version+ is a
-    # +ruby/prism+ commit; it stages where the compiler gem reads the
-    # submodule from, which also makes mruby's build skip fetching it.
+    # +ruby/prism+ commit. It stages where the compiler gem reads the
+    # submodule from, so mruby's build does not fetch it.
     def prism(vendor_dir:, version:, sha256:)
       Toolchain.new(
         name: "prism",
