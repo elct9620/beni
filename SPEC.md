@@ -1195,7 +1195,7 @@ Class and module definition are methods on the live `Mrb` handle: `define_class(
 
 ##### Anonymous classes
 
-An anonymous class is created from a superclass through the `Class` trait, and an anonymous module on the live `Mrb` handle, mirroring `magnus`'s anonymous class and module creation. The result is unnamed, reachable only through the returned handle and never registered under a name in any namespace. It gains a name only when a constant assignment later binds it.
+An anonymous class is created from a superclass through the `Class` trait, and an anonymous module on the live `Mrb` handle. Both mirror `magnus`'s anonymous creation. The result is unnamed, reachable only through the returned handle and never registered under a name in any namespace. It gains a name only when a constant assignment later binds it.
 
 | Creation | Outcome |
 |---|---|
@@ -1220,7 +1220,7 @@ Removal strips the definition rather than masking ancestor lookups, which distin
 
 ##### Class trait
 
-The class handles, `RClass` and `ExceptionClass`, carry their class-only operations through the `Class` trait, mirroring `magnus::Class`; a module handle does not. Instance construction and bare allocation answer a value through `RClass` and an `Exception` through `ExceptionClass`. Every class handle also yields the general `RClass` on the same class, an `RClass` itself.
+The class handles, `RClass` and `ExceptionClass`, carry their class-only operations through the `Class` trait, mirroring `magnus::Class`; a module handle does not. Instance construction and bare allocation answer a value through `RClass` and an `Exception` through `ExceptionClass`. Every class handle also yields the general `RClass` on the same class; an `RClass` yields itself.
 
 | Operation | Section |
 |---|---|
@@ -1458,7 +1458,7 @@ The named keyword read mirrors `magnus`'s `get_kwargs`. It takes a keyword hash 
 
 ##### Instance construction
 
-Constructing an instance of a class handle runs Ruby's `Class.new`: it allocates the object and runs its `initialize` with an argument slice. A raising `initialize` surfaces as a Rust `Err`. This mirrors `magnus`'s `Class::new_instance`.
+Constructing an instance of a class handle does what Ruby's built-in `Class#new` does. It allocates as the bare allocation does, then runs `initialize` with an argument slice. A class's own `new`, Ruby-defined or not, is never called. A raising `initialize` or a refused allocation surfaces as a Rust `Err`. This mirrors `magnus`'s `Class::new_instance`.
 
 A module function registers on a module handle in one call and becomes two methods, the way `Math.sqrt` is callable both ways.
 
