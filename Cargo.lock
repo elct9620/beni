@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "beni"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "beni-macros",
  "beni-sys",
@@ -23,7 +23,7 @@ dependencies = [
 
 [[package]]
 name = "beni-macros"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -32,7 +32,7 @@ dependencies = [
 
 [[package]]
 name = "beni-sys"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "bindgen",
  "cc",
@@ -40,7 +40,7 @@ dependencies = [
 
 [[package]]
 name = "beni-tests"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "beni",
  "bytemuck",
