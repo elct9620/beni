@@ -17,7 +17,7 @@
 #
 # The file is whatever the crate's own build script wrote for that
 # archive, taken from the +out_dir+ cargo reports for it. Nothing here
-# knows how a binding is generated, so the checked-in file cannot state
+# knows how a binding is generated, so the written file cannot state
 # a surface the crate would not produce for itself.
 
 require "json"

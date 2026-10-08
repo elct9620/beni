@@ -152,13 +152,13 @@ module BeniRust
   end
 
   # What a documentation host sets: DOCS_RS on and no archive discovery
-  # variable, so beni-sys stages the checked-in documentation bindings.
+  # variable, so beni-sys stages the generated documentation bindings.
   # Its own target dir, since flipping DOCS_RS would otherwise
   # invalidate the main verification cache.
   DOCUMENTATION_ENV = { "DOCS_RS" => "1", "BENI_VENDOR_DIR" => nil, "MRUBY_LIB_DIR" => nil }.freeze
   DOCUMENTATION_TARGET_DIR = File.join(ROOT, "target", "docs-rs")
 
-  # Whether the checked-in documentation bindings still declare
+  # Whether the generated documentation bindings still declare
   # everything the crate calls. rustdoc type checks signatures and not
   # function bodies, so the render below cannot answer this: the
   # bindings surface grows by a `sys::` call inside a body, which is
