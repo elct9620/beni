@@ -150,7 +150,7 @@ selects it, and `beni:vendor:setup` stages it into the mruby tree:
 
 ```ruby
 Beni::Tasks.new do
-  version "4.1.0"
+  version "<mruby release>"
 
   toolchain "prism" do
     version "<ruby/prism commit>"
