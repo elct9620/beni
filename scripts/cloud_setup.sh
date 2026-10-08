@@ -17,7 +17,7 @@ bundle check >/dev/null 2>&1 || bundle install
 
 # The coverage measure reads its inventory from the vendored mruby headers,
 # and the session's egress serves the git protocol but not source archives —
-# so the source arrives by clone here, at the version the gem pins.
+# so the source arrives by clone here, at the gem's default version.
 if [ ! -d vendor/mruby ]; then
   version="$(ruby -Ilib -rbeni/vendor -e 'print Beni::Vendor::BUILT_IN_PAIRS.fetch("mruby").fetch(:version)')"
   GIT_LFS_SKIP_SMUDGE=1 git -c advice.detachedHead=false clone --quiet --depth 1 \

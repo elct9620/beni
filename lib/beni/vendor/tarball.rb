@@ -11,7 +11,7 @@ module Beni
     # not supported and not needed by +Beni::Tasks+.
     #
     # A version mismatch (toolchain bump) forces a clean re-extract, so the
-    # unpacked tree never lags the pinned version. Public contract is the
+    # unpacked tree never lags the selected version. Public contract is the
     # single +#prepare+ entry point; the staging-directory step is internal.
     class Tarball
       # Marker stamped inside +final_dir+ after a successful unpack; a matching

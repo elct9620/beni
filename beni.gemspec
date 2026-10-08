@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.email = ["contact@aotoki.me"]
 
   spec.summary = "mruby vendoring and build toolchain"
-  spec.description = "Vendors a pinned mruby and builds libmruby.a through a Rake task " \
+  spec.description = "Vendors mruby and builds libmruby.a through a Rake task " \
                      "library, with generated build configs for customization. Aims to grow " \
                      "into a full mruby dependency manager."
   spec.homepage = "https://github.com/elct9620/beni"

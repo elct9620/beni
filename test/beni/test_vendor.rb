@@ -15,9 +15,9 @@ module Beni
     end
 
     def test_built_in_pairs_cover_every_toolchain_a_definition_does_not_select
-      pinned = Vendor::TOOLCHAIN_FACTORIES.keys - Vendor::SELECTED_BY_DEFINITION
+      paired = Vendor::TOOLCHAIN_FACTORIES.keys - Vendor::SELECTED_BY_DEFINITION
 
-      assert_equal pinned.sort, Vendor::BUILT_IN_PAIRS.keys.sort
+      assert_equal paired.sort, Vendor::BUILT_IN_PAIRS.keys.sort
     end
 
     def test_prism_stages_where_the_compiler_gem_reads_its_submodule_from
@@ -28,7 +28,7 @@ module Beni
       assert_equal "cafe", toolchain.expected_sha256
     end
 
-    def test_wasi_sdk_vendors_a_checksum_per_tarball_it_pins
+    def test_wasi_sdk_vendors_a_checksum_per_tarball_of_its_built_in_pair
       checksums = Vendor::BUILT_IN_PAIRS.fetch("wasi-sdk").fetch(:sha256)
 
       assert_equal %w[arm64-linux arm64-macos x86_64-linux x86_64-macos], checksums.keys.sort
@@ -47,7 +47,7 @@ module Beni
       assert_equal "arm64-windows", Vendor.build_platform("aarch64-mingw-ucrt")
     end
 
-    def test_build_platform_names_a_host_no_toolchain_is_pinned_for
+    def test_build_platform_names_a_host_no_toolchain_vendors_a_tarball_for
       assert_equal "riscv64-linux", Vendor.build_platform("riscv64-linux")
       assert_equal "x86_64-freebsd14", Vendor.build_platform("x86_64-freebsd14")
     end

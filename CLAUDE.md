@@ -171,7 +171,7 @@ Each entry point's own header or module doc is the authority for its area; read 
 |-------|-------------|------|
 | Behavior contracts | `SPEC.md` | features, error table, Terminology |
 | Task surface | `lib/beni/tasks.rb` | DSL in `lib/beni/dsl/` |
-| Vendor pipeline | `lib/beni/vendor.rb` | pins, platforms, factory registry |
+| Vendor pipeline | `lib/beni/vendor.rb` | built-in pairs, platforms, factory registry |
 | mruby build driving | `lib/beni/builder.rb` | archive and sidecar per target |
 | Config generation | `lib/beni/build_config.rb` | copies the staged upstream default |
 | ABI alignment | `crates/beni-sys/build.rs` | file-top comment is the contract |

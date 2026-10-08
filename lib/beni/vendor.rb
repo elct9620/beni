@@ -6,7 +6,7 @@ require_relative "vendor/tarball"
 require_relative "vendor/toolchain"
 
 module Beni
-  # Vendor toolchain façade. Owns the release-vendored toolchain pins and
+  # Vendor toolchain façade. Owns each toolchain's built-in pair and
   # the factory methods that build declarative +Toolchain+ values anchored
   # on a caller-supplied +vendor_dir+; +Beni::Tasks+ calls the factories
   # with each selected toolchain's resolved +(version, sha256)+ to wire

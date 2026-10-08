@@ -42,7 +42,7 @@ Beni::Tasks.new
 rake beni:build
 ```
 
-This downloads the pinned mruby release, builds it with mruby's untouched
+This downloads the default mruby release, builds it with mruby's untouched
 upstream default config, and stages `vendor/mruby/build/host/lib/` with the
 archive and its `libmruby.flags.mak` compile-flags sidecar — everything the
 crates need. The archive's own file name follows the toolchain that built it
@@ -166,10 +166,10 @@ The commit is the one the release records for
 
 beni targets plain mruby and is not bound to WebAssembly. `rust-toolchain.toml`
 keeps `wasm32-wasip1` only as a build-verification target for downstream wasi
-consumers (kobako). For that target two pins move in lockstep, in both this
+consumers (kobako). For that target two versions move in lockstep, in both this
 repo and kobako; host builds are unaffected.
 
-| Pin | Lockstep reason |
+| Version | Lockstep reason |
 |---|---|
 | Rust channel | `crt1-command.o` references `__wasi_init_tp` from 1.96 on |
 | wasi-sdk 33 | its `libc.a` supplies `__wasi_init_tp` |
