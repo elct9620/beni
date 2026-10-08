@@ -1125,3 +1125,75 @@ fn a_rust_string_key_names_its_bytes_past_an_embedded_nul() {
     assert!(object.const_defined_at(&mrb, whole));
     assert!(!object.const_defined_at(&mrb, prefix));
 }
+
+/// The class a Ruby expression evaluates to.
+fn ruby_class(mrb: &Mrb, source: &str) -> RClass {
+    let cxt = beni::Ccontext::new(mrb, c"superclass.rb")
+        .expect("allocating the compile context must succeed");
+    let value = cxt
+        .load_nstring(source.as_bytes())
+        .expect("the test source must compile and run");
+    RClass::from_value(value).expect("the expression answers a class")
+}
+
+#[test]
+fn superclass_answers_what_class_superclass_answers() {
+    let mrb = open_mrb();
+    let parent = ruby_class(
+        &mrb,
+        "module BeniSupIncluded; end; module BeniSupPrepended; end\n\
+         class BeniSupParent; end\n\
+         class BeniSupChild < BeniSupParent\n\
+           include BeniSupIncluded\n\
+           prepend BeniSupPrepended\n\
+         end\n\
+         BeniSupParent",
+    );
+    let child = mrb
+        .class_get(c"BeniSupChild")
+        .expect("the child class is defined");
+
+    // The modules included and prepended into the child sit on its
+    // chain as include classes; the read passes over both.
+    let read = child.superclass(&mrb).expect("the child has a superclass");
+    assert!(same_object(&mrb, read, parent));
+    assert!(same_object(
+        &mrb,
+        read,
+        ruby_class(&mrb, "BeniSupChild.superclass")
+    ));
+
+    let anonymous = mrb
+        .class_new(child)
+        .expect("creating an anonymous subclass must succeed");
+    let read = anonymous
+        .superclass(&mrb)
+        .expect("the anonymous class has a superclass");
+    assert!(same_object(&mrb, read, child));
+
+    let singleton = child
+        .singleton_class(&mrb)
+        .expect("a class has a singleton class");
+    let read = singleton
+        .superclass(&mrb)
+        .expect("a singleton class has a superclass");
+    assert!(same_object(
+        &mrb,
+        read,
+        ruby_class(&mrb, "BeniSupChild.singleton_class.superclass")
+    ));
+
+    let object = mrb.object_class();
+    let read = object.superclass(&mrb).expect("Object has a superclass");
+    assert_eq!(read.name(&mrb), "BasicObject");
+}
+
+#[test]
+fn superclass_answers_none_for_basic_object() {
+    let mrb = open_mrb();
+    let basic_object = mrb
+        .class_get(c"BasicObject")
+        .expect("BasicObject is present in every VM");
+
+    assert!(basic_object.superclass(&mrb).is_none());
+}

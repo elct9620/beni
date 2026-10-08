@@ -275,6 +275,26 @@ impl RClass {
         RClass::from_raw_unchecked(unsafe { sys::mrb_class_real(self.0) })
     }
 
+    /// The class Ruby's `Class#superclass` answers for this one: its
+    /// parent, past the include classes that modules included or
+    /// prepended along the chain add, or `None` for `BasicObject`.
+    /// Mirrors `magnus`'s `Class::superclass`, answering an `Option`
+    /// rather than a `Result`: mruby's read never raises and answers
+    /// `nil` only at the chain's end (`vendor/mruby/src/class.c`,
+    /// `mrb_class_superclass`). The class stays reachable as every
+    /// value that crosses out does.
+    #[inline]
+    pub fn superclass(self, mrb: &Mrb) -> Option<RClass> {
+        // SAFETY: `self` is a live class handle; the shim only follows
+        // its `super` chain, which the class keeps reachable.
+        let parent = unsafe { sys::mrb_class_superclass_func(self.0) };
+        (!parent.is_null()).then(|| {
+            let parent = RClass::from_raw_unchecked(parent);
+            mrb.hold(parent.as_value());
+            parent
+        })
+    }
+
     /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
     /// a new instance of this class, running `initialize` with `args`.
     /// Surfaces an `Err` when `initialize` raises. Mirrors `magnus`'s

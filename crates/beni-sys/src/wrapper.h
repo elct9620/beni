@@ -371,6 +371,23 @@ mrb_instance_tt_func(struct RClass *c)
   return MRB_INSTANCE_TT(c);
 }
 
+/* The class `Class#superclass` answers for `c`, or NULL for
+ * `BasicObject`: the class after `c`'s origin, past the include classes
+ * that modules included or prepended along the chain add. The same walk
+ * as mruby's own `mrb_class_superclass` (src/class.c), which it keeps
+ * static, over the `MRB_CLASS_ORIGIN` macro bindgen cannot expand. */
+static inline struct RClass *
+mrb_class_superclass_func(struct RClass *c)
+{
+  MRB_CLASS_ORIGIN(c);
+  c = c->super;
+  while (c && c->tt == MRB_TT_ICLASS) {
+    MRB_CLASS_ORIGIN(c);
+    c = c->super;
+  }
+  return c;
+}
+
 /* The C pointer a `MRB_TT_CPTR` value carries. Counterpart to the
  * `mrb_cptr(o)` macro, whose expansion differs per boxing mode. */
 static inline void *
