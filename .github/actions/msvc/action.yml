@@ -8,8 +8,10 @@ runs:
   using: composite
   steps:
     # vswhere's fixed path finds whichever Visual Studio is installed.
-    # Only what vcvars64 changed is exported; new PATH entries go in
-    # reverse, since GITHUB_PATH prepends each line.
+    # cmd.exe is reached through ComSpec: a PATH lookup can land on
+    # another `cmd`, such as the one RubyInstaller's MSYS2 ships. Only
+    # what vcvars64 changed is exported; new PATH entries go in reverse,
+    # since GITHUB_PATH prepends each line.
     - name: Export the vcvars64 environment
       shell: pwsh
       run: |
@@ -21,7 +23,7 @@ runs:
         Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
         $delimiter = "MSVC_$([guid]::NewGuid().ToString('N'))"
 
-        cmd /c "`"$vcvars`" >nul && set" | ForEach-Object {
+        & $env:ComSpec /c "`"$vcvars`" >nul && set" | ForEach-Object {
           $name, $value = $_ -split '=', 2
           if (-not $name -or $before[$name] -eq $value) { return }
           if ($name -eq 'Path') {
