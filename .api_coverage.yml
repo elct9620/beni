@@ -268,6 +268,7 @@ typed:
   mrb_num_sub: "`ReprValue::sub` — subtract two numeric values (Ruby's `-` on Integer / Float); raises like `ReprValue::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width)"
   mrb_num_mul: "`ReprValue::mul` — multiply two numeric values (Ruby's `*` on Integer / Float); raises like `ReprValue::add` (TypeError on a non-numeric operand, RangeError on an integer result past the configured width)"
   mrb_any_to_s: "`ReprValue::any_to_s` — the default `to_s` render (`#<ClassName:0x...>`) built from the class name; unlike `ReprValue::to_r_string` it dispatches no `to_s`, and unlike `ReprValue::inspect` it runs no user `inspect`. Total, so it returns the RString directly"
+  mrb_obj_alloc: "`Class::obj_alloc` — the class's own instance type, checked first as `mrb_instance_alloc` (`vendor/mruby/src/class.c`) checks it for `allocate`, so the raw `mrb_vtype` never reaches a typed caller"
   mrb_obj_as_string: ReprValue::to_r_string
   mrb_obj_class: ReprValue::class
   mrb_obj_classname: "`ReprValue::classname` — returns an owned `String`, not a borrow: mruby builds the name into a GC-reclaimable temporary with no VM-lifetime storage to borrow from, so copying it out (magnus's `into_owned`, the default here) is the only sound form"
@@ -560,7 +561,6 @@ declined:
   mrb_field_write_barrier: "the two-object form, taking both as `struct RBasic*` — see `mrb_write_barrier`"
   mrb_field_write_barrier_value: "the `mrb_value` form of `mrb_field_write_barrier`, still taking the owner as `struct RBasic*` — see `mrb_write_barrier`"
   mrb_object_dead_p: "asks whether the collector has reclaimed a `struct RBasic*` — see `mrb_str_ptr`; a typed `Value` names a live object or it is not one"
-  mrb_obj_alloc: "allocates a bare object of a raw `mrb_vtype`, returning `struct RBasic*` — see `mrb_str_ptr`; the typed paths are the value factories and `Mrb::wrap_as`"
   mrb_free_context: "releases a `struct mrb_context*` — VM-internal, the same call-frame machinery whose indices stay in `sys`; `Mrb::drop` releases the interpreter and every context it owns"
   mrb_iclass_p: "tests for the include-class tag, which no value a typed caller holds carries — mruby keeps include classes internal, filtering them out of `ObjectSpace` (`vendor/mruby/mrbgems/mruby-objectspace/src/mruby_objectspace.c:131-135`) and answering the included module in their place from `Module#ancestors` (`vendor/mruby/src/class.c:2245-2246`)"
   mrb_env_p: "tests for the environment tag, which only the VM's captured local-variable frames carry (`vendor/mruby/src/gc.c:568`) — see `mrb_iclass_p`"

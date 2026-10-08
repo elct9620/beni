@@ -360,6 +360,43 @@ impl ExceptionClass {
     }
 }
 
+/// Allocate an instance of `class` as mruby's `mrb_instance_alloc`
+/// (`vendor/mruby/src/class.c`) does for `new` and `allocate`. Its
+/// refusals are checked here in its order and answered as an `Err`, so
+/// `mrb_obj_alloc` meets only a class it allocates for and raises nothing
+/// but the out-of-memory error every allocation can.
+fn alloc_instance(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
+    let refuse = |message: String| Err(crate::try_convert::type_error(mrb, &message));
+    if class.is_singleton() {
+        return refuse("can't create instance of singleton class".to_owned());
+    }
+    let state = mrb.as_ptr();
+    let raw = class.0;
+    let mut tt = instance_tt(raw);
+    // SAFETY: `state` is the live interpreter borrowed as `mrb`; the read
+    // copies two class pointers out of it.
+    let nil_or_false = unsafe { raw == (*state).nil_class || raw == (*state).false_class };
+    if tt == sys::MRB_TT_FALSE && !nil_or_false {
+        tt = sys::MRB_TT_OBJECT;
+    }
+    // SAFETY: `raw` names a live class; the shim only reads a flag bit.
+    if unsafe { sys::mrb_undef_allocator_p_func(raw) } {
+        return refuse(format!("allocator undefined for {}", class.name(mrb)));
+    }
+    if tt <= sys::MRB_TT_CPTR {
+        return refuse(format!("can't create instance of {}", class.name(mrb)));
+    }
+    // SAFETY: `state` is alive; `raw` is a plain class whose instances are
+    // heap objects of type `tt`, the one type `mrb_obj_alloc` accepts for
+    // it, and the new object is kept in the arena as every value
+    // factory's is.
+    let object = unsafe { sys::mrb_obj_alloc(state, tt, raw) };
+    // SAFETY: `object` is the live object just allocated.
+    Ok(Value::from_raw_unchecked(unsafe {
+        sys::mrb_obj_value(object as *mut core::ffi::c_void)
+    }))
+}
+
 /// Operations on a class handle that a module handle has no use for —
 /// beni's mirror of `magnus::Class`, implemented by `RClass` and
 /// `ExceptionClass`. Every raising method runs inside exception
@@ -379,6 +416,14 @@ pub trait Class: crate::Module {
     /// a new instance of this class, running `initialize` with `args`.
     /// Surfaces an `Err` when `initialize` raises.
     fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Self::Instance, Error>;
+
+    /// Allocate an instance of this class without running `initialize`,
+    /// the instance mruby's built-in `allocate` makes. Dispatches no Ruby,
+    /// so neither a Ruby-defined `allocate` nor `new` is called. A
+    /// singleton class, a class whose default allocator is undefined, or
+    /// one whose instances are of an immediate or C-pointer type refuses
+    /// with mruby's `TypeError`.
+    fn obj_alloc(self, mrb: &Mrb) -> Result<Self::Instance, Error>;
 
     /// The class Ruby's `Class#superclass` answers for this one: its
     /// parent, past the include classes that modules included or
@@ -476,6 +521,11 @@ impl Class for RClass {
     }
 
     #[inline]
+    fn obj_alloc(self, mrb: &Mrb) -> Result<Value, Error> {
+        alloc_instance(mrb, self)
+    }
+
+    #[inline]
     fn as_r_class(self) -> RClass {
         self
     }
@@ -495,6 +545,18 @@ impl Class for ExceptionClass {
     #[inline]
     fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<crate::Exception, Error> {
         self.as_r_class().new_instance(mrb, args).map(|instance| {
+            // SAFETY: an exception class allocates exception objects.
+            unsafe {
+                <crate::Exception as crate::value::private::ReprValue>::from_value_unchecked(
+                    instance,
+                )
+            }
+        })
+    }
+
+    #[inline]
+    fn obj_alloc(self, mrb: &Mrb) -> Result<crate::Exception, Error> {
+        alloc_instance(mrb, self.as_r_class()).map(|instance| {
             // SAFETY: an exception class allocates exception objects.
             unsafe {
                 <crate::Exception as crate::value::private::ReprValue>::from_value_unchecked(

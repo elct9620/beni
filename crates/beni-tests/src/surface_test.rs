@@ -68,12 +68,14 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RClass::set_instance_data_tt;
     let _ = <RClass as Class>::new;
     let _ = <RClass as Class>::new_instance;
+    let _ = <RClass as Class>::obj_alloc;
     let _ = <RClass as Class>::superclass;
     let _ = <RClass as Class>::name;
     let _ = <RClass as Class>::as_r_class;
     let _ = <RClass as Class>::undef_default_alloc_func;
     let _ = <ExceptionClass as Class>::new;
     let _ = <ExceptionClass as Class>::new_instance;
+    let _ = <ExceptionClass as Class>::obj_alloc;
     let _ = <ExceptionClass as Class>::as_r_class;
     {
         struct Probe;

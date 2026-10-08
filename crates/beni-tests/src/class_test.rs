@@ -1041,6 +1041,124 @@ fn exception_class_registers_methods_through_the_module_trait() {
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 }
 
+/// `result` is a refused bare allocation carrying `message`.
+fn assert_alloc_refused(mrb: &Mrb, result: Result<Value, Error>, message: &str) {
+    let Err(err) = result else {
+        panic!("the allocation must be refused");
+    };
+    assert_eq!(err.message(mrb), message);
+    let Error::Exception(exc) = err else {
+        panic!("the refusal must carry an exception, got {err:?}");
+    };
+    assert_eq!(exc.class(mrb).name(mrb), "TypeError");
+}
+
+#[test]
+fn obj_alloc_allocates_without_running_initialize() {
+    let mrb = open_mrb();
+    let class = ruby_class(
+        &mrb,
+        "class BeniAllocInit; def initialize; @ran = true; end; end; BeniAllocInit",
+    );
+
+    let instance = class
+        .obj_alloc(&mrb)
+        .expect("a plain class allocates its instances");
+
+    assert!(instance.is_instance_of(&mrb, class));
+    let ran = instance
+        .funcall(
+            &mrb,
+            c"instance_variable_get",
+            &[mrb.str_new(b"@ran").as_value()],
+        )
+        .expect("reading the ivar must succeed");
+    assert!(ran.is_nil(), "initialize must not have run");
+}
+
+#[test]
+fn obj_alloc_dispatches_no_ruby_allocate_or_new() {
+    let mrb = open_mrb();
+    let class = ruby_class(
+        &mrb,
+        "class BeniAllocGuarded
+           def self.allocate; raise 'allocate dispatched'; end
+           def self.new(*); raise 'new dispatched'; end
+         end
+         BeniAllocGuarded",
+    );
+
+    let instance = class
+        .obj_alloc(&mrb)
+        .expect("the allocation must not call the class's own allocate or new");
+
+    assert!(instance.is_instance_of(&mrb, class));
+}
+
+#[test]
+fn obj_alloc_refuses_a_singleton_class() {
+    let mrb = open_mrb();
+    let singleton = mrb
+        .object_class()
+        .singleton_class(&mrb)
+        .expect("Object has a singleton class");
+
+    assert_alloc_refused(
+        &mrb,
+        singleton.obj_alloc(&mrb),
+        "can't create instance of singleton class",
+    );
+}
+
+#[test]
+fn obj_alloc_refuses_a_class_whose_allocator_is_undefined() {
+    let mrb = open_mrb();
+    let parent = ruby_class(&mrb, "class BeniAllocUndef; end; BeniAllocUndef");
+    parent.undef_default_alloc_func(&mrb);
+    let child = mrb
+        .define_class(c"BeniAllocUndefChild", parent)
+        .expect("defining the subclass must succeed");
+
+    assert_alloc_refused(
+        &mrb,
+        parent.obj_alloc(&mrb),
+        "allocator undefined for BeniAllocUndef",
+    );
+    assert_alloc_refused(
+        &mrb,
+        child.obj_alloc(&mrb),
+        "allocator undefined for BeniAllocUndefChild",
+    );
+}
+
+#[test]
+fn obj_alloc_refuses_a_class_whose_instances_are_immediates() {
+    let mrb = open_mrb();
+    for name in [c"NilClass", c"TrueClass", c"FalseClass", c"Symbol"] {
+        let class = mrb.class_get(name).expect("the class is built in");
+        let message = format!(
+            "can't create instance of {}",
+            name.to_str().expect("the name is UTF-8")
+        );
+
+        assert_alloc_refused(&mrb, class.obj_alloc(&mrb), &message);
+    }
+}
+
+#[test]
+fn exception_class_obj_alloc_answers_an_exception() {
+    let mrb = open_mrb();
+    let runtime_error = mrb
+        .exc_get(c"RuntimeError")
+        .expect("RuntimeError is present in every VM");
+
+    let exception = runtime_error
+        .obj_alloc(&mrb)
+        .expect("an exception class allocates its instances");
+
+    assert!(exception.is_instance_of(&mrb, runtime_error));
+}
+
 #[test]
 fn exception_class_reaches_the_class_trait() {
     let mrb = open_mrb();
