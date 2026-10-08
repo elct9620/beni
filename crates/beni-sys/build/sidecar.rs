@@ -135,10 +135,7 @@ const UNNAMED_STANDARD: &str = "-std=gnu99";
 /// A definition or removal carrying its value in the next token would
 /// reach the parse without it, so it stops the read instead.
 fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec<String> {
-    if let Some(bare) = compile_flags
-        .iter()
-        .find(|token| is_bare_spelling(token))
-    {
+    if let Some(bare) = compile_flags.iter().find(|token| is_bare_spelling(token)) {
         panic!(
             "beni-sys: {} names a bare `{bare}` in `MRUBY_CFLAGS`, whose value is a \
              separate token — unrecognized flags.mak layout",
