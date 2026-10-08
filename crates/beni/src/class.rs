@@ -412,9 +412,11 @@ pub trait Class: crate::Module {
     /// singleton class or `Class` itself as the superclass.
     fn new(mrb: &Mrb, superclass: Self) -> Result<Self, Error>;
 
-    /// `mrb_obj_new(mrb, self, argc, argv)` — allocate and initialise
-    /// a new instance of this class, running `initialize` with `args`.
-    /// Surfaces an `Err` when `initialize` raises.
+    /// `mrb_obj_new(mrb, self, argc, argv)` — construct an instance as
+    /// Ruby's built-in `Class#new` does: allocate as `obj_alloc` does,
+    /// then run `initialize` with `args`. The class's own `new` is never
+    /// called. Surfaces an `Err` when allocation is refused or
+    /// `initialize` raises.
     fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Self::Instance, Error>;
 
     /// Allocate an instance of this class without running `initialize`,
