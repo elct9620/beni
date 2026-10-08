@@ -125,7 +125,7 @@ namespace :rust do
     # Catches type/width coincidences the repo's MRB_INT32 validation
     # config masks — see BeniRust.default_abi_test for the mechanics.
     desc "cargo test against an upstream-default mruby build (64-bit mrb_int on 64-bit hosts)"
-    task default: "beni:vendor:setup:mruby" do |t|
+    task default: "beni:vendor:setup" do |t|
       BeniRust.require_cargo!(t.name)
 
       BeniRust.default_abi_test
@@ -135,7 +135,7 @@ namespace :rust do
     # configured float width, and every other leg builds the 64-bit one
     # — see BeniRust.float32_test for the mechanics.
     desc "cargo test against a MRB_USE_FLOAT32 mruby build (32-bit mrb_float)"
-    task float32: "beni:vendor:setup:mruby" do |t|
+    task float32: "beni:vendor:setup" do |t|
       BeniRust.require_cargo!(t.name)
 
       BeniRust.float32_test

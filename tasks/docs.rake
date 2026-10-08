@@ -9,14 +9,14 @@ require_relative "support/beni_docs_bindings"
 # that writes has to be the host that will read.
 namespace :docs do
   desc "Generate the documentation bindings from an upstream-default mruby"
-  task bindings: "beni:vendor:setup:mruby" do
+  task bindings: "beni:vendor:setup" do
     path = BeniDocsBindings.generate
     puts "[docs:bindings] wrote #{path.delete_prefix("#{Dir.pwd}/")}"
   end
 
   namespace :bindings do
     desc "Generate the documentation bindings a published package carries"
-    task release: "beni:vendor:setup:mruby" do
+    task release: "beni:vendor:setup" do
       BeniDocsBindings.require_documentation_host!
       Rake::Task["docs:bindings"].invoke
     end
