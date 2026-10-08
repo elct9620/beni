@@ -227,10 +227,18 @@ mod target {
     include!("../build/target.rs");
 }
 
+/// The build script's read of the constants the bindings declare,
+/// reachable here for the same reason as the sidecar parse above.
+#[cfg(test)]
+mod declared {
+    include!("../build/bindings.rs");
+}
+
 /// The build script's mruby version read, reachable here for the same
 /// reason as the sidecar parse above.
 #[cfg(test)]
 mod version {
+    use super::declared::{bindings, declared_u32};
     include!("../build/version.rs");
 }
 
@@ -238,6 +246,7 @@ mod version {
 /// same reason as the sidecar parse above.
 #[cfg(test)]
 mod width {
+    use super::declared::{bindings, declared_u32};
     include!("../build/width.rs");
 }
 
@@ -245,6 +254,7 @@ mod width {
 /// as the sidecar parse above.
 #[cfg(test)]
 mod arena {
+    use super::declared::bindings;
     include!("../build/arena.rs");
 }
 

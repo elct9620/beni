@@ -103,6 +103,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 include!("build/arena.rs");
+include!("build/bindings.rs");
 include!("build/sidecar.rs");
 include!("build/target.rs");
 include!("build/version.rs");
@@ -214,6 +215,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=WASI_SDK_PATH");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build/arena.rs");
+    println!("cargo:rerun-if-changed=build/bindings.rs");
     println!("cargo:rerun-if-changed=build/sidecar.rs");
     println!("cargo:rerun-if-changed=build/target.rs");
     println!("cargo:rerun-if-changed=build/version.rs");

@@ -91,23 +91,9 @@ fn declared_release(bindings_rs: &std::path::Path) -> (u32, u32) {
     let Ok(bindings) = std::fs::read_to_string(bindings_rs) else {
         undeclared()
     };
-    let release_number = |key: &str| {
-        bindings.lines().find_map(|line| {
-            line.trim_start()
-                .strip_prefix("pub const ")?
-                .strip_prefix(key)?
-                .strip_prefix(':')?
-                .split_once('=')?
-                .1
-                .trim()
-                .strip_suffix(';')?
-                .parse::<u32>()
-                .ok()
-        })
-    };
     match (
-        release_number("MRUBY_RELEASE_MAJOR"),
-        release_number("MRUBY_RELEASE_MINOR"),
+        declared_u32(&bindings, "MRUBY_RELEASE_MAJOR"),
+        declared_u32(&bindings, "MRUBY_RELEASE_MINOR"),
     ) {
         (Some(major), Some(minor)) => (major, minor),
         _ => undeclared(),
@@ -123,7 +109,7 @@ fn release_directive(bindings_rs: &std::path::Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_mruby_release, release_directive, require_supported_mruby};
+    use super::{bindings, parse_mruby_release, release_directive, require_supported_mruby};
 
     /// An include root holding one `mruby/version.h` with the given
     /// body, named after the case so concurrent tests cannot collide.
@@ -194,17 +180,6 @@ mod tests {
     #[should_panic(expected = "states no mruby version")]
     fn a_header_tree_without_the_version_header_stops_the_build() {
         require_supported_mruby(&headerless_root("absent"));
-    }
-
-    /// A bindings file with the given body, named after the case so
-    /// concurrent tests cannot collide.
-    fn bindings(case: &str, contents: &str) -> std::path::PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("beni-sys-release-{}-{}", std::process::id(), case));
-        std::fs::create_dir_all(&dir).expect("the case directory is creatable");
-        let path = dir.join("bindings.rs");
-        std::fs::write(&path, contents).expect("the bindings are writable");
-        path
     }
 
     #[test]

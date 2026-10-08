@@ -24,18 +24,7 @@ fn refuse_fixed_arena(bindings_rs: &std::path::Path) {
 
 #[cfg(test)]
 mod tests {
-    use super::refuse_fixed_arena;
-
-    /// A bindings file with the given body, named after the case so
-    /// concurrent tests cannot collide.
-    fn bindings(case: &str, contents: &str) -> std::path::PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("beni-sys-arena-{}-{}", std::process::id(), case));
-        std::fs::create_dir_all(&dir).expect("the case directory is creatable");
-        let path = dir.join("bindings.rs");
-        std::fs::write(&path, contents).expect("the bindings are writable");
-        path
-    }
+    use super::{bindings, refuse_fixed_arena};
 
     #[test]
     fn a_growable_arena_builds() {

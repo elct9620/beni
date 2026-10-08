@@ -27,17 +27,7 @@ fn declares_mrb_int64(bindings_rs: &std::path::Path) -> bool {
     let Ok(bindings) = std::fs::read_to_string(bindings_rs) else {
         undeclared()
     };
-    let bits = bindings.lines().find_map(|line| {
-        line.trim_start()
-            .strip_prefix("pub const MRB_INT_BIT:")?
-            .split_once('=')?
-            .1
-            .trim()
-            .strip_suffix(';')?
-            .parse::<u32>()
-            .ok()
-    });
-    match bits {
+    match declared_u32(&bindings, "MRB_INT_BIT") {
         Some(64) => true,
         Some(32) => false,
         _ => undeclared(),
@@ -108,18 +98,7 @@ fn float_width_directive(bindings_rs: &std::path::Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{float_width_directive, integer_width_directive};
-
-    /// A bindings file with the given body, named after the case so
-    /// concurrent tests cannot collide.
-    fn bindings(case: &str, contents: &str) -> std::path::PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("beni-sys-width-{}-{}", std::process::id(), case));
-        std::fs::create_dir_all(&dir).expect("the case directory is creatable");
-        let path = dir.join("bindings.rs");
-        std::fs::write(&path, contents).expect("the bindings are writable");
-        path
-    }
+    use super::{bindings, float_width_directive, integer_width_directive};
 
     #[test]
     fn a_64_bit_width_is_read_from_the_bindings() {
