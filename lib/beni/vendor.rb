@@ -163,8 +163,8 @@ module Beni
 
       checksum.fetch(platform) do
         raise Error, "[beni] #{name} #{version} vendors no tarball for build platform " \
-                     "#{platform}; declare the toolchain with its own version and sha256 " \
-                     "to name one beni vendors no checksum for"
+                     "#{platform}; declare the toolchain with a version and sha256 " \
+                     "for this platform"
       end
     end
 
