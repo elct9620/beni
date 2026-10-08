@@ -252,11 +252,15 @@ impl RHash {
     /// A pair that fails its conversion ends the walk with that `Err`, and
     /// a panic in `func` or a conversion ends it with an `Err` carrying the
     /// panic's message, never unwinding into mruby's frames. The walk
-    /// dispatches no Ruby of its own; `func` re-entering the VM to mutate
-    /// this hash's table trips mruby's in-walk modification guard, surfaced
-    /// as the `Err` carrying its `RuntimeError`. Each pair handed to `func`
-    /// stays reachable as every value that crosses out does, even once
-    /// this hash lets it go.
+    /// dispatches no Ruby of its own. A visit — a pair's conversion and
+    /// the `func` call on it — after which the hash holds a different
+    /// number of pairs ends the walk with an `Err` carrying `RuntimeError`
+    /// "hash modified", unless `func` answered an `Err` or panicked on that
+    /// visit. A visit that changes pairs but not their number may end the
+    /// walk the same way or let it continue over unspecified pairs, each
+    /// one the hash held during the walk. Each pair handed to `func` stays
+    /// reachable as every value that crosses out does, even once this hash
+    /// lets it go.
     #[inline]
     pub fn foreach<F, K, V>(self, mrb: &Mrb, mut func: F) -> Result<(), Error>
     where
@@ -264,8 +268,7 @@ impl RHash {
         K: TryConvert,
         V: TryConvert,
     {
-        let held = mrb.ary_new();
-        self.walk(mrb, Some(held), |key, val| {
+        self.walk(mrb, Some(self.pair_buffer(mrb)), |key, val| {
             func(K::try_convert(key, mrb)?, V::try_convert(val, mrb)?)
         })
     }
@@ -311,10 +314,69 @@ impl RHash {
         Ok(pairs)
     }
 
-    /// Run `visit` over each pair under exception protection, pushing each
-    /// pair into `held` first when one is given. A `visit` `Err` or panic
-    /// is parked and stops the walk, then surfaces once the walk returns.
+    /// An empty Array with room for every pair, key then value.
+    fn pair_buffer(self, mrb: &Mrb) -> RArray {
+        mrb.ary_new_capa(2 * self.len(mrb))
+    }
+
+    /// Run `visit` over each pair, pushing each pair into `held` first when
+    /// one is given, and end the walk with "hash modified" when a visit
+    /// changes the pair count. A `visit` `Err` or panic stops the walk and
+    /// outranks that error.
     fn walk<F>(self, mrb: &Mrb, held: Option<RArray>, visit: F) -> Result<(), Error>
+    where
+        F: FnMut(Value, Value) -> Result<ForEach, Error>,
+    {
+        #[cfg(mruby_lt_4_1)]
+        let walked = self.walk_snapshot(mrb, held.unwrap_or_else(|| self.pair_buffer(mrb)), visit);
+        #[cfg(not(mruby_lt_4_1))]
+        let walked = self.walk_live(mrb, held, visit);
+        walked
+    }
+
+    /// Walk a copy of the pairs, checking the count around each visit as
+    /// mruby 4.1's own walk does. mruby before 4.1 counts its walk down
+    /// from the size it read at the start, so a visit that deletes a pair
+    /// ahead of it would send the live walk past the hash's entries. The
+    /// copy lands in `snapshot`, which keeps every pair reachable.
+    #[cfg(mruby_lt_4_1)]
+    fn walk_snapshot<F>(self, mrb: &Mrb, snapshot: RArray, mut visit: F) -> Result<(), Error>
+    where
+        F: FnMut(Value, Value) -> Result<ForEach, Error>,
+    {
+        self.walk_live(mrb, Some(snapshot), |_, _| Ok(ForEach::Continue))?;
+        let count = self.len(mrb);
+        for pair in 0..snapshot.len() / 2 {
+            // SAFETY: the copy holds two entries per pair and nothing else
+            // reaches it, so both indices are in bounds; `snapshot` sits in
+            // the caller's arena, keeping both entries reachable.
+            let (key, val) = unsafe {
+                (
+                    snapshot.entry_unheld(2 * pair),
+                    snapshot.entry_unheld(2 * pair + 1),
+                )
+            };
+            let flow = crate::sys::catch_unwind(std::panic::AssertUnwindSafe(|| visit(key, val)))
+                .and_then(|res| res)?;
+            if self.len(mrb) != count {
+                return Err(crate::error::core_error(
+                    mrb,
+                    c"RuntimeError",
+                    "hash modified",
+                ));
+            }
+            if flow == ForEach::Stop {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    /// Run `visit` over each pair through mruby's own walk under exception
+    /// protection, pushing each pair into `held` first when one is given.
+    /// A `visit` `Err` or panic is parked and stops the walk, then surfaces
+    /// once the walk returns, ahead of whatever mruby's guard raised.
+    fn walk_live<F>(self, mrb: &Mrb, held: Option<RArray>, visit: F) -> Result<(), Error>
     where
         F: FnMut(Value, Value) -> Result<ForEach, Error>,
     {
@@ -378,8 +440,9 @@ impl RHash {
             parked: None,
         };
         let walk_ptr = &mut walk as *mut Walk<F> as *mut core::ffi::c_void;
-        // `H_CHECK_MODIFIED` raises when a visit mutates this hash's table
-        // mid-walk; the protect frame catches that raise into `Err`.
+        // `H_CHECK_MODIFIED` raises "hash modified" when a visit moves this
+        // hash's table, and from mruby 4.1 when it changes the pair count;
+        // the protect frame catches that raise into `Err`.
         let result = mrb.protect(|mrb| {
             // SAFETY: `self` is Hash-tagged, so its object pointer is an
             // `RHash`; `mrb` is alive inside the protect frame;

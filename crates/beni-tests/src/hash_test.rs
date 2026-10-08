@@ -408,29 +408,198 @@ fn foreach_ends_with_a_conversion_or_closure_err() {
     assert!(matches!(err, Error::Panic(msg) if msg == "stop here"));
 }
 
+fn assert_hash_modified(mrb: &beni::Mrb, err: &beni::Error) {
+    let beni::Error::Exception(exc) = err else {
+        panic!("a pair-count change surfaces mruby's exception, got {err:?}");
+    };
+    assert_eq!(exc.classname(mrb), "RuntimeError");
+    assert_eq!(err.message(mrb), "hash modified");
+}
+
 #[test]
-fn foreach_surfaces_an_in_walk_modification_as_err() {
-    use beni::{Error, ForEach};
+fn foreach_ends_when_a_visit_deletes_a_pair_ahead_of_it() {
+    use beni::ForEach;
 
     let mrb = open_mrb();
     let hash = abc_hash(&mrb);
 
-    // A closure that re-enters the VM to clear the hash it is walking
-    // resets the entry table, so the guard mruby runs after the callback
-    // raises RuntimeError, caught into Err rather than long-jumping across
-    // mrb_hash_foreach's FFI frame.
-    let result = hash.foreach(&mrb, |_: Value, _: Value| {
-        hash.clear(&mrb)
-            .expect("the in-walk clear itself does not raise");
-        Ok(ForEach::Continue)
-    });
-    assert!(matches!(result, Err(Error::Exception(_))));
+    let mut visited = 0;
+    let err = hash
+        .foreach(&mrb, |_: Value, _: Value| {
+            visited += 1;
+            hash.delete(&mrb, mrb.str_new(b"c").as_value())
+                .expect("the in-walk delete itself does not raise");
+            Ok(ForEach::Continue)
+        })
+        .expect_err("a visit that changes the pair count ends the walk");
 
+    assert_hash_modified(&mrb, &err);
+    assert_eq!(visited, 1, "the walk ends at the visit that deleted");
+}
+
+#[test]
+fn foreach_ends_when_a_visit_adds_a_pair() {
+    use beni::ForEach;
+
+    let mrb = open_mrb();
+    let hash = abc_hash(&mrb);
+
+    let mut visited = 0;
+    let err = hash
+        .foreach(&mrb, |_: Value, _: Value| {
+            visited += 1;
+            hash.set(&mrb, mrb.str_new(b"d").as_value(), 4i32.into_value(&mrb))
+                .expect("the in-walk set itself does not raise");
+            Ok(ForEach::Continue)
+        })
+        .expect_err("a visit that changes the pair count ends the walk");
+
+    assert_hash_modified(&mrb, &err);
+    assert_eq!(visited, 1);
+}
+
+/// An owned target whose conversion re-enters the VM to delete the pair
+/// keyed `"c"` from the hash `$beni_walked` names.
+struct DeletingOnConvert;
+
+impl beni::TryConvert for DeletingOnConvert {
+    fn try_convert(val: Value, mrb: &beni::Mrb) -> Result<Self, beni::Error> {
+        let cxt = beni::Ccontext::new(mrb, c"deleting_on_convert.rb")
+            .expect("allocating the compile context must succeed");
+        cxt.load_nstring(b"$beni_walked.delete('c')")
+            .expect("the delete runs");
+        i32::try_convert(val, mrb)?;
+        Ok(Self)
+    }
+}
+
+// SAFETY: a `DeletingOnConvert` holds an integer and no `Value`.
+unsafe impl beni::TryConvertOwned for DeletingOnConvert {}
+
+#[test]
+fn a_map_conversion_ends_when_a_conversion_changes_the_pair_count() {
+    let mrb = open_mrb();
+    let hash = abc_hash(&mrb);
+    mrb.gv_set(c"$beni_walked", hash.as_value())
+        .expect("binding the global succeeds");
+
+    let Err(err) = hash.to_hash_map::<String, DeletingOnConvert>(&mrb) else {
+        panic!("a conversion that changes the pair count ends the walk");
+    };
+
+    assert_hash_modified(&mrb, &err);
+}
+
+#[test]
+fn foreach_ends_when_a_visit_clears_the_hash() {
+    use beni::ForEach;
+
+    let mrb = open_mrb();
+    let hash = abc_hash(&mrb);
+
+    let err = hash
+        .foreach(&mrb, |_: Value, _: Value| {
+            hash.clear(&mrb)
+                .expect("the in-walk clear itself does not raise");
+            Ok(ForEach::Continue)
+        })
+        .expect_err("a visit that changes the pair count ends the walk");
+
+    assert_hash_modified(&mrb, &err);
     let other = mrb.hash_new();
     other
         .set(&mrb, mrb.str_new(b"x").as_value(), 9i32.into_value(&mrb))
-        .expect("the VM is usable after the protected raise");
+        .expect("the VM is usable after the walk ends");
     assert_eq!(other.len(&mrb), 1);
+}
+
+#[test]
+fn a_pair_count_change_ends_the_walk_even_when_the_visit_stops_it() {
+    use beni::ForEach;
+
+    let mrb = open_mrb();
+    let hash = abc_hash(&mrb);
+
+    let err = hash
+        .foreach(&mrb, |_: Value, _: Value| {
+            hash.delete(&mrb, mrb.str_new(b"c").as_value())
+                .expect("the in-walk delete itself does not raise");
+            Ok(ForEach::Stop)
+        })
+        .expect_err("the count change outranks the stop");
+
+    assert_hash_modified(&mrb, &err);
+}
+
+#[test]
+fn the_closures_own_err_or_panic_outranks_a_pair_count_change() {
+    use beni::{Error, ForEach};
+
+    let mrb = open_mrb();
+    let hash = abc_hash(&mrb);
+    let err = hash
+        .foreach(&mrb, |_: Value, _: Value| -> Result<ForEach, Error> {
+            hash.delete(&mrb, mrb.str_new(b"c").as_value())
+                .expect("the in-walk delete itself does not raise");
+            Err(Error::Panic("the closure's own".to_owned()))
+        })
+        .expect_err("the closure's Err surfaces");
+    assert!(matches!(err, Error::Panic(msg) if msg == "the closure's own"));
+
+    let hash = abc_hash(&mrb);
+    let err = hash
+        .foreach(&mrb, |_: Value, _: Value| -> Result<ForEach, Error> {
+            hash.delete(&mrb, mrb.str_new(b"c").as_value())
+                .expect("the in-walk delete itself does not raise");
+            panic!("boom after deleting");
+        })
+        .expect_err("the closure's panic surfaces");
+    assert!(matches!(err, Error::Panic(msg) if msg == "boom after deleting"));
+}
+
+#[test]
+fn a_visit_swapping_pairs_hands_over_only_pairs_the_hash_held() {
+    use beni::ForEach;
+
+    let mrb = open_mrb();
+    // Keys 0, 2, 3 behind the slot key 1 vacated: a visit that deletes
+    // one pair and adds another keeps the count while the entries move
+    // under the walk.
+    let hash = mrb.hash_new();
+    for key in 0..4i32 {
+        hash.set(&mrb, key.into_value(&mrb), key.into_value(&mrb))
+            .expect("set succeeds");
+    }
+    hash.delete(&mrb, 1i32.into_value(&mrb))
+        .expect("delete succeeds");
+
+    let held = [0, 2, 3, 100];
+    let mut seen = Vec::new();
+    let walked = hash.foreach(&mrb, |key: i32, _: Value| {
+        seen.push(key);
+        if seen.len() == 2 {
+            hash.delete(&mrb, 3i32.into_value(&mrb))
+                .expect("the in-walk delete itself does not raise");
+            hash.set(&mrb, 100i32.into_value(&mrb), 0i32.into_value(&mrb))
+                .expect("the in-walk set itself does not raise");
+        }
+        Ok(ForEach::Continue)
+    });
+
+    if let Err(err) = &walked {
+        assert_hash_modified(&mrb, err);
+    }
+    assert!(
+        seen.iter().all(|key| held.contains(key)),
+        "every pair handed over was held during the walk: {seen:?}"
+    );
+    let mut unique = seen.clone();
+    unique.dedup();
+    assert_eq!(
+        unique.len(),
+        seen.len(),
+        "no pair is handed over twice: {seen:?}"
+    );
 }
 
 #[test]

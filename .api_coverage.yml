@@ -219,7 +219,7 @@ typed:
   mrb_hash_dup: RHash::dup
   mrb_hash_empty_p: RHash::is_empty
   mrb_hash_fetch: RHash::fetch
-  mrb_hash_foreach: "`RHash::foreach` — magnus's shape: each pair converted through `TryConvert`, the closure answering `ForEach::{Continue,Stop}` or an `Err` (magnus's `Delete` is dropped: mruby's foreach has no delete path); a closure `Err` or panic stops the walk and surfaces as `Err`; runs under `protect` so mruby's in-walk modify guard (`H_CHECK_MODIFIED`) surfaces as `Err`; `RHash::to_hash_map` / `to_btree_map` convert each pair inside the same walk"
+  mrb_hash_foreach: "`RHash::foreach` — magnus's shape: each pair converted through `TryConvert`, the closure answering `ForEach::{Continue,Stop}` or an `Err` (magnus's `Delete` is dropped: mruby's foreach has no delete path); a closure `Err` or panic stops the walk and surfaces as `Err`; a visit that changes the pair count ends the walk with `RuntimeError` \"hash modified\" (below mruby 4.1 the walk runs over a copy of the pairs and checks the count itself, since mruby's own walk overruns a deletion ahead of it); `RHash::to_hash_map` / `to_btree_map` convert each pair inside the same walk"
   mrb_hash_get: RHash::get
   mrb_hash_key_p: RHash::contains_key
   mrb_hash_keys: RHash::keys
