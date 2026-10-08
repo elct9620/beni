@@ -1034,13 +1034,14 @@ The Rust map conversion mirrors `magnus`'s `RHash::to_hash_map` and `to_btree_ma
 
 ##### Hash iteration
 
-Iterate mirrors `magnus`'s `RHash::foreach` without its delete signal, which mruby's walk has no path for. It hands each key-value pair, in insertion order, to a closure, each converted through `TryConvert` into the types the closure takes. The closure answers whether to continue or stop, or an `Err`, and iterate returns a `Result`. The walk dispatches no Ruby of its own. A pair handed to the closure stays reachable as every value that crosses out does.
+Iterate mirrors `magnus`'s `RHash::foreach` without its delete signal, which mruby's walk has no path for. It hands each key-value pair, in insertion order, to a closure, each converted through `TryConvert` into the types the closure takes. The closure answers whether to continue or stop, or an `Err`, and iterate returns a `Result`. The walk dispatches no Ruby of its own. A pair handed to the closure stays reachable as every value that crosses out does. A visit is one pair's conversion and the closure call on it; the hash's pair count is compared before and after each visit.
 
 | During the walk | Outcome |
 |---|---|
 | the closure stops | the walk ends before the remaining pairs |
 | a pair fails its conversion, or the closure answers an `Err` | the walk ends before the remaining pairs; iterate surfaces that `Err` |
-| the closure or a conversion re-enters the VM to mutate the hash's table | `Err` carrying the `RuntimeError` mruby raises for the in-walk modification |
+| a visit leaves the hash holding a different number of pairs | the walk ends before the remaining pairs; iterate surfaces an `Err` carrying `RuntimeError` "hash modified", the error mruby raises for it, unless the closure answered an `Err` or panicked on that visit, which iterate surfaces instead |
+| a visit changes the hash's pairs but leaves their number as it was | the walk either ends with that `Err` or continues; which pairs it still visits is unspecified, and each pair it hands over is one the hash held during the walk |
 | the closure or a conversion panics | the walk ends before the remaining pairs; iterate surfaces an `Err` carrying the panic's message, and the panic never crosses into mruby's frames |
 
 #### Value operations
@@ -2181,7 +2182,7 @@ measures complete.
 | An `InlineStruct` derive or `wrap(inline)` applied to an enum, a union, or a type with generic parameters or lifetimes, given an attribute it does not accept, or applied to a type that is not `bytemuck::Pod` or exceeds three pointer widths in size or a pointer's alignment | a compile error; nothing usable is generated |
 | Installing user data into an interpreter whose slot already holds a value | refused; the offered value handed back and the held value unchanged |
 | Installing a payload into a data carrier that already holds one | refused; the offered payload handed back and the held payload unchanged |
-| A hash whose table is mutated while it is walked — by its iterate closure or by a pair's conversion re-entering the VM — raising mruby's in-walk `RuntimeError` | surfaced as a Rust `Err`, never unwinds across FFI |
+| A hash whose pair count differs after a visit of its walk — by its iterate closure or by a pair's conversion re-entering the VM | surfaced as a Rust `Err` carrying `RuntimeError` "hash modified", never unwinds across FFI; the walk hands over only pairs the hash held during the walk |
 | Dumping a Proc backed by a C function, or a dump mruby cannot complete | surfaced as a Rust `Err` carrying an exception, no bytes produced |
 | A precompiled bytecode blob the interpreter cannot read as a program | surfaced as a Rust `Err` carrying a `ScriptError` whose message names which structural check failed; nothing runs |
 | A precompiled bytecode program raising while it runs | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle |
