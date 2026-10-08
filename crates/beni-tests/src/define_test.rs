@@ -51,6 +51,20 @@ fn new_surfaces_err_for_a_rejected_superclass() {
 }
 
 #[test]
+fn new_surfaces_err_for_a_singleton_superclass() {
+    let mrb = open_mrb();
+    let singleton = mrb
+        .object_class()
+        .singleton_class(&mrb)
+        .expect("Object has a singleton class");
+
+    assert!(
+        RClass::new(&mrb, singleton).is_err(),
+        "a singleton class must be refused as a superclass"
+    );
+}
+
+#[test]
 fn module_new_creates_an_unnamed_mixable_module() {
     let mrb = open_mrb();
 
