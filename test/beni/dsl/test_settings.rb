@@ -2,12 +2,15 @@
 
 require "test_helper"
 require "beni"
+require_relative "configuring"
 
 module Beni
   module DSL
     # Scalar settings and target declarations — defaults, precedence,
     # and path resolution.
     class TestSettings < Minitest::Test
+      include Configuring
+
       def test_declared_targets_replace_the_default_set_entirely
         configuration = configure { target :embedded }
 
@@ -54,14 +57,6 @@ module Beni
       end
 
       private
-
-      # Run +block+ through the DSL exactly as +Beni::Tasks.new+ does and
-      # return the resolved Configuration.
-      def configure(&)
-        context = Context.new
-        context.instance_exec(&)
-        context.configuration
-      end
 
       def with_env(overrides)
         saved = overrides.keys.to_h { |key| [key, ENV.fetch(key, nil)] }

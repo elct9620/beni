@@ -40,7 +40,7 @@ module Beni
 
       setup_with(mruby_version: "9.9.1", task: "beni:vendor:setup")
 
-      assert_equal "9.9.1", File.read(File.join(@vendor_dir, "mruby", ".beni-version")).strip
+      assert_equal "9.9.1", File.read(File.join(@vendor_dir, "mruby", Vendor::Tarball::VERSION_MARKER)).strip
       assert_path_exists File.join(prism_tree, "templates", "template.rb")
     end
 
@@ -61,14 +61,21 @@ module Beni
 
     def setup_with(mruby_version:, task:)
       Rake.application = Rake::Application.new
+      define_tasks(mruby_version)
+      capture_io { Rake::Task[task].invoke }
+    end
+
+    def define_tasks(mruby_version)
       vendor = @vendor_dir
-      prism = { version: COMMIT, sha256: @prism_sha256 }
+      prism_sha256 = @prism_sha256
       Tasks.new do
         vendor_dir vendor
         version mruby_version
-        toolchain("prism") { prism.each { |field, value| public_send(field, value) } }
+        toolchain("prism") do
+          version COMMIT
+          sha256 prism_sha256
+        end
       end
-      capture_io { Rake::Task[task].invoke }
     end
 
     # Write a tarball holding +top_level_dir/file+ into the tarball cache

@@ -2,12 +2,15 @@
 
 require "test_helper"
 require "beni"
+require_relative "configuring"
 
 module Beni
   module DSL
     # prism is the toolchain its top-level definition selects: no
     # reference reaches it, and no built-in pair stands behind it.
     class TestPrismSelection < Minitest::Test
+      include Configuring
+
       def test_a_prism_definition_selects_prism_with_its_own_pair
         configuration = configure do
           toolchain "prism" do
@@ -36,14 +39,6 @@ module Beni
         end
 
         assert_match(/sha256/, error.message)
-      end
-
-      private
-
-      def configure(&)
-        context = Context.new
-        context.instance_exec(&)
-        context.configuration
       end
     end
   end

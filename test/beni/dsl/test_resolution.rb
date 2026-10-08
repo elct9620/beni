@@ -2,12 +2,15 @@
 
 require "test_helper"
 require "beni"
+require_relative "configuring"
 
 module Beni
   module DSL
     # Reference-driven toolchain selection and version pairing — the
     # Configuration the task-definition phase consumes.
     class TestResolution < Minitest::Test
+      include Configuring
+
       def test_zero_declarations_resolve_to_the_host_target_and_mruby_built_in_pair
         configuration = configure {} # rubocop:disable Lint/EmptyBlock
         pair = Vendor::BUILT_IN_PAIRS.fetch("mruby")
@@ -117,14 +120,6 @@ module Beni
             sha256 "cafe"
           end
         end
-      end
-
-      # Run +block+ through the DSL exactly as +Beni::Tasks.new+ does and
-      # return the resolved Configuration.
-      def configure(&)
-        context = Context.new
-        context.instance_exec(&)
-        context.configuration
       end
     end
   end

@@ -2,6 +2,7 @@
 
 require "test_helper"
 require "beni"
+require_relative "configuring"
 
 module Beni
   module DSL
@@ -9,6 +10,8 @@ module Beni
     # malformed declaration fails inside the DSL run, before any task
     # exists.
     class TestErrors < Minitest::Test
+      include Configuring
+
       def test_an_unknown_toolchain_reference_fails
         error = assert_raises(Error) do
           configure { target(:wasi) { toolchain "llvm" } }
@@ -126,13 +129,6 @@ module Beni
             end
           end
         end
-      end
-
-      # Run +block+ through the DSL exactly as +Beni::Tasks.new+ does.
-      def configure(&)
-        context = Context.new
-        context.instance_exec(&)
-        context.configuration
       end
     end
   end
