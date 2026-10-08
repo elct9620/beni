@@ -8,13 +8,24 @@ module Beni
     VENDOR_DIR = "/tmp/beni-vendor-test"
 
     def test_factories_anchor_on_vendor_dir
-      toolchains = [Vendor.mruby(vendor_dir: VENDOR_DIR), Vendor.wasi_sdk(vendor_dir: VENDOR_DIR)]
+      toolchains = [Vendor.mruby(vendor_dir: VENDOR_DIR), Vendor.wasi_sdk(vendor_dir: VENDOR_DIR),
+                    Vendor.prism(vendor_dir: VENDOR_DIR, version: "abc123", sha256: "cafe")]
 
       assert(toolchains.all? { |t| t.final_dir.start_with?(VENDOR_DIR) })
     end
 
-    def test_built_in_pairs_cover_every_known_toolchain
-      assert_equal Vendor::TOOLCHAIN_FACTORIES.keys.sort, Vendor::BUILT_IN_PAIRS.keys.sort
+    def test_built_in_pairs_cover_every_toolchain_a_definition_does_not_select
+      pinned = Vendor::TOOLCHAIN_FACTORIES.keys - Vendor::SELECTED_BY_DEFINITION
+
+      assert_equal pinned.sort, Vendor::BUILT_IN_PAIRS.keys.sort
+    end
+
+    def test_prism_stages_where_the_compiler_gem_reads_its_submodule_from
+      toolchain = Vendor.prism(vendor_dir: VENDOR_DIR, version: "abc123", sha256: "cafe")
+
+      assert_equal File.join(VENDOR_DIR, "mruby", "mrbgems", "mruby-compiler", "lib", "prism"), toolchain.final_dir
+      assert_equal "https://github.com/ruby/prism/archive/abc123.tar.gz", toolchain.url
+      assert_equal "cafe", toolchain.expected_sha256
     end
 
     def test_wasi_sdk_vendors_a_checksum_per_tarball_it_pins

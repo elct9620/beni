@@ -26,7 +26,8 @@ module Beni
   # The block is the declarative DSL from SPEC.md, run on +DSL::Context+:
   # scalar settings (+version+ / +build_config+ / +vendor_dir+), target
   # declarations carrying toolchain references, and top-level toolchain
-  # definitions overriding a built-in pair. Every malformed declaration
+  # definitions overriding a built-in pair — or, for +prism+, selecting
+  # the toolchain with the only pair it has. Every malformed declaration
   # raises here — no task defined, nothing downloaded.
   #
   # Defined tasks:
@@ -118,10 +119,19 @@ module Beni
 
       namespace :setup do
         desc "Download and unpack #{toolchain.name} #{toolchain.version_label} into #{toolchain.final_dir}"
-        task toolchain.task_name => toolchain.tarball_path do
+        task toolchain.task_name => [*enclosing_setup_tasks(toolchain), toolchain.tarball_path] do
           toolchain.install
         end
       end
+    end
+
+    # A toolchain staged inside another's tree unpacks only once that
+    # tree is in place: unpacking the enclosing one replaces everything
+    # beneath it.
+    def enclosing_setup_tasks(toolchain)
+      vendor_toolchains
+        .select { |other| toolchain.final_dir.start_with?("#{other.final_dir}/") }
+        .map { |other| other.task_name.to_s }
     end
 
     def define_build_task

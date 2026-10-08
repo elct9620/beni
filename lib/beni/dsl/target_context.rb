@@ -27,7 +27,7 @@ module Beni
                 "`toolchain #{key.inspect}` inside a target block must not carry a block — " \
                 "definitions live at the top level"
         end
-        DSL.assert_known_toolchain!(key)
+        DSL.assert_referenceable_toolchain!(key)
 
         @references << key unless @references.include?(key)
       end

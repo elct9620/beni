@@ -50,6 +50,12 @@ module Beni
     # task-definition time: referencing wasi-sdk implies mruby.
     DEPENDENCIES = { "wasi-sdk" => %w[mruby] }.freeze
 
+    # Toolchains a top-level definition selects on its own, with no
+    # reference: each completes the mruby source rather than serving a
+    # target, and vendors no built-in pair, so only its definition can
+    # name what to stage.
+    SELECTED_BY_DEFINITION = %w[prism].freeze
+
     # +RUBY_PLATFORM+ spells the same architecture and operating system
     # differently across hosts; toolchains key their per-platform tarballs
     # by one spelling each.
@@ -83,7 +89,8 @@ module Beni
     # domain the DSL validates against and +Beni::Tasks+ dispatches on.
     TOOLCHAIN_FACTORIES = {
       "mruby" => :mruby,
-      "wasi-sdk" => :wasi_sdk
+      "wasi-sdk" => :wasi_sdk,
+      "prism" => :prism
     }.freeze
 
     module_function
@@ -113,6 +120,23 @@ module Beni
         top_level_dir: "mruby-#{version}",
         vendor_dir: vendor_dir,
         expected_sha256: sha256 || built_in_sha256("mruby", version)
+      )
+    end
+
+    # The Prism source mruby's compiler gem carries as a git submodule,
+    # which a release's source tarball leaves out. +version+ is a
+    # +ruby/prism+ commit; it stages where the compiler gem reads the
+    # submodule from, which also makes mruby's build skip fetching it.
+    def prism(vendor_dir:, version:, sha256:)
+      Toolchain.new(
+        name: "prism",
+        version_label: version,
+        base_url: "https://github.com/ruby/prism/archive",
+        tarball_name: "#{version}.tar.gz",
+        top_level_dir: "prism-#{version}",
+        vendor_dir: vendor_dir,
+        staged_dir: File.join("mruby", "mrbgems", "mruby-compiler", "lib", "prism"),
+        expected_sha256: sha256
       )
     end
 

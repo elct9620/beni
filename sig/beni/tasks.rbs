@@ -25,6 +25,8 @@ module Beni
 
     def define_toolchain_tasks: (Vendor::Toolchain toolchain) -> void
 
+    def enclosing_setup_tasks: (Vendor::Toolchain toolchain) -> Array[String]
+
     def define_build_task: () -> void
 
     def define_clean_task: () -> void

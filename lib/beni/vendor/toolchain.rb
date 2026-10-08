@@ -14,8 +14,7 @@ module Beni
     #
     # Fields:
     #
-    #   * +name+          — display name; also the basename of the unpacked
-    #                       tree under +vendor_dir+ and the base for the
+    #   * +name+          — display name; also the base for the
     #                       +setup:<name>+ task identifier.
     #   * +version_label+ — version string; printed in the download log and
     #                       stamped into +final_dir+ as the idempotency key
@@ -30,12 +29,21 @@ module Beni
     #                       +Tarball#prepare+ under the same name.
     #   * +vendor_dir+    — root of the vendor tree; anchors +final_dir+
     #                       and +tarball_path+.
+    #   * +staged_dir+    — where the unpacked tree lands, relative to
+    #                       +vendor_dir+; defaults to +name+. A toolchain
+    #                       completing another's tree names a path inside
+    #                       it.
     #   * +expected_sha256+ — the toolchain's selected checksum (resolved
     #                       by +Beni::Vendor+ from the built-in pair or a
     #                       consumer override); +nil+ falls to TOFU
     #                       sidecar pinning in +Checksum#verify_or_pin+.
     class Toolchain <
-      Data.define(:name, :version_label, :base_url, :tarball_name, :top_level_dir, :vendor_dir, :expected_sha256)
+      Data.define(:name, :version_label, :base_url, :tarball_name, :top_level_dir, :vendor_dir, :staged_dir,
+                  :expected_sha256)
+      def initialize(name:, staged_dir: name, **fields)
+        super
+      end
+
       # Symbol used to identify the +setup:<task_name>+ rake task. Dashes
       # in +name+ are not valid in rake task identifiers, so we map them
       # to underscores at this single seam.
@@ -52,7 +60,7 @@ module Beni
 
       # Destination under +vendor_dir+ where the unpacked tree is moved.
       def final_dir
-        File.join(vendor_dir, name)
+        File.join(vendor_dir, staged_dir)
       end
 
       # Local cache path for the downloaded tarball. Lives under

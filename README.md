@@ -137,6 +137,27 @@ WASI_SDK_PATH=$PWD/vendor/wasi-sdk \
 cargo build --target wasm32-wasip1
 ```
 
+### Prism Source
+
+An mruby release whose compiler gem parses with Prism keeps Prism in a
+git submodule, which the release tarball leaves out. Declare the
+`prism` toolchain with that submodule's commit; the definition alone
+selects it, and `beni:vendor:setup` stages it into the mruby tree:
+
+```ruby
+Beni::Tasks.new do
+  version "4.1.0"
+
+  toolchain "prism" do
+    version "<ruby/prism commit>"
+    sha256 "…"
+  end
+end
+```
+
+The commit is the one the release records for
+`mrbgems/mruby-compiler/lib/prism`.
+
 ## Toolchain
 
 beni targets plain mruby and is not bound to WebAssembly. `rust-toolchain.toml`

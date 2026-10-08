@@ -1,5 +1,7 @@
 module Beni
   module DSL
     def self?.assert_known_toolchain!: (String name) -> void
+
+    def self?.assert_referenceable_toolchain!: (String name) -> void
   end
 end

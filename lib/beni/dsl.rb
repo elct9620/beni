@@ -17,6 +17,15 @@ module Beni
 
       raise Error, "unknown toolchain #{name.inspect} (known: #{Vendor::TOOLCHAIN_FACTORIES.keys.join(", ")})"
     end
+
+    # A toolchain a reference may name: a known one, other than those
+    # only their top-level definition selects.
+    def assert_referenceable_toolchain!(name)
+      assert_known_toolchain!(name)
+      return unless Vendor::SELECTED_BY_DEFINITION.include?(name)
+
+      raise Error, "`toolchain #{name.inspect}` is selected by its top-level definition, never by a reference"
+    end
   end
 end
 

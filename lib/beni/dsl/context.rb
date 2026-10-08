@@ -85,12 +85,14 @@ module Beni
         @targets.keys
       end
 
-      # References plus their transitive dependencies; +mruby+ is always
-      # selected and leads the set so it stages first.
+      # References plus their transitive dependencies, and the toolchains
+      # whose definition selects them; +mruby+ is always selected and
+      # leads the set so it stages first.
       def selected_names
         references = @targets.values.flat_map(&:references)
         dependencies = references.flat_map { |name| Vendor::DEPENDENCIES.fetch(name, []) }
-        (%w[mruby] + references + dependencies).uniq
+        defined = @definitions.keys & Vendor::SELECTED_BY_DEFINITION
+        (%w[mruby] + references + dependencies + defined).uniq
       end
 
       def selected_toolchain(name)
