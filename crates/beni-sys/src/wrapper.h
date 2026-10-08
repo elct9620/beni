@@ -409,6 +409,15 @@ mrb_undef_allocator_func(struct RClass *c)
   MRB_UNDEF_ALLOCATOR(c);
 }
 
+/* Whether a class's default allocator is undefined — the counterpart read
+ * of `mrb_undef_allocator_func`. Reads the `MRB_UNDEF_ALLOCATOR_P(c)`
+ * flag bit that bindgen cannot expand. */
+static inline mrb_bool
+mrb_undef_allocator_p_func(struct RClass *c)
+{
+  return MRB_UNDEF_ALLOCATOR_P(c) != 0;
+}
+
 /* Integer conversion across the numeric types. Counterpart to the
  * `mrb_as_int(mrb, val)` macro in <mruby.h>, which expands to
  * `mrb_integer(mrb_ensure_int_type(mrb, val))`: an Integer reads directly
