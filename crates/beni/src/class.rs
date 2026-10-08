@@ -305,7 +305,7 @@ impl ExceptionClass {
     /// or under an exception-class superclass.
     #[inline]
     pub(crate) const fn from_descendant_unchecked(class: RClass) -> Self {
-        Self(class.0)
+        Self(class.as_internal())
     }
 
     /// The exception `instance` is, for a value an exception class
