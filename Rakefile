@@ -26,8 +26,29 @@ Steep::RakeTask.new
 # build_config/default.rb.
 require "beni/tasks"
 
+# BENI_MRUBY_VERSION points the chain at another mruby release; unset,
+# it builds the release the gem pins. A release whose compiler gem
+# parses with Prism also needs the ruby/prism commit its submodule
+# records, keyed here by that release.
+MRUBY_VERSION = ENV.fetch("BENI_MRUBY_VERSION", nil)
+PRISM_SOURCES = {
+  "4.1.0-rc2" => {
+    commit: "c0e37816e97e23e92524a4070e1b99a4025bc63f",
+    sha256: "1d90fcd65f78c361d8fb1f9a835611e3f48c1816471feed6764204f037f73383"
+  }
+}.freeze
+
 Beni::Tasks.new do
   build_config "build_config/mruby.rb"
+  if MRUBY_VERSION
+    version MRUBY_VERSION
+    if (prism = PRISM_SOURCES[MRUBY_VERSION])
+      toolchain "prism" do
+        version prism.fetch(:commit)
+        sha256 prism.fetch(:sha256)
+      end
+    end
+  end
 
   target :host
   target :wasi do

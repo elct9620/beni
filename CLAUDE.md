@@ -114,6 +114,7 @@ The repo dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validat
 | Steep type check only | `bundle exec rake steep` |
 | Full Rust verification chain | `bundle exec rake rust:verify` |
 | Build vendored mruby (both targets) | `bundle exec rake beni:build` |
+| Point the chain at another mruby release | `BENI_MRUBY_VERSION=4.1.0-rc2 bundle exec rake beni:build` |
 | Stage toolchains only | `bundle exec rake beni:vendor:setup` |
 | Remove build trees / toolchains / everything | `rake beni:clean` / `beni:vendor:clean` / `beni:vendor:clobber` |
 | Run a consumer scenario | `cd test/scenarios/default_host && rake scenario:setup beni:build scenario:verify` |
