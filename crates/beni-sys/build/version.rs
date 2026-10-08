@@ -8,7 +8,7 @@
 // Names are written in full because the two including scopes import
 // different ones.
 
-/// The oldest mruby release the crates build against. Nothing bounds
+/// The oldest final mruby release the crates build against. Nothing bounds
 /// the other end: the FFI surface follows the discovered archive's own
 /// headers, so a later release shows what it changed as a compile
 /// failure rather than as something a declared ceiling foresaw.
