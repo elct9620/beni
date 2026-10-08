@@ -8,10 +8,12 @@
 # surface that glues these helpers to +rake rust:check+ /
 # +rake rust:test+ / +rake rust:check:wasm+.
 
+require "fileutils"
 require "open3"
 require "rbconfig"
 
 require "beni/builder"
+require "beni/vendor"
 
 # Helpers for the Cargo workspace at the repo root. See sibling
 # +tasks/rust.rake+ for the rake DSL.
@@ -20,7 +22,8 @@ module BeniRust
   WASM_TARGET = "wasm32-wasip1"
 
   # Scratch build dir for the default-ABI leg. Lives under tmp/
-  # (gitignored) and is incremental across runs.
+  # (gitignored) and is incremental across runs against one mruby
+  # release.
   DEFAULT_ABI_BUILD_DIR = File.join(ROOT, "tmp", "mruby-default-build")
 
   # Scratch build dir for the 32-bit-float leg, kept apart from the
@@ -98,6 +101,7 @@ module BeniRust
   # Build the vendored mruby under build_config/float32.rb and answer
   # the staged path.
   def self.float32_lib_dir
+    converge_build_dir(FLOAT32_BUILD_DIR)
     lib_dir = File.join(FLOAT32_BUILD_DIR, "host", "lib")
     run!({ "MRUBY_BUILD_DIR" => FLOAT32_BUILD_DIR,
            "MRUBY_CONFIG" => File.join(ROOT, "build_config", "float32.rb") },
@@ -112,12 +116,28 @@ module BeniRust
   # The documentation bindings are generated from the same build: both
   # want the surface a consumer gets before editing anything.
   def self.upstream_default_lib_dir
+    converge_build_dir(DEFAULT_ABI_BUILD_DIR)
     lib_dir = File.join(DEFAULT_ABI_BUILD_DIR, "host", "lib")
     run!({ "MRUBY_BUILD_DIR" => DEFAULT_ABI_BUILD_DIR },
          RbConfig.ruby, "-S", "rake", "default",
          File.join(lib_dir, Beni::Builder::FLAGS_MAK),
          chdir: File.join(ROOT, "vendor", "mruby"))
     lib_dir
+  end
+
+  # Start +build_dir+ over unless it was built from the mruby release
+  # staged at +source_dir+. The tree lives outside the staged source, so
+  # re-extracting the source for another release leaves it in place, and
+  # mruby's make-style build would link the objects it already holds.
+  def self.converge_build_dir(build_dir, source_dir = File.join(ROOT, "vendor", "mruby"))
+    marker = Beni::Vendor::Tarball::VERSION_MARKER
+    release = File.read(File.join(source_dir, marker))
+    stamp = File.join(build_dir, marker)
+    return if File.exist?(stamp) && File.read(stamp) == release
+
+    FileUtils.rm_rf(build_dir)
+    FileUtils.mkdir_p(build_dir)
+    File.write(stamp, release)
   end
 
   # What a documentation host sets: DOCS_RS on and no archive discovery
