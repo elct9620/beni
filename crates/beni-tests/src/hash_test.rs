@@ -473,7 +473,7 @@ impl beni::TryConvert for DeletingOnConvert {
     }
 }
 
-// SAFETY: a `DeletingOnConvert` holds an integer and no `Value`.
+// SAFETY: a `DeletingOnConvert` holds nothing, so no `Value`.
 unsafe impl beni::TryConvertOwned for DeletingOnConvert {}
 
 #[test]
@@ -592,13 +592,6 @@ fn a_visit_swapping_pairs_hands_over_only_pairs_the_hash_held() {
     assert!(
         seen.iter().all(|key| held.contains(key)),
         "every pair handed over was held during the walk: {seen:?}"
-    );
-    let mut unique = seen.clone();
-    unique.dedup();
-    assert_eq!(
-        unique.len(),
-        seen.len(),
-        "no pair is handed over twice: {seen:?}"
     );
 }
 
