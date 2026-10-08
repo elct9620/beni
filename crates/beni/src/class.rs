@@ -430,9 +430,9 @@ pub trait Class: crate::Module {
 
     /// `mrb_obj_new(mrb, self, argc, argv)` — construct an instance as
     /// Ruby's built-in `Class#new` does: allocate as `obj_alloc` does,
-    /// then run `initialize` with `args`. The class's own `new` is never
-    /// called. Surfaces an `Err` when allocation is refused or
-    /// `initialize` raises.
+    /// then run `initialize` with `args` and no block. The class's own
+    /// `new` is never called. Surfaces an `Err` when allocation is
+    /// refused or `initialize` raises.
     fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Self::Instance, Error>;
 
     /// Allocate an instance of this class without running `initialize`,

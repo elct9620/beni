@@ -49,7 +49,7 @@
 //! time — loading precompiled bytecode needs no compiler and stays.
 //!
 //! `fiber`, on by default, carries what mruby keeps in its fiber gem:
-//! `Mrb::fiber_new`, `Mrb::fiber_current`, and `Mrb::fiber_yield`.
+//! creating, resuming, and yielding fibers.
 //!
 //! `bytes`, off by default, carries `TryConvert` and `IntoValue` for
 //! `bytes::Bytes`, as magnus's `bytes` feature does.
