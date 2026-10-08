@@ -3,31 +3,42 @@
 bindgen-driven FFI bindings to the mruby C API — the rb-sys half of
 the magnus / rb-sys split that [beni](https://crates.io/crates/beni)
 applies at the mruby boundary. Most consumers want the typed `beni`
-crate; this one stays a pure FFI surface (bindings, ABI constants,
-layout-safe C shims).
+crate; this one stays a pure FFI surface of bindings, ABI constants, and
+layout-safe C shims. Behavior contracts live in the
+repository's [SPEC.md](https://github.com/elct9620/beni/blob/main/SPEC.md).
 
-The build script discovers a prebuilt archive and aligns the
-generated bindings with the archive's compile flags through the
-`libmruby.flags.mak` sidecar — the sole ABI alignment channel:
+```
+beni         typed wrapper     (magnus)
+  │
+beni-sys     FFI bindings      (rb-sys)
+  │
+archive      + libmruby.flags.mak
+```
 
-- `MRUBY_LIB_DIR` — directory holding the archive and its sidecar;
-  required for cross-compiled targets
-- `BENI_VENDOR_DIR` — vendor tree staged by the beni Ruby gem's
-  `beni:build` task; serves host builds
-- `WASI_SDK_PATH` — wasi-sdk root for `wasm32-wasip1` cross builds
-  (defaults to `/opt/wasi-sdk`)
+## Archive Discovery
 
-A build that finds no archive fails naming the variables above. The one
-exception is a documentation build, which `DOCS_RS` marks: its host has
-nowhere to stage an archive and never links, so the checked-in
-`src/bindings_docs.rs` supplies the declarations. Those are generated
-from an mruby built with mruby's own default config, so the rendered
-page carries that configuration's type widths — your own come from the
-archive your build discovers.
+The build script finds a prebuilt archive and aligns the bindings with
+its compile flags. The `libmruby.flags.mak` sidecar beside the archive
+is the sole ABI alignment channel.
 
-Behavior contracts live in the repository's
-[SPEC.md](https://github.com/elct9620/beni/blob/main/SPEC.md).
+| Variable | Points at |
+|---|---|
+| `MRUBY_LIB_DIR` | the archive and its sidecar; required for cross targets |
+| `BENI_VENDOR_DIR` | the beni gem's `beni:build` vendor tree; host builds |
+| `WASI_SDK_PATH` | wasi-sdk for `wasm32-wasip1`; default `/opt/wasi-sdk` |
+
+A build that finds no archive fails naming these variables.
+
+## Documentation Builds
+
+A documentation build, marked by `DOCS_RS`, stages no archive and never
+links. It reads the `src/bindings_docs.rs` the published crate carries.
+
+| Build | Type widths shown |
+|---|---|
+| docs.rs page | mruby's own default config |
+| your build | the archive it discovers |
 
 ## License
 
-Apache-2.0
+Apache-2.0; see the repository's [LICENSE](https://github.com/elct9620/beni/blob/main/LICENSE).
