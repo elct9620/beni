@@ -75,7 +75,8 @@ impl Immediates {
 /// `value::tests::value_shares_abi_with_mrb_value` here and
 /// `surface_test::typed_mrb_func_t_coerces_from_value_bridge` in
 /// `beni-tests` pin the `#[repr(transparent)]` contract that
-/// `Class::define_method`'s `mem::transmute` depends on.
+/// the method-registration `mem::transmute` in `class::protect_register`
+/// depends on.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Value(pub(crate) sys::mrb_value);
@@ -919,14 +920,9 @@ mod tests {
 
     #[test]
     fn value_shares_abi_with_mrb_value() {
-        // The `Value` newtype is `#[repr(transparent)]` over
-        // `sys::mrb_value`, which is the load-bearing invariant
-        // for the `core::mem::transmute(func)` inside
-        // `Class::define_method` / `define_singleton_method`
-        // (typed `beni::mrb_func_t` → raw `sys::mrb_func_t`).
-        // If a future change removes the repr attribute, drops a
-        // field, or adds padding, the transmute becomes UB; this
-        // test fails first.
+        // `class::protect_register` transmutes the typed
+        // `beni::mrb_func_t` to the raw `sys::mrb_func_t`, which is
+        // sound only while `Value` has `sys::mrb_value`'s layout.
         assert_eq!(
             core::mem::size_of::<Value>(),
             core::mem::size_of::<sys::mrb_value>(),

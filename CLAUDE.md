@@ -161,7 +161,7 @@ Vendor     Beni::Vendor façade →          beni-sys  bindgen FFI surface
 - **`Beni::Vendor::Toolchain` is a declarative `Data` value** exposing the fetch → verify → install pipeline; `Beni::Tasks` loops it into `file`/`task` declarations. A new tarball-based toolchain is one factory method in `Beni::Vendor`.
 - **`beni-sys/build.rs` is the only consumer of `MRUBY_LIB_DIR` / `WASI_SDK_PATH`** — libclang and discovery logic stay a sys-only build concern.
 - **Widths and the release are read, not declared.** They are ABI facts, not capabilities: `beni-sys` publishes each from its bindings as `links` metadata, and `beni/build.rs` turns them into cfgs. `mrb_int64` and `mrb_float32` admit a Rust number into a `Value` only where every value it holds fits. The rb-sys-shaped `mruby_{lt,lte,eq,gte,gt}_X_Y` gate release-dependent behavior; a C-side difference stays in `wrapper.h` behind `MRUBY_RELEASE_NO`. Width-dependent conversions stay lint-clean under both widths by spelling the target as `sys::mrb_int` (or an identity per width) — clippy flags a conversion only when a concrete target type equals its source.
-- The typed `mrb_func_t` at the `beni` crate root uses `Value` slots; `Class::define_method` transmutes it once to the raw `sys::mrb_func_t` — ABI-identical because `Value` is `#[repr(transparent)]` over `mrb_value`.
+- The typed `mrb_func_t` at the `beni` crate root uses `Value` slots. `class::protect_register` transmutes it to the raw `sys::mrb_func_t` for every registration, sound because `Value` is `#[repr(transparent)]` over `mrb_value`.
 
 ## Entry Points
 
