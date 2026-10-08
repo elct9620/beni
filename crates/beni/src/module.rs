@@ -57,7 +57,7 @@ pub trait Module: Object + private::ClassLike {
         // A class defined or fetched under an exception-class superclass
         // descends from it, so it is an exception class too.
         self.define_class(mrb, name, superclass.as_r_class())
-            .map(|class| ExceptionClass::from_raw_unchecked(class.as_internal()))
+            .map(ExceptionClass::from_descendant_unchecked)
     }
 
     /// `mrb_define_module_under_id(mrb, self, name)` — define (or

@@ -300,6 +300,24 @@ impl ExceptionClass {
         Self(p)
     }
 
+    /// The exception class `class` is, for a class the caller has
+    /// established descends from an exception class — one defined from
+    /// or under an exception-class superclass.
+    #[inline]
+    pub(crate) const fn from_descendant_unchecked(class: RClass) -> Self {
+        Self(class.0)
+    }
+
+    /// The exception `instance` is, for a value an exception class
+    /// allocated or constructed.
+    #[inline]
+    fn exception_unchecked(instance: Value) -> crate::Exception {
+        // SAFETY: an exception class allocates exception objects.
+        unsafe {
+            <crate::Exception as crate::value::private::ReprValue>::from_value_unchecked(instance)
+        }
+    }
+
     /// The class pointer, for the crate's own calls into `beni::sys` — a
     /// consumer reads it from the class value, as magnus leaves it.
     #[inline]
@@ -352,11 +370,9 @@ impl ExceptionClass {
         // SAFETY: `mrb` is alive; `self` is an exception class and `str`
         // a String-tagged value of the same VM, so neither the
         // allocation nor the string type guard can raise.
-        let exc = Value::from_raw_unchecked(unsafe {
+        Self::exception_unchecked(Value::from_raw_unchecked(unsafe {
             sys::mrb_exc_new_str(mrb.as_ptr(), self.0, str.as_raw())
-        });
-        // SAFETY: an exception class allocates exception objects.
-        unsafe { <crate::Exception as crate::value::private::ReprValue>::from_value_unchecked(exc) }
+        }))
     }
 }
 
@@ -540,32 +556,19 @@ impl Class for ExceptionClass {
     fn new(mrb: &Mrb, superclass: Self) -> Result<Self, Error> {
         // A class defined from an exception class inherits its exception
         // instance type, so it is an exception class too.
-        RClass::new(mrb, superclass.as_r_class())
-            .map(|class| ExceptionClass::from_raw_unchecked(class.0))
+        RClass::new(mrb, superclass.as_r_class()).map(ExceptionClass::from_descendant_unchecked)
     }
 
     #[inline]
     fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<crate::Exception, Error> {
-        self.as_r_class().new_instance(mrb, args).map(|instance| {
-            // SAFETY: an exception class allocates exception objects.
-            unsafe {
-                <crate::Exception as crate::value::private::ReprValue>::from_value_unchecked(
-                    instance,
-                )
-            }
-        })
+        self.as_r_class()
+            .new_instance(mrb, args)
+            .map(Self::exception_unchecked)
     }
 
     #[inline]
     fn obj_alloc(self, mrb: &Mrb) -> Result<crate::Exception, Error> {
-        alloc_instance(mrb, self.as_r_class()).map(|instance| {
-            // SAFETY: an exception class allocates exception objects.
-            unsafe {
-                <crate::Exception as crate::value::private::ReprValue>::from_value_unchecked(
-                    instance,
-                )
-            }
-        })
+        alloc_instance(mrb, self.as_r_class()).map(Self::exception_unchecked)
     }
 }
 
