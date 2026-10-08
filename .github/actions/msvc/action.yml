@@ -1,0 +1,38 @@
+name: Set up MSVC
+description: >-
+  Carry the environment vcvars64 sets into every later step of the job,
+  so mruby selects its visualcpp toolchain and the crates' build finds
+  cl.exe and the MSVC headers without each step entering it again.
+
+runs:
+  using: composite
+  steps:
+    # vswhere ships at a fixed path, which is why no edition or version is
+    # spelled out here. Only what vcvars64 changed is exported: the other
+    # variables are the runner's own. Values go through the multiline
+    # form, and new PATH entries through GITHUB_PATH in reverse, since
+    # each line there is prepended and vcvars64's own order is the one
+    # the tools are found in.
+    - name: Export the vcvars64 environment
+      shell: pwsh
+      run: |
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        $vcvars = Join-Path $install "VC\Auxiliary\Build\vcvars64.bat"
+
+        $before = @{}
+        Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+        $delimiter = "MSVC_$([guid]::NewGuid().ToString('N'))"
+
+        cmd /c "`"$vcvars`" >nul && set" | ForEach-Object {
+          $name, $value = $_ -split '=', 2
+          if (-not $name -or $before[$name] -eq $value) { return }
+          if ($name -eq 'Path') {
+            $known = $before['Path'] -split ';'
+            $added = @($value -split ';' | Where-Object { $_ -and ($known -notcontains $_) })
+            [array]::Reverse($added)
+            $added | ForEach-Object { Add-Content -Path $env:GITHUB_PATH -Value $_ }
+          } else {
+            Add-Content -Path $env:GITHUB_ENV -Value "$name<<$delimiter`n$value`n$delimiter"
+          }
+        }
