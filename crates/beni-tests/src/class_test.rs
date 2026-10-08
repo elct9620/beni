@@ -1096,6 +1096,32 @@ fn obj_alloc_dispatches_no_ruby_allocate_or_new() {
 }
 
 #[test]
+fn new_instance_runs_initialize_without_dispatching_the_class_new() {
+    let mrb = open_mrb();
+    let class = ruby_class(
+        &mrb,
+        "class BeniNewGuarded
+           def self.new(*); raise 'new dispatched'; end
+           def initialize(v); @v = v; end
+         end
+         BeniNewGuarded",
+    );
+
+    let instance = class
+        .new_instance(&mrb, &[7.into_value(&mrb)])
+        .expect("construction must not call the class's own new");
+
+    let v = instance
+        .funcall(
+            &mrb,
+            c"instance_variable_get",
+            &[mrb.str_new(b"@v").as_value()],
+        )
+        .expect("reading the ivar must succeed");
+    assert_eq!(i32::from_value(v), Some(7), "initialize must have run");
+}
+
+#[test]
 fn obj_alloc_refuses_a_singleton_class() {
     let mrb = open_mrb();
     let singleton = mrb
