@@ -64,10 +64,10 @@ jobs:
 
   # Integration lane: rust:verify, the full dogfooding chain, per build
   # platform and mruby release. Tarballs are not cached: a real
-  # download is what exercises each platform's detection. The pinned
-  # release gates; an upcoming one only warns, since the crates promise
-  # behavior on final releases alone, and skips by name the tests it
-  # already knows fail so that a new failure still turns it red.
+  # download is what exercises each platform's detection. A final
+  # release gates; a release candidate only warns, since the crates
+  # promise behavior on final releases alone, and skips by name the
+  # tests it already knows fail so that a new failure still turns it red.
   verify:
     runs-on: ${{ matrix.os }}
     name: Verify (${{ matrix.os }}, mruby ${{ matrix.mruby }})
@@ -214,7 +214,7 @@ jobs:
         if: matrix.msvc
         uses: ./.github/actions/msvc
       # The verify lane already proves the download per platform. The key
-      # carries the pinned versions, and a hit still verifies checksums.
+      # carries the built-in pairs, and a hit still verifies checksums.
       - name: Cache the scenario's toolchain tarballs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

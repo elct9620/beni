@@ -1,12 +1,10 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "yaml"
 
 module Beni
-  # Release lockstep: the four packages ship one version, the Rust
-  # channel moves together with the wasi-sdk pin, and CI gates on the
-  # mruby release the gem pins. These asserts turn a
+  # Release lockstep: the four packages ship one version, and the Rust
+  # channel moves together with the wasi-sdk pin. These asserts turn a
   # partial bump into a test failure instead of a broken downstream
   # build.
   class TestLockstep < Minitest::Test
@@ -46,15 +44,6 @@ module Beni
 
       assert_operator Gem::Version.new(wasi_sdk), :>=, Gem::Version.new("33"),
                       "rust-toolchain #{channel} needs wasi-sdk >= 33 (__wasi_init_tp); pinned #{wasi_sdk}"
-    end
-
-    def test_the_verify_lane_gates_on_the_mruby_release_the_gem_pins
-      matrix = YAML.load_file(File.join(ROOT, ".github", "workflows", "main.yml"))
-                   .dig("jobs", "verify", "strategy", "matrix")
-      pinned = Beni::Vendor::BUILT_IN_PAIRS.fetch("mruby").fetch(:version)
-
-      assert_equal [pinned], matrix.fetch("mruby"),
-                   "the verify lane's mruby releases drifted from the one lib/beni/vendor.rb pins"
     end
 
     private
