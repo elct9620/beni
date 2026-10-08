@@ -224,9 +224,11 @@ No upper bound is declared: the FFI surface is generated from the discovered arc
 | below the floor | the `beni-sys` build fails, named by the version its own headers record |
 | headers state no version | fails the same way |
 | a release the crates have not reconciled with | not refused; its changes surface as compile failures |
-| a release candidate | builds as the release it declares; the behavior this specification states is promised on final releases only |
+| a release candidate | builds as the release it declares |
 
 Such a compile failure is a symbol the wrapper calls that the archive does not declare, or a layout the crates pin.
+
+The behavior this specification states is promised on final releases only.
 
 #### Supported Configurations
 
