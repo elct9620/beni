@@ -81,8 +81,8 @@ fn described(val: Value, mrb: &Mrb) -> String {
 /// The `TypeError` mruby's `mrb_check_type` raises for a value of the
 /// wrong type, naming the value as that check names it.
 pub(crate) fn wrong_argument_type(val: Value, mrb: &Mrb, expected: &str) -> Error {
-    // SAFETY: `mrb_type` is a pure predicate over the value tag.
-    let immediate = unsafe { beni_sys::mrb_type(val.0) } <= beni_sys::MRB_TT_CPTR;
+    // SAFETY: `mrb_immediate_p` is a pure predicate over the value word.
+    let immediate = unsafe { beni_sys::mrb_immediate_p_func(val.0) };
     let named = if val.is_nil() {
         "nil".to_owned()
     } else if val.tag() == beni_sys::MRB_TT_INTEGER {

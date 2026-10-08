@@ -212,6 +212,16 @@ mrb_nil_p_func(mrb_value v)
   return mrb_nil_p(v);
 }
 
+/* `mrb_immediate_p(v)` is a mask test under word boxing and a tag
+ * test otherwise (<mruby/boxing_word.h>, <mruby/value.h>), so a heap
+ * Float is immediate in one build and not in another; it must expand
+ * against libmruby.a's own boxing config. */
+static inline mrb_bool
+mrb_immediate_p_func(mrb_value v)
+{
+  return mrb_immediate_p(v);
+}
+
 /* `mrb_undef_p(v)` expands via `mrb_type(v) == MRB_TT_UNDEF`; the tag
  * read depends on the boxing config, so reaching it from Rust must go
  * through the C compiler to match libmruby.a's layout. Tells an

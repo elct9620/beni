@@ -235,6 +235,34 @@ fn a_tagged_handle_words_a_mismatch_as_mruby_type_check_does() {
 }
 
 #[test]
+fn a_tagged_handle_names_a_float_or_boolean_as_mruby_type_check_does() {
+    let mrb = open_mrb();
+    // mruby's own check names a value by how the build boxes it, so the
+    // expected message comes from that check under the same archive.
+    let checked = |source: &str| {
+        let value = eval(&mrb, source);
+        let err = beni::sys::protect(&mrb, |m| {
+            // SAFETY: `m` is the live VM inside the protected frame and
+            // `value` is from it; the mismatch raises into that frame.
+            unsafe {
+                beni::sys::mrb_check_type(
+                    m.as_ptr(),
+                    beni::sys::AsRawValue::as_raw(value),
+                    beni::sys::MRB_TT_EXCEPTION,
+                )
+            };
+            beni::value::qnil().as_value()
+        })
+        .expect_err("a non-exception must fail the check");
+        type_error(&err.message(&mrb))
+    };
+
+    for source in ["1.5", "true"] {
+        assert_eq!(rejection::<Exception>(&mrb, source), checked(source));
+    }
+}
+
+#[test]
 fn an_exception_argument_dispatches_no_exception_method() {
     let mrb = open_mrb();
 
