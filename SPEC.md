@@ -224,6 +224,7 @@ No upper bound is declared: the FFI surface is generated from the discovered arc
 | below the floor | the `beni-sys` build fails, named by the version its own headers record |
 | headers state no version | fails the same way |
 | a release the crates have not reconciled with | not refused; its changes surface as compile failures |
+| a release candidate | builds as the release it declares; the behavior this specification states is promised on final releases only |
 
 Such a compile failure is a symbol the wrapper calls that the archive does not declare, or a layout the crates pin.
 
@@ -2252,7 +2253,7 @@ measures complete.
 | configured float width | the bit width of mruby's float the bindings a build uses declare — 32 or 64; mruby settles it from the archive's flags, and the documentation bindings carry the 64-bit width of the upstream default configuration |
 | float-width metadata | the `links` metadata key `defines_mrb_float32` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_DEFINES_MRB_FLOAT32` — `true` for a 32-bit configured float width, `false` for a 64-bit one |
 | release metadata | the `links` metadata key `release` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_RELEASE` — the major and minor release the bindings declare, written `major.minor`, such as `4.0` |
-| supported mruby floor | mruby 4.0 — the oldest release the crates build against; an archive states its own version in the header tree staged beside it |
+| supported mruby floor | mruby 4.0 — the oldest final release the crates build against; an archive states its own version in the header tree staged beside it |
 | documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable and builds on one platform, `x86_64-unknown-linux-gnu` |
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
 | documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated from an mruby built with the upstream default configuration, and carrying what the generating host decides alongside it — type widths, the form of `va_list`, the constants its headers define. Never hand-written and never tracked by the repository: the published package carries the copy a release generated, and every other copy is generated where it is read |
