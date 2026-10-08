@@ -363,6 +363,13 @@ mod width {
     include!("../build/width.rs");
 }
 
+/// The build script's release read, reachable here for the same reason
+/// as the width read above.
+#[cfg(test)]
+mod release {
+    include!("../build/release.rs");
+}
+
 /// The README's example, compiled and run as a doctest so the page
 /// crates.io shows keeps to the current surface.
 #[cfg(doctest)]
