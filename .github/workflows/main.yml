@@ -145,6 +145,54 @@ jobs:
           bundle exec rake api:coverage
           git diff --exit-code docs/api_coverage.md
 
+  # Next-release lane: the crates against the upcoming mruby release
+  # before it is pinned, so the branches the crates keep for it compile
+  # and run somewhere. The behavior the crates promise holds on final
+  # releases only, so this lane warns rather than gates. Each leg runs
+  # whatever the one before it reported, and the freshness gates and
+  # per-ABI clippy stay on the pinned release they describe. Under 4.1's
+  # Prism compiler the over-long filename test aborts the test process,
+  # which would end every test after it, so it is skipped here.
+  verify-next:
+    runs-on: ubuntu-latest
+    name: Verify (mruby ${{ matrix.mruby }})
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        mruby:
+          - '4.1.0-rc2'
+    env:
+      BENI_MRUBY_VERSION: ${{ matrix.mruby }}
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+      - name: Set up Rust
+        uses: ./.github/actions/rust
+        with:
+          targets: wasm32-wasip1
+          cache: "true"
+      - name: Build the archives
+        run: bundle exec rake beni:build
+      - name: cargo test (host)
+        if: ${{ !cancelled() }}
+        run: |
+          BENI_VENDOR_DIR="$PWD/vendor" \
+            cargo test -p beni -p beni-tests -- --skip a_filename_too_long_to_be_a_symbol
+      - name: Link wasm32-wasip1
+        if: ${{ !cancelled() }}
+        run: bundle exec rake rust:link:wasm
+      - name: Check without default features
+        if: ${{ !cancelled() }}
+        run: bundle exec rake rust:check:nodefault
+
   # Consumer lane: each harness under test/scenarios/ is a
   # consumer-shaped Rakefile run from its own directory through the
   # gem's task interface alone (scenario:setup → beni:build →
