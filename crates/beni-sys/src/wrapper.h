@@ -213,9 +213,9 @@ mrb_nil_p_func(mrb_value v)
 }
 
 /* `mrb_immediate_p(v)` is a mask test under word boxing and a tag
- * test otherwise (<mruby/boxing_word.h>, <mruby/value.h>), so a heap
- * Float is immediate in one build and not in another; it must expand
- * against libmruby.a's own boxing config. */
+ * test otherwise (<mruby/boxing_word.h>, <mruby/value.h>), so whether a
+ * Float counts as immediate depends on how the build stores it; it must
+ * expand against libmruby.a's own boxing config. */
 static inline mrb_bool
 mrb_immediate_p_func(mrb_value v)
 {
