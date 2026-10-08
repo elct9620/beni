@@ -3,13 +3,13 @@
 // A build script is outside `cargo test`'s reach, so the check lives
 // here and both `build.rs` and the library's test build include it.
 
-/// Stop the build when the bindings at `bindings_rs` declare a
-/// fixed-size GC arena, which the crates above do not support. mruby
-/// declares the arena's pre-allocated overflow error on `mrb_state` in
-/// that configuration alone.
-fn refuse_fixed_arena(bindings_rs: &std::path::Path) {
-    let bindings = std::fs::read_to_string(bindings_rs).unwrap_or_default();
+/// Stop the build when `bindings` declare a fixed-size GC arena, which
+/// the crates above do not support. mruby declares the arena's
+/// pre-allocated overflow error on `mrb_state` in that configuration
+/// alone.
+fn refuse_fixed_arena(bindings: &Bindings) {
     if bindings
+        .text
         .lines()
         .any(|line| line.trim_start().starts_with("pub arena_err:"))
     {
@@ -17,7 +17,7 @@ fn refuse_fixed_arena(bindings_rs: &std::path::Path) {
             "beni-sys: {} declares a fixed-size GC arena (MRB_GC_FIXED_ARENA). \
              An archive configured that way is outside what the crates above \
              support.",
-            bindings_rs.display()
+            bindings.path.display()
         );
     }
 }

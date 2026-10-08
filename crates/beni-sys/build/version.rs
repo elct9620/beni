@@ -79,31 +79,28 @@ const RELEASE_METADATA: &str = "release";
 /// `MRUBY_RELEASE_MAJOR` and `MRUBY_RELEASE_MINOR` constants. Bindings
 /// that declare no release fail loudly rather than letting a dependent
 /// build choose release-dependent behavior against a guess.
-fn declared_release(bindings_rs: &std::path::Path) -> (u32, u32) {
+fn declared_release(bindings: &Bindings) -> (u32, u32) {
     let undeclared = || {
         panic!(
             "beni-sys: {} declares no mruby release. The bindings must carry \
              `MRUBY_RELEASE_MAJOR` and `MRUBY_RELEASE_MINOR` for the crates \
              above to know which release they build against.",
-            bindings_rs.display()
+            bindings.path.display()
         )
     };
-    let Ok(bindings) = std::fs::read_to_string(bindings_rs) else {
-        undeclared()
-    };
     match (
-        declared_u32(&bindings, "MRUBY_RELEASE_MAJOR"),
-        declared_u32(&bindings, "MRUBY_RELEASE_MINOR"),
+        declared_u32(&bindings.text, "MRUBY_RELEASE_MAJOR"),
+        declared_u32(&bindings.text, "MRUBY_RELEASE_MINOR"),
     ) {
         (Some(major), Some(minor)) => (major, minor),
         _ => undeclared(),
     }
 }
 
-/// The build-script directive publishing the release the bindings at
-/// `bindings_rs` declare as the release metadata.
-fn release_directive(bindings_rs: &std::path::Path) -> String {
-    let (major, minor) = declared_release(bindings_rs);
+/// The build-script directive publishing the release `bindings` declare
+/// as the release metadata.
+fn release_directive(bindings: &Bindings) -> String {
+    let (major, minor) = declared_release(bindings);
     format!("cargo:{RELEASE_METADATA}={major}.{minor}")
 }
 

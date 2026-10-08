@@ -313,10 +313,11 @@ fn main() {
 /// Refuse bindings the crates above do not support, then publish the
 /// widths and release they declare as `links` metadata.
 fn check_and_publish_bindings(bindings_rs: &Path) {
-    refuse_fixed_arena(bindings_rs);
-    println!("{}", integer_width_directive(bindings_rs));
-    println!("{}", float_width_directive(bindings_rs));
-    println!("{}", release_directive(bindings_rs));
+    let bindings = Bindings::read(bindings_rs);
+    refuse_fixed_arena(&bindings);
+    println!("{}", integer_width_directive(&bindings));
+    println!("{}", float_width_directive(&bindings));
+    println!("{}", release_directive(&bindings));
 }
 
 /// Put the documentation bindings where `src/lib.rs`

@@ -15,19 +15,16 @@ const INTEGER_WIDTH_METADATA: &str = "defines_mrb_int64";
 /// `MRB_INT_BIT` constant mruby settles the width into. Bindings that
 /// declare no width, or one other than 32 or 64, fail loudly rather than
 /// letting a dependent build pick its conversions against a guess.
-fn declares_mrb_int64(bindings_rs: &std::path::Path) -> bool {
+fn declares_mrb_int64(bindings: &Bindings) -> bool {
     let undeclared = || {
         panic!(
             "beni-sys: {} declares no integer width. The bindings must carry \
              `MRB_INT_BIT` as 32 or 64 for the crates above to know which \
              integer conversions the archive supports.",
-            bindings_rs.display()
+            bindings.path.display()
         )
     };
-    let Ok(bindings) = std::fs::read_to_string(bindings_rs) else {
-        undeclared()
-    };
-    match declared_u32(&bindings, "MRB_INT_BIT") {
+    match declared_u32(&bindings.text, "MRB_INT_BIT") {
         Some(64) => true,
         Some(32) => false,
         _ => undeclared(),
@@ -35,11 +32,11 @@ fn declares_mrb_int64(bindings_rs: &std::path::Path) -> bool {
 }
 
 /// The build-script directive publishing the configured integer width
-/// the bindings at `bindings_rs` declare as the integer-width metadata.
-fn integer_width_directive(bindings_rs: &std::path::Path) -> String {
+/// `bindings` declare as the integer-width metadata.
+fn integer_width_directive(bindings: &Bindings) -> String {
     format!(
         "cargo:{INTEGER_WIDTH_METADATA}={}",
-        declares_mrb_int64(bindings_rs)
+        declares_mrb_int64(bindings)
     )
 }
 
@@ -53,19 +50,16 @@ const FLOAT_WIDTH_METADATA: &str = "defines_mrb_float32";
 /// are an archive built without floating point, which the crates above
 /// do not support: their surface converts floats, so the build stops
 /// here rather than at a missing type deep in the wrapper.
-fn declares_mrb_float32(bindings_rs: &std::path::Path) -> bool {
+fn declares_mrb_float32(bindings: &Bindings) -> bool {
     let no_float = || {
         panic!(
             "beni-sys: {} declares no `mrb_float`. An archive built without \
              floating point (MRB_NO_FLOAT) is outside what the crates above \
              support, since their surface converts floats.",
-            bindings_rs.display()
+            bindings.path.display()
         )
     };
-    let Ok(bindings) = std::fs::read_to_string(bindings_rs) else {
-        no_float()
-    };
-    let width = bindings.lines().find_map(|line| {
+    let width = bindings.text.lines().find_map(|line| {
         Some(
             line.trim_start()
                 .strip_prefix("pub type mrb_float =")?
@@ -81,18 +75,18 @@ fn declares_mrb_float32(bindings_rs: &std::path::Path) -> bool {
         Some(other) => panic!(
             "beni-sys: {} declares `mrb_float` as `{other}`, where the crates \
              above expect `f32` or `f64`.",
-            bindings_rs.display()
+            bindings.path.display()
         ),
         None => no_float(),
     }
 }
 
 /// The build-script directive publishing the configured float width the
-/// bindings at `bindings_rs` declare as the float-width metadata.
-fn float_width_directive(bindings_rs: &std::path::Path) -> String {
+/// `bindings` declare as the float-width metadata.
+fn float_width_directive(bindings: &Bindings) -> String {
     format!(
         "cargo:{FLOAT_WIDTH_METADATA}={}",
-        declares_mrb_float32(bindings_rs)
+        declares_mrb_float32(bindings)
     )
 }
 
@@ -134,14 +128,6 @@ mod tests {
     #[should_panic(expected = "declares no integer width")]
     fn a_width_other_than_32_or_64_stops_the_build() {
         integer_width_directive(&bindings("16", "pub const MRB_INT_BIT: u32 = 16;\n"));
-    }
-
-    #[test]
-    #[should_panic(expected = "declares no integer width")]
-    fn absent_bindings_stop_the_build() {
-        let path = bindings("absent", "");
-        std::fs::remove_file(&path).expect("the bindings are removable");
-        integer_width_directive(&path);
     }
 
     #[test]

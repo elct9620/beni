@@ -238,7 +238,7 @@ mod declared {
 /// reason as the sidecar parse above.
 #[cfg(test)]
 mod version {
-    use super::declared::{bindings, declared_u32};
+    use super::declared::{bindings, declared_u32, Bindings};
     include!("../build/version.rs");
 }
 
@@ -246,7 +246,7 @@ mod version {
 /// same reason as the sidecar parse above.
 #[cfg(test)]
 mod width {
-    use super::declared::{bindings, declared_u32};
+    use super::declared::{bindings, declared_u32, Bindings};
     include!("../build/width.rs");
 }
 
@@ -254,7 +254,7 @@ mod width {
 /// as the sidecar parse above.
 #[cfg(test)]
 mod arena {
-    use super::declared::bindings;
+    use super::declared::{bindings, Bindings};
     include!("../build/arena.rs");
 }
 
