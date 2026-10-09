@@ -76,13 +76,17 @@ fn store_out_of_range_index_surfaces_err() {
         ary.store(&mrb, -5, mrb.str_new(b"x").as_value()),
         Err(Error::Exception(_))
     ));
-    // An index beyond the archive's `mrb_int` width saturates so
-    // mruby's own range check rejects it as too large, rather than a
-    // truncated index hitting the wrong slot.
-    assert!(matches!(
-        ary.store(&mrb, isize::MAX, mrb.str_new(b"x").as_value()),
-        Err(Error::Exception(_))
-    ));
+    // An index beyond the archive's `mrb_int` width saturates to the
+    // nearer bound, so mruby's own range check rejects it on the side
+    // it lies on, rather than a truncated index hitting the wrong slot.
+    let Err(too_large) = ary.store(&mrb, isize::MAX, mrb.str_new(b"x").as_value()) else {
+        panic!("no array holds a slot at isize::MAX");
+    };
+    assert_eq!(too_large.message(&mrb), "index too big");
+    let Err(too_small) = ary.store(&mrb, isize::MIN, mrb.str_new(b"x").as_value()) else {
+        panic!("no array holds a slot at isize::MIN");
+    };
+    assert!(too_small.message(&mrb).ends_with("out of array"));
 }
 
 #[test]
