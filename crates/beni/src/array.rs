@@ -129,11 +129,7 @@ impl RArray {
         // range check raises the matching `IndexError` (too large,
         // or past the beginning) rather than a truncated index
         // silently hitting the wrong slot.
-        let n = sys::mrb_int::try_from(idx).unwrap_or(if idx < 0 {
-            sys::mrb_int::MIN
-        } else {
-            sys::mrb_int::MAX
-        });
+        let n = crate::value::narrow_index(idx);
         mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive; `self` is Array-tagged by the
             // `from_value_unchecked` contract; `val` shares the VM
@@ -151,7 +147,7 @@ impl RArray {
     /// saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn resize(self, mrb: &Mrb, new_len: usize) -> Result<(), Error> {
-        let new_len = new_len.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        let new_len = crate::value::narrow_len(new_len);
         mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract.
@@ -242,12 +238,8 @@ impl RArray {
     /// a truncated one hitting the wrong slot.
     #[inline]
     pub fn splice(self, mrb: &Mrb, head: isize, len: usize, rpl: Value) -> Result<Value, Error> {
-        let head = sys::mrb_int::try_from(head).unwrap_or(if head < 0 {
-            sys::mrb_int::MIN
-        } else {
-            sys::mrb_int::MAX
-        });
-        let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
+        let head = crate::value::narrow_index(head);
+        let len = crate::value::narrow_len(len);
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract;

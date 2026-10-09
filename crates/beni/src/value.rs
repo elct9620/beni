@@ -904,6 +904,24 @@ pub(crate) fn widen(n: sys::mrb_int) -> i64 {
     i64::from(n)
 }
 
+/// A length or count as the `mrb_int` mruby takes, saturating at
+/// `sys::mrb_int::MAX` past the configured integer width.
+#[inline]
+pub(crate) fn narrow_len(n: usize) -> sys::mrb_int {
+    sys::mrb_int::try_from(n).unwrap_or(sys::mrb_int::MAX)
+}
+
+/// An index or offset as the `mrb_int` mruby takes, saturating at the
+/// nearer bound past the configured integer width.
+#[inline]
+pub(crate) fn narrow_index(n: isize) -> sys::mrb_int {
+    sys::mrb_int::try_from(n).unwrap_or(if n < 0 {
+        sys::mrb_int::MIN
+    } else {
+        sys::mrb_int::MAX
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

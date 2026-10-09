@@ -22,7 +22,7 @@ impl Mrb {
     /// configured integer width). Real callers stay far below that.
     #[inline]
     pub fn str_new(&self, bytes: &[u8]) -> RString {
-        let len = bytes.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        let len = crate::value::narrow_len(bytes.len());
         // SAFETY: `self` is alive by the `&self` borrow; `bytes`
         // outlives the synchronous call. `mrb_str_new` always returns
         // a String-tagged value, so the unchecked wrap is sound.
@@ -59,7 +59,7 @@ impl Mrb {
     /// `mrb_int` width, mirroring `ary_new_capa`.
     #[inline]
     pub fn str_new_capa(&self, capa: usize) -> RString {
-        let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        let capa = crate::value::narrow_len(capa);
         // SAFETY: `self` is alive; `mrb_str_new_capa` always returns
         // a String-tagged value, so the unchecked wrap is sound.
         unsafe {
@@ -83,7 +83,7 @@ impl Mrb {
     /// configured integer width). Real callers stay far below that.
     #[inline]
     pub fn str_new_static(&self, bytes: &'static [u8]) -> RString {
-        let len = bytes.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        let len = crate::value::narrow_len(bytes.len());
         // SAFETY: `self` is alive by the `&self` borrow; `bytes` is
         // `'static`, so the aliased buffer outlives the VM as mruby's
         // NOFREE contract requires. `mrb_str_new_static` always returns
@@ -115,7 +115,7 @@ impl Mrb {
     /// `capa` saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn ary_new_capa(&self, capa: usize) -> RArray {
-        let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        let capa = crate::value::narrow_len(capa);
         // SAFETY: `self` is alive; `mrb_ary_new_capa` always returns
         // an Array-tagged value, so the unchecked wrap is sound.
         unsafe {
@@ -131,7 +131,7 @@ impl Mrb {
     /// saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn ary_new_from_values(&self, values: &[Value]) -> RArray {
-        let len = values.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        let len = crate::value::narrow_len(values.len());
         // SAFETY: `self` is alive; `Value` is `#[repr(transparent)]`
         // over `mrb_value` (pinned by the ABI test), so the slice
         // pointer is a valid `*const mrb_value` for `len` elements,
@@ -163,7 +163,7 @@ impl Mrb {
     /// saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn hash_new_capa(&self, capa: usize) -> RHash {
-        let capa = capa.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        let capa = crate::value::narrow_len(capa);
         // SAFETY: `self` is alive; `mrb_hash_new_capa` always returns
         // a Hash-tagged value, so the unchecked wrap is sound.
         unsafe {

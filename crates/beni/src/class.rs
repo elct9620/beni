@@ -345,7 +345,7 @@ impl ExceptionClass {
     /// `initialize`; `Error::new` is the public form.
     #[inline]
     pub(crate) fn exc_new(self, mrb: &Mrb, msg: &str) -> Value {
-        let len = msg.len().min(sys::mrb_int::MAX as usize) as sys::mrb_int;
+        let len = crate::value::narrow_len(msg.len());
         // SAFETY: `mrb` is alive; `self` is an exception class of the
         // same VM, so the allocation cannot refuse its instance type;
         // `msg`'s bytes are copied into the new exception object

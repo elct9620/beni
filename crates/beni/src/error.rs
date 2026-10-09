@@ -55,7 +55,7 @@ impl Error {
     /// `Mrb::str_new`; real argument counts stay far below that.
     #[inline]
     pub fn argnum(mrb: &Mrb, given: usize, min: i32, max: i32) -> Self {
-        let argc = sys::mrb_int::try_from(given).unwrap_or(sys::mrb_int::MAX);
+        let argc = crate::value::narrow_len(given);
         match mrb.protect(|mrb| -> Value {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `mrb_argnum_error` raises `ArgumentError`, caught by

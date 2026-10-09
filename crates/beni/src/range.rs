@@ -122,7 +122,7 @@ impl Range {
         // reachable extent; saturate it up so the clamp sees "as large
         // as representable" rather than a wrapped value landing on a
         // wrong span.
-        let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
+        let len = crate::value::narrow_len(len);
 
         mrb.protect_unit(|mrb| {
             let mut beg: sys::mrb_int = 0;

@@ -179,12 +179,8 @@ impl RString {
         // names no position; saturate it to the nearest bound so the
         // clamp still sees "past the beginning" / "past the end" rather
         // than a truncated value landing on a wrong in-range position.
-        let beg = sys::mrb_int::try_from(beg).unwrap_or(if beg < 0 {
-            sys::mrb_int::MIN
-        } else {
-            sys::mrb_int::MAX
-        });
-        let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
+        let beg = crate::value::narrow_index(beg);
+        let len = crate::value::narrow_len(len);
         // SAFETY: `self` is String-tagged by the newtype contract;
         // `mrb` is alive; `mrb_str_substr` clamps the range and reads
         // only the byte buffer, returning a fresh String or `nil`.
@@ -217,12 +213,8 @@ impl RString {
         // length is non-negative; a length past `mrb_int::MAX` cannot fit
         // before the end either, so it saturates upward to stay "not
         // found".
-        let offset = sys::mrb_int::try_from(offset).unwrap_or(if offset < 0 {
-            sys::mrb_int::MIN
-        } else {
-            sys::mrb_int::MAX
-        });
-        let slen = sys::mrb_int::try_from(needle.len()).unwrap_or(sys::mrb_int::MAX);
+        let offset = crate::value::narrow_index(offset);
+        let slen = crate::value::narrow_len(needle.len());
         // SAFETY: `self` is String-tagged by the newtype contract;
         // `mrb` is alive; `needle` is read-only and only scanned for
         // its `len` bytes. `mrb_str_index` does a pure `mrb_memsearch`
