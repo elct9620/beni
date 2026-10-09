@@ -11,7 +11,7 @@
 //! (`str_new`, `str_new_cstr`), per-string ops (`cat`, `as_bytes`,
 //! `to_string`, and `to_bytes` with the `bytes` feature) live here.
 
-use crate::{sys::AsRawValue, Error, FromValue, Mrb, ReprValue, Value};
+use crate::{sys::AsRawValue, Error, Mrb, ReprValue, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `String`. `#[repr(transparent)]` over
@@ -538,13 +538,4 @@ impl RString {
 
 crate::value::value_backed_repr!(RString);
 
-impl FromValue for RString {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the wrap precondition (MRB_TT_STRING tagging) is
-        // established by the tag check immediately before it.
-        (value.tag() == sys::MRB_TT_STRING).then(|| unsafe { RString::from_value_unchecked(value) })
-    }
-}
-
-crate::try_convert::try_convert_tagged!(RString => "String");
+crate::try_convert::tagged_conversions!(RString, sys::MRB_TT_STRING => "String");

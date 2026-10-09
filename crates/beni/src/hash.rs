@@ -10,8 +10,7 @@
 //! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
 
 use crate::{
-    sys::AsRawValue, Error, FromValue, IntoValue, Mrb, RArray, ReprValue, TryConvert,
-    TryConvertOwned, Value,
+    sys::AsRawValue, Error, IntoValue, Mrb, RArray, ReprValue, TryConvert, TryConvertOwned, Value,
 };
 use beni_sys as sys;
 
@@ -481,13 +480,4 @@ where
 
 crate::value::value_backed_repr!(RHash);
 
-impl FromValue for RHash {
-    #[inline]
-    fn from_value(value: Value) -> Option<Self> {
-        // SAFETY: the wrap precondition (MRB_TT_HASH tagging) is
-        // established by the tag check immediately before it.
-        (value.tag() == sys::MRB_TT_HASH).then(|| unsafe { RHash::from_value_unchecked(value) })
-    }
-}
-
-crate::try_convert::try_convert_tagged!(RHash => "Hash");
+crate::try_convert::tagged_conversions!(RHash, sys::MRB_TT_HASH => "Hash");

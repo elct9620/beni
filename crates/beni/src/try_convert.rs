@@ -199,10 +199,22 @@ impl TryConvert for f32 {
     }
 }
 
-/// The `TryConvert` of a handle that converts on its tag alone, naming
-/// `$target` in mruby's conversion `TypeError`.
-macro_rules! try_convert_tagged {
-    ($handle:ty => $target:literal) => {
+/// The `FromValue` and `TryConvert` of a handle that converts on its tag
+/// alone: `$tag` is the tag it accepts, and `$target` the name mruby's
+/// conversion `TypeError` gives it.
+macro_rules! tagged_conversions {
+    ($handle:ty, $tag:path => $target:literal) => {
+        impl $crate::FromValue for $handle {
+            #[inline]
+            fn from_value(value: $crate::Value) -> Option<Self> {
+                // SAFETY: the wrap precondition (`$tag` tagging) is
+                // established by the tag check immediately before it.
+                (value.tag() == $tag).then(|| unsafe {
+                    <$handle as $crate::value::private::ReprValue>::from_value_unchecked(value)
+                })
+            }
+        }
+
         impl $crate::TryConvert for $handle {
             #[inline]
             fn try_convert(val: $crate::Value, mrb: &$crate::Mrb) -> Result<Self, $crate::Error> {
@@ -212,7 +224,7 @@ macro_rules! try_convert_tagged {
         }
     };
 }
-pub(crate) use try_convert_tagged;
+pub(crate) use tagged_conversions;
 
 unsafe impl TryConvertOwned for f32 {}
 
