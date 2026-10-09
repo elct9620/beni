@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.1](https://github.com/elct9620/beni/compare/v0.22.0...v0.22.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **beni:** name a mismatched value by mruby's own immediate test ([a86dd77](https://github.com/elct9620/beni/commit/a86dd77ec29fce3b70ff95cab7b32ef7e9dc8a75))
+
 ## [0.22.0](https://github.com/elct9620/beni/compare/v0.21.0...v0.22.0) (2026-10-08)
 
 
