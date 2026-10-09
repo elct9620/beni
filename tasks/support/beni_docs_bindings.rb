@@ -28,7 +28,7 @@ require_relative "beni_rust"
 # Regeneration of the documentation bindings. See sibling
 # +tasks/docs.rake+ for the rake DSL.
 module BeniDocsBindings
-  ROOT = File.expand_path("../..", __dir__)
+  ROOT = BeniRust::ROOT
   CRATE = "beni-sys"
   TARGET = File.join(ROOT, "crates", CRATE, "src", "bindings_docs.rs")
   BUILD_DIR = File.join(ROOT, "tmp", "docs-bindings-target")
@@ -98,7 +98,7 @@ module BeniDocsBindings
   # goes to stderr, so it still reaches the terminal while the JSON
   # stream is read here.
   def capture!(env, *cmd)
-    puts "[docs] cd #{ROOT} && #{env.map { |k, v| "#{k}=#{v}" }.join(" ")} #{cmd.join(" ")}"
+    BeniRust.echo("docs", env, cmd, chdir: ROOT)
     stdout, status = Open3.capture2(env, *cmd, chdir: ROOT)
     raise "#{cmd.first} failed with #{status.exitstatus}" unless status.success?
 

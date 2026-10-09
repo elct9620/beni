@@ -19,6 +19,8 @@ require "beni/vendor"
 # +tasks/rust.rake+ for the rake DSL.
 module BeniRust
   ROOT = File.expand_path("../..", __dir__)
+  VENDOR_DIR = File.join(ROOT, "vendor")
+  MRUBY_SOURCE_DIR = File.join(VENDOR_DIR, "mruby")
   WASM_TARGET = "wasm32-wasip1"
 
   # Scratch build dir for the default-ABI leg. Lives under tmp/
@@ -57,7 +59,7 @@ module BeniRust
   # `beni:build` populates, named explicitly because beni-sys's
   # discovery is environment-driven with no fallback.
   def self.host_env
-    { "BENI_VENDOR_DIR" => File.join(ROOT, "vendor") }
+    { "BENI_VENDOR_DIR" => VENDOR_DIR }
   end
 
   # Archive discovery env for wasm32 cargo runs: cross targets never
@@ -65,8 +67,8 @@ module BeniRust
   # wasi-sdk root are named directly.
   def self.wasm_env
     {
-      "MRUBY_LIB_DIR" => File.join(ROOT, "vendor", "mruby", "build", "wasi", "lib"),
-      "WASI_SDK_PATH" => File.join(ROOT, "vendor", "wasi-sdk")
+      "MRUBY_LIB_DIR" => File.join(MRUBY_SOURCE_DIR, "build", "wasi", "lib"),
+      "WASI_SDK_PATH" => File.join(VENDOR_DIR, "wasi-sdk")
     }
   end
 
@@ -124,7 +126,7 @@ module BeniRust
     run!({ "MRUBY_BUILD_DIR" => build_dir, **env },
          RbConfig.ruby, "-S", "rake", "default",
          File.join(lib_dir, Beni::Builder::FLAGS_MAK),
-         chdir: File.join(ROOT, "vendor", "mruby"))
+         chdir: MRUBY_SOURCE_DIR)
     lib_dir
   end
 
@@ -143,7 +145,7 @@ module BeniRust
   # staged at +source_dir+. The tree lives outside the staged source, so
   # a re-extraction leaves it in place. mruby's make-style build would
   # then link the other release's objects.
-  def self.converge_build_dir(build_dir, source_dir = File.join(ROOT, "vendor", "mruby"))
+  def self.converge_build_dir(build_dir, source_dir = MRUBY_SOURCE_DIR)
     marker = Beni::Vendor::Tarball::VERSION_MARKER
     release = File.read(File.join(source_dir, marker))
     stamp = File.join(build_dir, marker)
@@ -183,8 +185,14 @@ module BeniRust
   # Echo-then-run with the env overlay, raising on failure — the same
   # subprocess shape `rake sh` provides, available outside the DSL.
   def self.run!(env, *cmd, chdir:)
-    puts "[rust] cd #{chdir} && #{env.map { |k, v| "#{k}=#{v}" }.join(" ")} #{cmd.join(" ")}"
+    echo("rust", env, cmd, chdir: chdir)
     system(env, *cmd, chdir: chdir, exception: true)
+  end
+
+  # Print a subprocess as it will run — its directory, env overlay, and
+  # command — under +tag+.
+  def self.echo(tag, env, cmd, chdir:)
+    puts "[#{tag}] cd #{chdir} && #{env.map { |k, v| "#{k}=#{v}" }.join(" ")} #{cmd.join(" ")}"
   end
 
   # Whether the wasm target's standard library is installed. The sysroot

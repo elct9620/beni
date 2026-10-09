@@ -56,25 +56,29 @@
 
 require_relative "support/beni_rust"
 
+# A task whose body spawns cargo: it stops first, naming itself, when
+# cargo is not on PATH.
+def cargo_task(spec, &body)
+  task(spec) do |t|
+    BeniRust.require_cargo!(t.name)
+    body.call
+  end
+end
+
 namespace :rust do
   desc "cargo check the workspace on the host target"
-  task :check do |t|
-    BeniRust.require_cargo!(t.name)
-
+  cargo_task(:check) do
     sh(BeniRust.host_env, "cargo", "check", "--workspace")
   end
 
   desc "cargo test the workspace on the host (wasm32 has no test runner)"
-  task :test do |t|
-    BeniRust.require_cargo!(t.name)
-
+  cargo_task(:test) do
     sh(BeniRust.host_env, "cargo", "test", "--workspace", *BeniRust.test_harness_args)
   end
 
   namespace :check do
     desc "cargo check the workspace on wasm32-wasip1"
-    task :wasm do |t|
-      BeniRust.require_cargo!(t.name)
+    cargo_task(:wasm) do
       BeniRust.require_wasm_target!
 
       sh(BeniRust.wasm_env, "cargo", "check", "--workspace", "--target", BeniRust::WASM_TARGET)
@@ -86,9 +90,7 @@ namespace :rust do
     # the shape a consumer gets with default features off the shape this
     # leg actually compiles.
     desc "cargo check the beni crate with every capability feature off"
-    task :nodefault do |t|
-      BeniRust.require_cargo!(t.name)
-
+    cargo_task(:nodefault) do
       sh(BeniRust.host_env, "cargo", "check", "-p", "beni", "--no-default-features")
     end
 
@@ -99,9 +101,7 @@ namespace :rust do
     # before it renders, because rustdoc type checks signatures and not
     # bodies, and a body is where a new `sys::` call appears.
     desc "Build as a documentation host would: no archive, generated bindings"
-    task docs: "docs:bindings" do |t|
-      BeniRust.require_cargo!(t.name)
-
+    cargo_task(docs: "docs:bindings") do
       BeniRust.documentation_build_check
       BeniRust.documentation_build_doc
     end
@@ -113,8 +113,7 @@ namespace :rust do
     # search paths — are only exercised by producing a real artifact.
     # wasm32 has no test runner, so the binaries are built and not run.
     desc "link wasm32-wasip1 test binaries against the staged archive"
-    task :wasm do |t|
-      BeniRust.require_cargo!(t.name)
+    cargo_task(:wasm) do
       BeniRust.require_wasm_target!
 
       sh(BeniRust.wasm_env, "cargo", "test", "--workspace", "--target", BeniRust::WASM_TARGET, "--no-run")
@@ -125,9 +124,7 @@ namespace :rust do
     # Catches type/width coincidences the repo's MRB_INT32 validation
     # config masks — see BeniRust.default_abi_test for the mechanics.
     desc "cargo test against an upstream-default mruby build (64-bit mrb_int on 64-bit hosts)"
-    task default: "beni:vendor:setup" do |t|
-      BeniRust.require_cargo!(t.name)
-
+    cargo_task(default: "beni:vendor:setup") do
       BeniRust.default_abi_test
     end
 
@@ -135,9 +132,7 @@ namespace :rust do
     # configured float width, and every other leg builds the 64-bit one
     # — see BeniRust.float32_test for the mechanics.
     desc "cargo test against a MRB_USE_FLOAT32 mruby build (32-bit mrb_float)"
-    task float32: "beni:vendor:setup" do |t|
-      BeniRust.require_cargo!(t.name)
-
+    cargo_task(float32: "beni:vendor:setup") do
       BeniRust.float32_test
     end
   end
