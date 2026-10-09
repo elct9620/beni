@@ -212,10 +212,10 @@ mrb_nil_p_func(mrb_value v)
   return mrb_nil_p(v);
 }
 
-/* `mrb_immediate_p(v)` is a mask test under word boxing and a tag
- * test otherwise (<mruby/boxing_word.h>, <mruby/value.h>), so whether a
- * Float counts as immediate depends on how the build stores it; it must
- * expand against libmruby.a's own boxing config. */
+/* `mrb_immediate_p(v)` expands differently across boxing configs
+ * (word-box / NaN-box / no-box), so whether a Float counts as
+ * immediate depends on the build; reaching it from Rust must go
+ * through the C compiler to match libmruby.a's layout. */
 static inline mrb_bool
 mrb_immediate_p_func(mrb_value v)
 {
