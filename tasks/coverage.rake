@@ -82,10 +82,11 @@ end
 namespace :api do
   desc "Verify every get_args specifier the crate reads is recorded in the coverage lens"
   task :formats do
-    problems = BeniCoverage.formats_drift
+    specifiers = BeniCoverage.read_specifiers
+    problems = BeniCoverage.formats_drift(specifiers)
     problems.each { |problem| puts "[api:formats] #{problem}" }
     abort "[api:formats] get_args format lens drift detected" unless problems.empty?
 
-    puts "[api:formats] #{BeniCoverage.read_specifiers.size} read specifiers all recorded"
+    puts "[api:formats] #{specifiers.size} read specifiers all recorded"
   end
 end

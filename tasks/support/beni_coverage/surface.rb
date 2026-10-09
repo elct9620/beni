@@ -95,9 +95,9 @@ module BeniCoverage
 
     # Macros naming another embedder symbol's capability under a second
     # spelling — the body is one call and nothing else — as
-    # +alias => target+. Covering either symbol covers both.
-    def aliases(include_root)
-      inventory = parse(include_root).map(&:name)
+    # +alias => target+. Covering either symbol covers both. A caller
+    # that has already parsed the headers hands over the +inventory+.
+    def aliases(include_root, inventory = parse(include_root).map(&:name))
       unambiguous_bodies(include_root).filter_map do |name, body|
         next unless inventory.include?(name)
 

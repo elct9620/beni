@@ -35,11 +35,7 @@ module BeniCoverage
     # embedder surface) so the frequency shares the coverage denominator.
     # Every name gets a key — unused symbols read as 0, not absent.
     def scan(root, names)
-      counts = names.to_h { |name| [name, 0] }
-      sources(root).each do |path|
-        calls(File.read(path)).each { |name| counts[name] += 1 if counts.key?(name) }
-      end
-      counts
+      tally(sources(root), names) { |src| calls(src) }
     end
 
     # The C sources whose calls count as demand: the active gems' where a
@@ -63,9 +59,15 @@ module BeniCoverage
     # symbol name => `beni::sys::` use count across the Rust consumers
     # in reach, restricted to +names+ like the mrbgem scan.
     def scan_rust(root, names)
+      tally(rust_sources(root), names) { |src| sys_calls(src) }
+    end
+
+    # name => how many times the block finds it across +paths+, for each
+    # of +names+ and nothing else.
+    def tally(paths, names)
       counts = names.to_h { |name| [name, 0] }
-      rust_sources(root).each do |path|
-        sys_calls(File.read(path)).each { |name| counts[name] += 1 if counts.key?(name) }
+      paths.each do |path|
+        yield(File.read(path)).each { |name| counts[name] += 1 if counts.key?(name) }
       end
       counts
     end

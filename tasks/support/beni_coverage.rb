@@ -96,16 +96,17 @@ module BeniCoverage
   # What the measure knows about every scanned symbol, joining the
   # authored sections to the two tiers nobody writes down.
   def coverage_of(surface, manifest, sys)
+    inventory = surface.map(&:name)
     Coverage.new(
-      manifest:, sys:, equivalents: equivalents(manifest["typed"] || {}),
-      inventory: surface.map(&:name)
+      manifest:, sys:, equivalents: equivalents(manifest["typed"] || {}, inventory),
+      inventory:
     )
   end
 
   # Symbols an alias covers on a recorded partner's behalf — the tier no
   # one writes down.
-  def equivalents(typed)
-    Aliases.equivalents(Surface.aliases(INCLUDE_ROOT), typed)
+  def equivalents(typed, inventory)
+    Aliases.equivalents(Surface.aliases(INCLUDE_ROOT, inventory), typed)
   end
 
   # Whether the vendored headers are staged. They are the evidence every
@@ -157,7 +158,7 @@ module BeniCoverage
   end
 
   def wrapper_identifiers
-    src = File.read(WRAPPER_H).gsub(%r{/\*.*?\*/}m, "").gsub(%r{//.*$}, "")
+    src = Frequency.strip_comments(File.read(WRAPPER_H))
     src.scan(/\b[A-Za-z_]\w*\b/).uniq
   end
 
@@ -195,9 +196,9 @@ module BeniCoverage
   # Problems between the specifiers the crate reads and the
   # +get_args_formats+ lens — empty when they agree. Every specifier read
   # must be recorded covered.
-  def formats_drift
+  def formats_drift(specifiers = read_specifiers)
     lens = load_manifest["get_args_formats"] || {}
-    read_specifiers.filter_map { |ch| format_lens_problem(ch, lens[ch]) }
+    specifiers.filter_map { |ch| format_lens_problem(ch, lens[ch]) }
   end
 
   def format_lens_problem(char, entry)
