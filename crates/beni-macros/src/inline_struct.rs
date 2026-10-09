@@ -1,17 +1,12 @@
-use crate::attr::{beni_attribute, carrier_site, class_and_name, reject_field_attributes};
+use crate::attr::{
+    carrier_site, class_and_name, derive_attribute, reject_field_attributes, site_ident,
+};
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::{spanned::Spanned, Data, DeriveInput, Error};
 
 pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
-    let attr = beni_attribute(&input.attrs)?
-        .ok_or_else(|| Error::new(input.span(), "missing #[beni(class = \"...\")] attribute"))?;
-    if !input.generics.to_token_stream().is_empty() {
-        return Err(Error::new_spanned(
-            &input.generics,
-            "InlineStruct cannot be derived for a type with generic parameters or lifetimes",
-        ));
-    }
+    let attr = derive_attribute(&input, "InlineStruct")?;
     if !matches!(input.data, Data::Struct(_)) {
         return Err(Error::new(
             input.span(),
@@ -22,11 +17,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     reject_field_attributes(&input.data)?;
 
     let ident = &input.ident;
-    let site = carrier_site(
-        proc_macro2::Ident::new("CLASS", proc_macro2::Span::call_site()),
-        &class,
-        "InlineStruct",
-    )?;
+    let site = carrier_site(site_ident("CLASS"), &class, "InlineStruct")?;
     let (site_decl, site_ident, path) = (&site.decl, &site.ident, &site.path);
 
     // The bound is checked where the type is declared, so a payload too

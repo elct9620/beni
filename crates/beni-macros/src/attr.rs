@@ -1,29 +1,70 @@
 //! The `#[beni(...)]` attribute reading both derives share.
 
-use proc_macro2::{Ident, Literal, TokenStream};
+use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{quote, ToTokens};
 use std::ffi::CString;
-use syn::{spanned::Spanned, Attribute, Data, Error, Field, LitStr};
+use syn::{spanned::Spanned, Attribute, Data, DeriveInput, Error, Field, LitStr};
+
+/// The type-level `#[beni]` attribute a derive of `trait_name` reads,
+/// for a type declaring no generic parameters or lifetimes.
+pub fn derive_attribute<'a>(
+    input: &'a DeriveInput,
+    trait_name: &str,
+) -> Result<&'a Attribute, Error> {
+    let attr = beni_attribute(&input.attrs)?
+        .ok_or_else(|| Error::new(input.span(), "missing #[beni(class = \"...\")] attribute"))?;
+    if !input.generics.to_token_stream().is_empty() {
+        return Err(Error::new_spanned(
+            &input.generics,
+            format!(
+                "{trait_name} cannot be derived for a type with generic parameters or lifetimes"
+            ),
+        ));
+    }
+    Ok(attr)
+}
 
 /// The `class` and `name` a type-level `#[beni]` attribute gives, `name`
 /// defaulting to `class`, as the C string the descriptor carries.
 pub fn class_and_name(attr: &Attribute) -> Result<(LitStr, Literal), Error> {
+    let (class, name) = class_attribute(attr, true)?;
+    let name = name.unwrap_or_else(|| class.clone());
+    let name = Literal::c_string(&CString::new(name.value()).expect("checked NUL-free"));
+    Ok((class, name))
+}
+
+/// The `class` an enum variant's `#[beni]` attribute names.
+pub fn variant_class(attr: &Attribute) -> Result<LitStr, Error> {
+    class_attribute(attr, false).map(|(class, _)| class)
+}
+
+/// The `class` an attribute names, beside the `name` it gives when
+/// `with_name` admits one.
+fn class_attribute(attr: &Attribute, with_name: bool) -> Result<(LitStr, Option<LitStr>), Error> {
+    let accepted = if with_name {
+        "`class` and `name`"
+    } else {
+        "`class`"
+    };
     let mut class = None;
     let mut name = None;
     attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("class") {
             class = Some(nul_free(meta.value()?.parse()?)?);
-        } else if meta.path.is_ident("name") {
+        } else if with_name && meta.path.is_ident("name") {
             name = Some(nul_free(meta.value()?.parse()?)?);
         } else {
-            return Err(unsupported(&meta, "`class` and `name`"));
+            return Err(unsupported(&meta, accepted));
         }
         Ok(())
     })?;
     let class = class.ok_or_else(|| Error::new(attr.span(), "missing attribute: `class = ...`"))?;
-    let name = name.unwrap_or_else(|| class.clone());
-    let name = Literal::c_string(&CString::new(name.value()).expect("checked NUL-free"));
     Ok((class, name))
+}
+
+/// The identifier of a naming site the expansion declares.
+pub fn site_ident(name: &str) -> Ident {
+    Ident::new(name, Span::call_site())
 }
 
 /// A naming site: the `Lazy` static `ident` holding, in each
@@ -95,7 +136,7 @@ pub fn beni_attribute(attrs: &[Attribute]) -> Result<Option<&Attribute>, Error> 
     Ok(first)
 }
 
-pub fn nul_free(lit: LitStr) -> Result<LitStr, Error> {
+fn nul_free(lit: LitStr) -> Result<LitStr, Error> {
     if lit.value().contains('\0') {
         return Err(Error::new(lit.span(), "must not contain a NUL byte"));
     }
@@ -104,7 +145,7 @@ pub fn nul_free(lit: LitStr) -> Result<LitStr, Error> {
 
 /// An attribute the macros do not accept: mruby's data type carries a
 /// name and a release hook and nothing else to configure.
-pub fn unsupported(meta: &syn::meta::ParseNestedMeta, accepted: &str) -> Error {
+fn unsupported(meta: &syn::meta::ParseNestedMeta, accepted: &str) -> Error {
     let name = meta.path.to_token_stream().to_string();
     meta.error(format!(
         "unsupported attribute `{name}`; accepted here: {accepted}"

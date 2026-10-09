@@ -1,13 +1,12 @@
 use crate::attr::{
-    beni_attribute, carrier_site, class_and_name, nul_free, reject_field_attributes, unsupported,
-    CarrierSite,
+    beni_attribute, carrier_site, class_and_name, derive_attribute, reject_field_attributes,
+    site_ident, variant_class, CarrierSite,
 };
-use proc_macro2::Span;
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn::parse::Parser;
 use syn::punctuated::Punctuated;
-use syn::{spanned::Spanned, Data, DeriveInput, Error, LitStr, Meta, Token};
+use syn::{Data, DeriveInput, Error, Meta, Token};
 
 pub fn expand_wrap(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let (derive, attrs) = match inline_requested(attrs.clone()) {
@@ -37,14 +36,7 @@ fn inline_requested(attrs: TokenStream) -> Option<TokenStream> {
 }
 
 pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
-    let attr = beni_attribute(&input.attrs)?
-        .ok_or_else(|| Error::new(input.span(), "missing #[beni(class = \"...\")] attribute"))?;
-    if !input.generics.to_token_stream().is_empty() {
-        return Err(Error::new_spanned(
-            &input.generics,
-            "TypedData cannot be derived for a type with generic parameters or lifetimes",
-        ));
-    }
+    let attr = derive_attribute(&input, "TypedData")?;
 
     let (class, name) = class_and_name(attr)?;
 
@@ -88,10 +80,6 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     })
 }
 
-fn site_ident(name: &str) -> proc_macro2::Ident {
-    proc_macro2::Ident::new(name, Span::call_site())
-}
-
 /// The naming site of each enum variant carrying `#[beni(class = "...")]`,
 /// beside the variant it names.
 fn variant_sites(data: &Data) -> Result<Vec<(&syn::Ident, CarrierSite)>, Error> {
@@ -100,7 +88,8 @@ fn variant_sites(data: &Data) -> Result<Vec<(&syn::Ident, CarrierSite)>, Error> 
     };
     let mut sites = Vec::new();
     for (index, variant) in data.variants.iter().enumerate() {
-        if let Some(class) = variant_class(variant)? {
+        if let Some(attr) = beni_attribute(&variant.attrs)? {
+            let class = variant_class(attr)?;
             let ident = site_ident(&format!("VARIANT_{index}"));
             sites.push((&variant.ident, carrier_site(ident, &class, "TypedData")?));
         }
@@ -127,24 +116,4 @@ fn class_for(variants: &[(&syn::Ident, CarrierSite)]) -> TokenStream {
             }
         }
     }
-}
-
-/// The class path one enum variant names, and nothing when it carries
-/// no `#[beni]` attribute.
-fn variant_class(variant: &syn::Variant) -> Result<Option<LitStr>, Error> {
-    let Some(attr) = beni_attribute(&variant.attrs)? else {
-        return Ok(None);
-    };
-    let mut class = None;
-    attr.parse_nested_meta(|meta| {
-        if meta.path.is_ident("class") {
-            class = Some(nul_free(meta.value()?.parse()?)?);
-            Ok(())
-        } else {
-            Err(unsupported(&meta, "`class`"))
-        }
-    })?;
-    class
-        .ok_or_else(|| Error::new(attr.span(), "missing attribute: `class = ...`"))
-        .map(Some)
 }
