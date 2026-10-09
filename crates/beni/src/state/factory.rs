@@ -131,16 +131,14 @@ impl Mrb {
     /// saturates to the archive's `mrb_int` width.
     #[inline]
     pub fn ary_new_from_values(&self, values: &[Value]) -> RArray {
-        let len = crate::value::narrow_len(values.len());
-        // SAFETY: `self` is alive; `Value` is `#[repr(transparent)]`
-        // over `mrb_value` (pinned by the ABI test), so the slice
-        // pointer is a valid `*const mrb_value` for `len` elements,
-        // which the call copies before returning.
+        let (len, vals) = crate::state::args::argv_from_slice(values);
+        // SAFETY: `self` is alive; `vals` is a valid `*const mrb_value`
+        // for `len` elements, which the call copies before returning.
         unsafe {
             RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new_from_values(
                 self.as_ptr(),
                 len,
-                values.as_ptr() as *const sys::mrb_value,
+                vals,
             )))
         }
     }

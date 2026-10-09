@@ -97,19 +97,13 @@ pub struct FiberYield {
 
 impl ReturnValue for FiberYield {
     fn into_return_value(self, mrb: &Mrb, _: Bridge) -> Result<Value, Error> {
-        let args = self.args.as_slice();
+        let (argc, argv) = crate::state::args::argv_from_slice(self.args.as_slice());
         mrb.protect(|inner| {
             // SAFETY: `inner` is the live VM inside the protected frame;
             // every `args` entry comes from the same VM; this projection
             // runs only as the bridge returns, the one place mruby lets
             // a fiber suspend.
-            let raw = unsafe {
-                sys::mrb_fiber_yield(
-                    inner.as_ptr(),
-                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
-                    args.as_ptr() as *const sys::mrb_value,
-                )
-            };
+            let raw = unsafe { sys::mrb_fiber_yield(inner.as_ptr(), argc, argv) };
             Value::from_raw_unchecked(raw)
         })
     }
@@ -132,20 +126,11 @@ impl Fiber {
     pub fn resume<T: TryConvert>(self, mrb: &Mrb, args: &[Value]) -> Result<T, Error> {
         let fiber_raw = self.as_value().as_raw();
         let value = mrb.protect(|inner| {
-            // `Value` is `#[repr(transparent)]` over `mrb_value`, so the
-            // slice is mruby's argv as-is.
-            let argv = args.as_ptr() as *const sys::mrb_value;
+            let (argc, argv) = crate::state::args::argv_from_slice(args);
             // SAFETY: `inner` is the live VM inside the protected frame;
             // `fiber_raw` is Fiber-tagged; every `args` entry comes from
             // the same VM and the slice outlives the call.
-            let raw = unsafe {
-                sys::mrb_fiber_resume(
-                    inner.as_ptr(),
-                    fiber_raw,
-                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
-                    argv,
-                )
-            };
+            let raw = unsafe { sys::mrb_fiber_resume(inner.as_ptr(), fiber_raw, argc, argv) };
             Value::from_raw_unchecked(raw)
         })?;
         T::try_convert(value, mrb)

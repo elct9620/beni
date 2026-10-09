@@ -356,29 +356,18 @@ pub trait ReprValue: private::ReprValue {
     /// under exception protection: a normal return is the `Ok` value, any
     /// raise is `Err` rather than a long-jump across FFI. Mirrors
     /// magnus's `funcall`.
-    ///
-    /// `args` is `&[Value]`; `Value` is `#[repr(transparent)]` over
-    /// `mrb_value`, so the slice layout matches mruby's `mrb_value`
-    /// argv exactly — the pointer cast on the way through is a no-op
-    /// at codegen level.
     #[inline]
     fn funcall<K: crate::IntoId>(self, mrb: &Mrb, name: K, args: &[Value]) -> Result<Value, Error> {
         let sym = name.into_id(mrb)?.to_raw();
+        let (argc, argv) = crate::state::args::argv_from_slice(args);
         mrb.protect(|mrb| {
-            let argv = args.as_ptr() as *const sys::mrb_value;
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // and every `args` entry originate from the same VM by the
             // single-VM contract; `sym` was interned against the same
             // VM (caller contract). `mrb_funcall_argv` dispatches
             // arbitrary Ruby and may raise — caught by `protect`.
             Value(unsafe {
-                sys::mrb_funcall_argv(
-                    mrb.as_ptr(),
-                    self.as_value().0,
-                    sym,
-                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
-                    argv,
-                )
+                sys::mrb_funcall_argv(mrb.as_ptr(), self.as_value().0, sym, argc, argv)
             })
         })
     }
@@ -401,11 +390,8 @@ pub trait ReprValue: private::ReprValue {
     ) -> Result<Value, Error> {
         let sym = name.into_id(mrb)?.to_raw();
         let block_raw = block.as_raw();
+        let (argc, argv) = crate::state::args::argv_from_slice(args);
         mrb.protect(|mrb| {
-            // `Value` is `#[repr(transparent)]` over `mrb_value`, so the
-            // slice layout matches mruby's argv exactly — the cast is a
-            // no-op at codegen level.
-            let argv = args.as_ptr() as *const sys::mrb_value;
             // SAFETY: `mrb` is alive inside the protect frame; `self`,
             // every `args` entry, and `block` originate from the same VM
             // by the single-VM contract; `sym` was interned against the
@@ -416,7 +402,7 @@ pub trait ReprValue: private::ReprValue {
                     mrb.as_ptr(),
                     self.as_value().0,
                     sym,
-                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
+                    argc,
                     argv,
                     block_raw,
                 )

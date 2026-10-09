@@ -517,22 +517,13 @@ impl Class for RClass {
 
     #[inline]
     fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
-        // Value is repr(transparent) over mrb_value; the slice
-        // pointer reuses the same layout.
-        let argv = args.as_ptr() as *const sys::mrb_value;
+        let (argc, argv) = crate::state::args::argv_from_slice(args);
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and every `args` entry originate from the same
             // VM. `mrb_obj_new` runs `initialize`, which may raise —
             // caught by `protect`.
-            Value::from_raw_unchecked(unsafe {
-                sys::mrb_obj_new(
-                    mrb.as_ptr(),
-                    self.0,
-                    sys::mrb_int::try_from(args.len()).unwrap_or(sys::mrb_int::MAX),
-                    argv,
-                )
-            })
+            Value::from_raw_unchecked(unsafe { sys::mrb_obj_new(mrb.as_ptr(), self.0, argc, argv) })
         })
     }
 

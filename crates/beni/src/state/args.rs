@@ -195,6 +195,17 @@ pub(crate) fn slice_from_argv<'a>(argv: *const sys::mrb_value, argc: sys::mrb_in
     }
 }
 
+/// `args` as the `(argc, argv)` pair mruby takes. `Value` is
+/// `#[repr(transparent)]` over `mrb_value`, so the slice is mruby's argv
+/// as-is; the count saturates to the configured integer width.
+#[inline]
+pub(crate) fn argv_from_slice(args: &[Value]) -> (sys::mrb_int, *const sys::mrb_value) {
+    (
+        crate::value::narrow_len(args.len()),
+        args.as_ptr() as *const sys::mrb_value,
+    )
+}
+
 /// Build a capture-all `mrb_kwargs` (no name table) whose keyword dict
 /// lands in `*out`. Paired with the `:` specifier, mruby routes every
 /// keyword pair to `rest` and fills `*out` with an empty Hash — never nil
