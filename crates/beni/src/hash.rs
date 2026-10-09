@@ -10,7 +10,8 @@
 //! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
 
 use crate::{
-    sys::AsRawValue, Error, FromValue, Mrb, RArray, ReprValue, TryConvert, TryConvertOwned, Value,
+    sys::AsRawValue, Error, FromValue, IntoValue, Mrb, RArray, ReprValue, TryConvert,
+    TryConvertOwned, Value,
 };
 use beni_sys as sys;
 
@@ -146,11 +147,7 @@ impl RHash {
             // `protect`.
             let present =
                 unsafe { sys::mrb_hash_key_p(mrb.as_ptr(), self.0.as_raw(), key.as_raw()) };
-            if present {
-                crate::value::qtrue().as_value()
-            } else {
-                crate::value::qfalse().as_value()
-            }
+            present.into_value(mrb)
         })
         .map(|v| v.to_bool())
     }

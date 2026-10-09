@@ -9,7 +9,7 @@
 use beni_sys as sys;
 
 use crate::{sys::AsRawValue, Error, Module, Mrb, RClass};
-use crate::{FromValue, RString};
+use crate::{FromValue, IntoValue, RString};
 
 pub use crate::state::lazy::Lazy;
 
@@ -566,11 +566,7 @@ pub trait ReprValue: private::ReprValue {
             // VM. `mrb_equal` may dispatch `==` and raise, which
             // `protect` catches into `Err`.
             let eq = unsafe { sys::mrb_equal(mrb.as_ptr(), self.as_value().0, other.0) };
-            if eq {
-                crate::value::qtrue().as_value()
-            } else {
-                crate::value::qfalse().as_value()
-            }
+            eq.into_value(mrb)
         })
         .map(|v| v.to_bool())
     }
@@ -584,11 +580,7 @@ pub trait ReprValue: private::ReprValue {
             // SAFETY: as `equal`; `mrb_eql` may dispatch `eql?` and
             // raise, caught by `protect`.
             let eq = unsafe { sys::mrb_eql(mrb.as_ptr(), self.as_value().0, other.0) };
-            if eq {
-                crate::value::qtrue().as_value()
-            } else {
-                crate::value::qfalse().as_value()
-            }
+            eq.into_value(mrb)
         })
         .map(|v| v.to_bool())
     }
