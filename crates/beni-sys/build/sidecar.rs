@@ -10,45 +10,60 @@
 /// archive. SPEC's Terminology defines it; this is the read end.
 const FLAGS_MAK: &str = "libmruby.flags.mak";
 
-/// The value of one `NAME = ...` line in the `libmruby.flags.mak`
-/// sidecar in `lib_dir`. The sidecar is the sole channel through which
-/// an archive states how it was built, so a sidecar that is absent, is
-/// missing the line, or carries a layout whose tokens the whitespace
-/// split would mis-read fails loudly rather than yielding a partial
-/// set.
-fn sidecar_line(lib_dir: &std::path::Path, key: &str) -> String {
-    let flags_mak = lib_dir.join(FLAGS_MAK);
-    let content = std::fs::read_to_string(&flags_mak).unwrap_or_else(|_| {
-        panic!(
-            "beni-sys: {} is missing. The discovered archive's compile flags are \
-             unknown, so bindgen cannot be aligned with the archive. Re-run \
-             `bundle exec rake beni:build` (which requests the sidecar), or for \
-             an externally built archive invoke mruby's rake with the sidecar's \
-             file task — `rake <build_dir>/lib/libmruby.flags.mak`.",
-            flags_mak.display()
-        )
-    });
-    let prefix = format!("{key} = ");
-    let value = content
-        .lines()
-        .find_map(|line| line.strip_prefix(prefix.as_str()))
-        .unwrap_or_else(|| {
+/// The `libmruby.flags.mak` sidecar beside an archive, read once for
+/// every value the build takes from it, with the path each read names
+/// when it stops the build.
+struct Sidecar {
+    path: std::path::PathBuf,
+    text: String,
+}
+
+impl Sidecar {
+    /// Read the sidecar in `lib_dir`. It is the sole channel through
+    /// which an archive states how it was built, so an absent one stops
+    /// the build rather than leaving the flags to be guessed.
+    fn read(lib_dir: &std::path::Path) -> Self {
+        let path = lib_dir.join(FLAGS_MAK);
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|_| {
             panic!(
-                "beni-sys: {} has no `{prefix}` line — unrecognized flags.mak layout",
-                flags_mak.display()
+                "beni-sys: {} is missing. The discovered archive's compile flags are \
+                 unknown, so bindgen cannot be aligned with the archive. Re-run \
+                 `bundle exec rake beni:build` (which requests the sidecar), or for \
+                 an externally built archive invoke mruby's rake with the sidecar's \
+                 file task — `rake <build_dir>/lib/libmruby.flags.mak`.",
+                path.display()
             )
         });
-    // A make continuation line means the value carries on past what
-    // this read sees, so the read stops rather than acting on a
-    // fragment of it.
-    if value.trim_end().ends_with('\\') {
-        panic!(
-            "beni-sys: {} carries a continuation line in `{key}` — unrecognized \
-             flags.mak layout",
-            flags_mak.display()
-        );
+        Self { path, text }
     }
-    value.to_owned()
+
+    /// The value of one `NAME = ...` line. A sidecar missing the line,
+    /// or carrying a layout whose tokens the whitespace split would
+    /// mis-read, fails loudly rather than yielding a partial set.
+    fn line(&self, key: &str) -> String {
+        let prefix = format!("{key} = ");
+        let value = self
+            .text
+            .lines()
+            .find_map(|line| line.strip_prefix(prefix.as_str()))
+            .unwrap_or_else(|| {
+                panic!(
+                    "beni-sys: {} has no `{prefix}` line — unrecognized flags.mak layout",
+                    self.path.display()
+                )
+            });
+        // A make continuation line means the value carries on past what
+        // this read sees, so the read stops rather than acting on a
+        // fragment of it.
+        if value.trim_end().ends_with('\\') {
+            panic!(
+                "beni-sys: {} carries a continuation line in `{key}` — unrecognized \
+                 flags.mak layout",
+                self.path.display()
+            );
+        }
+        value.to_owned()
+    }
 }
 
 /// The compile flags the discovered archive was actually built with,
@@ -61,8 +76,9 @@ fn sidecar_line(lib_dir: &std::path::Path, key: &str) -> String {
 /// A quoted value has spaces the whitespace split would sever, so a
 /// flag carrying one stops the read rather than reaching a compiler
 /// in pieces.
-fn parse_compile_flags(lib_dir: &std::path::Path) -> Vec<String> {
-    let flags: Vec<String> = sidecar_line(lib_dir, "MRUBY_CFLAGS")
+fn parse_compile_flags(sidecar: &Sidecar) -> Vec<String> {
+    let flags: Vec<String> = sidecar
+        .line("MRUBY_CFLAGS")
         .split_whitespace()
         .filter(|token| !names_header_tree(token))
         .map(str::to_owned)
@@ -74,7 +90,7 @@ fn parse_compile_flags(lib_dir: &std::path::Path) -> Vec<String> {
         panic!(
             "beni-sys: {} carries a quoted value in `MRUBY_CFLAGS` ({quoted}) — \
              unrecognized flags.mak layout",
-            lib_dir.join(FLAGS_MAK).display()
+            sidecar.path.display()
         );
     }
     flags
@@ -134,12 +150,12 @@ const UNNAMED_STANDARD: &str = "-std=gnu99";
 ///
 /// A definition or removal carrying its value in the next token would
 /// reach the parse without it, so it stops the read instead.
-fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec<String> {
+fn declaration_flags(sidecar: &Sidecar, compile_flags: &[String]) -> Vec<String> {
     if let Some(bare) = compile_flags.iter().find(|token| is_bare_spelling(token)) {
         panic!(
             "beni-sys: {} names a bare `{bare}` in `MRUBY_CFLAGS`, whose value is a \
              separate token — unrecognized flags.mak layout",
-            lib_dir.join(FLAGS_MAK).display()
+            sidecar.path.display()
         );
     }
     let mut flags: Vec<String> = compile_flags
@@ -156,15 +172,15 @@ fn declaration_flags(lib_dir: &std::path::Path, compile_flags: &[String]) -> Vec
 /// through a make variable no reader outside make can expand, so the
 /// name is what is taken from it — the archive itself sits in the
 /// directory discovery resolved.
-fn parse_archive_file_name(lib_dir: &std::path::Path) -> String {
-    let path = sidecar_line(lib_dir, "MRUBY_LIBMRUBY_PATH");
+fn parse_archive_file_name(sidecar: &Sidecar) -> String {
+    let path = sidecar.line("MRUBY_LIBMRUBY_PATH");
     let name = path.trim().rsplit(['/', '\\']).next().unwrap_or_default();
     if name.is_empty() || name.contains('$') {
         panic!(
             "beni-sys: {} names `{path}` in `MRUBY_LIBMRUBY_PATH`, which carries no \
              file name the archive can be looked for under — unrecognized flags.mak \
              layout",
-            lib_dir.join(FLAGS_MAK).display()
+            sidecar.path.display()
         );
     }
     name.to_owned()
@@ -195,8 +211,9 @@ fn link_lib_name(token: &str) -> Option<&str> {
 /// toolchain defines, so a token in neither of those forms names a link
 /// set this read would carry only in part; it stops rather than linking
 /// against less than the archive names.
-fn parse_link_libs(lib_dir: &std::path::Path) -> Vec<String> {
-    sidecar_line(lib_dir, "MRUBY_LIBS")
+fn parse_link_libs(sidecar: &Sidecar) -> Vec<String> {
+    sidecar
+        .line("MRUBY_LIBS")
         .split_whitespace()
         .map(|token| {
             link_lib_name(token)
@@ -205,7 +222,7 @@ fn parse_link_libs(lib_dir: &std::path::Path) -> Vec<String> {
                         "beni-sys: {} names `{token}` in `MRUBY_LIBS`, which is neither a \
                          `-l<name>` option nor a `<name>.lib` file — unrecognized \
                          flags.mak layout",
-                        lib_dir.join(FLAGS_MAK).display()
+                        sidecar.path.display()
                     )
                 })
                 .to_owned()
@@ -217,16 +234,16 @@ fn parse_link_libs(lib_dir: &std::path::Path) -> Vec<String> {
 /// sidecar names it by path, a host build by a name off `PATH`; either
 /// way it is the compiler the sidecar's flags were written for, and the
 /// one the trampoline compile uses.
-fn parse_compiler(lib_dir: &std::path::Path) -> String {
-    sidecar_line(lib_dir, "MRUBY_CC").trim().to_owned()
+fn parse_compiler(sidecar: &Sidecar) -> String {
+    sidecar.line("MRUBY_CC").trim().to_owned()
 }
 
 /// The toolchain root the archive was built against, derived from the
 /// compiler the sidecar names. A cross build's sidecar names it as
 /// `<root>/bin/<compiler>`; a host build names a compiler off `PATH`
 /// with no root to derive, and yields `None`.
-fn parse_toolchain_root(lib_dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    let cc = parse_compiler(lib_dir);
+fn parse_toolchain_root(sidecar: &Sidecar) -> Option<std::path::PathBuf> {
+    let cc = parse_compiler(sidecar);
     let bin = std::path::Path::new(&cc).parent()?;
     if bin.file_name()? != "bin" {
         return None;
@@ -238,17 +255,17 @@ fn parse_toolchain_root(lib_dir: &std::path::Path) -> Option<std::path::PathBuf>
 mod tests {
     use super::{
         declaration_flags, names_the_archive, parse_archive_file_name, parse_compile_flags,
-        parse_compiler, parse_link_libs, parse_toolchain_root,
+        parse_compiler, parse_link_libs, parse_toolchain_root, Sidecar,
     };
 
-    /// A directory holding one sidecar with the given `MRUBY_CFLAGS`
-    /// body, named after the case so concurrent tests cannot collide.
-    fn sidecar_dir(case: &str, contents: &str) -> std::path::PathBuf {
+    /// A sidecar with the given body, in a directory named after the
+    /// case so concurrent tests cannot collide.
+    fn sidecar(case: &str, contents: &str) -> Sidecar {
         let dir =
             std::env::temp_dir().join(format!("beni-sys-sidecar-{}-{}", std::process::id(), case));
         std::fs::create_dir_all(&dir).expect("the case directory is creatable");
         std::fs::write(dir.join("libmruby.flags.mak"), contents).expect("the sidecar is writable");
-        dir
+        Sidecar::read(&dir)
     }
 
     /// A directory with no sidecar in it at all.
@@ -282,9 +299,9 @@ mod tests {
 
     #[test]
     fn the_archives_compile_flags_are_read_from_its_cflags() {
-        let dir = sidecar_dir("host", HOST_SIDECAR);
+        let sidecar = sidecar("host", HOST_SIDECAR);
         assert_eq!(
-            parse_compile_flags(&dir),
+            parse_compile_flags(&sidecar),
             vec![
                 "-std=gnu99".to_owned(),
                 "-g".to_owned(),
@@ -303,13 +320,13 @@ mod tests {
         // names, and `-mllvm -wasm-use-legacy-eh=false` decides how
         // setjmp compiles; the trampoline compile uses that compiler,
         // so all of them reach it.
-        let dir = sidecar_dir(
+        let sidecar = sidecar(
             "wasi",
             "MRUBY_CFLAGS = --target=wasm32-wasip1 --sysroot=/opt/wasi-sdk/share/wasi-sysroot \
              -mllvm -wasm-use-legacy-eh=false -DMRB_INT32 -I\"$(MRUBY_PACKAGE_DIR)/include\"\n",
         );
         assert_eq!(
-            parse_compile_flags(&dir),
+            parse_compile_flags(&sidecar),
             vec![
                 "--target=wasm32-wasip1".to_owned(),
                 "--sysroot=/opt/wasi-sdk/share/wasi-sysroot".to_owned(),
@@ -323,9 +340,9 @@ mod tests {
 
     #[test]
     fn an_msvc_archives_compile_flags_are_read_from_its_cflags() {
-        let dir = sidecar_dir("msvc", MSVC_SIDECAR);
+        let sidecar = sidecar("msvc", MSVC_SIDECAR);
         assert_eq!(
-            parse_compile_flags(&dir),
+            parse_compile_flags(&sidecar),
             vec![
                 "/nologo".to_owned(),
                 "/W3".to_owned(),
@@ -344,13 +361,13 @@ mod tests {
     fn an_msvc_archives_declaration_flags_reach_binding_generation_as_clangs() {
         // libclang never reads MSVC's spelling, so each flag deciding
         // what the headers declare crosses in the spelling it does read.
-        let dir = sidecar_dir(
+        let sidecar = sidecar(
             "msvc-declares",
             "MRUBY_CFLAGS = /nologo /std:c11 /O2 /DMRB_INT32 /UMRB_USE_FLOAT32\n",
         );
-        let flags = parse_compile_flags(&dir);
+        let flags = parse_compile_flags(&sidecar);
         assert_eq!(
-            declaration_flags(&dir, &flags),
+            declaration_flags(&sidecar, &flags),
             vec![
                 "-std=c11".to_owned(),
                 "-DMRB_INT32".to_owned(),
@@ -365,10 +382,10 @@ mod tests {
         // archive is built under that compiler's default. libclang's own
         // default is a newer one, under which mruby declares its
         // never-returning functions in a form the bindings do not carry.
-        let dir = sidecar_dir("msvc-no-standard", MSVC_SIDECAR);
-        let flags = parse_compile_flags(&dir);
+        let sidecar = sidecar("msvc-no-standard", MSVC_SIDECAR);
+        let flags = parse_compile_flags(&sidecar);
         assert_eq!(
-            declaration_flags(&dir, &flags),
+            declaration_flags(&sidecar, &flags),
             vec![
                 "-D_CRT_SECURE_NO_WARNINGS".to_owned(),
                 "-DMRB_STACK_EXTEND_DOUBLING".to_owned(),
@@ -380,9 +397,9 @@ mod tests {
 
     #[test]
     fn a_sidecar_naming_a_standard_is_parsed_under_that_one_alone() {
-        let dir = sidecar_dir("named-standard", HOST_SIDECAR);
-        let flags = parse_compile_flags(&dir);
-        let standards: Vec<String> = declaration_flags(&dir, &flags)
+        let sidecar = sidecar("named-standard", HOST_SIDECAR);
+        let flags = parse_compile_flags(&sidecar);
+        let standards: Vec<String> = declaration_flags(&sidecar, &flags)
             .into_iter()
             .filter(|flag| flag.starts_with("-std="))
             .collect();
@@ -396,19 +413,19 @@ mod tests {
     #[test]
     #[should_panic(expected = "names a bare `/D` in `MRUBY_CFLAGS`")]
     fn a_bare_msvc_define_fails_rather_than_reaching_the_parse_without_its_value() {
-        let dir = sidecar_dir("msvc-bare-define", "MRUBY_CFLAGS = /D MRB_INT32\n");
-        let flags = parse_compile_flags(&dir);
-        declaration_flags(&dir, &flags);
+        let sidecar = sidecar("msvc-bare-define", "MRUBY_CFLAGS = /D MRB_INT32\n");
+        let flags = parse_compile_flags(&sidecar);
+        declaration_flags(&sidecar, &flags);
     }
 
     #[test]
     fn the_archives_file_name_is_read_from_the_path_its_sidecar_names_it_by() {
         assert_eq!(
-            parse_archive_file_name(&sidecar_dir("archive-gnu", HOST_SIDECAR)),
+            parse_archive_file_name(&sidecar("archive-gnu", HOST_SIDECAR)),
             "libmruby.a"
         );
         assert_eq!(
-            parse_archive_file_name(&sidecar_dir("archive-msvc", MSVC_SIDECAR)),
+            parse_archive_file_name(&sidecar("archive-msvc", MSVC_SIDECAR)),
             "libmruby.lib",
             "MSVC separates the path with backslashes and names the file .lib"
         );
@@ -417,8 +434,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "carries no file name")]
     fn a_path_whose_file_name_is_a_make_variable_fails_rather_than_looking_for_it() {
-        let dir = sidecar_dir("archive-variable", "MRUBY_LIBMRUBY_PATH = $(MRUBY_LIB)\n");
-        parse_archive_file_name(&dir);
+        let sidecar = sidecar("archive-variable", "MRUBY_LIBMRUBY_PATH = $(MRUBY_LIB)\n");
+        parse_archive_file_name(&sidecar);
     }
 
     #[test]
@@ -434,8 +451,11 @@ mod tests {
 
     #[test]
     fn the_archives_compiler_is_read_from_its_cc() {
-        let dir = sidecar_dir("wasi-cc", "MRUBY_CC = /opt/wasi-sdk/bin/clang\n");
-        assert_eq!(parse_compiler(&dir), "/opt/wasi-sdk/bin/clang".to_owned());
+        let sidecar = sidecar("wasi-cc", "MRUBY_CC = /opt/wasi-sdk/bin/clang\n");
+        assert_eq!(
+            parse_compiler(&sidecar),
+            "/opt/wasi-sdk/bin/clang".to_owned()
+        );
     }
 
     #[test]
@@ -443,14 +463,14 @@ mod tests {
         // `-mllvm -wasm-use-legacy-eh=false` decides how code is
         // generated and `-Wall` what is warned about; neither changes a
         // declaration, and libclang need not know either.
-        let dir = sidecar_dir(
+        let sidecar = sidecar(
             "wasi-declares",
             "MRUBY_CFLAGS = -std=gnu99 -g -O3 -Wall -mllvm -wasm-use-legacy-eh=false \
              -DMRB_INT32 -UMRB_USE_FLOAT32\n",
         );
-        let flags = parse_compile_flags(&dir);
+        let flags = parse_compile_flags(&sidecar);
         assert_eq!(
-            declaration_flags(&dir, &flags),
+            declaration_flags(&sidecar, &flags),
             vec![
                 "-std=gnu99".to_owned(),
                 "-DMRB_INT32".to_owned(),
@@ -463,16 +483,16 @@ mod tests {
     #[test]
     #[should_panic(expected = "names a bare `-D` in `MRUBY_CFLAGS`")]
     fn a_bare_define_fails_rather_than_reaching_the_parse_without_its_value() {
-        let dir = sidecar_dir("bare-define", "MRUBY_CFLAGS = -D MRB_INT32\n");
-        let flags = parse_compile_flags(&dir);
-        declaration_flags(&dir, &flags);
+        let sidecar = sidecar("bare-define", "MRUBY_CFLAGS = -D MRB_INT32\n");
+        let flags = parse_compile_flags(&sidecar);
+        declaration_flags(&sidecar, &flags);
     }
 
     #[test]
     fn the_archives_link_set_is_read_from_its_libs() {
-        let dir = sidecar_dir("host-libs", HOST_SIDECAR);
+        let sidecar = sidecar("host-libs", HOST_SIDECAR);
         assert_eq!(
-            parse_link_libs(&dir),
+            parse_link_libs(&sidecar),
             vec!["mruby".to_owned(), "m".to_owned()],
             "every -l token is carried, without its prefix"
         );
@@ -483,9 +503,9 @@ mod tests {
         // A cross build's sidecar names the toolchain library its
         // exception mechanism needs; a gem's configuration could name
         // any other. Neither is known to the crate.
-        let dir = sidecar_dir("extra-libs", "MRUBY_LIBS = -lmruby -lm -lsetjmp -lz\n");
+        let sidecar = sidecar("extra-libs", "MRUBY_LIBS = -lmruby -lm -lsetjmp -lz\n");
         assert_eq!(
-            parse_link_libs(&dir),
+            parse_link_libs(&sidecar),
             vec![
                 "mruby".to_owned(),
                 "m".to_owned(),
@@ -498,22 +518,22 @@ mod tests {
     #[test]
     #[should_panic(expected = "has no `MRUBY_LIBS = ` line")]
     fn a_sidecar_without_a_libs_line_fails() {
-        let dir = sidecar_dir("no-libs", "MRUBY_CFLAGS = -DMRB_INT32\n");
-        parse_link_libs(&dir);
+        let sidecar = sidecar("no-libs", "MRUBY_CFLAGS = -DMRB_INT32\n");
+        parse_link_libs(&sidecar);
     }
 
     #[test]
     #[should_panic(expected = "neither a `-l<name>` option nor a `<name>.lib` file")]
     fn a_quoted_library_fails_rather_than_naming_one_with_its_quotes() {
-        let dir = sidecar_dir("libs-quoted", "MRUBY_LIBS = -l\"mruby\" -l\"m\"\n");
-        parse_link_libs(&dir);
+        let sidecar = sidecar("libs-quoted", "MRUBY_LIBS = -l\"mruby\" -l\"m\"\n");
+        parse_link_libs(&sidecar);
     }
 
     #[test]
     fn an_msvc_link_set_names_each_library_by_its_file() {
-        let dir = sidecar_dir("libs-msvc", "MRUBY_LIBS = libmruby.lib kernel32.lib\n");
+        let sidecar = sidecar("libs-msvc", "MRUBY_LIBS = libmruby.lib kernel32.lib\n");
         assert_eq!(
-            parse_link_libs(&dir),
+            parse_link_libs(&sidecar),
             vec!["libmruby".to_owned(), "kernel32".to_owned()],
             "MSVC names a library by its file, and the name is what is carried out"
         );
@@ -522,73 +542,73 @@ mod tests {
     #[test]
     #[should_panic(expected = "neither a `-l<name>` option nor a `<name>.lib` file")]
     fn a_library_named_in_neither_form_fails_rather_than_linking_none() {
-        let dir = sidecar_dir("libs-bare", "MRUBY_LIBS = mruby\n");
-        parse_link_libs(&dir);
+        let sidecar = sidecar("libs-bare", "MRUBY_LIBS = mruby\n");
+        parse_link_libs(&sidecar);
     }
 
     #[test]
     #[should_panic(expected = "continuation line in `MRUBY_LIBS`")]
     fn a_continuation_in_the_link_set_fails_rather_than_dropping_a_library() {
-        let dir = sidecar_dir("libs-continuation", "MRUBY_LIBS = -lmruby \\\n  -lm\n");
-        parse_link_libs(&dir);
+        let sidecar = sidecar("libs-continuation", "MRUBY_LIBS = -lmruby \\\n  -lm\n");
+        parse_link_libs(&sidecar);
     }
 
     #[test]
     fn a_cross_builds_toolchain_root_is_derived_from_its_compiler() {
-        let dir = sidecar_dir(
+        let sidecar = sidecar(
             "cc-cross",
             "MRUBY_CC = /opt/wasi-sdk/bin/clang\nMRUBY_CFLAGS = -DMRB_INT32\n",
         );
         assert_eq!(
-            parse_toolchain_root(&dir),
+            parse_toolchain_root(&sidecar),
             Some(std::path::PathBuf::from("/opt/wasi-sdk"))
         );
     }
 
     #[test]
     fn a_host_build_names_a_compiler_with_no_root_to_derive() {
-        let dir = sidecar_dir("cc-host", "MRUBY_CC = gcc\nMRUBY_CFLAGS = -DMRB_INT32\n");
-        assert_eq!(parse_toolchain_root(&dir), None);
+        let sidecar = sidecar("cc-host", "MRUBY_CC = gcc\nMRUBY_CFLAGS = -DMRB_INT32\n");
+        assert_eq!(parse_toolchain_root(&sidecar), None);
     }
 
     #[test]
     fn a_compiler_outside_a_bin_directory_yields_no_root() {
         // Only the `<root>/bin/<compiler>` shape names a root; anything
         // else is read as naming none rather than as naming its parent.
-        let dir = sidecar_dir(
+        let sidecar = sidecar(
             "cc-loose",
             "MRUBY_CC = /usr/local/clang\nMRUBY_CFLAGS = -DMRB_INT32\n",
         );
-        assert_eq!(parse_toolchain_root(&dir), None);
+        assert_eq!(parse_toolchain_root(&sidecar), None);
     }
 
     #[test]
     #[should_panic(expected = "is missing")]
     fn a_missing_sidecar_fails_naming_the_path() {
-        parse_compile_flags(&empty_dir("absent"));
+        Sidecar::read(&empty_dir("absent"));
     }
 
     #[test]
     #[should_panic(expected = "has no `MRUBY_CFLAGS = ` line")]
     fn a_sidecar_without_a_cflags_line_fails() {
-        let dir = sidecar_dir("no-cflags", "MRUBY_CC = gcc\nMRUBY_LIBS = -lmruby\n");
-        parse_compile_flags(&dir);
+        let sidecar = sidecar("no-cflags", "MRUBY_CC = gcc\nMRUBY_LIBS = -lmruby\n");
+        parse_compile_flags(&sidecar);
     }
 
     #[test]
     #[should_panic(expected = "continuation line in `MRUBY_CFLAGS`")]
     fn a_continuation_line_fails_rather_than_dropping_the_rest() {
-        let dir = sidecar_dir(
+        let sidecar = sidecar(
             "continuation",
             "MRUBY_CFLAGS = -DMRB_INT32 \\\n  -DMRB_UTF8\n",
         );
-        parse_compile_flags(&dir);
+        parse_compile_flags(&sidecar);
     }
 
     #[test]
     #[should_panic(expected = "carries a quoted value")]
     fn a_quoted_value_fails_rather_than_reaching_a_compiler_in_pieces() {
-        let dir = sidecar_dir("quoted-define", "MRUBY_CFLAGS = -DMRB_NAME=\"a b\"\n");
-        parse_compile_flags(&dir);
+        let sidecar = sidecar("quoted-define", "MRUBY_CFLAGS = -DMRB_NAME=\"a b\"\n");
+        parse_compile_flags(&sidecar);
     }
 }

@@ -115,14 +115,14 @@ fn env_path(key: &str) -> Option<String> {
     env::var(key).ok().filter(|s| !s.is_empty())
 }
 
-/// Locate the directory holding the active target's archive and its
-/// compile-flags sidecar. Every outcome either resolves or panics
-/// naming what is missing.
-fn discover_lib_dir(is_cross: bool) -> PathBuf {
+/// Locate the directory holding the active target's archive, with the
+/// compile-flags sidecar read from beside it. Every outcome either
+/// resolves or panics naming what is missing.
+fn discover_lib_dir(is_cross: bool) -> (PathBuf, Sidecar) {
     if let Some(dir) = env_path("MRUBY_LIB_DIR") {
         let lib_dir = PathBuf::from(dir);
-        require_archive(&lib_dir, "MRUBY_LIB_DIR");
-        return lib_dir;
+        let sidecar = require_archive(&lib_dir, "MRUBY_LIB_DIR");
+        return (lib_dir, sidecar);
     }
     if is_cross {
         panic!(
@@ -138,8 +138,8 @@ fn discover_lib_dir(is_cross: bool) -> PathBuf {
             .join("build")
             .join("host")
             .join("lib");
-        require_archive(&lib_dir, "BENI_VENDOR_DIR");
-        return lib_dir;
+        let sidecar = require_archive(&lib_dir, "BENI_VENDOR_DIR");
+        return (lib_dir, sidecar);
     }
     panic!(
         "beni-sys: no archive discovery variable set. Set MRUBY_LIB_DIR to the \
@@ -150,9 +150,11 @@ fn discover_lib_dir(is_cross: bool) -> PathBuf {
 
 /// Fail loudly when the discovery variable points at a directory with
 /// no archive — a set variable is a claim that the archive exists. The
-/// name to look for is the archive's own, which its sidecar states.
-fn require_archive(lib_dir: &Path, var: &str) {
-    let archive = lib_dir.join(parse_archive_file_name(lib_dir));
+/// name to look for is the archive's own, which its sidecar states, so
+/// the sidecar read here is the one the build goes on with.
+fn require_archive(lib_dir: &Path, var: &str) -> Sidecar {
+    let sidecar = Sidecar::read(lib_dir);
+    let archive = lib_dir.join(parse_archive_file_name(&sidecar));
     if !archive.exists() {
         panic!(
             "beni-sys: {var} is set but {} does not exist. Run \
@@ -161,6 +163,7 @@ fn require_archive(lib_dir: &Path, var: &str) {
             archive.display()
         );
     }
+    sidecar
 }
 
 /// Resolve the wasi-sdk root for wasm32 builds: `WASI_SDK_PATH` when
@@ -168,7 +171,7 @@ fn require_archive(lib_dir: &Path, var: &str) {
 /// the toolchain (`bin/clang`) — a missing toolchain fails naming the
 /// root in effect — and must be the one the archive in `lib_dir` was
 /// built against, which its sidecar records.
-fn resolve_wasi_sdk(lib_dir: &Path) -> String {
+fn resolve_wasi_sdk(lib_dir: &Path, sidecar: &Sidecar) -> String {
     let root = env_path("WASI_SDK_PATH").unwrap_or_else(|| "/opt/wasi-sdk".to_owned());
     if !Path::new(&root).join("bin").join("clang").exists() {
         panic!(
@@ -177,7 +180,7 @@ fn resolve_wasi_sdk(lib_dir: &Path) -> String {
              wasi-sdk root."
         );
     }
-    let Some(recorded) = parse_toolchain_root(lib_dir) else {
+    let Some(recorded) = parse_toolchain_root(sidecar) else {
         panic!(
             "beni-sys: the archive in {} records no toolchain root, so the \
              wasi-sdk root in effect ({root}) cannot be checked against the one \
@@ -237,7 +240,7 @@ fn main() {
         return;
     }
 
-    let lib_dir = discover_lib_dir(target != host);
+    let (lib_dir, sidecar) = discover_lib_dir(target != host);
 
     // The complete header tree mruby copies next to the archive on
     // every build — the single include root for bindgen and the
@@ -259,18 +262,15 @@ fn main() {
     );
     require_supported_mruby(&include_root);
 
-    let wasi_sdk = is_wasm.then(|| resolve_wasi_sdk(&lib_dir));
+    let wasi_sdk = is_wasm.then(|| resolve_wasi_sdk(&lib_dir, &sidecar));
 
     // The archive's actual compile defines, from its flags.mak
     // sidecar. Re-run when the sidecar changes — a rebuilt archive
     // with different defines must re-bindgen.
-    println!(
-        "cargo:rerun-if-changed={}",
-        lib_dir.join(FLAGS_MAK).display()
-    );
-    let compiler = parse_compiler(&lib_dir);
-    let compile_flags = parse_compile_flags(&lib_dir);
-    let declaration_flags = declaration_flags(&lib_dir, &compile_flags);
+    println!("cargo:rerun-if-changed={}", sidecar.path.display());
+    let compiler = parse_compiler(&sidecar);
+    let compile_flags = parse_compile_flags(&sidecar);
+    let declaration_flags = declaration_flags(&sidecar, &compile_flags);
 
     let bindings_rs = out_dir.join("bindings.rs");
     let static_wrappers_c = out_dir.join("mruby_static_wrappers.c");
@@ -297,8 +297,8 @@ fn main() {
             wasi_sdk
         );
     }
-    let archive_file_name = parse_archive_file_name(&lib_dir);
-    for lib in parse_link_libs(&lib_dir) {
+    let archive_file_name = parse_archive_file_name(&sidecar);
+    for lib in parse_link_libs(&sidecar) {
         // The archive is static by definition; on wasm32 nothing links
         // dynamically, so every library there is static too.
         let kind = if names_the_archive(&lib, &archive_file_name) || is_wasm {
