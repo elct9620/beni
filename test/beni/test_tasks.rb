@@ -4,19 +4,13 @@ require "test_helper"
 require "rake"
 require "tmpdir"
 require "beni/tasks"
+require_relative "fresh_rake_application"
 
 module Beni
   class TestTasks < Minitest::Test
+    include FreshRakeApplication
+
     VENDOR_DIR = "/tmp/beni-tasks-test/vendor"
-
-    def setup
-      @original_application = Rake.application
-      Rake.application = Rake::Application.new
-    end
-
-    def teardown
-      Rake.application = @original_application
-    end
 
     def test_defines_the_beni_task_suite
       Tasks.new { vendor_dir VENDOR_DIR }

@@ -3,6 +3,7 @@
 require "test_helper"
 require "tmpdir"
 require "beni/vendor"
+require_relative "demo_kit"
 
 module Beni
   module Vendor
@@ -61,15 +62,7 @@ module Beni
       private
 
       def build_toolchain(expected_sha256:)
-        ScriptedToolchain.new(
-          name: "demo-kit",
-          version_label: "1.0",
-          base_url: "https://example.invalid/releases",
-          tarball_name: "demo-kit-1.0.tar.gz",
-          top_level_dir: "demo-kit-1.0",
-          vendor_dir: @vendor_dir,
-          expected_sha256: expected_sha256
-        )
+        ScriptedToolchain.new(**DEMO_KIT, vendor_dir: @vendor_dir, expected_sha256:)
       end
     end
   end

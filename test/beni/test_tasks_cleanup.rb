@@ -4,19 +4,13 @@ require "test_helper"
 require "rake"
 require "tmpdir"
 require "beni/tasks"
+require_relative "fresh_rake_application"
 
 module Beni
   # The cleanup tasks (beni:clean / beni:vendor:clean / clobber) invoked
   # against a real disposable vendor tree.
   class TestTasksCleanup < Minitest::Test
-    def setup
-      @original_application = Rake.application
-      Rake.application = Rake::Application.new
-    end
-
-    def teardown
-      Rake.application = @original_application
-    end
+    include FreshRakeApplication
 
     def test_vendor_clean_removes_unpacked_trees_but_keeps_the_tarball_cache
       with_vendor_fixture do |dir, unpacked, cache|

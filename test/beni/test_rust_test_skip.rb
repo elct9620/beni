@@ -3,10 +3,13 @@
 require "test_helper"
 
 require_relative "../../tasks/support/beni_rust"
+require_relative "environment_overrides"
 
 # BENI_TEST_SKIP names the tests a chain leaves out by name, so a lane
 # can list the failures it already knows and still fail on a new one.
 class TestRustTestSkip < Minitest::Test
+  include Beni::EnvironmentOverrides
+
   def test_each_named_test_becomes_a_skip_for_the_test_binaries
     with_skip("first_known  second_known") do
       assert_equal %w[-- --skip first_known --skip second_known], BeniRust.test_harness_args
@@ -20,11 +23,7 @@ class TestRustTestSkip < Minitest::Test
 
   private
 
-  def with_skip(value)
-    saved = ENV.fetch("BENI_TEST_SKIP", nil)
-    ENV["BENI_TEST_SKIP"] = value
-    yield
-  ensure
-    ENV["BENI_TEST_SKIP"] = saved
+  def with_skip(value, &)
+    with_env("BENI_TEST_SKIP" => value, &)
   end
 end

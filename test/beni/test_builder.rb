@@ -2,12 +2,15 @@
 
 require "test_helper"
 require "tmpdir"
+require_relative "fixtures"
 
 module Beni
   # Artifact paths, built-state detection, and cleanup. The build
   # entry points (subprocess contract, config validation, artifact
   # verification) live in TestBuilderBuild.
   class TestBuilder < Minitest::Test
+    include Fixtures
+
     def setup
       @dir = Dir.mktmpdir("beni-builder")
       @builder = Builder.new(vendor_dir: @dir)
@@ -80,18 +83,6 @@ module Beni
 
       refute_path_exists File.join(@dir, "mruby", "build", "host")
       assert_path_exists source
-    end
-
-    private
-
-    # Fakes a fully built target: the sidecar naming the archive, and
-    # the archive itself beside it.
-    def touch_libmruby(builder, target, archive: "libmruby.a")
-      dir = builder.staged_path(target)
-      FileUtils.mkdir_p(dir)
-      File.write(File.join(dir, Builder::FLAGS_MAK),
-                 "#{Builder::ARCHIVE_PATH_KEY}$(MRUBY_PACKAGE_DIR)/lib/#{archive}\n")
-      FileUtils.touch(File.join(dir, archive))
     end
   end
 end

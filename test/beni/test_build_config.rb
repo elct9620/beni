@@ -4,6 +4,7 @@ require "test_helper"
 require "rake"
 require "tmpdir"
 require "beni/tasks"
+require_relative "fresh_rake_application"
 
 module Beni
   class TestBuildConfig < Minitest::Test
@@ -73,14 +74,7 @@ module Beni
   # The rake-task plumbing around the generator (the build_config
   # declaration wiring) — the generator behavior itself is covered above.
   class TestBuildConfigTask < Minitest::Test
-    def setup
-      @original_application = Rake.application
-      Rake.application = Rake::Application.new
-    end
-
-    def teardown
-      Rake.application = @original_application
-    end
+    include FreshRakeApplication
 
     def test_config_task_generates_at_the_declared_build_config_path
       Dir.mktmpdir("beni-tasks-config") do |dir|

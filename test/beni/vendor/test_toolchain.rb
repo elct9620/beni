@@ -3,10 +3,16 @@
 require "test_helper"
 require "tmpdir"
 require "beni/vendor"
+require_relative "../environment_overrides"
+require_relative "../fixtures"
+require_relative "demo_kit"
 
 module Beni
   module Vendor
     class TestToolchain < Minitest::Test
+      include EnvironmentOverrides
+      include Fixtures
+
       def setup
         @dir = Dir.mktmpdir("beni-toolchain")
         @vendor_dir = File.join(@dir, "vendor")
@@ -80,32 +86,11 @@ module Beni
       private
 
       def build_toolchain(expected_sha256:)
-        Toolchain.new(
-          name: "demo-kit",
-          version_label: "1.0",
-          base_url: "https://example.invalid/releases",
-          tarball_name: "demo-kit-1.0.tar.gz",
-          top_level_dir: "demo-kit-1.0",
-          vendor_dir: @vendor_dir,
-          expected_sha256: expected_sha256
-        )
-      end
-
-      def with_env(overrides)
-        saved = overrides.keys.to_h { |key| [key, ENV.fetch(key, nil)] }
-        overrides.each { |key, value| ENV[key] = value }
-        yield
-      ensure
-        saved.each { |key, value| ENV[key] = value }
+        Toolchain.new(**DEMO_KIT, vendor_dir: @vendor_dir, expected_sha256:)
       end
 
       def put_fixture_tarball_in_cache(content: "hello")
-        src = File.join(@dir, "src", "demo-kit-1.0")
-        FileUtils.mkdir_p(src)
-        File.write(File.join(src, "README"), content)
-        FileUtils.mkdir_p(File.dirname(@toolchain.tarball_path))
-        system("tar", "-czf", @toolchain.tarball_path, "-C", File.join(@dir, "src"), "demo-kit-1.0",
-               exception: true)
+        pack_tarball(@toolchain.tarball_path, File.join(@dir, "src"), "demo-kit-1.0", "README" => content)
       end
     end
   end

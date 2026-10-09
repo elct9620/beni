@@ -3,10 +3,13 @@
 require "test_helper"
 require "tmpdir"
 require "beni/vendor/tarball"
+require_relative "../fixtures"
 
 module Beni
   module Vendor
     class TestTarball < Minitest::Test
+      include Fixtures
+
       # Extract-and-override seam: unpacks for real while recording the
       # arguments tar was handed, so the argument shape can be asserted
       # on a host that cannot produce a Windows path.
@@ -118,12 +121,7 @@ module Beni
       end
 
       def make_tarball(top_level_dir, files)
-        src = File.join(@dir, "src", top_level_dir)
-        FileUtils.mkdir_p(src)
-        files.each { |name, content| File.write(File.join(src, name), content) }
-        path = File.join(@dir, "#{top_level_dir}.tar.gz")
-        system("tar", "-czf", path, "-C", File.join(@dir, "src"), top_level_dir, exception: true)
-        path
+        pack_tarball(File.join(@dir, "#{top_level_dir}.tar.gz"), File.join(@dir, "src"), top_level_dir, files)
       end
     end
   end

@@ -2,9 +2,12 @@
 
 require "test_helper"
 require "beni/vendor"
+require_relative "environment_overrides"
 
 module Beni
   class TestVendor < Minitest::Test
+    include EnvironmentOverrides
+
     VENDOR_DIR = "/tmp/beni-vendor-test"
 
     def test_factories_anchor_on_vendor_dir
@@ -102,11 +105,9 @@ module Beni
     end
 
     def test_base_url_for_strips_trailing_slash_from_override
-      ENV["BENI_VENDOR_BASE_URL"] = "http://127.0.0.1:8080/fixtures/"
-
-      assert_equal "http://127.0.0.1:8080/fixtures", Vendor.base_url_for("https://example.invalid")
-    ensure
-      ENV.delete("BENI_VENDOR_BASE_URL")
+      with_env("BENI_VENDOR_BASE_URL" => "http://127.0.0.1:8080/fixtures/") do
+        assert_equal "http://127.0.0.1:8080/fixtures", Vendor.base_url_for("https://example.invalid")
+      end
     end
 
     def test_stage_wasi_toolchain_file_writes_the_gem_shipped_definition

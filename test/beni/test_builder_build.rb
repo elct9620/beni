@@ -2,12 +2,15 @@
 
 require "test_helper"
 require "tmpdir"
+require_relative "fixtures"
 
 module Beni
   # The build entry points: subprocess contract, config validation,
   # and artifact verification. Path/cleanup behavior lives in
   # TestBuilder.
   class TestBuilderBuild < Minitest::Test
+    include Fixtures
+
     # Extract-and-override seam: pretends mruby's rake ran without
     # spawning a subprocess, recording the env + cmd contract so the
     # subprocess wiring and artifact verification can be tested in
@@ -133,16 +136,6 @@ module Beni
       path = File.join(@dir, "config.rb")
       FileUtils.touch(path)
       path
-    end
-
-    # Fakes a fully built target: the sidecar naming the archive, and
-    # the archive itself beside it.
-    def touch_libmruby(builder, target)
-      dir = builder.staged_path(target)
-      FileUtils.mkdir_p(dir)
-      File.write(File.join(dir, Builder::FLAGS_MAK),
-                 "#{Builder::ARCHIVE_PATH_KEY}$(MRUBY_PACKAGE_DIR)/lib/libmruby.a\n")
-      FileUtils.touch(File.join(dir, "libmruby.a"))
     end
   end
 end

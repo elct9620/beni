@@ -4,11 +4,14 @@ require "test_helper"
 require "tmpdir"
 
 require_relative "../../tasks/support/beni_coverage"
+require_relative "environment_overrides"
 
 # The Rust half of the demand signal. A scanner that silently matches
 # nothing looks exactly like a consumer that calls nothing, so these pin
 # that it counts a real use and skips a mention in prose.
 class TestCoverageFrequency < Minitest::Test
+  include Beni::EnvironmentOverrides
+
   def test_counts_a_symbol_reached_through_a_sys_path
     counts = scan_source(<<~RUST, %w[mrb_gc_register mrb_full_gc])
       unsafe { sys::mrb_gc_register(mrb.as_ptr(), v.as_raw()) };
@@ -44,11 +47,7 @@ class TestCoverageFrequency < Minitest::Test
     end
   end
 
-  def with_consumer(path)
-    previous = ENV.fetch("BENI_CONSUMER_PATHS", nil)
-    ENV["BENI_CONSUMER_PATHS"] = path
-    yield
-  ensure
-    ENV["BENI_CONSUMER_PATHS"] = previous
+  def with_consumer(path, &)
+    with_env("BENI_CONSUMER_PATHS" => path, &)
   end
 end

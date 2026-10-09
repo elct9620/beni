@@ -3,12 +3,15 @@
 require "test_helper"
 require "rake"
 require "beni/tasks"
+require_relative "fresh_rake_application"
 
 module Beni
   # Pins the joins between the task definitions and their collaborators:
   # the +beni:build+ action driving the builder, and the resolved
   # toolchain selections reaching the Vendor pipeline.
   class TestTasksWiring < Minitest::Test
+    include FreshRakeApplication
+
     VENDOR_DIR = "/tmp/beni-tasks-test/vendor"
 
     # Records the build task's collaborator call without spawning
@@ -45,15 +48,6 @@ module Beni
     # definitions were wired from.
     class InspectableTasks < Tasks
       public :vendor_toolchains
-    end
-
-    def setup
-      @original_application = Rake.application
-      Rake.application = Rake::Application.new
-    end
-
-    def teardown
-      Rake.application = @original_application
     end
 
     def test_build_executes_the_builder

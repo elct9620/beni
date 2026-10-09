@@ -3,12 +3,14 @@
 require "test_helper"
 require "beni"
 require_relative "configuring"
+require_relative "../environment_overrides"
 
 module Beni
   module DSL
     # Scalar settings and target declarations — defaults, precedence,
     # and path resolution.
     class TestSettings < Minitest::Test
+      include EnvironmentOverrides
       include Configuring
 
       def test_declared_targets_replace_the_default_set_entirely
@@ -54,16 +56,6 @@ module Beni
 
         assert_nil default.build_config
         assert_equal File.expand_path("build_config/mruby.rb"), declared.build_config
-      end
-
-      private
-
-      def with_env(overrides)
-        saved = overrides.keys.to_h { |key| [key, ENV.fetch(key, nil)] }
-        overrides.each { |key, value| ENV[key] = value }
-        yield
-      ensure
-        saved&.each { |key, value| ENV[key] = value }
       end
     end
   end
