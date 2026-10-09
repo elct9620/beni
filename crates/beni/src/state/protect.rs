@@ -85,4 +85,16 @@ impl Mrb {
             Ok(unsafe { <T as crate::value::private::ReprValue>::from_value_unchecked(value) })
         }
     }
+
+    /// Run `body` inside a protected frame for its effect alone: `Ok(())`
+    /// once it returns, or `Err(Error::Exception)` with the raise it
+    /// ended in.
+    #[inline]
+    pub(crate) fn protect_unit(&self, body: impl FnOnce(&Mrb)) -> Result<(), Error> {
+        self.protect(|mrb| {
+            body(mrb);
+            crate::value::qnil()
+        })
+        .map(|_| ())
+    }
 }

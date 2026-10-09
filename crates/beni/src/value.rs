@@ -524,15 +524,13 @@ pub trait ReprValue: private::ReprValue {
     /// form, not a prerequisite for them.
     #[inline]
     fn check_frozen(self, mrb: &Mrb) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_check_frozen_value`
             // raises `FrozenError` on a frozen or immediate receiver —
             // caught by `protect`.
             unsafe { sys::mrb_check_frozen_value(mrb.as_ptr(), self.as_value().0) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_obj_equal(mrb, self, other)` — TRUE when `self` and `other`

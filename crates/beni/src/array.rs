@@ -70,16 +70,14 @@ impl RArray {
     /// surfaces as `Err` rather than long-jumping.
     #[inline]
     pub fn push(self, mrb: &Mrb, val: Value) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract;
             // `val` originates from the same VM. `mrb_ary_push` calls
             // `mrb_ary_modify`, which raises `FrozenError` on a frozen
             // array — caught by `protect` into `Err`.
             unsafe { sys::mrb_ary_push(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_ary_entry(self, idx)` — read the element at `idx`
@@ -136,16 +134,14 @@ impl RArray {
         } else {
             sys::mrb_int::MAX
         });
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive; `self` is Array-tagged by the
             // `from_value_unchecked` contract; `val` shares the VM
             // by the single-VM contract. `mrb_ary_set` range-checks
             // `n` and may raise `IndexError`, which `protect` catches
             // into `Err`.
             unsafe { sys::mrb_ary_set(mrb.as_ptr(), self.0.as_raw(), n, val.as_raw()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_ary_resize(mrb, self, new_len)` — set the array's length:
@@ -156,16 +152,14 @@ impl RArray {
     #[inline]
     pub fn resize(self, mrb: &Mrb, new_len: usize) -> Result<(), Error> {
         let new_len = new_len.min(sys::mrb_int::MAX as usize) as sys::mrb_int;
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract.
             // `mrb_ary_resize` routes through `mrb_ary_modify`, which
             // raises `FrozenError` on a frozen array — caught by
             // `protect` into `Err`.
             unsafe { sys::mrb_ary_resize(mrb.as_ptr(), self.0.as_raw(), new_len) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_ary_pop(mrb, self)` — remove and return the last element,
@@ -199,13 +193,11 @@ impl RArray {
     /// surfaced as `Err`.
     #[inline]
     pub fn unshift(self, mrb: &Mrb, val: Value) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: as `push`; `mrb_ary_unshift` modifies and may
             // raise `FrozenError` — caught by `protect`.
             unsafe { sys::mrb_ary_unshift(mrb.as_ptr(), self.0.as_raw(), val.as_raw()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_ary_concat(mrb, self, other)` — append `other`'s elements,
@@ -213,14 +205,12 @@ impl RArray {
     /// `FrozenError`, surfaced as `Err`.
     #[inline]
     pub fn concat(self, mrb: &Mrb, other: RArray) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: as `push`; `self` and `other` are Array-tagged
             // and share the VM. `mrb_ary_concat` modifies `self` and
             // may raise `FrozenError` — caught by `protect`.
             unsafe { sys::mrb_ary_concat(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_ary_replace(mrb, self, other)` — make the receiver's contents
@@ -228,14 +218,12 @@ impl RArray {
     /// frozen receiver raises `FrozenError`, surfaced as `Err`.
     #[inline]
     pub fn replace(self, mrb: &Mrb, other: RArray) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: as `concat`; `self` and `other` are Array-tagged
             // and share the VM. `mrb_ary_replace` modifies `self` and
             // may raise `FrozenError` — caught by `protect`.
             unsafe { sys::mrb_ary_replace(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_ary_splice(mrb, self, head, len, rpl)` — replace the `len`
@@ -280,13 +268,11 @@ impl RArray {
     /// surfaced as `Err`.
     #[inline]
     pub fn clear(self, mrb: &Mrb) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: as `push`; `mrb_ary_clear` modifies and may raise
             // `FrozenError` — caught by `protect`.
             unsafe { sys::mrb_ary_clear(mrb.as_ptr(), self.0.as_raw()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_ary_join(mrb, self, sep)` — render the elements into one

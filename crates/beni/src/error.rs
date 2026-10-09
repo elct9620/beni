@@ -160,7 +160,7 @@ impl Mrb {
     /// carrying its `ArgumentError`; an archive built without standard I/O
     /// writes nothing and answers `Ok`.
     pub fn warn(&self, msg: &str) -> Result<(), Error> {
-        self.protect(|mrb| {
+        self.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `%l` reads a
             // pointer and a byte count, so the message is written whole, a
             // NUL included, and a length mruby cannot hold raises, which
@@ -173,9 +173,7 @@ impl Mrb {
                     msg.len(),
                 )
             }
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 }
 

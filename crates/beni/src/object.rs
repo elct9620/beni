@@ -60,7 +60,7 @@ pub trait Object: ReprValue {
     /// `NameError`).
     fn undef_singleton_method<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
         let sym = name.into_id(mrb)?.to_raw();
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM; `sym` was interned against
             // it. `mrb_singleton_class` yields a class-tagged value or
@@ -70,9 +70,7 @@ pub trait Object: ReprValue {
                 let singleton = sys::mrb_singleton_class(mrb.as_ptr(), self.as_value().0);
                 sys::mrb_undef_method_id(mrb.as_ptr(), sys::mrb_class_ptr_func(singleton), sym);
             }
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_iv_get(mrb, self, sym)` — read instance variable `name` from
@@ -95,14 +93,12 @@ pub trait Object: ReprValue {
     fn ivar_set<K: IntoId, U: IntoValue>(self, mrb: &Mrb, name: K, val: U) -> Result<(), Error> {
         let sym = name.into_id(mrb)?.to_raw();
         let val = val.into_value(mrb);
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self` and
             // `val` originate from the same VM. `mrb_iv_set` raises
             // `FrozenError` on a frozen holder — caught by `protect`.
             unsafe { sys::mrb_iv_set(mrb.as_ptr(), self.as_value().0, sym, val.0) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_iv_defined(mrb, self, sym)` — TRUE when instance variable

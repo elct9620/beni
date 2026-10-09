@@ -40,7 +40,6 @@
 //! non-capturing closures; a capturing closure fails to compile
 //! because the expansion nests it inside an `extern "C" fn`.
 
-use crate::state::args::read_frame;
 use crate::{sys::AsRawValue, Error, FromValue, Mrb, Qundef, TryConvert, Value};
 use beni_sys as sys;
 
@@ -286,7 +285,9 @@ macro_rules! define_method_trait {
                     Some(args) => args,
                     None => {
                         $(let mut $arg = sys::mrb_value::zeroed();)*
-                        read_frame(mrb, |mrb| {
+                        // `mrb_get_args` raises for a call this shape does
+                        // not accept, which comes back as the `Err`.
+                        mrb.protect_unit(|mrb| {
                             // SAFETY: `mrb` is alive; each out-parameter
                             // is a valid `*mut mrb_value`; the format
                             // string holds one `o` per out-parameter.
@@ -415,7 +416,9 @@ macro_rules! define_method_req_opt_trait {
                         // SAFETY: the undef sentinel marks an optional slot
                         // mruby leaves untouched, answered `None` below.
                         $(let mut $opt = unsafe { crate::value::qundef().as_value() }.as_raw();)*
-                        read_frame(mrb, |mrb| {
+                        // `mrb_get_args` raises for a call this shape does
+                        // not accept, which comes back as the `Err`.
+                        mrb.protect_unit(|mrb| {
                             // SAFETY: `mrb` is alive; each out-parameter is a
                             // valid `*mut mrb_value`; the format string holds
                             // one `o` per out-parameter, `|` before the

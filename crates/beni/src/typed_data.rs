@@ -309,11 +309,10 @@ fn payload<T: TypedData>(val: Value, mrb: &Mrb) -> Result<*const T, Error> {
     if !ptr.is_null() {
         return Ok(ptr as *const T);
     }
-    mrb.protect(|mrb| {
+    mrb.protect_unit(|mrb| {
         // SAFETY: `mrb` is alive inside the protect frame; the check
         // raises the mismatch's `TypeError`, caught by `protect`.
         unsafe { sys::mrb_data_check_type(mrb.as_ptr(), val.as_raw(), ty) };
-        crate::value::qnil().as_value()
     })?;
     // A carrier of `T`'s data type whose payload is NULL is a bare
     // carrier the check lets through; it is uninitialized all the same.
@@ -339,12 +338,11 @@ impl TryConvert for RTypedData {
         if val.tag() == sys::MRB_TT_CDATA {
             return Ok(RTypedData(val));
         }
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; a
             // non-carrier raises mruby's own `TypeError`, caught by
             // `protect`.
             unsafe { sys::mrb_check_type(mrb.as_ptr(), val.as_raw(), sys::MRB_TT_CDATA) };
-            crate::value::qnil().as_value()
         })?;
         unreachable!("mrb_check_type raises for every value that is no data carrier")
     }

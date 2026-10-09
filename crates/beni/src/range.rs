@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_range.rs`: the `range_new` factory lives on
 //! `Mrb`, the begin / end / exclusive-end reads live here.
 
-use crate::{sys::AsRawValue, Error, FromValue, Mrb, ReprValue, Value};
+use crate::{sys::AsRawValue, Error, FromValue, Mrb, Value};
 use beni_sys as sys;
 
 /// The three-way outcome of `Range::beg_len` — the normalized slice a
@@ -124,7 +124,7 @@ impl Range {
         // wrong span.
         let len = sys::mrb_int::try_from(len).unwrap_or(sys::mrb_int::MAX);
 
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             let mut beg: sys::mrb_int = 0;
             let mut sel: sys::mrb_int = 0;
             // SAFETY: `self` is Range-tagged by the newtype contract (a
@@ -145,7 +145,6 @@ impl Range {
             });
             begp.set(beg);
             lenp.set(sel);
-            crate::value::qnil().as_value()
         })?;
 
         Ok(match outcome.get() {

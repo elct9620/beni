@@ -51,7 +51,7 @@ impl RString {
     /// long-jumping.
     #[inline]
     pub fn cat(self, mrb: &Mrb, bytes: &[u8]) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `self` is String-tagged by the newtype
             // contract; `mrb` is alive inside the protect frame;
             // `bytes` is read-only and copied into the string's
@@ -66,9 +66,7 @@ impl RString {
                     bytes.len(),
                 );
             }
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_str_cat_str(mrb, self, other)` — append `other`'s bytes to
@@ -81,7 +79,7 @@ impl RString {
     /// by `mrb_str_cat_str`, which snapshots the source before growing.
     #[inline]
     pub fn cat_str(self, mrb: &Mrb, other: RString) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `self` and `other` are String-tagged by the
             // newtype contract; `mrb` is alive inside the protect
             // frame. `mrb_str_cat_str` calls `mrb_str_modify`, which
@@ -90,9 +88,7 @@ impl RString {
             unsafe {
                 sys::mrb_str_cat_str(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw());
             }
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_str_cat_cstr(mrb, self, ptr)` — append a NUL-terminated C
@@ -104,7 +100,7 @@ impl RString {
     /// exception protection, so that surfaces as `Err` rather than long-jumping.
     #[inline]
     pub fn cat_cstr(self, mrb: &Mrb, s: &core::ffi::CStr) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `self` is String-tagged by the newtype contract;
             // `mrb` is alive inside the protect frame; `s` is a
             // NUL-terminated buffer read up to its terminator and
@@ -115,9 +111,7 @@ impl RString {
             unsafe {
                 sys::mrb_str_cat_cstr(mrb.as_ptr(), self.0.as_raw(), s.as_ptr());
             }
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_str_concat(mrb, self, other)` — append `other` coerced to a
@@ -130,7 +124,7 @@ impl RString {
     /// surfaces as `Err` rather than long-jumping.
     #[inline]
     pub fn concat(self, mrb: &Mrb, other: Value) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `self` is String-tagged by the newtype
             // contract; `mrb` is alive inside the protect frame;
             // `other` shares the VM. `mrb_str_concat` coerces
@@ -140,9 +134,7 @@ impl RString {
             unsafe {
                 sys::mrb_str_concat(mrb.as_ptr(), self.0.as_raw(), other.as_raw());
             }
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_str_resize(mrb, self, len)` — set this string's byte length
@@ -164,7 +156,7 @@ impl RString {
                 "string size too large",
             ));
         };
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `self` is String-tagged by the newtype contract;
             // `mrb` is alive inside the protect frame. `mrb_str_resize`
             // calls `mrb_str_modify` (raises `FrozenError` on a frozen
@@ -172,9 +164,7 @@ impl RString {
             // a length at the integer maximum) — both long-jump, caught
             // by `protect`.
             unsafe { sys::mrb_str_resize(mrb.as_ptr(), self.0.as_raw(), len) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_str_substr(mrb, self, beg, len)` — a substring by character
@@ -452,7 +442,7 @@ impl RString {
     /// anchors on mruby's own `mrb_string_cstr`.
     #[inline]
     pub fn to_cstr(self, mrb: &Mrb) -> Result<std::ffi::CString, Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `self` is String-tagged by the newtype contract;
             // `mrb` is alive inside the protect frame. `mrb_string_cstr`
             // NUL-terminates the buffer in place, raising `ArgumentError`
@@ -462,7 +452,6 @@ impl RString {
             unsafe {
                 sys::mrb_string_cstr(mrb.as_ptr(), self.0.as_raw());
             }
-            crate::value::qnil().as_value()
         })?;
         // On the success path `mrb_string_cstr` proved the bytes hold no
         // NUL, so the CString build cannot fail.

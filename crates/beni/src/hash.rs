@@ -58,7 +58,7 @@ impl RHash {
     /// long-jumping.
     #[inline]
     pub fn set(self, mrb: &Mrb, key: Value, val: Value) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Hash-tagged by the `from_value_unchecked` contract;
             // `key` and `val` originate from the same VM.
@@ -66,9 +66,7 @@ impl RHash {
             // on a frozen hash) and may run the key's `hash`/`eql?` —
             // either caught by `protect` into `Err`.
             unsafe { sys::mrb_hash_set(mrb.as_ptr(), self.0.as_raw(), key.as_raw(), val.as_raw()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_hash_get(mrb, self, key)` — the value for `key`, or `nil`
@@ -199,15 +197,13 @@ impl RHash {
     /// surfaces as `Err`.
     #[inline]
     pub fn update(self, mrb: &Mrb, other: RHash) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: as `set`; `self` and `other` are Hash-tagged and
             // share the VM. `mrb_hash_merge` modifies `self` (raises
             // `FrozenError` when frozen) and runs each key's
             // `hash`/`eql?` — caught by `protect`.
             unsafe { sys::mrb_hash_merge(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_hash_clear(mrb, self)` — remove all entries, Ruby's
@@ -215,16 +211,14 @@ impl RHash {
     /// surfaced here as `Err`.
     #[inline]
     pub fn clear(self, mrb: &Mrb) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self` is
             // Hash-tagged by the `from_value_unchecked` contract.
             // `mrb_hash_clear` calls `hash_modify`, which raises
             // `FrozenError` on a frozen hash — caught by `protect` into
             // `Err`.
             unsafe { sys::mrb_hash_clear(mrb.as_ptr(), self.0.as_raw()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_hash_dup(mrb, self)` — a shallow copy, Ruby's `Hash#dup`. It
@@ -455,7 +449,7 @@ impl RHash {
         // `H_CHECK_MODIFIED` raises "hash modified" when a visit moves this
         // hash's table, and from mruby 4.1 when it changes the pair count;
         // the protect frame catches that raise into `Err`.
-        let result = mrb.protect(|mrb| {
+        let result = mrb.protect_unit(|mrb| {
             // SAFETY: `self` is Hash-tagged, so its object pointer is an
             // `RHash`; `mrb` is alive inside the protect frame;
             // `trampoline::<F>` upholds the `mrb_hash_foreach_func` ABI;
@@ -465,7 +459,6 @@ impl RHash {
                 let hash = sys::mrb_obj_ptr_func(self.0.as_raw()) as *mut sys::RHash;
                 sys::mrb_hash_foreach(mrb.as_ptr(), hash, Some(trampoline::<F>), walk_ptr);
             }
-            crate::value::qnil().as_value()
         });
         match walk.parked {
             Some(err) => {
@@ -476,7 +469,7 @@ impl RHash {
                 }
                 Err(err)
             }
-            None => result.map(|_| ()),
+            None => result,
         }
     }
 }

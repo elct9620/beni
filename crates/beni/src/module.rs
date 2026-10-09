@@ -193,16 +193,14 @@ pub trait Module: Object + private::ClassLike {
     fn alias_method<N: IntoId, O: IntoId>(self, mrb: &Mrb, new: N, old: O) -> Result<(), Error> {
         let new = new.into_id(mrb)?.to_raw();
         let old = old.into_id(mrb)?.to_raw();
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `new` and `old`
             // were interned against it. The original-method lookup
             // raises NameError when `old` is absent — caught by
             // `protect`.
             unsafe { sys::mrb_define_alias_id(mrb.as_ptr(), self.raw(), new, old) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_undef_method_id(mrb, self, name)` — undefine a method on
@@ -216,15 +214,13 @@ pub trait Module: Object + private::ClassLike {
     /// definition methods above.
     fn undef_method<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
         let sym = name.into_id(mrb)?.to_raw();
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `sym` was interned
             // against it. `mrb_undef_method_id` raises NameError when
             // the method is absent — caught by `protect`.
             unsafe { sys::mrb_undef_method_id(mrb.as_ptr(), self.raw(), sym) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_remove_method(mrb, self, name)` — remove a method from this
@@ -238,15 +234,13 @@ pub trait Module: Object + private::ClassLike {
     /// as the definition methods above.
     fn remove_method<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
         let sym = name.into_id(mrb)?.to_raw();
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` originates from the same VM; `sym` was interned
             // against it. `mrb_remove_method` raises NameError when the
             // method is not defined on the handle — caught by `protect`.
             unsafe { sys::mrb_remove_method(mrb.as_ptr(), self.raw(), sym) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_include_module(mrb, self, module)` — mix `module` into this
@@ -254,15 +248,13 @@ pub trait Module: Object + private::ClassLike {
     /// `FrozenError` and a cyclic include raises `ArgumentError`; both
     /// surface as `Err` via exception protection.
     fn include_module(self, mrb: &Mrb, module: RModule) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // and `module` originate from the same VM. `mrb_include_module`
             // checks frozen state and rejects a cyclic include, raising
             // FrozenError or ArgumentError — caught by `protect`.
             unsafe { sys::mrb_include_module(mrb.as_ptr(), self.raw(), module.as_internal()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_prepend_module(mrb, self, module)` — mix `module` into this
@@ -271,15 +263,13 @@ pub trait Module: Object + private::ClassLike {
     /// raises `FrozenError` and a cyclic prepend raises `ArgumentError`;
     /// both surface as `Err` via exception protection.
     fn prepend_module(self, mrb: &Mrb, module: RModule) -> Result<(), Error> {
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // and `module` originate from the same VM. `mrb_prepend_module`
             // checks frozen state and rejects a cyclic prepend, raising
             // FrozenError or ArgumentError — caught by `protect`.
             unsafe { sys::mrb_prepend_module(mrb.as_ptr(), self.raw(), module.as_internal()) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_class_path(mrb, self)` — the handle's fully-qualified path,
@@ -343,15 +333,13 @@ pub trait Module: Object + private::ClassLike {
     fn const_set<K: IntoId, U: IntoValue>(self, mrb: &Mrb, name: K, val: U) -> Result<(), Error> {
         let sym = name.into_id(mrb)?.to_raw();
         let val = val.into_value(mrb);
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // and `val` originate from the same VM. `mrb_const_set`
             // raises `FrozenError` on a frozen receiver and runs a
             // `const_added` hook that may raise — caught by `protect`.
             unsafe { sys::mrb_const_set(mrb.as_ptr(), self.as_value().0, sym, val.0) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_const_remove(mrb, self, sym)` — remove constant `name` from
@@ -360,14 +348,12 @@ pub trait Module: Object + private::ClassLike {
     #[inline]
     fn const_remove<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
         let sym = name.into_id(mrb)?.to_raw();
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_const_remove` raises
             // `FrozenError` on a frozen receiver — caught by `protect`.
             unsafe { sys::mrb_const_remove(mrb.as_ptr(), self.as_value().0, sym) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_cv_get(mrb, self, sym)` — read class variable `name` from
@@ -394,14 +380,12 @@ pub trait Module: Object + private::ClassLike {
     fn cvar_set<K: IntoId, U: IntoValue>(self, mrb: &Mrb, name: K, val: U) -> Result<(), Error> {
         let sym = name.into_id(mrb)?.to_raw();
         let val = val.into_value(mrb);
-        mrb.protect(|mrb| {
+        mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // and `val` originate from the same VM. `mrb_cv_set` raises
             // `FrozenError` on a frozen receiver — caught by `protect`.
             unsafe { sys::mrb_cv_set(mrb.as_ptr(), self.as_value().0, sym, val.0) };
-            crate::value::qnil()
         })
-        .map(|_| ())
     }
 
     /// `mrb_cv_defined(mrb, self, sym)` — TRUE when class variable

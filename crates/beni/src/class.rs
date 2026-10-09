@@ -158,7 +158,7 @@ pub(crate) fn protect_register<F>(mrb: &Mrb, method: MethodDef, register: F) -> 
 where
     F: FnOnce(&Mrb, sys::mrb_func_t, sys::mrb_aspec),
 {
-    mrb.protect(|mrb| {
+    mrb.protect_unit(|mrb| {
         let aspec = method_aspec(method.arity, method.opt, method.block);
         // SAFETY: `Value` is `#[repr(transparent)]` over
         // `sys::mrb_value` (pinned by
@@ -167,9 +167,7 @@ where
         // the transmute is a no-op at codegen.
         let raw: sys::mrb_func_t = unsafe { core::mem::transmute(method.func) };
         register(mrb, raw, aspec);
-        crate::value::qnil()
     })
-    .map(|_| ())
 }
 
 /// Resolve a class definition whose `name` the namespace `outer` itself

@@ -5,18 +5,6 @@
 use crate::{Error, FromValue, Id, Mrb, ReprValue, Value};
 use beni_sys as sys;
 
-/// Run a call-frame read under exception protection. `mrb_get_args`
-/// raises for a call the read's shape does not accept; protected, that
-/// raise comes back as the `Err` carrying mruby's exception, across
-/// plain frames alone.
-pub(crate) fn read_frame(mrb: &Mrb, read: impl FnOnce(&Mrb)) -> Result<(), Error> {
-    mrb.protect(|mrb| {
-        read(mrb);
-        crate::value::qnil()
-    })
-    .map(|_| ())
-}
-
 impl Mrb {
     /// Read the single required argument from the call frame: the one
     /// positional, or the keyword hash when the call passed keywords
