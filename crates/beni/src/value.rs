@@ -206,9 +206,10 @@ pub trait ReprValue: private::ReprValue {
     }
 
     /// Coerce `self` to a string — `self` unchanged when it is already a
-    /// string, otherwise the result of its `to_s`. A `to_s` answering a
-    /// non-string falls back to the `any_to_s` render. `Err` only when
-    /// `to_s` raises. Mirrors mruby's `mrb_obj_as_string`.
+    /// string. A Symbol, Integer, class, or module renders without
+    /// dispatching `to_s`. Any other value runs its `to_s`, and a
+    /// non-string answer falls back to the `any_to_s` render. `Err` only
+    /// when `to_s` raises. Mirrors mruby's `mrb_obj_as_string`.
     #[inline]
     fn to_r_string(self, mrb: &Mrb) -> Result<RString, Error> {
         if let Some(s) = RString::from_value(self.as_value()) {
@@ -217,8 +218,8 @@ pub trait ReprValue: private::ReprValue {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_obj_as_string` answers a
-            // String on every return — Symbol, Integer, and Class render
-            // directly, and a non-string `to_s` falls back to
+            // String on every return — Symbol, Integer, class, and module
+            // render directly, and a non-string `to_s` falls back to
             // `mrb_any_to_s` — while a raising `to_s` is caught by
             // `protect` into `Err`.
             let v = Value(unsafe { sys::mrb_obj_as_string(mrb.as_ptr(), self.as_value().0) });
