@@ -518,15 +518,52 @@ fn to_r_string_coerces_through_to_s() {
     let coerced = already
         .to_r_string(&mrb)
         .expect("a string coerces without raising");
-    assert!(coerced.is::<beni::RString>());
-    assert!(already.is_equal(&mrb, coerced));
+    assert!(already.is_equal(&mrb, coerced.as_value()));
 
     // A non-string coerces through its `to_s`.
-    assert!(42i32
+    let rendered = 42i32
         .into_value(&mrb)
         .to_r_string(&mrb)
         .expect("to_s of an integer does not raise")
-        .is::<beni::RString>());
+        .owned_bytes();
+    assert_eq!(rendered, b"42");
+}
+
+#[test]
+fn to_r_string_renders_the_default_form_for_a_non_string_to_s() {
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"to_r_string_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    // A `to_s` answering a non-string falls back to the default render
+    // rather than raising, so the coercion still answers a String.
+    let obj = cxt
+        .load_nstring(b"class IntToS; def to_s; 42; end; end; IntToS.new")
+        .expect("the test source must compile and run");
+    let rendered = obj
+        .to_r_string(&mrb)
+        .expect("a non-string to_s falls back without raising")
+        .owned_bytes();
+    assert!(
+        rendered.starts_with(b"#<IntToS:0x"),
+        "expected the default heap-object form, got {:?}",
+        String::from_utf8_lossy(&rendered)
+    );
+}
+
+#[test]
+fn to_r_string_surfaces_a_raising_to_s_as_err() {
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"to_r_string_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    let raising = cxt
+        .load_nstring(b"class RaiseToS; def to_s; raise 'no'; end; end; RaiseToS.new")
+        .expect("the test source must compile and run");
+    assert!(matches!(
+        raising.to_r_string(&mrb),
+        Err(Error::Exception(_))
+    ));
 }
 
 /// A `to_a` that returns a non-array non-`nil` value — the case that
