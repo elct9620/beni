@@ -1099,9 +1099,9 @@ These operations call, render, copy, or freeze a value:
 
 | Operation | Semantics |
 |---|---|
-| dispatch | call a Ruby method named by a symbol-or-name key with an argument slice, receiving its return value |
+| dispatch | call a Ruby method by symbol-or-name key with an argument slice, returning its result |
 | inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect` |
-| default render | the value's default `to_s` form as a new string; runs no user Ruby and is total |
+| default render | the default `to_s` form as a new string; total, running no user Ruby |
 | `dup` | copy the object, running its `initialize_copy`; may raise |
 | string coercion | the value as a string, by the rules below; raises only when `to_s` raises |
 | freeze | freeze the value in place |
