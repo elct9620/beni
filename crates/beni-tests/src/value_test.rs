@@ -530,6 +530,24 @@ fn to_r_string_coerces_through_to_s() {
 }
 
 #[test]
+fn to_r_string_renders_an_integer_without_its_to_s() {
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"to_r_string_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    // An Integer renders its decimal digits directly, so an override of
+    // `Integer#to_s` never runs.
+    let n = cxt
+        .load_nstring(b"class Integer; def to_s; 'overridden'; end; end; 42")
+        .expect("the test source must compile and run");
+    let rendered = n
+        .to_r_string(&mrb)
+        .expect("an integer coerces without raising")
+        .owned_bytes();
+    assert_eq!(rendered, b"42");
+}
+
+#[test]
 fn to_r_string_renders_the_default_form_for_a_non_string_to_s() {
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"to_r_string_test.rb")
