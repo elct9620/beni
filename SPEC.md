@@ -1111,7 +1111,7 @@ Dispatch can also pass an explicit block — a typed `Proc` the method yields to
 
 A raise inside `inspect` yields an empty string. Default render gives `#<ClassName>` for an immediate and `#<ClassName:0x...>` for a heap object. It builds from the class name without dispatching the value's own `to_s`.
 
-String coercion answers a string as itself. A Symbol, Integer, class, or module renders directly. Any other value runs its `to_s`, and a non-string answer falls back to default render.
+String coercion answers a string as itself. Without dispatching `to_s`, a Symbol renders its name, an Integer its decimal digits, and a class or module as `Module#to_s` does. Any other value runs its `to_s`, and a non-string answer falls back to default render.
 
 A `dup` copy is unfrozen and carries no singleton class; an immediate returns itself. The frozen check is a precondition guard, and an immediate counts as frozen.
 
