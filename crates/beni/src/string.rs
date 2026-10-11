@@ -118,7 +118,7 @@ impl RString {
     /// String, the dispatching counterpart of `cat_str`, the way Ruby's
     /// `String#concat` accepts a non-string argument. A non-string
     /// `other` runs the same coercion as `ReprValue::to_r_string` (a
-    /// Symbol/Integer/Class renders directly, anything else dispatches
+    /// Symbol/Integer/class/module renders directly, anything else dispatches
     /// `to_s`), which may raise; appending to a frozen receiver raises
     /// `FrozenError`. The call runs under exception protection, so either
     /// surfaces as `Err` rather than long-jumping.
