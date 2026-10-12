@@ -584,6 +584,65 @@ fn to_r_string_surfaces_a_raising_to_s_as_err() {
     ));
 }
 
+#[test]
+fn to_r_string_renders_a_symbol_and_a_class_without_their_to_s() {
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"to_r_string_test.rb")
+        .expect("allocating the compile context must succeed");
+    cxt.load_nstring(b"class Symbol; def to_s; 'overridden'; end; end")
+        .expect("the test source must compile and run");
+
+    // A Symbol renders its name and a class its path directly, so
+    // neither override runs.
+    for (source, expected) in [
+        (&b":sym"[..], &b"sym"[..]),
+        (
+            b"class Named; def self.to_s; 'overridden'; end; end; Named",
+            b"Named",
+        ),
+    ] {
+        let rendered = cxt
+            .load_nstring(source)
+            .expect("the test source must compile and run")
+            .to_r_string(&mrb)
+            .expect("a direct render does not raise")
+            .owned_bytes();
+        assert_eq!(rendered, expected);
+    }
+}
+
+#[test]
+fn to_r_string_surfaces_a_raising_inspect_of_a_singleton_class_as_err() {
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"to_r_string_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    // A singleton class renders through the `inspect` of the class it is
+    // attached to, so that `inspect` raising is the coercion's `Err`.
+    let singleton = cxt
+        .load_nstring(b"class Loud; def self.inspect; raise 'no'; end; end; Loud.singleton_class")
+        .expect("the test source must compile and run");
+    assert!(matches!(
+        singleton.to_r_string(&mrb),
+        Err(Error::Exception(_))
+    ));
+}
+
+#[test]
+fn to_r_string_refuses_a_value_without_to_s_as_a_type_error() {
+    let mrb = open_mrb();
+    let cxt = Ccontext::new(&mrb, c"to_r_string_test.rb")
+        .expect("allocating the compile context must succeed");
+
+    let bare = cxt
+        .load_nstring(b"BasicObject.new")
+        .expect("the test source must compile and run");
+    let Err(Error::Exception(exc)) = bare.to_r_string(&mrb) else {
+        panic!("a value without to_s must not coerce");
+    };
+    assert_eq!(exc.classname(&mrb), "TypeError");
+}
+
 /// A `to_a` that returns a non-array non-`nil` value — the case that
 /// makes `mrb_ary_splat` raise rather than wrap.
 fn to_a_returns_int(_mrb: &Mrb, _self: Value) -> i32 {
