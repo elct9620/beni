@@ -71,9 +71,9 @@ impl Mrb {
             return Err(Error::new(self, script_error, structural_failure(bytes)));
         }
 
-        // Mirror mruby's static `load_irep` body: wrap the IREP in
-        // a top-level Proc, hand IREP ownership to the Proc via
-        // decref, then run.
+        // Build the Proc as mruby's static `load_irep` does — wrap the
+        // IREP, hand IREP ownership to the Proc via decref — and target
+        // it at the top level as `mrb_load_exec` does, then run.
         // SAFETY: `irep` was just returned non-null by
         // mrb_read_irep_buf; `mrb` is alive.
         let proc_ = unsafe { sys::mrb_proc_new_func(self.as_ptr(), irep) };
@@ -82,6 +82,7 @@ impl Mrb {
         unsafe { (*proc_).c = core::ptr::null_mut() };
         // SAFETY: hands IREP ownership to the Proc.
         unsafe { sys::mrb_irep_decref(self.as_ptr(), irep) };
+        self.target_top_level(proc_);
         // SAFETY: `mrb` is alive.
         let top_self = unsafe { sys::mrb_top_self(self.as_ptr()) };
         self.protect(|mrb| {
@@ -91,6 +92,23 @@ impl Mrb {
             Value::from_raw_unchecked(unsafe { sys::mrb_top_run(mrb.as_ptr(), proc_, top_self, 0) })
         })
         .and_then(|value| self.outcome(value))
+    }
+
+    /// Point a program's Proc at `Object`, as mruby's source loader
+    /// does before it runs one (`mrb_load_exec`). A Proc takes its target
+    /// class from the frame it is created in, so a program created inside
+    /// a method would otherwise define its constants in that method's
+    /// class rather than at the top level.
+    pub(crate) fn target_top_level(&self, proc_: *mut sys::RProc) {
+        // SAFETY: `proc_` is a live Proc of this VM, and `object_class`
+        // is the VM's own `Object`.
+        unsafe {
+            sys::mrb_proc_set_target_class_func(
+                self.as_ptr(),
+                proc_,
+                sys::mrb_object_class(self.as_ptr()),
+            )
+        };
     }
 }
 

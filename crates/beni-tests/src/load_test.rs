@@ -206,6 +206,46 @@ fn load_bytecode_inside(mrb: &Mrb, _self: Value, blob: RString) -> Value {
     caught(mrb.load_bytecode(&blob.owned_bytes()))
 }
 
+// A program defining a constant and a method, so where each landed
+// shows whether it ran at the top level.
+const TOP_LEVEL_PROGRAM: &[u8] =
+    b"TOP_LEVEL_ANSWER = 42\ndef top_level_answer; TOP_LEVEL_ANSWER; end";
+
+fn load_bytecode_in_loader(mrb: &Mrb, _self: Value, blob: RString) -> Value {
+    mrb.load_bytecode(&blob.owned_bytes())
+        .expect("the program must run")
+}
+
+#[test]
+fn load_bytecode_inside_a_method_of_another_class_runs_at_the_top_level() {
+    let mrb = open_mrb();
+    let bytes = Ccontext::new(&mrb, c"top.rb")
+        .expect("allocating the context must succeed")
+        .compile(TOP_LEVEL_PROGRAM)
+        .expect("the source must compile")
+        .dump(&mrb, DumpOptions::default())
+        .expect("a Proc compiled from source must dump");
+    let loader = mrb
+        .define_class(c"BeniBytecodeLoader", mrb.object_class())
+        .expect("defining the class must succeed");
+    loader
+        .define_method(&mrb, c"run", beni::method!(load_bytecode_in_loader, 1))
+        .expect("defining the method must succeed");
+
+    loader
+        .new_instance(&mrb, &[])
+        .expect("instantiating must succeed")
+        .funcall(&mrb, c"run", &[mrb.str_new(&bytes).as_value()])
+        .expect("the load must come back Ok");
+
+    for name in [&b"TOP_LEVEL_ANSWER"[..], b"top_level_answer"] {
+        let answer = mrb
+            .load_string(name)
+            .expect("the constant and the method must be defined at the top level");
+        assert_eq!(i64::from_value(answer), Some(42));
+    }
+}
+
 #[test]
 fn load_string_inside_a_registered_method_hands_the_raise_back_as_err() {
     let mrb = open_mrb();

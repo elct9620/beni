@@ -180,6 +180,39 @@ fn compile_yields_a_program_that_has_not_run_yet() {
     );
 }
 
+fn compile_and_call_in_compiler(mrb: &Mrb, _self: Value) -> Value {
+    Ccontext::new(mrb, c"top.rb")
+        .expect("allocating the compile context must succeed")
+        .compile(b"TOP_LEVEL_COMPILED = 42\ndef top_level_compiled; TOP_LEVEL_COMPILED; end")
+        .expect("the source must compile")
+        .call(mrb, &[])
+        .unwrap_or_else(|_| panic!("the program must run when called"))
+}
+
+#[test]
+fn compile_inside_a_method_of_another_class_runs_at_the_top_level() {
+    let mrb = open_mrb();
+    let compiler = mrb
+        .define_class(c"BeniSourceCompiler", mrb.object_class())
+        .expect("defining the class must succeed");
+    compiler
+        .define_method(&mrb, c"run", beni::method!(compile_and_call_in_compiler, 0))
+        .expect("defining the method must succeed");
+
+    compiler
+        .new_instance(&mrb, &[])
+        .expect("instantiating must succeed")
+        .funcall(&mrb, c"run", &[])
+        .expect("the program must come back Ok");
+
+    for name in [&b"TOP_LEVEL_COMPILED"[..], b"top_level_compiled"] {
+        let answer = mrb
+            .load_string(name)
+            .expect("the constant and the method must be defined at the top level");
+        assert_eq!(i64::from_value(answer), Some(42));
+    }
+}
+
 #[test]
 fn compile_surfaces_a_parse_failure_the_way_a_load_does() {
     let mrb = open_mrb();

@@ -142,7 +142,12 @@ impl<'mrb> Ccontext<'mrb> {
         // (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7782`), and
         // the codegen failure that would answer otherwise left the
         // exception `outcome` has already returned.
-        Ok(unsafe { Proc::from_value_unchecked(value) })
+        let program = unsafe { Proc::from_value_unchecked(value) };
+        // SAFETY: `program` is a Proc, whose object header
+        // `mrb_obj_ptr_func` reads.
+        self.mrb
+            .target_top_level(unsafe { sys::mrb_obj_ptr_func(value.0) } as *mut sys::RProc);
+        Ok(program)
     }
 
     /// Hand the parser to mruby with this context stopped before it

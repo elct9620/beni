@@ -181,6 +181,16 @@ mrb_proc_new_func(mrb_state *mrb, const mrb_irep *irep)
   return mrb_proc_new(mrb, irep);
 }
 
+/* `MRB_PROC_SET_TARGET_CLASS` is a macro: it picks the field by the
+ * Proc's env flag and runs the write barrier, both of which must
+ * resolve in the C compiler against the layout libmruby.a was built
+ * with. */
+static inline void
+mrb_proc_set_target_class_func(mrb_state *mrb, struct RProc *p, struct RClass *tc)
+{
+  MRB_PROC_SET_TARGET_CLASS(p, tc);
+}
+
 /* The IREP a Proc carries, or NULL when a C function backs it and
  * there is none. `MRB_PROC_CFUNC_P` reads the flags bitfield and
  * `body` is a union, so both must resolve in the C compiler against
