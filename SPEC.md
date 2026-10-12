@@ -1103,7 +1103,7 @@ These operations call, render, copy, or freeze a value:
 | inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect` |
 | default render | the default `to_s` form as a new string; total, running no user Ruby |
 | `dup` | copy the object, running its `initialize_copy`; may raise |
-| string coercion | the value as a string, by the rules below; raises only when `to_s` raises |
+| string coercion | the value as a string, by the rules below; may raise |
 | freeze | freeze the value in place |
 | frozen check | `Err` when the value is frozen, `Ok` otherwise; runs no user Ruby |
 
@@ -1111,9 +1111,21 @@ Dispatch can also pass an explicit block — a typed `Proc` the method yields to
 
 A raise inside `inspect` yields an empty string. Default render gives `#<ClassName>` for an immediate and `#<ClassName:0x...>` for a heap object. It builds from the class name without dispatching the value's own `to_s`.
 
-String coercion answers a string as itself. Without dispatching `to_s`, a Symbol renders its name, an Integer its decimal digits, and a class or module as `Module#to_s` does. Any other value runs its `to_s`, and a non-string answer falls back to default render.
-
 A `dup` copy is unfrozen and carries no singleton class; an immediate returns itself. The frozen check is a precondition guard, and an immediate counts as frozen.
+
+###### String coercion
+
+String coercion dispatches `to_s` only for a value outside the first four rows:
+
+| Value | Renders as |
+|---|---|
+| String | itself |
+| Symbol | its name |
+| Integer | its decimal digits |
+| class or module | the built-in `Module#to_s` form |
+| any other | its `to_s`; default render for a non-string answer |
+
+That form runs `inspect` on the class or module a singleton class is attached to. A value without `to_s` raises `TypeError`. Any raise is the coercion's `Err`.
 
 ##### Arithmetic
 
