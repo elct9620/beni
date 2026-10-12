@@ -9,9 +9,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
-| function | 317 | 316 (100%) | 250 (79%) |
+| function | 317 | 316 (100%) | 251 (79%) |
 | macro | 106 | 29 (27%) | 86 (81%) |
-| total | 423 | 345 (82%) | 336 (79%) |
+| total | 423 | 345 (82%) | 337 (80%) |
 
 ## mruby.h
 
@@ -324,7 +324,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 |--------|------|:---:|:-----:|------|
 | `mrb_load_irep_file` | fn | ✅ | ✅ | subsumed: `Mrb::load_irep` — the stream form; `std::fs` reads the file |
 | `mrb_load_irep_file_cxt` | fn | ✅ | ❌ |  |
-| `mrb_read_irep` | fn | ✅ | ❌ |  |
+| `mrb_read_irep` | fn | ✅ | ✅ | subsumed: `Mrb::read_irep` — the unbounded form; a slice carries the length |
 | `mrb_read_irep_buf` | fn | ✅ | ✅ | `Mrb::read_irep` |
 ## mruby/error.h
 
