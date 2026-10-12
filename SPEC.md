@@ -1885,17 +1885,27 @@ A read or a take names the type it expects. Naming a type other than the one hel
 
 mruby publishes no call for the slot, so it belongs to this surface: a write to it through `beni::sys` is the writer's own unsafe act.
 
-#### Loading precompiled bytecode
+#### Precompiled bytecode
 
 No part of this section is carried by the `compiler` capability feature.
 
-Loading a precompiled bytecode blob runs the program at the interpreter's top level. The blob is a byte slice carrying its own length, and it is the form a Proc's dump answers.
+A precompiled bytecode blob is a byte slice carrying its own length, in the form a Proc's dump answers. Two operations take one:
+
+| Operation | Answer |
+|---|---|
+| read | the program as a typed `Proc`, not yet run |
+| load | the program's result value, after running it at the interpreter's top level |
+
+A program read from a blob is invoked through `Proc::call`, and invoking it runs it at the interpreter's top level, as a compiled program does.
+
+##### Bytecode failures
+
+Both operations fail the same way on a blob they cannot read, and only a load runs a program that can raise.
 
 | Outcome | Answer |
 |---|---|
-| program runs | `Ok` with its result value |
 | blob unreadable as a program | `Err` carrying a `ScriptError`; nothing runs |
-| program raises while it runs | `Err` carrying that exception |
+| loaded program raises while it runs | `Err` carrying that exception |
 
 The `ScriptError` message distinguishes four conditions:
 
@@ -1906,7 +1916,19 @@ The `ScriptError` message distinguishes four conditions:
 | format version the interpreter does not read |
 | body fails validation |
 
-When the loaded program raises, the pending exception is cleared from the handle as it crosses out — the contract a load under a compile context answers. Neither failure carries an outcome of its own: both are the `Err` every fallible operation on this surface answers with.
+When a loaded program raises, the pending exception is cleared from the handle as it crosses out. That is the contract a load under a compile context answers. Neither failure carries an outcome of its own: both are the `Err` every fallible operation on this surface answers with.
+
+##### Bytecode trust
+
+The interpreter validates a blob's structure, not the instructions it carries. What a blob reaches therefore turns on where it came from:
+
+| Blob | Reaches |
+|---|---|
+| unmodified output of a Proc's dump or mruby's compiler, same mruby release | the program it holds |
+| structurally invalid | the `ScriptError` above; nothing runs |
+| any other | possibly memory outside the program |
+
+The blob's origin is a caller-owned invariant, so both operations are `unsafe`.
 
 #### Compiling and running source
 
@@ -1999,9 +2021,11 @@ An error answers its backtrace as a list of rendered frames.
 
 ##### GC Validity Rule
 
-The safe API cannot cause undefined behavior while the GC validity rule
-holds. A value that crossed out to Rust — created or read — is not used after
-either end below. A survivor carried out through `keep` counts as crossing
+The safe API cannot cause undefined behavior while the consumer upholds two
+rules the type system does not enforce. They are the GC validity rule and the
+interpreter pairing the Thread Contract states. Under the GC validity rule, a
+value that crossed out to Rust — created or read — is not used after either
+end below. A survivor carried out through `keep` counts as crossing
 out where its scope was opened.
 
 | End | Reached when |
