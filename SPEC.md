@@ -1125,7 +1125,7 @@ String coercion dispatches `to_s` only for a value outside the first four rows:
 | class or module | the built-in `Module#to_s` form |
 | any other | its `to_s`; default render for a non-string answer |
 
-That form runs `inspect` on the class or module a singleton class is attached to. A value without `to_s` raises `TypeError`. Any raise is the coercion's `Err`.
+The built-in `Module#to_s` form runs `inspect` on the class or module a singleton class is attached to. A value without `to_s` raises `TypeError`. Any raise is the coercion's `Err`.
 
 ##### Arithmetic
 
