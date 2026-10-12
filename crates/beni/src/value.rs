@@ -207,8 +207,8 @@ pub trait ReprValue: private::ReprValue {
 
     /// Coerce `self` to a string — `self` unchanged when it is already a
     /// string. A Symbol, Integer, class, or module renders without
-    /// dispatching `to_s`, though a singleton class's render runs
-    /// `inspect` on the class or module it is attached to. Any other value
+    /// dispatching `to_s`. A singleton class's render runs `inspect` on
+    /// the class or module it is attached to. Any other value
     /// runs its `to_s`, and a non-string answer falls back to the
     /// `any_to_s` render; a value without `to_s` raises `TypeError`. Any
     /// raise comes back `Err`. Mirrors mruby's `mrb_obj_as_string`.
