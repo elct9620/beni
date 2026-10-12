@@ -39,7 +39,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::intern_cstr;
     let _ = Mrb::intern_str;
     let _ = Mrb::sym_name;
-    let _ = Mrb::load_bytecode;
+    let _ = Mrb::read_irep;
+    let _ = Mrb::load_irep;
     let _ = scan_args::scan_args::<(), (), (), (), (), ()>;
     let _ = scan_args::get_kwargs::<&str, (), (), ()>;
     let _ = beni::value::qnil;

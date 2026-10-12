@@ -289,7 +289,7 @@ typed:
   mrb_range_end: Range::end
   mrb_range_excl_p: Range::is_exclusive
   mrb_range_new: Mrb::range_new
-  mrb_read_irep_buf: Mrb::load_bytecode
+  mrb_read_irep_buf: Mrb::read_irep
   mrb_remove_method: "`Module::remove_method` — Ruby's `Module#remove_method`; deletes the method's own definition from the handle (the name reverts to an ancestor's method), distinct from `Module::undef_method` which masks ancestor lookups. The symbol-or-name key routes through this raising form, which takes a `mrb_sym` directly with no string variant"
   mrb_respond_to: ReprValue::respond_to
   mrb_singleton_class_ptr: "`Object::singleton_class` — `mrb_singleton_class` wraps it, raising where it answers null (`vendor/mruby/src/class.c:2428-2436`); it answers null only for an immediate or an object with no class (`vendor/mruby/src/class.c:2382-2405`), neither of which an `Object` handle holds"
@@ -325,8 +325,8 @@ typed:
   mrb_sym_str: "`Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises"
   mrb_symbol_value: "`Symbol::from` an `Id`, `IntoValue for Id` — boxing the interned id into its symbol value, magnus's `From<Id> for Symbol`"
   mrb_test: ReprValue::to_bool
-  mrb_top_run: Mrb::load_bytecode
-  mrb_top_self: Mrb::load_bytecode
+  mrb_top_run: Mrb::load_irep
+  mrb_top_self: Mrb::load_irep
   mrb_true_p: Qtrue::from_value
   mrb_true_value: value::qtrue
   mrb_undef_value: value::qundef
@@ -502,10 +502,10 @@ subsumed:
   mrb_funcall: "`ReprValue::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"
   mrb_funcall_id: "`ReprValue::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"
   mrb_yield: "`Proc::call` — the one-argument form of `mrb_yield_argv` (`vendor/mruby/src/vm.c:1328` passes `1, &arg` to the same `yield_with_attr`); a Rust slice of one carries it"
-  mrb_load_irep_buf: "`Mrb::load_bytecode` — the read-and-run form, whose body is `load_irep(mrb, mrb_proc_read_irep_buf(mrb, buf, bufsize), NULL)` and nothing else (`vendor/mruby/src/load.c:783-798`); the typed load drives the read and the run itself so it can name which structural check a blob failed, where the one-call form reports every one of them as `irep load error`, and it answers the same `ScriptError` for the same condition"
-  mrb_load_irep: "`Mrb::load_bytecode` — the unbounded form of `mrb_load_irep_buf`, whose read passes `UINT32_MAX` where the buffer's size goes and trusts the header for the length (`vendor/mruby/src/load.c:732-737`, `:775-792`); a Rust byte slice carries the length the header would otherwise be trusted for, and the `undef` it answers for an unreadable blob without raising (`:778`) is the `Err` the typed load answers"
+  mrb_load_irep_buf: "`Mrb::load_irep` — the read-and-run form, split to name the failed check"
+  mrb_load_irep: "`Mrb::load_irep` — the unbounded form; a slice carries the length"
   mrb_proc_new_cfunc: "`Mrb::proc_new` — a proc whose body is a bare C function with no environment (`vendor/mruby/src/proc.c:141-152`); a Rust function carries the body the C function pointer would"
-  mrb_load_irep_file: "`Mrb::load_bytecode` — the stream form, whose body reads the header and then the size it names from a `FILE*` and runs what it read with no context (`vendor/mruby/src/load.c:809-856`); a Rust caller reads the file through `std::fs`, and the byte slice carries what the stream yields"
+  mrb_load_irep_file: "`Mrb::load_irep` — the stream form; `std::fs` reads the file"
   mrb_load_nstring: "`Mrb::load_string` — the context-free form, whose body is `mrb_load_nstring_cxt(mrb, s, len, NULL)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7868-7871`); the typed load borrows an unnamed context in the NULL's place so the compiler's diagnostics are captured rather than printed, which is all a fresh context changes for one load; carried by the `compiler` capability feature"
   mrb_load_nstring_cxt: "`Ccontext::load_nstring` — the one-call form, whose body is `mrb_load_exec(mrb, mrb_parse_nstring(mrb, s, len, c), c)` and nothing else (`vendor/mruby/mrbgems/mruby-compiler/core/parse.y:7862-7865`); the typed load drives those two calls itself so it can read the parser's diagnostic buffer between them, which the one-call form frees before returning; carried by the `compiler` capability feature"
   mrb_generate_code: "`Ccontext::compile` — the codegen half alone, taking the parser `mrb_parse_nstring` produced (`vendor/mruby/mrbgems/mruby-compiler/core/codegen.c:7336-7339`); the typed compile drives the parse and the codegen from source, so the parser the C form takes is what the Rust shape already carries, and beni hands a parser to no caller; carried by the `compiler` capability feature"

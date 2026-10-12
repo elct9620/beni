@@ -278,7 +278,7 @@ impl DumpOptions {
 
 impl Proc {
     /// The compiled form of this Proc as bytecode, which
-    /// `Mrb::load_bytecode` reads back.
+    /// `Mrb::read_irep` and `Mrb::load_irep` read back.
     ///
     /// A Proc backed by a C function has no compiled form and comes
     /// back `Err`, as does a dump mruby could not complete.

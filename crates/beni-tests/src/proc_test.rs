@@ -85,7 +85,8 @@ fn a_dumped_program_loads_back_as_bytecode() {
         .dump(&mrb, DumpOptions::default())
         .expect("a Proc compiled from source must dump");
 
-    let got = mrb.load_bytecode(&bytes).expect("the dump must load back");
+    // SAFETY: the blob is this interpreter's own dump.
+    let got = unsafe { mrb.load_irep(&bytes) }.expect("the dump must load back");
 
     // The result is the program's own value, and it is the caller's to
     // scope: a collection with the load's frame still live must not

@@ -1,11 +1,12 @@
 //! Source and RITE bytecode loaders on `Mrb`.
 //!
-//! Inherent methods that compile Ruby source — or drop a compiled
+//! Inherent methods that compile Ruby source — or read a compiled
 //! blob — into the live mruby VM and run its top-level Proc. The
-//! `compiler` feature carries the source loader; the bytecode loader
-//! needs no compiler and stays outside it.
+//! `compiler` feature carries the source loader; the bytecode read and
+//! load need no compiler and stay outside it.
 
-use crate::{Error, Mrb, Value};
+use crate::sys::AsRawValue;
+use crate::{Error, Mrb, Proc, Value};
 use beni_sys as sys;
 
 impl Mrb {
@@ -39,19 +40,26 @@ impl Mrb {
         cxt.load_nstring(source)
     }
 
-    /// Load and run a precompiled bytecode blob at the interpreter's
-    /// top level, yielding the program's result value.
+    /// Read a precompiled bytecode blob as a program without running
+    /// it, yielding the program as a `Proc`.
     ///
     /// The blob is the form `Proc::dump` answers. A blob mruby cannot
     /// read as a program comes back `Err(Error::Exception)` carrying a
-    /// `ScriptError` whose message names which structural check failed,
-    /// and nothing runs; an exception the program raises while it runs
-    /// comes back the same way, carrying that exception with the
-    /// pending exception cleared from the handle.
+    /// `ScriptError` whose message names which structural check failed.
+    /// `Proc::call` runs the program at the interpreter's top level, so a
+    /// raise from it comes back from that call, never from this read.
     ///
-    /// The result is a value like any other, so carrying it past the
+    /// The program is a value like any other, so carrying it past the
     /// arena scope that produced it needs a `GcRoot`.
-    pub fn load_bytecode(&self, bytes: &[u8]) -> Result<Value, Error> {
+    ///
+    /// # Safety
+    ///
+    /// mruby validates the blob's structure, not the instructions it
+    /// carries. The blob must be the unmodified output of `Proc::dump` or
+    /// of mruby's compiler from this interpreter's mruby release, or one
+    /// that fails structural validation; any other blob can reach memory
+    /// outside the program once it runs.
+    pub unsafe fn read_irep(&self, bytes: &[u8]) -> Result<Proc, Error> {
         // SAFETY: bytes pointer is valid for the synchronous call.
         let irep = unsafe {
             sys::mrb_read_irep_buf(
@@ -73,16 +81,42 @@ impl Mrb {
 
         // Build the Proc as mruby's static `load_irep` does — wrap the
         // IREP, hand IREP ownership to the Proc via decref — and target
-        // it at the top level as `mrb_load_exec` does, then run.
+        // it at the top level as `mrb_load_exec` does.
         // SAFETY: `irep` was just returned non-null by
         // mrb_read_irep_buf; `mrb` is alive.
         let proc_ = unsafe { sys::mrb_proc_new_func(self.as_ptr(), irep) };
-        // SAFETY: `proc_` came from mrb_proc_new and is alive until
-        // the matching mrb_top_run consumes it.
+        // SAFETY: `proc_` came from mrb_proc_new and is alive.
         unsafe { (*proc_).c = core::ptr::null_mut() };
         // SAFETY: hands IREP ownership to the Proc.
         unsafe { sys::mrb_irep_decref(self.as_ptr(), irep) };
         self.target_top_level(proc_);
+        // SAFETY: `proc_` is the live Proc just built, which
+        // `mrb_obj_value` boxes Proc-tagged.
+        Ok(unsafe {
+            Proc::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_obj_value(proc_.cast())))
+        })
+    }
+
+    /// Read a precompiled bytecode blob and run it at the interpreter's
+    /// top level, yielding the program's result value.
+    ///
+    /// A blob mruby cannot read fails as `read_irep` reports it, and
+    /// nothing runs; an exception the program raises while it runs comes
+    /// back `Err(Error::Exception)` carrying that exception with the
+    /// pending exception cleared from the handle.
+    ///
+    /// The result is a value like any other, so carrying it past the
+    /// arena scope that produced it needs a `GcRoot`.
+    ///
+    /// # Safety
+    ///
+    /// The blob carries the same obligation `read_irep` states.
+    pub unsafe fn load_irep(&self, bytes: &[u8]) -> Result<Value, Error> {
+        // SAFETY: the caller upholds the blob's obligation.
+        let program = unsafe { self.read_irep(bytes)? };
+        // SAFETY: `program` is a Proc, whose object header
+        // `mrb_obj_ptr_func` reads.
+        let proc_ = unsafe { sys::mrb_obj_ptr_func(program.as_raw()) } as *mut sys::RProc;
         // SAFETY: `mrb` is alive.
         let top_self = unsafe { sys::mrb_top_self(self.as_ptr()) };
         self.protect(|mrb| {

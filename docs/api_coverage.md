@@ -210,8 +210,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_to_int` | macro | ❌ | ✅ | defined as `mrb_ensure_int_type` |
 | `mrb_to_integer` | macro | ❌ | ✅ | defined as `mrb_ensure_int_type` |
 | `mrb_to_str` | macro | ❌ | ✅ | defined as `mrb_ensure_string_type` |
-| `mrb_top_run` | fn | ✅ | ✅ | `Mrb::load_bytecode` |
-| `mrb_top_self` | fn | ✅ | ✅ | `Mrb::load_bytecode` |
+| `mrb_top_run` | fn | ✅ | ✅ | `Mrb::load_irep` |
+| `mrb_top_self` | fn | ✅ | ✅ | `Mrb::load_irep` |
 | `mrb_toplevel_run` | macro | ❌ | ❌ |  |
 | `mrb_toplevel_run_keep` | macro | ❌ | ❌ |  |
 | `mrb_type_convert` | fn | ✅ | ❌ |  |
@@ -322,10 +322,10 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_load_irep_file` | fn | ✅ | ✅ | subsumed: `Mrb::load_bytecode` — the stream form, whose body reads the header and then the size it names from a `FILE*` and runs what it read with no context (`vendor/mruby/src/load.c:809-856`); a Rust caller reads the file through `std::fs`, and the byte slice carries what the stream yields |
+| `mrb_load_irep_file` | fn | ✅ | ✅ | subsumed: `Mrb::load_irep` — the stream form; `std::fs` reads the file |
 | `mrb_load_irep_file_cxt` | fn | ✅ | ❌ |  |
 | `mrb_read_irep` | fn | ✅ | ❌ |  |
-| `mrb_read_irep_buf` | fn | ✅ | ✅ | `Mrb::load_bytecode` |
+| `mrb_read_irep_buf` | fn | ✅ | ✅ | `Mrb::read_irep` |
 ## mruby/error.h
 
 | Symbol | Kind | sys | typed | Note |
@@ -379,8 +379,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_add_irep` | fn | ✅ | ❌ |  |
 | `mrb_irep_catch_handler_pack` | macro | ❌ | ❌ |  |
 | `mrb_irep_catch_handler_unpack` | macro | ❌ | ❌ |  |
-| `mrb_load_irep` | fn | ✅ | ✅ | subsumed: `Mrb::load_bytecode` — the unbounded form of `mrb_load_irep_buf`, whose read passes `UINT32_MAX` where the buffer's size goes and trusts the header for the length (`vendor/mruby/src/load.c:732-737`, `:775-792`); a Rust byte slice carries the length the header would otherwise be trusted for, and the `undef` it answers for an unreadable blob without raising (`:778`) is the `Err` the typed load answers |
-| `mrb_load_irep_buf` | fn | ✅ | ✅ | subsumed: `Mrb::load_bytecode` — the read-and-run form, whose body is `load_irep(mrb, mrb_proc_read_irep_buf(mrb, buf, bufsize), NULL)` and nothing else (`vendor/mruby/src/load.c:783-798`); the typed load drives the read and the run itself so it can name which structural check a blob failed, where the one-call form reports every one of them as `irep load error`, and it answers the same `ScriptError` for the same condition |
+| `mrb_load_irep` | fn | ✅ | ✅ | subsumed: `Mrb::load_irep` — the unbounded form; a slice carries the length |
+| `mrb_load_irep_buf` | fn | ✅ | ✅ | subsumed: `Mrb::load_irep` — the read-and-run form, split to name the failed check |
 | `mrb_load_irep_buf_cxt` | fn | ✅ | ❌ |  |
 | `mrb_load_irep_cxt` | fn | ✅ | ❌ |  |
 ## mruby/istruct.h

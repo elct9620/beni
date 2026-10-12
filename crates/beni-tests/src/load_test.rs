@@ -95,9 +95,10 @@ fn load_string_still_runs_source_the_compiler_warns_about() {
 /// that reported the right words under the wrong class still fails
 /// here — the class is what a Ruby-side bare `rescue` reads.
 fn structural_failure(mrb: &Mrb, blob: &[u8]) -> String {
-    let err = mrb
-        .load_bytecode(blob)
-        .expect_err("a blob that is not a program must not load");
+    // SAFETY: each blob here fails structural validation, which the
+    // read rejects before anything runs.
+    let err =
+        unsafe { mrb.load_irep(blob) }.expect_err("a blob that is not a program must not load");
     let Error::Exception(exc) = &err else {
         panic!("a structural failure carries an exception, got {err:?}");
     };
@@ -114,21 +115,21 @@ fn structural_failure(mrb: &Mrb, blob: &[u8]) -> String {
 }
 
 #[test]
-fn load_bytecode_classifies_a_blob_shorter_than_the_header() {
+fn load_irep_classifies_a_blob_shorter_than_the_header() {
     let mrb = open_mrb();
 
     assert!(structural_failure(&mrb, b"RITE").contains("shorter than RITE binary header"));
 }
 
 #[test]
-fn load_bytecode_classifies_a_non_rite_ident() {
+fn load_irep_classifies_a_non_rite_ident() {
     let mrb = open_mrb();
 
     assert!(structural_failure(&mrb, &[b'X'; HEADER_LEN]).contains("not RITE format"));
 }
 
 #[test]
-fn load_bytecode_classifies_a_rite_version_mismatch() {
+fn load_irep_classifies_a_rite_version_mismatch() {
     let mrb = open_mrb();
     let mut blob = [0u8; HEADER_LEN];
     blob[..4].copy_from_slice(&beni::sys::RITE_BINARY_IDENT[..4]);
@@ -138,7 +139,7 @@ fn load_bytecode_classifies_a_rite_version_mismatch() {
 }
 
 #[test]
-fn load_bytecode_classifies_a_corrupt_body() {
+fn load_irep_classifies_a_corrupt_body() {
     let mrb = open_mrb();
     let mut blob = [0u8; HEADER_LEN + 8];
     blob[..4].copy_from_slice(&beni::sys::RITE_BINARY_IDENT[..4]);
@@ -148,7 +149,7 @@ fn load_bytecode_classifies_a_corrupt_body() {
 }
 
 #[test]
-fn load_bytecode_leaves_the_vm_usable_after_a_structural_failure() {
+fn load_irep_leaves_the_vm_usable_after_a_structural_failure() {
     let mrb = open_mrb();
 
     let _ = structural_failure(&mrb, b"not RITE bytecode");
@@ -160,18 +161,13 @@ fn load_bytecode_leaves_the_vm_usable_after_a_structural_failure() {
 }
 
 #[test]
-fn load_bytecode_hands_back_an_exception_the_program_raised() {
+fn load_irep_hands_back_an_exception_the_program_raised() {
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"raiser.rb").expect("allocating the context must succeed");
-    let bytes = cxt
-        .compile(b"raise ArgumentError, 'from the loaded program'")
-        .expect("the source must compile")
-        .dump(&mrb, DumpOptions::default())
-        .expect("a Proc compiled from source must dump");
+    let bytes = dumped(&mrb, b"raise ArgumentError, 'from the loaded program'");
 
-    let err = mrb
-        .load_bytecode(&bytes)
-        .expect_err("a program that raises must not come back Ok");
+    // SAFETY: the blob is this interpreter's own dump.
+    let err =
+        unsafe { mrb.load_irep(&bytes) }.expect_err("a program that raises must not come back Ok");
 
     let Error::Exception(exc) = &err else {
         panic!("a raise carries an exception, got {err:?}");
@@ -188,6 +184,90 @@ fn load_bytecode_hands_back_an_exception_the_program_raised() {
     assert!(err.message(&mrb).contains("from the loaded program"));
 }
 
+fn dumped(mrb: &Mrb, source: &[u8]) -> Vec<u8> {
+    Ccontext::new(mrb, c"dumped.rb")
+        .expect("allocating the context must succeed")
+        .compile(source)
+        .expect("the source must compile")
+        .dump(mrb, DumpOptions::default())
+        .expect("a Proc compiled from source must dump")
+}
+
+#[test]
+fn read_irep_yields_a_program_that_runs_only_when_called() {
+    let mrb = open_mrb();
+    let bytes = dumped(&mrb, b"$runs = ($runs || 0) + 1; 6 * 7");
+    let runs = mrb.intern_cstr(c"$runs").expect("the name interns");
+
+    // SAFETY: the blob is this interpreter's own dump.
+    let program = unsafe { mrb.read_irep(&bytes) }.expect("the dump must read back");
+    assert!(
+        mrb.gv_get(runs).is_nil(),
+        "reading must not run the program"
+    );
+
+    let got = program
+        .call(&mrb, &[])
+        .unwrap_or_else(|_| panic!("the program must run when called"));
+    assert_eq!(i64::from_value(got), Some(42));
+    assert_eq!(i64::from_value(mrb.gv_get(runs)), Some(1));
+}
+
+#[test]
+fn read_irep_and_load_irep_answer_the_same_value_for_a_top_level_return() {
+    let mrb = open_mrb();
+    let bytes = dumped(&mrb, b"return 5\n6");
+
+    // SAFETY: the blob is this interpreter's own dump.
+    let called = unsafe { mrb.read_irep(&bytes) }
+        .expect("the dump must read back")
+        .call(&mrb, &[])
+        .unwrap_or_else(|_| panic!("the program must run when called"));
+    // SAFETY: as above.
+    let loaded = unsafe { mrb.load_irep(&bytes) }.expect("the dump must load");
+
+    assert_eq!(i64::from_value(called), Some(5));
+    assert_eq!(i64::from_value(loaded), Some(5));
+}
+
+#[test]
+fn read_irep_refuses_an_unreadable_blob_as_a_script_error() {
+    let mrb = open_mrb();
+
+    // SAFETY: the blob fails structural validation, which the read
+    // rejects before anything runs.
+    let err = unsafe { mrb.read_irep(b"RITE") }
+        .err()
+        .expect("a blob that is not a program must not read");
+
+    let Error::Exception(exc) = &err else {
+        panic!("a structural failure carries an exception, got {err:?}");
+    };
+    assert_eq!(exc.classname(&mrb), "ScriptError");
+    assert!(err
+        .message(&mrb)
+        .contains("shorter than RITE binary header"));
+}
+
+#[test]
+fn read_irep_leaves_a_script_error_the_program_raises_to_its_call() {
+    let mrb = open_mrb();
+    let bytes = dumped(&mrb, b"raise ScriptError, 'from the program'");
+
+    // SAFETY: the blob is this interpreter's own dump.
+    let program =
+        unsafe { mrb.read_irep(&bytes) }.expect("a program that raises when run still reads");
+    let err = program
+        .call(&mrb, &[])
+        .expect_err("the raise must come back from the call");
+
+    let Error::Exception(exc) = &err else {
+        panic!("a raise carries an exception, got {err:?}");
+    };
+    assert_eq!(exc.classname(&mrb), "ScriptError");
+    assert!(err.message(&mrb).contains("from the program"));
+}
+
 // A registered method answers the exception the load inside it came
 // back with, or nil when it came back with none — so a raise that
 // escaped the load reaches the method's caller instead.
@@ -202,8 +282,9 @@ fn load_string_inside(mrb: &Mrb, _self: Value) -> Value {
     caught(mrb.load_string(b"raise 'from the nested load'"))
 }
 
-fn load_bytecode_inside(mrb: &Mrb, _self: Value, blob: RString) -> Value {
-    caught(mrb.load_bytecode(&blob.owned_bytes()))
+fn load_irep_inside(mrb: &Mrb, _self: Value, blob: RString) -> Value {
+    // SAFETY: the blob is this interpreter's own dump.
+    caught(unsafe { mrb.load_irep(&blob.owned_bytes()) })
 }
 
 // A program defining a constant and a method, so where each landed
@@ -211,25 +292,20 @@ fn load_bytecode_inside(mrb: &Mrb, _self: Value, blob: RString) -> Value {
 const TOP_LEVEL_PROGRAM: &[u8] =
     b"TOP_LEVEL_ANSWER = 42\ndef top_level_answer; TOP_LEVEL_ANSWER; end";
 
-fn load_bytecode_in_loader(mrb: &Mrb, _self: Value, blob: RString) -> Value {
-    mrb.load_bytecode(&blob.owned_bytes())
-        .expect("the program must run")
+fn load_irep_in_loader(mrb: &Mrb, _self: Value, blob: RString) -> Value {
+    // SAFETY: the blob is this interpreter's own dump.
+    unsafe { mrb.load_irep(&blob.owned_bytes()) }.expect("the program must run")
 }
 
 #[test]
-fn load_bytecode_inside_a_method_of_another_class_runs_at_the_top_level() {
+fn load_irep_inside_a_method_of_another_class_runs_at_the_top_level() {
     let mrb = open_mrb();
-    let bytes = Ccontext::new(&mrb, c"top.rb")
-        .expect("allocating the context must succeed")
-        .compile(TOP_LEVEL_PROGRAM)
-        .expect("the source must compile")
-        .dump(&mrb, DumpOptions::default())
-        .expect("a Proc compiled from source must dump");
+    let bytes = dumped(&mrb, TOP_LEVEL_PROGRAM);
     let loader = mrb
         .define_class(c"BeniBytecodeLoader", mrb.object_class())
         .expect("defining the class must succeed");
     loader
-        .define_method(&mrb, c"run", beni::method!(load_bytecode_in_loader, 1))
+        .define_method(&mrb, c"run", beni::method!(load_irep_in_loader, 1))
         .expect("defining the method must succeed");
 
     loader
@@ -265,16 +341,11 @@ fn load_string_inside_a_registered_method_hands_the_raise_back_as_err() {
 }
 
 #[test]
-fn load_bytecode_inside_a_registered_method_hands_the_raise_back_as_err() {
+fn load_irep_inside_a_registered_method_hands_the_raise_back_as_err() {
     let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"raiser.rb").expect("allocating the context must succeed");
-    let bytes = cxt
-        .compile(b"raise ArgumentError, 'from the nested program'")
-        .expect("the source must compile")
-        .dump(&mrb, DumpOptions::default())
-        .expect("a Proc compiled from source must dump");
+    let bytes = dumped(&mrb, b"raise ArgumentError, 'from the nested program'");
     mrb.object_class()
-        .define_method(&mrb, c"load_inside", beni::method!(load_bytecode_inside, 1))
+        .define_method(&mrb, c"load_inside", beni::method!(load_irep_inside, 1))
         .expect("defining the method must succeed");
 
     let exc = beni::value::qnil()

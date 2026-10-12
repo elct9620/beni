@@ -193,9 +193,9 @@ fn a_bytecode_load_error_keeps_its_exception_through_a_collection() {
         .dump(&mrb, DumpOptions::default())
         .expect("a Proc compiled from source must dump");
 
-    let err = mrb
-        .load_bytecode(&bytes)
-        .expect_err("a program that raises must not come back Ok");
+    // SAFETY: the blob is this interpreter's own dump.
+    let err =
+        unsafe { mrb.load_irep(&bytes) }.expect_err("a program that raises must not come back Ok");
 
     assert_exception_survives_a_collection(&mrb, &err);
     assert!(err.message(&mrb).contains("boom"));
