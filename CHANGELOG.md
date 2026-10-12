@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.23.0](https://github.com/elct9620/beni/compare/v0.22.1...v0.23.0) (2026-10-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** Mrb::load_bytecode is renamed Mrb::load_irep and is now an unsafe fn; callers wrap it in unsafe and vouch that the blob is the unmodified output of Proc::dump or mruby's compiler from the same mruby release.
+* **beni:** ReprValue::to_r_string returns Result<RString, Error>; call .as_value() where a Value is still wanted.
+
+### Features
+
+* **beni:** answer ReprValue::to_r_string with an RString ([d4703cc](https://github.com/elct9620/beni/commit/d4703cc7b6bf2f2377e51ff4cf700e3faf374452))
+* **beni:** read bytecode without running it, behind an unsafe trust contract ([d1e2e36](https://github.com/elct9620/beni/commit/d1e2e36c3c6bf364aa848f704a27667c3d8c2570))
+
+
+### Bug Fixes
+
+* **beni:** run loaded and compiled programs at the top level from inside a method ([c4cb50a](https://github.com/elct9620/beni/commit/c4cb50a186f14c477aabf26145fc9a5c520f58cb))
+
 ## [0.22.1](https://github.com/elct9620/beni/compare/v0.22.0...v0.22.1) (2026-10-09)
 
 
