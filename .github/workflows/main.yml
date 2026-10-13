@@ -229,3 +229,9 @@ jobs:
         env:
           BENI_VENDOR_DIR: ${{ github.workspace }}\test\scenarios\${{ matrix.scenario }}\vendor
         run: cargo test -p beni -p beni-tests
+      # Optimisation decides which cleanups a raise's long-jump meets.
+      - name: Run the crates' suite optimised against the staged archive
+        if: matrix.suite
+        env:
+          BENI_VENDOR_DIR: ${{ github.workspace }}\test\scenarios\${{ matrix.scenario }}\vendor
+        run: cargo test --release -p beni -p beni-tests
