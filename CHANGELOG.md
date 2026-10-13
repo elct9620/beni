@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.1](https://github.com/elct9620/beni/compare/v0.23.0...v0.23.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **beni-sys:** declare mruby's functions to unwind under the unwind strategy ([b42faee](https://github.com/elct9620/beni/commit/b42faee83bd95733864512efcd74fac848993bdb))
+
 ## [0.23.0](https://github.com/elct9620/beni/compare/v0.22.1...v0.23.0) (2026-10-12)
 
 
