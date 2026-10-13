@@ -15,3 +15,8 @@ publish = false
 
 [dependencies]
 beni = { path = "../../../crates/beni" }
+
+# Tests ignore the panic strategy, so the abort posture runs as the
+# raise_under_abort example under this profile.
+[profile.release]
+panic = "abort"

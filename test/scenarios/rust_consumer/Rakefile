@@ -6,7 +6,9 @@
 # one carries on into what those artifacts exist for: a cargo project
 # outside the repo's workspace, with its own lock file and target dir,
 # discovering the staged archive through BENI_VENDOR_DIR and running a
-# gem it defined against a live interpreter. Run from this directory:
+# gem it defined against a live interpreter, then once more as a release
+# build whose panic strategy is abort, raising from the gem's method to
+# a Ruby rescue. Run from this directory:
 #
 #   $ cd test/scenarios/rust_consumer && rake scenario:setup beni:build scenario:verify
 $LOAD_PATH.unshift File.expand_path("../../../lib", __dir__)
@@ -28,9 +30,12 @@ namespace :scenario do
     # hosts and is not on Windows.
     abort "[scenario] cargo not on PATH" if system("cargo", "--version", %i[out err] => File::NULL).nil?
 
-    sh({ "BENI_VENDOR_DIR" => File.expand_path("vendor", __dir__) },
-       "cargo", "test", "--manifest-path", File.expand_path("Cargo.toml", __dir__))
+    vendor = File.expand_path("vendor", __dir__)
+    env = { "BENI_VENDOR_DIR" => vendor }
+    manifest = File.expand_path("Cargo.toml", __dir__)
+    sh(env, "cargo", "test", "--manifest-path", manifest)
+    sh(env, "cargo", "run", "--release", "--example", "raise_under_abort", "--manifest-path", manifest)
 
-    puts "[scenario] rust_consumer linked and ran against #{File.expand_path("vendor", __dir__)}"
+    puts "[scenario] rust_consumer linked and ran against #{vendor}"
   end
 end
