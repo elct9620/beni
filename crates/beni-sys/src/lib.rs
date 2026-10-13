@@ -82,6 +82,25 @@ mod bindings {
     // signatures (e.g. `mrb_define_method`'s `func` parameter);
     // pull the parent alias into scope so those references resolve.
     use super::mrb_func_t;
+
+    // mruby raises by long-jumping across the Rust frames between the
+    // raise and its catch. MSVC implements that jump as a forced unwind
+    // that runs whatever cleanup the crossed frames recorded for the call
+    // site it left from, and a call to a `"C"` function records none of
+    // its own: it inherits the neighbouring call's, which may drop a value
+    // the frame never initialised. `C-unwind` gives each call site its own
+    // record. Under an abort panic strategy that record is an abort, which
+    // the jump would trigger, while `"C"` leaves those frames with no
+    // cleanup at all — so the strategy picks the ABI.
+    macro_rules! mruby_extern {
+        ($($item:tt)*) => {
+            #[cfg(panic = "unwind")]
+            extern "C-unwind" { $($item)* }
+            #[cfg(not(panic = "unwind"))]
+            extern "C" { $($item)* }
+        };
+    }
+
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
@@ -213,8 +232,15 @@ pub fn mrb_args_block() -> mrb_aspec {
     unsafe { mrb_args_block_func() }
 }
 
-/// The build script's sidecar parse, reachable here because a build
-/// script is outside `cargo test`'s reach.
+/// The build script's foreign-block rewrite, reachable here because a
+/// build script is outside `cargo test`'s reach.
+#[cfg(test)]
+mod abi {
+    include!("../build/abi.rs");
+}
+
+/// The build script's sidecar parse, reachable here for the same reason
+/// as the foreign-block rewrite above.
 #[cfg(test)]
 mod sidecar {
     include!("../build/sidecar.rs");
@@ -272,5 +298,19 @@ mod tests {
             mrb_value::zeroed()
         }
         let _f: mrb_func_t = _stub;
+    }
+
+    // Compile-time checks: a binding coerces to a pointer of one ABI
+    // only, so each fails to build when the strategy picked the other.
+    #[cfg(panic = "unwind")]
+    #[test]
+    fn a_raising_binding_unwinds_under_the_unwind_strategy() {
+        let _f: unsafe extern "C-unwind" fn(*mut mrb_state, mrb_value) -> ! = mrb_exc_raise;
+    }
+
+    #[cfg(not(panic = "unwind"))]
+    #[test]
+    fn a_raising_binding_is_plain_c_under_any_other_strategy() {
+        let _f: unsafe extern "C" fn(*mut mrb_state, mrb_value) -> ! = mrb_exc_raise;
     }
 }

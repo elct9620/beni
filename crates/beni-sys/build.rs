@@ -7,7 +7,9 @@
 // target, this build script does five things:
 //
 //   1. Runs bindgen against `src/wrapper.h` to emit the mruby C API
-//      FFI surface into `$OUT_DIR/bindings.rs`. The static-fn
+//      FFI surface into `$OUT_DIR/bindings.rs`, each foreign block
+//      reopened as `mruby_extern!` so the crate's panic strategy picks
+//      the ABI mruby's functions are declared with. The static-fn
 //      trampolines bindgen needs to reach `MRB_INLINE` helpers and
 //      the `wrapper.h`-defined inline wrappers land in
 //      `$OUT_DIR/mruby_static_wrappers.c`.
@@ -102,6 +104,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+include!("build/abi.rs");
 include!("build/arena.rs");
 include!("build/bindings.rs");
 include!("build/sidecar.rs");
@@ -394,8 +397,7 @@ fn run_bindgen(
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("bindgen: failed to generate mruby bindings");
-    bindings
-        .write_to_file(bindings_rs)
+    fs::write(bindings_rs, route_foreign_blocks(&bindings.to_string()))
         .expect("bindgen: failed to write bindings.rs");
 }
 
