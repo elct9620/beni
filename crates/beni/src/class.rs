@@ -331,8 +331,9 @@ impl ExceptionClass {
     ///
     /// Only callable from contexts that mruby may unwind out of (C
     /// bridges, `mrb_funcall` handlers, `mrb_protect_error` bodies).
-    /// Calling from arbitrary Rust code would leave Rust frames without
-    /// returning through them, so the drops they expect may not run.
+    /// The raise leaves the frames it crosses without returning through
+    /// them, and whether their destructors run is not guaranteed. None of
+    /// them may hold anything that could need dropping.
     #[inline]
     pub unsafe fn raise(self, mrb: &Mrb, msg: &core::ffi::CStr) -> ! {
         // SAFETY: bridge frame — caller upholds the unwind contract.

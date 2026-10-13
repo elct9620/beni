@@ -14,10 +14,10 @@ use crate::{Error, Mrb, Value};
 ///
 /// Wrap a raw `mrb_*` call that can raise; typed operations already hand
 /// their raise back as an `Err`. A raise leaves the body without returning
-/// through it and may skip its destructors, so the code making the raw
-/// call keeps nothing that could need dropping alive in the body when it
-/// raises. There is no panic boundary: a panic in `body` aborts the
-/// process.
+/// through it, and whether its destructors run on the way is not
+/// guaranteed. The code making the raw call keeps nothing that could need
+/// dropping alive in the body when it raises. There is no panic boundary:
+/// a panic in `body` aborts the process.
 pub fn protect<F>(mrb: &Mrb, body: F) -> Result<Value, Error>
 where
     F: FnOnce(&Mrb) -> Value,

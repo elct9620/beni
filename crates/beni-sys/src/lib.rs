@@ -83,15 +83,13 @@ mod bindings {
     // pull the parent alias into scope so those references resolve.
     use super::mrb_func_t;
 
-    // mruby raises by long-jumping across the Rust frames between the
-    // raise and its catch. MSVC implements that jump as a forced unwind
-    // that runs whatever cleanup the crossed frames recorded for the call
-    // site it left from, and a call to a `"C"` function records none of
-    // its own: it inherits the neighbouring call's, which may drop a value
-    // the frame never initialised. `C-unwind` gives each call site its own
-    // record. Under an abort panic strategy that record is an abort, which
-    // the jump would trigger, while `"C"` leaves those frames with no
-    // cleanup at all — so the strategy picks the ABI.
+    // mruby raises by long-jumping across Rust frames, which MSVC runs as
+    // a forced unwind through each frame's cleanup for the call it leaves.
+    // Only a call that may unwind has a cleanup of its own; a `"C"` call
+    // takes its neighbour's. The unwind strategy therefore declares mruby's
+    // functions `C-unwind`. Under any other strategy a `C-unwind` call's
+    // cleanup is an abort the jump would trigger, while `"C"` leaves no
+    // cleanup at all. rb-sys, which magnus binds, declares CRuby's `"C"`.
     macro_rules! mruby_extern {
         ($($item:tt)*) => {
             #[cfg(panic = "unwind")]
