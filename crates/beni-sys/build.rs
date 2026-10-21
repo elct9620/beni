@@ -108,6 +108,7 @@ include!("build/abi.rs");
 include!("build/arena.rs");
 include!("build/bindings.rs");
 include!("build/boxing.rs");
+include!("build/comments.rs");
 include!("build/sidecar.rs");
 include!("build/target.rs");
 include!("build/version.rs");
@@ -223,6 +224,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build/arena.rs");
     println!("cargo:rerun-if-changed=build/bindings.rs");
+    println!("cargo:rerun-if-changed=build/comments.rs");
     println!("cargo:rerun-if-changed=build/sidecar.rs");
     println!("cargo:rerun-if-changed=build/target.rs");
     println!("cargo:rerun-if-changed=build/version.rs");
@@ -341,6 +343,16 @@ fn stage_documentation_bindings(manifest_dir: &Path, out_dir: &Path) {
     fs::copy(&source, out_dir.join("bindings.rs")).expect("stage documentation bindings");
 }
 
+/// Rewrites each header comment as bindgen carries it into the bindings.
+#[derive(Debug)]
+struct HeaderComments;
+
+impl bindgen::callbacks::ParseCallbacks for HeaderComments {
+    fn process_comment(&self, comment: &str) -> Option<String> {
+        Some(markdown_comment(comment))
+    }
+}
+
 fn run_bindgen(
     manifest_dir: &Path,
     include_root: &Path,
@@ -397,6 +409,7 @@ fn run_bindgen(
         .wrap_static_fns_path(static_wrappers_c.with_extension(""))
         .layout_tests(cfg!(feature = "bindgen-layout-tests"))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .parse_callbacks(Box::new(HeaderComments))
         .generate()
         .expect("bindgen: failed to generate mruby bindings");
     fs::write(bindings_rs, route_foreign_blocks(&bindings.to_string()))

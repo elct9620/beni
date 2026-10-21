@@ -274,6 +274,13 @@ mod boxing {
     include!("../build/boxing.rs");
 }
 
+/// The build script's header comment rewrite, reachable here for the
+/// same reason as the sidecar parse above.
+#[cfg(test)]
+mod comments {
+    include!("../build/comments.rs");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
