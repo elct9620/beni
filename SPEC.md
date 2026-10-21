@@ -1947,7 +1947,7 @@ A `TraceArg` reads the instruction about to run.
 | Read | Answers |
 |---|---|
 | `lineno` | its line, or nothing for code that carries no line numbers |
-| `path` | its file name, or nothing for code loaded without one |
+| `path` | its file name, or nothing for code that carries no line numbers |
 | `method_id` | the name of the method running it, or nothing at the top level |
 | `debug_inspector` | a `DebugInspector` over the running fiber's frames, valid for the same call |
 

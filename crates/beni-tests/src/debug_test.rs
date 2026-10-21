@@ -1,7 +1,7 @@
 use crate::support::open_mrb;
 use beni::debug::TraceArg;
 use beni::prelude::*;
-use beni::{Ccontext, Error, FromValue, Id, Mrb, Proc, Value};
+use beni::{Ccontext, DumpOptions, Error, FromValue, Id, Mrb, Proc, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -54,23 +54,33 @@ fn the_hook_reads_each_line_and_the_file_running_it() {
 }
 
 #[test]
-fn code_loaded_without_a_file_name_has_no_place() {
+fn bytecode_dumped_without_its_lines_has_no_place_and_no_locals() {
     let mut mrb = open_mrb();
+    let bytes = Ccontext::new(&mrb, c"debug_test.rb")
+        .expect("allocating the compile context must succeed")
+        .compile(b"a = 1\nb = a + 1\n")
+        .expect("the source compiles")
+        .dump(&mrb, DumpOptions::default())
+        .expect("a compiled proc dumps");
     let seen = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&seen);
     mrb.set_code_fetch_hook(move |arg: TraceArg<'_>| {
+        let locals = arg
+            .debug_inspector()
+            .frame_local_variables(0)
+            .map_or(0, |locals| locals.len());
         sink.lock()
             .unwrap()
-            .push((arg.path().is_some(), arg.lineno().is_some()));
+            .push((arg.path().is_some(), arg.lineno().is_some(), locals));
     });
 
-    mrb.load_string(b"a = 1\nb = a + 1\n")
-        .expect("the source runs");
+    // SAFETY: the bytes are the dump this interpreter just produced.
+    unsafe { mrb.load_irep(&bytes) }.expect("the bytecode runs");
 
     let seen = seen.lock().unwrap();
     assert!(!seen.is_empty(), "the hook runs");
     assert!(
-        seen.iter().all(|&place| place == (false, false)),
+        seen.iter().all(|&place| place == (false, false, 0)),
         "{seen:?}"
     );
 }
