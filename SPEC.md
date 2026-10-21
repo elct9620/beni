@@ -2176,7 +2176,8 @@ context — pins both to the thread they were made on for as long as the guard
 lives. A typed handle stays on the thread it was made on, mirroring `magnus`.
 A handle crosses threads inside an `Opaque`, mirroring `magnus`'s
 `value::Opaque`, which offers nothing until `Mrb::get_inner` hands the handle
-back on the thread holding the interpreter. An `Id` crosses freely.
+back, or `Mrb::get_inner_ref` lends it, on the thread holding the
+interpreter. An `Id` crosses freely.
 
 | Carried across threads | Typed surface |
 |---|---|
