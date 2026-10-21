@@ -4,7 +4,8 @@
 
 use crate::support::open_mrb;
 use beni::prelude::*;
-use beni::{ForEach, IntoValue, Mrb, RObject, ReprValue, TypedData, Value};
+use beni::value::Lazy;
+use beni::{ForEach, IntoValue, Mrb, RObject, RString, ReprValue, TypedData, Value};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Payload whose `Drop` counts into the case's own counter — the only
@@ -177,4 +178,69 @@ fn a_pending_exception_outlives_its_clearing() {
 
     assert_held(&DROPS, "a pending exception");
     assert!(!read.is_nil());
+}
+
+/// Run a program that empties every Array `ObjectSpace` reaches, then
+/// collect: what the typed surface keeps in Arrays of its own must
+/// survive both.
+fn clear_every_reachable_array(mrb: &Mrb) {
+    mrb.load_string(b"ObjectSpace.each_object(Array) { |a| a.clear unless a.frozen? }")
+        .expect("walking the heap's Arrays must succeed");
+    mrb.full_gc();
+}
+
+#[test]
+fn a_root_outlives_a_program_clearing_every_array() {
+    static DROPS: AtomicUsize = AtomicUsize::new(0);
+    let mrb = open_mrb();
+    let mut root = None;
+    stored_carrier(&mrb, &DROPS, |obj| {
+        root = Some(mrb.gc_root(obj).expect("taking a root must succeed"));
+    });
+
+    clear_every_reachable_array(&mrb);
+
+    assert_held(&DROPS, "a rooted value");
+    drop(root);
+}
+
+#[test]
+fn a_lazy_value_outlives_a_program_clearing_every_array() {
+    static HELD: Lazy<RString> = Lazy::new(|mrb| mrb.str_new(b"held"));
+    let mrb = open_mrb();
+    Lazy::force(&HELD, &mrb);
+
+    clear_every_reachable_array(&mrb);
+
+    let held = Lazy::try_get_inner(&HELD, &mrb).expect("the lazy value must still be held");
+    assert_eq!(
+        held.to_string(&mrb).expect("the held string renders"),
+        "held"
+    );
+}
+
+#[test]
+fn a_walk_visits_every_pair_after_a_visit_clears_every_array() {
+    let mrb = open_mrb();
+    let hash = mrb.hash_new();
+    for (key, val) in [(1, "one"), (2, "two")] {
+        hash.set(
+            &mrb,
+            key.into_value(&mrb),
+            mrb.str_new(val.as_bytes()).as_value(),
+        )
+        .expect("set must succeed");
+    }
+
+    let mut visited = Vec::new();
+    hash.foreach(&mrb, |_: Value, val: RString| {
+        if visited.is_empty() {
+            clear_every_reachable_array(&mrb);
+        }
+        visited.push(val.to_string(&mrb)?);
+        Ok(ForEach::Continue)
+    })
+    .expect("a walk whose pairs stay in place must succeed");
+
+    assert_eq!(visited, ["one", "two"]);
 }

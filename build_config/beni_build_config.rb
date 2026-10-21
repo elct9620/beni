@@ -54,6 +54,7 @@ unless defined?(BeniBuildConfig)
       mruby-struct
       mruby-set
       mruby-complex
+      mruby-objectspace
     ].freeze
   end
 end

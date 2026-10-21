@@ -58,7 +58,7 @@ impl Mrb {
 /// lazy value for the interpreter's lifetime: slot 0 heads the list of
 /// free slots, every other slot holds a root or the next free slot.
 static ROOT_TABLE: Lazy<RArray> = Lazy::new(|mrb| {
-    let table = mrb.ary_new();
+    let table = mrb.hidden_ary_new_capa(1);
     table
         .push(mrb, Value::from_int(mrb, 0))
         .expect("a fresh Array accepts a push");

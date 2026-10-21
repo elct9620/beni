@@ -126,6 +126,18 @@ impl Mrb {
         }
     }
 
+    /// An empty Array with room for `capa` elements that no Ruby program
+    /// reaches: it carries no class, so `ObjectSpace.each_object` passes
+    /// over it, as mruby hides its own root table (`src/gc.c`,
+    /// `mrb_gc_register`). Never handed to a caller.
+    pub(crate) fn hidden_ary_new_capa(&self, capa: usize) -> RArray {
+        let ary = self.ary_new_capa(capa);
+        // SAFETY: `ary` is a live Array, and every Array operation the
+        // crate runs on a hidden one reads no class.
+        unsafe { (*sys::mrb_obj_ptr_func(ary.as_raw())).c = core::ptr::null_mut() };
+        ary
+    }
+
     /// `mrb_ary_new_from_values(mrb, len, vals)` — construct an mruby
     /// `Array` holding a copy of `values`, in order. `values.len()`
     /// saturates to the archive's `mrb_int` width.

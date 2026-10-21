@@ -21,7 +21,7 @@ use beni_sys as sys;
 use core::ffi::CStr;
 
 /// The classes inline-struct types own, as pairs `[class, tag, …]`.
-static INLINE_OWNERS: Lazy<RArray> = Lazy::new(|mrb| mrb.ary_new());
+static INLINE_OWNERS: Lazy<RArray> = Lazy::new(|mrb| mrb.hidden_ary_new_capa(0));
 
 impl Mrb {
     /// Resolve `path` from `Object`, prepare the class it names to carry

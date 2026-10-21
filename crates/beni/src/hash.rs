@@ -304,9 +304,10 @@ impl RHash {
         Ok(pairs)
     }
 
-    /// An empty Array with room for every pair, key then value.
+    /// An empty Array with room for every pair, key then value, hidden
+    /// from Ruby so no visit can take back what it holds.
     fn pair_buffer(self, mrb: &Mrb) -> RArray {
-        mrb.ary_new_capa(2 * self.len(mrb))
+        mrb.hidden_ary_new_capa(2 * self.len(mrb))
     }
 
     /// Run `visit` over each pair, pushing each pair into `held` first when

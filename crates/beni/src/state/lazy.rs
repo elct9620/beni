@@ -4,8 +4,9 @@
 //! mruby runs many interpreters in a process and releases a root with its
 //! state, so the `static` here holds only an index, assigned once per
 //! process, and each interpreter keeps the value at that index in its own
-//! record — an Array under a global whose name carries no `$`, which no
-//! Ruby program can read or write. An unheld slot holds undef, a value no
+//! record — an Array no Ruby program can read or write: it sits under a
+//! global whose name carries no `$`, and it carries no class, so
+//! `ObjectSpace` passes over it. An unheld slot holds undef, a value no
 //! computed handle can be. An interpreter beni opened also keeps the
 //! record in its slot once found, so later reads skip the global lookup.
 
@@ -114,7 +115,7 @@ impl Mrb {
 
     fn set_lazy_slot(&self, index: usize, value: Value) {
         let record = self.lazy_record().unwrap_or_else(|| {
-            let record = self.ary_new();
+            let record = self.hidden_ary_new_capa(index + 1);
             let name = self
                 .intern_static(RECORD_GLOBAL)
                 .expect("interning a short static name only allocates");
