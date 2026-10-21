@@ -55,9 +55,6 @@ module BeniCoverage
 
     private
 
-    # A symbol two sections claim, or one an alias covers while a
-    # section takes it out of the measure — either way the record says
-    # two things about it and only one can be acted on.
     # A symbol taken out of the measure with nothing said about why. The
     # ratio moves on these, so an unreviewable one cannot be allowed to
     # stand; a bare `typed` Note is only an unnamed Rust side, which the
@@ -66,6 +63,9 @@ module BeniCoverage
       OUTSIDE.flat_map { |section| @sections.fetch(section).select { |_, note| note.to_s.strip.empty? }.keys }.sort
     end
 
+    # A symbol two sections claim, or one an alias covers while a
+    # section takes it out of the measure — either way the record says
+    # two things about it and only one can be acted on.
     def doubly_claimed
       named = @sections.values.flat_map(&:keys)
       contradicted = @equivalents.keys.select { |name| exclusion(name) }

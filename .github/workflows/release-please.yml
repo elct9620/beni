@@ -1,6 +1,6 @@
-# Release orchestration: one release-please PR bumps the gem and both
-# crates in lockstep (single v* tag), then the publish workflows chain
-# off the release event.
+# Release orchestration: one release-please PR bumps the gem and the
+# three published crates in lockstep (single v* tag), then the publish
+# workflows chain off the release event.
 name: Release Please
 
 on:

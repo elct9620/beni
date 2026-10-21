@@ -195,8 +195,8 @@ impl Mrb {
         unsafe { &*(mrb_ref as *const *mut sys::mrb_state as *const Mrb) }
     }
 
-    /// Return the currently pending mruby exception, or
-    /// `mrb_nil_value()` (`w == 0`) if none. Reads `mrb->exc`
+    /// Return the currently pending mruby exception, or `nil` if
+    /// none. Reads `mrb->exc`
     /// directly through the bindgen-exposed struct field; does NOT
     /// clear the field — callers pair this with `Mrb::clear_exc`
     /// after they have captured class/message/backtrace.

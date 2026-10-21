@@ -186,9 +186,9 @@ mrb_integer_func(mrb_value v)
 
 /* GC arena bracketing helpers. mruby exposes these as macros that
  * read / write `mrb->gc.arena_idx`; bindgen treats `mrb_gc` as
- * opaque (workaround for the bitfield mis-pack on wasm32, see
- * `build.rs::run_bindgen`), so reaching the field from Rust
- * requires routing through the C compiler. */
+ * opaque, its size taken from clang (see `build.rs::run_bindgen`), so
+ * reaching the field from Rust requires routing through the C
+ * compiler. */
 static inline int
 mrb_gc_arena_save_func(mrb_state *mrb)
 {
