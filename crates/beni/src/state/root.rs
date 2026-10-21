@@ -5,7 +5,7 @@
 //! keeps it reachable for the collector independently of the arena and
 //! of any Ruby reference to it.
 //!
-//! `Mrb::gc_register_forever` is the shape whose root is never released.
+//! `Mrb::gc_register_mark_object` is the shape whose root is never released.
 //! Never releasing is what makes it safe: mruby's registry is keyed by
 //! value rather than by registration, so a removal drops every root over
 //! that value, and a shape that never removes cannot drop another
@@ -18,7 +18,7 @@
 
 use crate::value::Lazy;
 use crate::{sys::AsRawValue, FromValue as _, RArray};
-use crate::{Error, Mrb, Value};
+use crate::{Error, Mrb, ReprValue, Value};
 use beni_sys as sys;
 
 impl Mrb {
@@ -28,12 +28,13 @@ impl Mrb {
     /// value is never reclaimed — the shape for a value an embedder
     /// holds as long as the VM itself, such as a cached class handle.
     /// Rooting an immediate value is a no-op, immediates being values
-    /// the collector never reclaims.
-    pub fn gc_register_forever(&self, v: Value) {
-        // SAFETY: `self` is alive by the `&self` borrow and `v`
+    /// the collector never reclaims. Mirrors magnus's
+    /// `Ruby::gc_register_mark_object`.
+    pub fn gc_register_mark_object<T: ReprValue>(&self, value: T) {
+        // SAFETY: `self` is alive by the `&self` borrow and `value`
         // originates from the same VM; the registry only records the
         // value, and this shape never removes it again.
-        unsafe { sys::mrb_gc_register(self.as_ptr(), v.as_raw()) };
+        unsafe { sys::mrb_gc_register(self.as_ptr(), value.as_value().as_raw()) };
     }
 
     /// Root `v` until the returned guard is dropped, so it stays

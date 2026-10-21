@@ -1716,7 +1716,7 @@ Arenas and roots govern which values stay reachable. Collection timing governs w
 | Concern | Typed surface |
 |---|---|
 | Arena scope | `Mrb::arena_scope` |
-| Root | `Mrb::gc_register_forever`, `Mrb::gc_root` |
+| Root | `Mrb::gc_register_mark_object`, `Mrb::gc_root` |
 | Lazy value | `Lazy`, `Mrb::get_inner` |
 | Collection timing | `Mrb::full_gc`, `Mrb::incremental_gc` |
 | Heap region | `Mrb::gc_add_region` |
@@ -1751,10 +1751,10 @@ A **root** keeps a value reachable independently of the arena and of any Ruby re
 
 | Shape | Answers | Root released |
 |---|---|---|
-| `Mrb::gc_register_forever` | nothing | never |
+| `Mrb::gc_register_mark_object` | nothing | never |
 | `Mrb::gc_root` | `Result` of a `GcRoot` guard | when that guard drops |
 
-`Mrb::gc_register_forever` roots a value for the interpreter's remaining lifetime, so the value is never reclaimed. It is the shape for a value an embedder holds as long as the VM itself, such as a cached class handle. Rooting an immediate value is a no-op, immediates being values the collector never reclaims.
+`Mrb::gc_register_mark_object` roots a value for the interpreter's remaining lifetime, so the value is never reclaimed. It is the shape for a value an embedder holds as long as the VM itself, such as a cached class handle. Rooting an immediate value is a no-op, immediates being values the collector never reclaims.
 
 ##### Releasable roots
 

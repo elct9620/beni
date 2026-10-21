@@ -68,7 +68,7 @@ fn a_registered_value_survives_collection() {
         // end is what leaves the root as its only hold.
         let scope = mrb.arena_scope();
         let obj = mrb.wrap_as(RootedProbe, class).as_value();
-        mrb.gc_register_forever(obj);
+        mrb.gc_register_mark_object(obj);
         drop(scope);
     }
     for _ in 0..64 {
