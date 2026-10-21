@@ -56,7 +56,8 @@
 #                              with a 32-bit pointer.
 #   $ rake rust:verify       — beni:build + the tasks above; the
 #                              single local entry point for "does the
-#                              Rust side compile and pass everywhere".
+#                              Rust side build on every target and pass
+#                              where it runs".
 #
 # Every cargo test leg skips the tests BENI_TEST_SKIP names, so a chain
 # run against a release the crates do not support yet can list the
@@ -79,7 +80,7 @@ namespace :rust do
     sh(BeniRust.host_env, "cargo", "check", "--workspace")
   end
 
-  desc "cargo test the workspace on the host (wasm32 has no test runner)"
+  desc "cargo test the workspace on the host (wasm32 is held to building and linking)"
   cargo_task(:test) do
     sh(BeniRust.host_env, "cargo", "test", "--workspace", *BeniRust.test_harness_args)
   end
@@ -119,7 +120,8 @@ namespace :rust do
     # `cargo check` never reaches the linker, so the link directives the
     # archive's sidecar drives — which libraries, found through which
     # search paths — are only exercised by producing a real artifact.
-    # wasm32 has no test runner, so the binaries are built and not run.
+    # wasm32 is held to building and linking, as the other cross target
+    # is, so the binaries are built and not run.
     desc "link wasm32-wasip1 test binaries against the staged archive"
     cargo_task(:wasm) do
       BeniRust.require_wasm_target!
