@@ -5,7 +5,7 @@ require "tmpdir"
 require_relative "fixtures"
 
 module Beni
-  # Artifact paths, built-state detection, and cleanup. The build
+  # Artifact paths and cleanup. The build
   # entry points (subprocess contract, config validation, artifact
   # verification) live in TestBuilderBuild.
   class TestBuilder < Minitest::Test
@@ -37,30 +37,13 @@ module Beni
 
       assert_equal File.join(@builder.staged_path("host"), "libmruby.lib"),
                    @builder.archive_path("host")
-      assert_predicate @builder, :built?,
-                       "a target whose sidecar names an MSVC archive is built when that file is there"
     end
 
-    def test_built_eh_is_false_until_every_target_artifact_exists
-      builder = Builder.new(vendor_dir: @dir, targets: %w[host wasi])
-
-      refute_predicate builder, :built?
-
-      touch_libmruby(builder, "host")
-
-      refute_predicate builder, :built?
-
-      touch_libmruby(builder, "wasi")
-
-      assert_predicate builder, :built?
-    end
-
-    def test_built_eh_requires_flags_mak_alongside_each_archive
+    def test_no_archive_is_looked_for_without_its_sidecar
       builder = Builder.new(vendor_dir: @dir)
       FileUtils.mkdir_p(builder.staged_path("host"))
       FileUtils.touch(File.join(builder.staged_path("host"), "libmruby.a"))
 
-      refute_predicate builder, :built?, "an archive without libmruby.flags.mak is not built"
       assert_nil builder.archive_path("host"),
                  "with no sidecar there is nothing naming an archive to look for"
     end

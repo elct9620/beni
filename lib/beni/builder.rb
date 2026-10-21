@@ -62,13 +62,6 @@ module Beni
       File.join(staged_path(target), archive_file_name(sidecar))
     end
 
-    # True when every target has its +libmruby.flags.mak+ sidecar — the
-    # channel +beni-sys+ parses for ABI alignment — and the archive that
-    # sidecar names.
-    def built?
-      targets.all? { |target| exist?(archive_path(target)) }
-    end
-
     # Build entry point for +rake beni:build+. mruby's rake decides what
     # is stale — a changed build config, gem, or source rebuilds what
     # depends on it, and an up-to-date tree compiles nothing — so every
@@ -114,10 +107,6 @@ module Beni
       raise Error, "[beni] #{sidecar} has no #{ARCHIVE_PATH_KEY.strip} line" unless line
 
       File.basename(line.delete_prefix(ARCHIVE_PATH_KEY).strip.tr("\\", "/"))
-    end
-
-    def exist?(path)
-      !path.nil? && File.exist?(path)
     end
 
     # Spawn mruby's rake with the parent environment plus the +env+

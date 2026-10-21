@@ -20,8 +20,6 @@ module Beni
 
     def archive_path: (String target) -> String?
 
-    def built?: () -> bool
-
     def ensure_built: () -> void
 
     def build: () -> void
@@ -31,8 +29,6 @@ module Beni
     private
 
     def archive_file_name: (String sidecar) -> String
-
-    def exist?: (String? path) -> bool
 
     def run_mruby_rake: (Hash[String, String] env, Array[String] cmd) -> void
 
