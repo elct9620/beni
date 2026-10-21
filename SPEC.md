@@ -269,6 +269,15 @@ The build fails for bindings that declare no integer width, and for bindings of 
 
 The crate publishes the mruby release the bindings declare, its major and minor number, to its direct dependents as the release metadata. It is read from the bindings the build uses, as the widths are; the documentation bindings declare the release they were generated from.
 
+#### Layout Check
+
+The `bindgen-layout-tests` cargo feature, disabled by default, turns on the layout check in a build that generates its bindings from the discovered archive. Enabling it adds no surface.
+
+| Feature | Generating build |
+|---|---|
+| disabled | checks no layout |
+| enabled | fails to compile on a type whose Rust layout differs from the one binding generation read from the headers, naming the type |
+
 #### Documentation Build
 
 A documentation build renders the whole typed surface where no archive can be staged. Every other build generates its bindings from the discovered archive's own headers.
@@ -279,6 +288,7 @@ A documentation build renders the whole typed surface where no archive can be st
 | Linking | none |
 | Cargo targets | host only |
 | Archive discovery | does not run; an archive discovery variable set changes nothing |
+| Layout check | none; the documentation bindings carry no layout check |
 
 ### beni crate — typed wrapper
 
@@ -2252,6 +2262,7 @@ measures complete.
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root |
 | The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has |
 | Bindings a `beni-sys` build uses that declare no integer width, no release, no float, or a fixed-size GC arena | `beni-sys` build fails and names the bindings it read |
+| A `beni-sys` build with the layout check on whose bindings lay a type out differently from its headers | `beni-sys` build fails to compile and names the type |
 | A `beni` build that receives no integer-width metadata, no float-width metadata, or no release metadata | `beni` build fails and names the metadata it expected |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | An exception raised by a raw binding inside a `sys::protect` body | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle; never unwinds past the caller |
@@ -2336,6 +2347,7 @@ measures complete.
 | configured float width | the bit width of mruby's float the bindings a build uses declare — 32 or 64; mruby settles it from the archive's flags, and the documentation bindings carry the 64-bit width of the upstream default configuration |
 | float-width metadata | the `links` metadata key `defines_mrb_float32` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_DEFINES_MRB_FLOAT32` — `true` for a 32-bit configured float width, `false` for a 64-bit one |
 | release metadata | the `links` metadata key `release` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_RELEASE` — the major and minor release the bindings declare, written `major.minor`, such as `4.0` |
+| layout check | the compile-time comparison of each type the bindings declare — its size, alignment, and field offsets as Rust lays it out — against the layout binding generation read from the headers for the same target |
 | supported mruby floor | mruby 4.0 — the oldest final release the crates build against |
 | documentation host | the service that renders a published crate's documentation from the registry, without network access or a place to stage an archive; it announces itself to a build script through the `DOCS_RS` environment variable and builds on one platform, `x86_64-unknown-linux-gnu` |
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
