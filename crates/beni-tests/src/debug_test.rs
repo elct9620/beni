@@ -54,6 +54,28 @@ fn the_hook_reads_each_line_and_the_file_running_it() {
 }
 
 #[test]
+fn code_loaded_without_a_file_name_has_no_place() {
+    let mut mrb = open_mrb();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&seen);
+    mrb.set_code_fetch_hook(move |arg: TraceArg<'_>| {
+        sink.lock()
+            .unwrap()
+            .push((arg.path().is_some(), arg.lineno().is_some()));
+    });
+
+    mrb.load_string(b"a = 1\nb = a + 1\n")
+        .expect("the source runs");
+
+    let seen = seen.lock().unwrap();
+    assert!(!seen.is_empty(), "the hook runs");
+    assert!(
+        seen.iter().all(|&place| place == (false, false)),
+        "{seen:?}"
+    );
+}
+
+#[test]
 fn a_removed_hook_is_called_no_more() {
     let mut mrb = open_mrb();
     let calls = Arc::new(AtomicUsize::new(0));
