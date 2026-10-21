@@ -31,22 +31,25 @@ impl Mrb {
     /// did not open.
     pub(crate) fn slot(&self) -> Option<&Slot> {
         // SAFETY: `self` is live, and `ud` is NULL or the pointer
-        // `slot_mut` wrote, which stays valid until `release_slot`
+        // `install_slot` wrote, which stays valid until `release_slot`
         // reclaims it through `&mut self` — so not while this borrow
         // lives.
         unsafe { ((*self.as_ptr()).ud as *const Slot).as_ref() }
     }
 
-    /// The slot this interpreter carries, allocated first when it has
-    /// none. Only an owner reaches it, and the owner's drop reclaims it.
+    /// Give this interpreter its slot. An owner does so once, as it opens
+    /// the interpreter, and its drop reclaims the slot.
+    pub(crate) fn install_slot(&mut self) {
+        *self.ud_field_mut() = Box::into_raw(Box::<Slot>::default()).cast();
+    }
+
+    /// The slot an owner's interpreter carries.
     pub(crate) fn slot_mut(&mut self) -> &mut Slot {
-        let ud = self.ud_field();
-        if ud.is_null() {
-            *self.ud_field_mut() = Box::into_raw(Box::<Slot>::default()).cast();
-        }
-        // SAFETY: the field now holds the pointer written above or by
-        // an earlier call, and `&mut self` makes this the only borrow.
-        unsafe { &mut *self.ud_field().cast::<Slot>() }
+        // SAFETY: an owner's `ud` is the pointer `install_slot` wrote,
+        // valid until `release_slot` reclaims it after the drop, and
+        // `&mut self` makes this the only borrow.
+        unsafe { self.ud_field().cast::<Slot>().as_mut() }
+            .expect("an interpreter beni opened carries its slot")
     }
 
     /// The field as it stands, read before the interpreter closes so
@@ -67,7 +70,7 @@ impl Mrb {
 /// has closed, so nothing mruby runs reads it after.
 pub(crate) fn release_slot(ud: *mut core::ffi::c_void) {
     if !ud.is_null() {
-        // SAFETY: a non-NULL `ud` is the pointer `slot_mut` produced
+        // SAFETY: a non-NULL `ud` is the pointer `install_slot` produced
         // from `Box::into_raw`, read out of the state before it closed,
         // so this is its only reclaim.
         drop(unsafe { Box::from_raw(ud.cast::<Slot>()) });

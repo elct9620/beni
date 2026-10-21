@@ -67,9 +67,7 @@ impl Mrb {
         // SAFETY: `self` is live; clearing the field first means the
         // interpreter calls no hook once the closure is dropped.
         unsafe { (*self.as_ptr()).code_fetch_hook = None };
-        if self.slot().is_some() {
-            *self.slot_mut().hook.get_mut() = None;
-        }
+        *self.slot_mut().hook.get_mut() = None;
     }
 
     /// Run `func` with a `DebugInspector` over the running fiber's frames,

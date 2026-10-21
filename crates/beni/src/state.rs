@@ -128,6 +128,7 @@ impl Mrb {
             return Err(MrbOpenError);
         };
         let mut mrb = Self { state };
+        mrb.install_slot();
         // `mrb_open` also signals failure by returning a state
         // with `mrb->exc` set — core or gem init failed (vendored
         // `src/state.c`). That state is not a usable interpreter;
@@ -135,7 +136,6 @@ impl Mrb {
         if !mrb.pending_exc().is_nil() {
             return Err(MrbOpenError);
         }
-        mrb.slot_mut();
         Ok(mrb)
     }
 

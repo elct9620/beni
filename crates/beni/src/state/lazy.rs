@@ -6,7 +6,7 @@
 //! process, and each interpreter keeps the value at that index in its own
 //! record — an Array no Ruby program can read or write: it sits under a
 //! global whose name carries no `$`, and it carries no class, so
-//! `ObjectSpace` passes over it. An unheld slot holds undef, a value no
+//! `ObjectSpace` passes over it. An unheld entry holds undef, a value no
 //! computed handle can be. An interpreter beni opened also keeps the
 //! record in its slot once found, so later reads skip the global lookup.
 
@@ -63,15 +63,15 @@ impl<T: ReprValue> Lazy<T> {
     /// nothing. Mirrors magnus's `Lazy::try_get_inner`, reading the
     /// interpreter that holds the value.
     pub fn try_get_inner(this: &Self, mrb: &Mrb) -> Option<T> {
-        let held = mrb.lazy_slot(this.index())?;
-        // SAFETY: a held slot holds the value this `Lazy` computed or was
+        let held = mrb.lazy_entry(this.index())?;
+        // SAFETY: a held entry holds the value this `Lazy` computed or was
         // given, a `T`.
         Some(unsafe { <T as crate::value::private::ReprValue>::from_value_unchecked(held) })
     }
 
     /// Hold `value` in `mrb` in place of whatever it held.
     pub(crate) fn hold(this: &Self, mrb: &Mrb, value: T) {
-        mrb.set_lazy_slot(this.index(), value.as_value());
+        mrb.set_lazy_entry(this.index(), value.as_value());
     }
 
     fn index(&self) -> usize {
@@ -113,7 +113,7 @@ impl Mrb {
         wrapper.get_inner_with(self)
     }
 
-    fn lazy_slot(&self, index: usize) -> Option<Value> {
+    fn lazy_entry(&self, index: usize) -> Option<Value> {
         let record = self.lazy_record()?;
         if index >= record.len() {
             return None;
@@ -124,7 +124,7 @@ impl Mrb {
         Qundef::from_value(held).is_none().then_some(held)
     }
 
-    fn set_lazy_slot(&self, index: usize, value: Value) {
+    fn set_lazy_entry(&self, index: usize, value: Value) {
         let record = self.lazy_record().unwrap_or_else(|| {
             let record = self.hidden_ary_new_capa(index + 1);
             let name = self
