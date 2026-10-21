@@ -64,6 +64,14 @@ module Beni
       refute builder.ran, "mruby's rake must not spawn for a missing config"
     end
 
+    def test_ensure_built_hands_mruby_the_build_even_when_artifacts_exist
+      builder = fake_built_builder
+
+      capture_io { builder.ensure_built }
+
+      assert builder.ran, "mruby's rake decides what is stale, so it runs every time"
+    end
+
     def test_ensure_built_aborts_on_missing_config_even_when_artifacts_exist
       missing = File.join(@dir, "missing_config.rb")
       builder = FakeRakeBuilder.new(vendor_dir: @dir, build_config: missing)

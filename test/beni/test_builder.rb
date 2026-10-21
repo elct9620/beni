@@ -60,18 +60,9 @@ module Beni
       FileUtils.mkdir_p(builder.staged_path("host"))
       FileUtils.touch(File.join(builder.staged_path("host"), "libmruby.a"))
 
-      refute_predicate builder, :built?,
-                       "an archive without libmruby.flags.mak must trigger a (cheap, incremental) rebuild"
+      refute_predicate builder, :built?, "an archive without libmruby.flags.mak is not built"
       assert_nil builder.archive_path("host"),
                  "with no sidecar there is nothing naming an archive to look for"
-    end
-
-    def test_ensure_built_skips_the_build_when_artifacts_exist
-      touch_libmruby(@builder, "host")
-
-      output, = capture_io { @builder.ensure_built }
-
-      assert_includes output, "skipping"
     end
 
     def test_clean_removes_target_build_trees_but_keeps_source

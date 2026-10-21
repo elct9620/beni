@@ -64,24 +64,16 @@ module Beni
 
     # True when every target has its +libmruby.flags.mak+ sidecar — the
     # channel +beni-sys+ parses for ABI alignment — and the archive that
-    # sidecar names, letting callers skip the build without spawning a
-    # subprocess. A missing sidecar triggers a rebuild, which is
-    # incremental and only emits what it lacks.
+    # sidecar names.
     def built?
       targets.all? { |target| exist?(archive_path(target)) }
     end
 
-    # Idempotent build entry point for +rake beni:build+: skip with a
-    # note when every artifact is already present, otherwise build and
-    # report readiness. A declared config that does not exist aborts
-    # before the skip check — stale artifacts must not mask it.
+    # Build entry point for +rake beni:build+. mruby's rake decides what
+    # is stale — a changed build config, gem, or source rebuilds what
+    # depends on it, and an up-to-date tree compiles nothing — so every
+    # run hands it the build.
     def ensure_built
-      check_build_config!
-      if built?
-        puts "[beni] archive already present for #{targets.join(" + ")} — skipping"
-        return
-      end
-
       build
       puts "[beni] archive ready for #{targets.join(" + ")}"
     end
