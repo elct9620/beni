@@ -67,7 +67,7 @@ module BeniRust
   # the staged path.
   def self.float32_lib_dir
     staged_abi_lib_dirs(FLOAT32_BUILD_DIR,
-                        "MRUBY_CONFIG" => File.join(ROOT, "build_config", "float32.rb")).first
+                        { "MRUBY_CONFIG" => File.join(ROOT, "build_config", "float32.rb") }).first
   end
 
   # Build the vendored mruby under build_config/no_boxing.rb and answer
