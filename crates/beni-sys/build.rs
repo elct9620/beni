@@ -389,8 +389,8 @@ fn run_bindgen(
         .opaque_type("mrb_gc")
         .prepend_enum_name(false)
         // Generate trampolines for `static inline` helpers reached
-        // through `wrapper.h` — both mruby's own (`mrb_integer_func`,
-        // `mrb_obj_value`, `mrb_type`, …) and the macro wrappers
+        // through `wrapper.h` — both mruby's own (`mrb_nil_value`,
+        // `mrb_obj_value`, `mrb_symbol_value`, …) and the macro wrappers
         // declared in `wrapper.h` (`mrb_rstring_ptr_func`, `mrb_obj_ptr_func`,
         // `mrb_gc_arena_save_func`, `mrb_proc_new_func`, …).
         .wrap_static_fns(true)

@@ -153,6 +153,26 @@ mrb_symbol_func(mrb_value v)
   return mrb_symbol(v);
 }
 
+/* Type tag read. Counterpart to `mrb_type(o)`, an MRB_INLINE function
+ * under word boxing and a field-read macro under no boxing, so reaching
+ * it from Rust must go through the C compiler. */
+static inline enum mrb_vtype
+mrb_type_func(mrb_value v)
+{
+  return mrb_type(v);
+}
+
+/* Integer unbox. Counterpart to the `mrb_integer(o)` macro. Word boxing
+ * expands it to its own `mrb_integer_func` MRB_INLINE; every other
+ * boxing reads a field, so the same name is declared here for them. */
+#if !defined(MRB_WORD_BOXING)
+static inline mrb_int
+mrb_integer_func(mrb_value v)
+{
+  return mrb_integer(v);
+}
+#endif
+
 /* GC arena bracketing helpers. mruby exposes these as macros that
  * read / write `mrb->gc.arena_idx`; bindgen treats `mrb_gc` as
  * opaque (workaround for the bitfield mis-pack on wasm32, see
