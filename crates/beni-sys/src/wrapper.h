@@ -201,6 +201,18 @@ mrb_gc_arena_restore_func(mrb_state *mrb, int idx)
   mrb_gc_arena_restore(mrb, idx);
 }
 
+/* Lower the arena index to `idx`, leaving an index already below it in
+ * place: an arena scope that ends after one opened before it must not
+ * raise the index back over released slots. One call, so the check
+ * costs no crossing of its own. */
+static inline void
+mrb_gc_arena_release_func(mrb_state *mrb, int idx)
+{
+  if (idx < mrb_gc_arena_save(mrb)) {
+    mrb_gc_arena_restore(mrb, idx);
+  }
+}
+
 /* `mrb_proc_new` is declared in <mruby/proc.h> without `MRB_API`,
  * so the `-fvisibility=default` workaround in `build.rs` does not
  * make bindgen pick it up. The static archive still resolves the

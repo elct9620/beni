@@ -88,10 +88,6 @@ impl Drop for ArenaScope<'_> {
 /// the index past `idx`; raising it back would protect slots that no
 /// longer hold anything live.
 fn release_to(mrb: &Mrb, idx: core::ffi::c_int) {
-    // SAFETY: `mrb` is alive; the save helper only reads the index.
-    if idx < unsafe { sys::mrb_gc_arena_save_func(mrb.as_ptr()) } {
-        // SAFETY: `mrb` is alive, and `idx` lies below the current
-        // index, so the restore only releases.
-        unsafe { sys::mrb_gc_arena_restore_func(mrb.as_ptr(), idx) };
-    }
+    // SAFETY: `mrb` is alive; the shim only lowers the index.
+    unsafe { sys::mrb_gc_arena_release_func(mrb.as_ptr(), idx) };
 }
