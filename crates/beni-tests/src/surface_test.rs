@@ -452,6 +452,8 @@ fn fiber_surface_is_reachable_from_outside() {
 #[test]
 fn debug_hook_surface_is_reachable_from_outside() {
     let _ = Mrb::set_code_fetch_hook::<fn(debug::TraceArg<'_>), ()>;
+    let _ =
+        Mrb::set_code_fetch_hook::<fn(debug::TraceArg<'_>) -> Result<(), Error>, Result<(), Error>>;
     let _ = Mrb::remove_code_fetch_hook;
     let _ = debug::TraceArg::lineno;
     let _ = debug::TraceArg::path;

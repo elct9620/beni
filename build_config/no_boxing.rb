@@ -8,8 +8,9 @@
 # which mruby accepts on a 32-bit target only without boxing: this is
 # the archive that compiles the crates against a 64-bit `mrb_int`
 # beside a 32-bit pointer, a pairing no other build in the chain
-# reaches. Nothing here is a product posture — it exists to be verified
-# against.
+# reaches. It carries the debug hooks too, so the debug surface compiles
+# and runs over the tagged union. Nothing here is a product posture — it
+# exists to be verified against.
 #
 # The file is `load`ed by mruby's rake when +MRUBY_CONFIG+ points at it.
 
@@ -17,7 +18,7 @@ MRuby::Lockfile.disable
 
 require_relative "beni_build_config"
 
-no_boxing_defines = %w[MRB_NO_BOXING MRB_INT64].freeze
+no_boxing_defines = %w[MRB_NO_BOXING MRB_INT64 MRB_USE_DEBUG_HOOK].freeze
 
 MRuby::Build.new("host") do |conf|
   conf.toolchain :gcc

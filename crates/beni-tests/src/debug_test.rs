@@ -450,3 +450,60 @@ fn an_inspector_opened_from_rust_reads_its_callers_across_a_moved_frame_stack() 
         "[2, :outer, 2, :outer]"
     );
 }
+
+#[test]
+fn a_hook_in_a_fiber_reads_only_that_fibers_frames() {
+    let mut mrb = open_mrb();
+    let source = "def wrap\n  Fiber.new do\n    y = 3\n    y\n  end.resume\nend\nwrap\n";
+
+    let (depth, past) = read_at(&mut mrb, source, 4, |arg| {
+        let frames = arg.debug_inspector();
+        (frames.frame_depth(0), frames.frame_depth(1))
+    });
+
+    assert_eq!(depth, Some(0), "the fiber's block is its outermost frame");
+    assert_eq!(past, None, "the frames that resumed it are another fiber's");
+}
+
+#[test]
+fn the_running_frames_line_is_the_instructions() {
+    let mut mrb = open_mrb();
+    let agree = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&agree);
+    mrb.set_code_fetch_hook(move |arg: TraceArg<'_>| {
+        let running = arg.debug_inspector().frame_lineno(0);
+        sink.lock().unwrap().push(running == arg.lineno());
+    });
+
+    run(&mrb, "a = 1\nb = [a, 2].map { |n| n * 2 }\nc = b.sum\n").expect("the source runs");
+    mrb.remove_code_fetch_hook();
+
+    let agree = agree.lock().unwrap();
+    assert!(!agree.is_empty());
+    assert!(agree.iter().all(|&same| same));
+}
+
+/// Runs Ruby as the interpreter closes, as an embedder's exit handler may.
+unsafe extern "C" fn run_ruby_on_close(mrb: *mut beni::sys::mrb_state) {
+    // SAFETY: mruby calls an exit handler with its live state.
+    unsafe { beni::sys::mrb_load_string(mrb, c"[1, 2].map { |n| n + 1 }".as_ptr()) };
+}
+
+#[test]
+fn closing_calls_the_hook_for_nothing_the_close_runs() {
+    let mut mrb = open_mrb();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&calls);
+    mrb.set_code_fetch_hook(move |_: TraceArg<'_>| {
+        counter.fetch_add(1, Ordering::SeqCst);
+    });
+    // SAFETY: `mrb` is live, and the handler runs only Ruby.
+    unsafe { beni::sys::mrb_state_atexit(mrb.as_ptr(), Some(run_ruby_on_close)) };
+    run(&mrb, "1 + 1").expect("the source runs");
+    let before = calls.load(Ordering::SeqCst);
+
+    drop(mrb);
+
+    assert!(before > 0);
+    assert_eq!(calls.load(Ordering::SeqCst), before);
+}
