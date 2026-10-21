@@ -1218,7 +1218,7 @@ A top-level constant binds on the live `Mrb` handle as a constant assignment on 
 
 ##### Global variables
 
-A global variable belongs to the interpreter rather than to any value. So it reads, assigns, and removes on the live `Mrb` handle, symbol-or-name keyed:
+A global variable belongs to the interpreter rather than to any value. So it reads, assigns, and removes on the live `Mrb` handle, symbol-or-name keyed; a key without a leading `$` names the global with one:
 
 | Operation | Behavior |
 |---|---|
@@ -1290,7 +1290,7 @@ Every operation keyed by a name accepts the name as a symbol-or-name key, mirror
 
 Every key resolves to the `Id` it names: a string key by interning, an already-interned `Id` or `Symbol` key as the id it already is. A string key reaches the intern as a NUL-terminated C string, keyed on the bytes before its first NUL, or as a Rust string, keyed on all of its bytes. A consumer holding an `Id` or a `Symbol` reaches the operation without a redundant intern. The result is identical to passing the equivalent name, since both resolve to the same interned id. A method alias keys the new and the original name this way, each independently.
 
-A key too long to intern names no symbol.
+A key too long to intern names no symbol, and is refused as too long before its name is checked.
 
 | Operation | Outcome for a too-long key |
 |---|---|
@@ -1298,6 +1298,39 @@ A key too long to intern names no symbol.
 | total predicate | `false` |
 | total read | `nil` |
 | total removal | nothing done |
+
+##### Admitted names
+
+mruby keeps state its C code reads back unchecked under names no Ruby program can write, such as a class's `__attached__`. So a class-variable, constant, or global-variable operation keys only a name Ruby could write in its namespace. Such state is reachable only through `beni::sys`.
+
+| Namespace | Operations | Admits |
+|---|---|---|
+| class variable | every class-variable operation | `@@`, then identifier characters |
+| constant | constant operations, class and module definition and lookup, `define_global_const` | an ASCII uppercase letter, then identifier characters |
+| global variable | every global-variable operation | every name, `$` prefixed when it lacks one |
+
+An identifier character is an ASCII letter or digit, `_`, or any non-ASCII byte. A class variable needs at least one, and its first is not a digit. A global key without `$` names the global with one, as CRuby's `rb_gv_get` and `rb_gv_set` do.
+
+##### Refused names
+
+A class-variable or constant name its namespace does not admit is refused before the operation acts. The refusal surfaces as a Rust `Err` carrying a `NameError` whose `name` is that name. A total predicate answers `false` instead.
+
+| Namespace | Refusal message |
+|---|---|
+| class variable | `'NAME' is not allowed as a class variable name` |
+| constant | `wrong constant name NAME` |
+
+`NAME` stands for the refused name.
+
+##### Checked keys
+
+A checked key carries a name already admitted by one namespace, so its operations repeat no check. It keys any other operation as its `Id` does, and converts into that `Id`.
+
+| Key | Namespace |
+|---|---|
+| `CvarId` | class variable |
+| `ConstId` | constant |
+| `GvarId` | global variable, already `$` prefixed |
 
 ##### Exception classes
 
@@ -2358,6 +2391,7 @@ measures complete.
 | A Ruby method invoked through a value's dispatch, an object `dup` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising; a current-fiber read finding `Fiber` naming no class, or `Fiber.current` raising or answering anything but a Fiber | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
 | A name of `UINT16_MAX` bytes or more given to a creating intern, to a string's coercion to a symbol, or as a symbol-or-name key | surfaced as a Rust `Err` carrying the `ArgumentError`, never unwinds across FFI; an operation that reports no failure answers instead as it does for a name nothing is bound under — a predicate `false`, a read `nil`, a removal a no-op |
+| A name the class-variable or constant namespace does not admit, given to an operation in it | surfaced as a Rust `Err` carrying the namespace's `NameError`, without acting; a total predicate answers `false` |
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A `TypedData` value wrapped as an instance of a class that cannot carry data — one never marked, breaking the `TypedData` contract | the payload not yet handed to a carrier is reclaimed, never leaked, and the wrap panics; nothing unwinds across FFI |
 | A `TypedData` type's carriers marked in an interpreter where a path resolves to no class, resolves to a value that is not a class, or names a class that refuses the mark | surfaced as a Rust `Err`; whichever classes it marked before the failure stay marked and held |
