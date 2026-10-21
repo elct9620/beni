@@ -43,7 +43,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let ident = &input.ident;
     let own = carrier_site(site_ident("CLASS"), &class, "TypedData")?;
     let variants = variant_sites(&input.data)?;
-    let class_for = class_for(&variants);
+    let class_for = class_for(&variants, variant_count(&input.data));
     reject_field_attributes(&input.data)?;
 
     let own_site = &own.ident;
@@ -98,8 +98,9 @@ fn variant_sites(data: &Data) -> Result<Vec<(&syn::Ident, CarrierSite)>, Error> 
 }
 
 /// `class_for` answering each variant's own class, for an enum whose
-/// variants carry `#[beni(class = "...")]`; nothing otherwise.
-fn class_for(variants: &[(&syn::Ident, CarrierSite)]) -> TokenStream {
+/// variants carry `#[beni(class = "...")]`; nothing otherwise. A variant
+/// without a class of its own answers the type's class.
+fn class_for(variants: &[(&syn::Ident, CarrierSite)], count: usize) -> TokenStream {
     if variants.is_empty() {
         return TokenStream::new();
     }
@@ -107,13 +108,22 @@ fn class_for(variants: &[(&syn::Ident, CarrierSite)]) -> TokenStream {
         let site = &site.ident;
         quote! { Self::#variant { .. } => mrb.get_inner(&#site) }
     });
+    let rest =
+        (variants.len() < count).then(|| quote! { _ => <Self as ::beni::TypedData>::class(mrb), });
     quote! {
         fn class_for(mrb: &::beni::Mrb, value: &Self) -> ::beni::RClass {
-            #[allow(unreachable_patterns)]
             match value {
                 #(#arms,)*
-                _ => <Self as ::beni::TypedData>::class(mrb),
+                #rest
             }
         }
+    }
+}
+
+/// How many variants an enum declares; none for any other type.
+fn variant_count(data: &Data) -> usize {
+    match data {
+        Data::Enum(data) => data.variants.len(),
+        _ => 0,
     }
 }

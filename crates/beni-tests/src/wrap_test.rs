@@ -35,6 +35,15 @@ enum Shape {
     Square,
 }
 
+#[derive(beni::TypedData)]
+#[beni(class = "BeniWrapSign")]
+enum Sign {
+    #[beni(class = "BeniWrapSign::Plus")]
+    Plus,
+    #[beni(class = "BeniWrapSign::Minus")]
+    Minus,
+}
+
 fn define(mrb: &Mrb, source: &[u8]) {
     mrb.load_string(source)
         .expect("defining the classes must succeed");
@@ -125,6 +134,22 @@ fn each_variant_wraps_as_its_own_class_or_the_types() {
 
     assert_eq!(circle.classname(&mrb), "BeniWrapShape::Circle");
     assert_eq!(square.classname(&mrb), "BeniWrapShape");
+}
+
+#[test]
+fn an_enum_whose_every_variant_names_a_class_wraps_each_as_it() {
+    let mrb = open_mrb();
+    define(
+        &mrb,
+        b"class BeniWrapSign; class Plus < self; end; class Minus < self; end; end",
+    );
+    Sign::mark_carriers(&mrb).expect("every path names a class");
+
+    let plus = mrb.wrap(Sign::Plus).as_value();
+    let minus = mrb.wrap(Sign::Minus).as_value();
+
+    assert_eq!(plus.classname(&mrb), "BeniWrapSign::Plus");
+    assert_eq!(minus.classname(&mrb), "BeniWrapSign::Minus");
 }
 
 #[test]
