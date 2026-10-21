@@ -18,9 +18,8 @@ pub use crate::state::lazy::Lazy;
 // --------------------------------------------------------------------
 //
 // `mrb_nil_value()` / `mrb_true_value()` / `mrb_false_value()` /
-// `mrb_undef_value()` are config-level constants under mruby's word-box
-// configuration — they
-// are decided at libmruby build time and do not vary across
+// `mrb_undef_value()` are config-level constants under every boxing —
+// they are decided at libmruby build time and do not vary across
 // `mrb_state` instances. Capturing them once via the C shims sidesteps
 // a cross-FFI call every time a hot path wants `nil` / `true` /
 // `false`.
@@ -32,10 +31,12 @@ struct Immediates {
     qundef: sys::mrb_value,
 }
 
-// SAFETY: `mrb_value` under word boxing is a `#[repr(C)]` struct
-// holding a single integer word — plain old data with no interior
-// mutability. `Immediates` therefore shares only `Copy` snapshots,
-// which is sound to read from any thread.
+// SAFETY: `mrb_value` is plain old data with no interior mutability —
+// a single word under word boxing, a tagged union under no boxing. nil,
+// true, false, and undef each store an integer payload and name no
+// object, so the snapshots are sound to move to and read from any
+// thread.
+unsafe impl Send for Immediates {}
 unsafe impl Sync for Immediates {}
 
 static IMMEDIATES: std::sync::OnceLock<Immediates> = std::sync::OnceLock::new();
@@ -105,7 +106,7 @@ impl core::fmt::Debug for Value {
 /// handle crosses threads freely.
 #[inline]
 pub fn qnil() -> crate::Qnil {
-    // SAFETY: the cached word is mruby's own `nil`.
+    // SAFETY: the cached value is mruby's own `nil`.
     unsafe {
         <crate::Qnil as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qnil))
     }
@@ -115,7 +116,7 @@ pub fn qnil() -> crate::Qnil {
 /// interpreter handle for the reason `qnil` gives.
 #[inline]
 pub fn qtrue() -> crate::Qtrue {
-    // SAFETY: the cached word is mruby's own `true`.
+    // SAFETY: the cached value is mruby's own `true`.
     unsafe {
         <crate::Qtrue as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qtrue))
     }
@@ -125,14 +126,14 @@ pub fn qtrue() -> crate::Qtrue {
 /// interpreter handle for the reason `qnil` gives.
 #[inline]
 pub fn qfalse() -> crate::Qfalse {
-    // SAFETY: the cached word is mruby's own `false`.
+    // SAFETY: the cached value is mruby's own `false`.
     unsafe {
         <crate::Qfalse as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qfalse))
     }
 }
 
 /// The undefined value, magnus's `QUNDEF`. A function rather than a
-/// constant, as `qnil` is: the word is the configured boxing's, read
+/// constant, as `qnil` is: the value is the configured boxing's, read
 /// through mruby's own `mrb_undef_value`.
 #[inline]
 pub fn qundef() -> crate::Qundef {
@@ -542,11 +543,11 @@ pub trait ReprValue: private::ReprValue {
 
     /// `mrb_obj_id(self)` — a unique integer identifier for `self`,
     /// Ruby's `object_id`. Reads the value's identity from the boxed
-    /// word alone, so it takes no `Mrb`, dispatches nothing, and never
+    /// value alone, so it takes no `Mrb`, dispatches nothing, and never
     /// raises.
     #[inline]
     fn object_id(self) -> i64 {
-        // SAFETY: `mrb_obj_id` reads only `self`'s boxed word for its
+        // SAFETY: `mrb_obj_id` reads only `self`'s boxed value for its
         // identity and does not touch `mrb_state`.
         widen(unsafe { sys::mrb_obj_id(self.as_value().0) })
     }
@@ -825,9 +826,9 @@ impl Value {
     /// what every handle's downcast discriminates on.
     #[inline]
     pub(crate) fn tag(self) -> sys::mrb_vtype {
-        // SAFETY: mrb_type is a pure read of the value tag and does not
-        // touch `mrb_state`.
-        unsafe { sys::mrb_type(self.0) }
+        // SAFETY: mrb_type_func is a pure read of the value tag and does
+        // not touch `mrb_state`.
+        unsafe { sys::mrb_type_func(self.0) }
     }
 
     /// The integer a fixed-width Integer carries, as an `i64`, which
