@@ -11,9 +11,9 @@
 #
 # Bindings are shaped by the host as well as the config — the platform
 # decides +va_list+'s form and which constants its headers define — so
-# they are generated on the platform the documentation host builds on
-# and nowhere else. Another host would write a different file, which the
-# freshness gate would read as drift.
+# each host writes its own and reads it on the same machine. Only the
+# copy a release packages must come from the platform the documentation
+# host builds on, which +require_documentation_host!+ holds.
 #
 # The file is whatever the crate's own build script wrote for that
 # archive, taken from the +out_dir+ cargo reports for it. Nothing here
