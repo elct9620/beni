@@ -269,6 +269,15 @@ The build fails for bindings that declare no integer width, and for bindings of 
 
 The crate publishes the mruby release the bindings declare, its major and minor number, to its direct dependents as the release metadata. It is read from the bindings the build uses, as the widths are; the documentation bindings declare the release they were generated from.
 
+#### Debug-hook Metadata
+
+The crate publishes whether the archive carries the debug hooks to its direct dependents as the debug-hook metadata. It is read from the bindings the build uses, as the widths are.
+
+| Bindings declare in the interpreter state | Metadata |
+|---|---|
+| the code fetch hook | `true` |
+| no code fetch hook | `false` |
+
 #### Layout Check
 
 The `bindgen-layout-tests` cargo feature, disabled by default, turns on the layout check in a build that generates its bindings from the discovered archive. Enabling it adds no surface.
@@ -1730,7 +1739,7 @@ Every value the typed surface hands to a Rust caller stays reachable from the mo
 | Value handed out | Origin |
 |---|---|
 | created | by the typed surface |
-| read out | of an array, a hash, or a variable |
+| read out | of an array, a hash, a variable, or a frame's local variables |
 | argument | of a method |
 | exception | however it was produced |
 
@@ -1907,6 +1916,54 @@ Readers include a gem's installation and a registered method. A read lasts as lo
 A read or a take names the type it expects. Naming a type other than the one held, or reaching an empty slot, answers nothing. A take that answers nothing leaves the slot as it was.
 
 mruby publishes no call for the slot, so it belongs to this surface: a write to it through `beni::sys` is the writer's own unsafe act.
+
+#### Debug hooks
+
+The `Mrb` handle installs a code fetch hook, the per-instruction callback a debugger drives breakpoints and stepping from. This surface exists only in a build whose archive carries the debug hooks, as the debug-hook metadata reports.
+
+| Operation | Who | Outcome |
+|---|---|---|
+| `Mrb::set_code_fetch_hook` | only the handle's owner | installs the hook, dropping any installed before it |
+| `Mrb::remove_code_fetch_hook` | only the handle's owner | drops the installed hook, if any |
+
+The hook is a closure that may be called more than once and can cross threads. The interpreter calls it before each instruction it runs, in whichever fiber runs it. The interpreter drops it when it closes, calling it for nothing the close itself runs.
+
+##### Hook calls
+
+Each call hands the hook a `TraceArg`, mirroring `magnus`'s `TraceArg`, valid only for that call. The hook reaches no Ruby code: a `TraceArg` reads, and offers no interpreter handle to call Ruby through. The hook returns one of a closed set, mirroring `magnus`'s `InitReturn`:
+
+| Hook returns | The running code receives |
+|---|---|
+| nothing | nothing; the instruction runs |
+| `Ok` | nothing; the instruction runs |
+| `Err` | the `Err` raised in place of the instruction, rescuable there |
+
+A panic in the hook raises the same way, as an exception carrying the panic's message, and never unwinds into mruby's C frames.
+
+##### Trace arguments
+
+A `TraceArg` reads the instruction about to run.
+
+| Read | Answers |
+|---|---|
+| `lineno` | its line, or nothing for code that carries no line numbers |
+| `path` | its file name, or nothing for code loaded without one |
+| `method_id` | the name of the method running it, or nothing at the top level |
+| `debug_inspector` | a `DebugInspector` over the running fiber's frames, valid for the same call |
+
+##### Frame inspection
+
+A `DebugInspector` reads the frames of the running fiber, mirroring `magnus`'s `DebugInspector`. Each read takes a frame index. Index `0` is the frame running the instruction, and each next index the frame that called it. An index past the fiber's outermost frame answers nothing.
+
+| Read | Answers for the indexed frame |
+|---|---|
+| `frame_depth` | how many frames lie beneath it, `0` for the outermost |
+| `frame_path` | the file name of its code, as `path` does |
+| `frame_lineno` | the line of its current instruction or pending call |
+| `frame_method_id` | the name of its method, as `method_id` does |
+| `frame_local_variables` | each local variable its code declares, in order, with its current value |
+
+A frame running Rust or C code has no file name, no line, and no local variables. Code compiled without its local variable names declares none. A `DebugInspector` writes nothing.
 
 #### Precompiled bytecode
 
@@ -2264,6 +2321,7 @@ measures complete.
 | Bindings a `beni-sys` build uses that declare no integer width, no release, no float, or a fixed-size GC arena | `beni-sys` build fails and names the bindings it read |
 | A `beni-sys` build with the layout check on whose bindings lay a type out differently from its headers | `beni-sys` build fails to compile and names the type |
 | A `beni` build that receives no integer-width metadata, no float-width metadata, or no release metadata | `beni` build fails and names the metadata it expected |
+| A `beni` build that receives no debug-hook metadata | the build fails, naming that metadata |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | An exception raised by a raw binding inside a `sys::protect` body | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle; never unwinds past the caller |
 | An allocation the interpreter cannot satisfy, inside a typed operation | mruby's out-of-memory raise, outside every total or never-raising statement. An operation that surfaces `Err` surfaces it as one carrying that exception; inside one that surfaces none — a conversion into a value, a read or render stated to never raise — it reaches the nearest mruby frame that rescues it, and ends the process where none does |
@@ -2304,6 +2362,7 @@ measures complete.
 | A registered method returning a fiber yield outside a resumed fiber, or with a call from C or Rust code into Ruby between the fiber's block and the method | mruby's `FiberError` raised to the method's Ruby caller; no fiber switches |
 | A class defined under a name bound to anything but an ordinary class with the given superclass, or mruby raising during class or module definition, method registration, method aliasing, method undefinition or removal, or module inclusion or prepend (including a cyclic include or prepend) | surfaced as a Rust `Err`, never unwinds across FFI |
 | Rust panic raised inside any closure the safe wrapper invokes (`Gem::init` body, registered method, Rust-defined proc body, hash iterate closure, a closure run through `sys::catch_unwind`) | caught at the FFI boundary; surfaced as a Rust `Err` to the Rust caller (`Gem::init` body, hash iterate closure, `sys::catch_unwind`) or as an mruby exception to the caller (registered method, Rust-defined proc body); never unwinds into mruby's C frames |
+| A code fetch hook answering `Err` or panicking | an exception raised in place of the next instruction, rescuable there |
 | A Rust-defined proc's closure called again, through its proc or a copy of it, while it is already running | `RuntimeError` raised to the second caller; the running call is unaffected |
 | An exception beni builds on its own whose class constant is missing or names no exception class | the `Exception` mruby raises for that constant, surfaced where the original exception would have been — a Rust `Err` or a raise to the Ruby caller; no `const_missing` runs and nothing unwinds across FFI |
 | A warning message longer than the longest string the interpreter holds, in an archive built with standard I/O | surfaced as a Rust `Err` carrying mruby's `ArgumentError`; nothing is written |
@@ -2346,6 +2405,9 @@ measures complete.
 | integer-width metadata | the `links` metadata key `defines_mrb_int64` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_DEFINES_MRB_INT64` — `true` for a 64-bit configured integer width, `false` for a 32-bit one |
 | configured float width | the bit width of mruby's float the bindings a build uses declare — 32 or 64; mruby settles it from the archive's flags, and the documentation bindings carry the 64-bit width of the upstream default configuration |
 | float-width metadata | the `links` metadata key `defines_mrb_float32` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_DEFINES_MRB_FLOAT32` — `true` for a 32-bit configured float width, `false` for a 64-bit one |
+| debug-hook metadata | `links` key `defines_mrb_debug_hook`, read as `DEP_MRUBY_DEFINES_MRB_DEBUG_HOOK` |
+| debug hooks | the per-instruction callbacks an archive built with `MRB_USE_DEBUG_HOOK` carries |
+| code fetch hook | the debug hook mruby calls before each instruction it runs |
 | release metadata | the `links` metadata key `release` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_RELEASE` — the major and minor release the bindings declare, written `major.minor`, such as `4.0` |
 | layout check | the compile-time comparison of each type the bindings declare — its size, alignment, and field offsets as Rust lays it out — against the layout binding generation read from the headers for the same target |
 | supported mruby floor | mruby 4.0 — the oldest final release the crates build against |
