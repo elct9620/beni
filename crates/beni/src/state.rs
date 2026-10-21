@@ -42,7 +42,8 @@
 //!   * `protect` — closure-based `mrb_protect_error`
 //!   * `root` — GC roots outliving the frame that made the value
 //!   * `carrier` — the class each `TypedData` class path was marked as
-//!   * `user_data` — the one slot of embedder data the owner installs
+//!   * `slot` — what the typed surface keeps in `mrb->ud`
+//!   * `user_data` — the one piece of embedder data the owner installs
 //!
 //! Splitting per concern keeps each file's surface small and the
 //! rustdoc on each cluster focused.
@@ -57,6 +58,7 @@ pub mod lazy;
 pub mod load;
 pub mod protect;
 pub mod root;
+pub(crate) mod slot;
 pub mod symbol;
 pub mod user_data;
 
@@ -125,7 +127,7 @@ impl Mrb {
         let Some(state) = NonNull::new(raw) else {
             return Err(MrbOpenError);
         };
-        let mrb = Self { state };
+        let mut mrb = Self { state };
         // `mrb_open` also signals failure by returning a state
         // with `mrb->exc` set — core or gem init failed (vendored
         // `src/state.c`). That state is not a usable interpreter;
@@ -133,6 +135,7 @@ impl Mrb {
         if !mrb.pending_exc().is_nil() {
             return Err(MrbOpenError);
         }
+        mrb.slot_mut();
         Ok(mrb)
     }
 
@@ -140,8 +143,8 @@ impl Mrb {
     /// not yet migrated to safe methods. The returned pointer is
     /// valid for the lifetime of `&self`; callers must not call
     /// `mrb_close` on it (the `Mrb` Drop owns that), and its `ud`
-    /// field is the user-data slot's, so a write to it is the
-    /// writer's own unsafe act.
+    /// field holds what the typed surface keeps per interpreter, so a
+    /// write to it is the writer's own unsafe act.
     #[inline]
     pub fn as_ptr(&self) -> *mut sys::mrb_state {
         self.state.as_ptr()
@@ -176,8 +179,8 @@ impl Mrb {
     ///
     /// `*mrb_ref` must be a live mruby state that remains open for
     /// the lifetime of the returned borrow, and whose `ud` field is
-    /// NULL or was written by `Mrb::set_user_data` — the user-data
-    /// reads take the field for that slot. Passing storage holding
+    /// NULL or was written by an `Mrb` — the typed surface reads the
+    /// field as what it keeps per interpreter. Passing storage holding
     /// NULL is undefined behaviour.
     #[inline]
     pub unsafe fn borrow_raw(mrb_ref: &*mut sys::mrb_state) -> &Mrb {
@@ -324,9 +327,11 @@ impl Mrb {
 impl Drop for Mrb {
     fn drop(&mut self) {
         self.drop_user_data();
+        let ud = self.ud_field();
         // SAFETY: `state` was produced by `mrb_open` in `Mrb::open`
         // and has not been closed elsewhere — `as_ptr` hands out
         // borrows but never takes ownership.
         unsafe { sys::mrb_close(self.state.as_ptr()) };
+        slot::release_slot(ud);
     }
 }
