@@ -101,6 +101,8 @@ fn tag_item(text: &str) -> Option<String> {
 
 /// Close the example being collected as one fenced block, its common
 /// indent removed and its trailing blank lines left outside the fence.
+/// The fence is longer than any backtick run the example holds, so no
+/// line of it closes the block.
 fn close_example(out: &mut Vec<String>, example: &mut Vec<&str>) {
     let mut trailing = 0;
     while example.last() == Some(&"") {
@@ -130,13 +132,20 @@ fn close_example(out: &mut Vec<String>, example: &mut Vec<&str>) {
     if out.last().is_some_and(|last| !last.is_empty()) {
         out.push(String::new());
     }
-    out.push(format!(" ```{lang}"));
+    let longest_run = lines
+        .iter()
+        .flat_map(|line| line.split(|c| c != '`'))
+        .map(str::len)
+        .max()
+        .unwrap_or(0);
+    let fence = "`".repeat((longest_run + 1).max(3));
+    out.push(format!(" {fence}{lang}"));
     out.extend(
         lines
             .iter()
             .map(|line| format!(" {line}").trim_end().to_owned()),
     );
-    out.push(" ```".to_owned());
+    out.push(format!(" {fence}"));
     out.extend(std::iter::repeat(String::new()).take(trailing));
     example.clear();
 }
@@ -193,6 +202,16 @@ mod tests {
         assert_eq!(
             markdown_comment(comment),
             " Example:\n\n ```text\n a = 1\n\n b = 2\n ```\n\n Done."
+        );
+    }
+
+    #[test]
+    fn an_example_holding_a_fence_is_fenced_past_it() {
+        let comment = " Renders Markdown.\n\n      ```\n      code\n      ```\n\n @param mrb The current mruby state.";
+
+        assert_eq!(
+            markdown_comment(comment),
+            " Renders Markdown.\n\n ````text\n ```\n code\n ```\n ````\n\n - **param** `mrb` The current mruby state."
         );
     }
 
