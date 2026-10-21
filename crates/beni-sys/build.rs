@@ -392,12 +392,10 @@ fn run_bindgen(
         // in lib.rs (with `Value` parameters) instead of bindgen's
         // Option<unsafe extern "C" fn(...)>-wrapped version.
         .blocklist_type("mrb_func_t")
-        // WORKAROUND: mrb_gc has mixed `int:2` and `mrb_bool:1`
-        // bitfields. clang's actual codegen keeps the int portion in
-        // its own 4-byte container; bindgen merges all 7 bits into a
-        // single byte, shifting every field after mrb_gc in mrb_state
-        // by 4 bytes. opaque_type makes bindgen ask clang for
-        // sizeof(mrb_gc) (correct) and emit an opaque blob.
+        // mrb_gc is the collector's internal state, embedded in
+        // mrb_state ahead of fields Rust writes, such as `ud`. Opaque,
+        // its size comes from clang rather than from bindgen's reading
+        // of its bitfields, so those fields sit where mruby puts them.
         .opaque_type("mrb_gc")
         .prepend_enum_name(false)
         // Generate trampolines for `static inline` helpers reached
