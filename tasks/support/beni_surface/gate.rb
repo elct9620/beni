@@ -4,8 +4,8 @@ require_relative "syntax"
 
 module BeniSurface
   # The attribute state pending for the next item: the capability
-  # feature gating it, and whether some other +#[cfg]+ makes it
-  # build-specific and so no part of the expectation. Attributes
+  # feature or archive cfg gating it, and whether some other +#[cfg]+
+  # makes it build-specific and so no part of the expectation. Attributes
   # accumulate onto the item that follows, and any line that is neither
   # an attribute nor a doc comment ends the accumulation — which is one
   # rule, so the three scanners read it from here rather than each
@@ -16,10 +16,11 @@ module BeniSurface
     end
 
     # The gate one attribute line leaves pending. A feature gate names
-    # the feature; any other +#[cfg]+ marks the item build-specific;
-    # every other attribute leaves the gate as it stands.
+    # the feature and an archive cfg the cfg; any other +#[cfg]+ marks
+    # the item build-specific; every other attribute leaves the gate as
+    # it stands.
     def read(line)
-      name = line[Syntax::CFG_FEATURE, :feature]
+      name = line[Syntax::CFG_FEATURE, :feature] || line[Syntax::CFG_ARCHIVE, :cfg]
       return with(feature: name) if name
       return with(excluded: true) if Syntax::CFG_ATTRIBUTE.match?(line)
 

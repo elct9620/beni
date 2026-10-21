@@ -12,9 +12,12 @@ module BeniSurface
     end
 
     # How a diagnostic names the entry: the path, and the capability
-    # feature it sits behind when one does.
+    # feature or archive cfg it sits behind when one does.
     def label
-      feature ? "#{ref} (feature #{feature})" : ref
+      return ref unless feature
+
+      kind = Syntax.archive_cfg?(feature) ? "cfg" : "feature"
+      "#{ref} (#{kind} #{feature})"
     end
   end
 

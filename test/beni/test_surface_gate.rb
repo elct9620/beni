@@ -60,6 +60,16 @@ class TestSurfaceGate < Minitest::Test
     assert_equal 1, report.total, "a build-specific fn is neither expected nor counted"
   end
 
+  def test_expects_an_archive_cfg_gated_module_in_that_cfg_body
+    crate = { "lib.rs" => "#[cfg(mrb_debug_hook)]\npub mod debug;\n",
+              "debug.rs" => "impl TraceArg {\n    pub fn lineno() {}\n}\n" }
+    net = "#[cfg(mrb_debug_hook)]\n#[test]\nfn hooked() {\n    let _ = TraceArg::lineno;\n}\n"
+
+    assert_predicate verify(crate: crate, net: net), :ok?
+    assert_equal ["TraceArg::lineno (cfg mrb_debug_hook)"],
+                 verify(crate: crate, net: "").missing.map(&:label)
+  end
+
   def test_refuses_a_gated_inline_module
     crate = { "lib.rs" => <<~RUST }
       #[cfg(feature = "compiler")]

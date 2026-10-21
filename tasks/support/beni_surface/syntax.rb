@@ -15,8 +15,17 @@ module BeniSurface
     ATTRIBUTE = /\A\s*#\[/
     CFG_ATTRIBUTE = /\A\s*#\[cfg[( ]/
     CFG_FEATURE = /\A\s*#\[cfg\(feature\s*=\s*"(?<feature>[\w-]+)"\)\]/
+    # A cfg the crate's build script reads from the archive's metadata
+    # (+mrb_debug_hook+, +mruby_gte_4_1+), named by mruby's own prefixes.
+    CFG_ARCHIVE = /\A\s*#\[cfg\((?<cfg>(?:mrb|mruby)_\w+)\)\]/
 
     module_function
+
+    # Whether a gate name is an archive cfg rather than a cargo feature,
+    # which the two axes' names never share.
+    def archive_cfg?(name)
+      name.match?(/\A(?:mrb|mruby)_/)
+    end
 
     # The inherent-impl type a column-zero +impl+ line opens; trait
     # impls (+impl X for Y+) stay out of scope, since the compiler type
