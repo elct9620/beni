@@ -29,8 +29,10 @@
 //   5. Refuses bindings of a configuration the crates do not support,
 //      then publishes the integer and float widths those bindings
 //      declare as `links` metadata, so a direct dependent offers only
-//      the numeric conversions those widths can hold, and the release
-//      they declare, so it follows that release. A documentation
+//      the numeric conversions those widths can hold, whether they
+//      carry the debug hooks, so it offers the hooks only where the
+//      archive has them, and the release they declare, so it follows
+//      that release. A documentation
 //      build checks and publishes the documentation bindings it stages
 //      instead.
 //
@@ -109,6 +111,7 @@ include!("build/arena.rs");
 include!("build/bindings.rs");
 include!("build/boxing.rs");
 include!("build/comments.rs");
+include!("build/debug_hook.rs");
 include!("build/sidecar.rs");
 include!("build/target.rs");
 include!("build/version.rs");
@@ -225,6 +228,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build/arena.rs");
     println!("cargo:rerun-if-changed=build/bindings.rs");
     println!("cargo:rerun-if-changed=build/comments.rs");
+    println!("cargo:rerun-if-changed=build/debug_hook.rs");
     println!("cargo:rerun-if-changed=build/sidecar.rs");
     println!("cargo:rerun-if-changed=build/target.rs");
     println!("cargo:rerun-if-changed=build/version.rs");
@@ -317,13 +321,14 @@ fn main() {
 }
 
 /// Refuse bindings the crates above do not support, then publish the
-/// widths and release they declare as `links` metadata.
+/// widths, debug hooks, and release they declare as `links` metadata.
 fn check_and_publish_bindings(bindings_rs: &Path) {
     let bindings = Bindings::read(bindings_rs);
     refuse_fixed_arena(&bindings);
     refuse_unsupported_boxing(&bindings);
     println!("{}", integer_width_directive(&bindings));
     println!("{}", float_width_directive(&bindings));
+    println!("{}", debug_hook_directive(&bindings));
     println!("{}", release_directive(&bindings));
 }
 

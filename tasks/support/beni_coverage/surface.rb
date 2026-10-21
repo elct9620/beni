@@ -16,6 +16,7 @@ module BeniCoverage
       mruby/class.h
       mruby/compile.h
       mruby/data.h
+      mruby/debug.h
       mruby/dump.h
       mruby/error.h
       mruby/gc.h

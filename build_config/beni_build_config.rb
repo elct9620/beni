@@ -16,13 +16,17 @@ unless defined?(BeniBuildConfig)
     # ABI-bearing defines the validation build applies to BOTH its host
     # and wasi targets, keeping `mrb_int` width and float boxing
     # identical across them (without MRB_INT32 a 64-bit host defaults to
-    # MRB_INT64 while wasm32 stays 32-bit — see mruby's mrbconf.h). The
+    # MRB_INT64 while wasm32 stays 32-bit — see mruby's mrbconf.h), and
+    # carrying the debug hooks, whose fields `mrb_state` holds only
+    # under MRB_USE_DEBUG_HOOK, so the typed suite reaches the hook
+    # surface; the other validation configs leave it out. The
     # beni crates align themselves automatically: their build script
     # parses the `libmruby.flags.mak` sidecar each build leaves next to
     # the archive, so edits here flow into bindgen without code changes.
     ABI_DEFINES = %w[
       MRB_INT32
       MRB_WORDBOX_NO_INLINE_FLOAT
+      MRB_USE_DEBUG_HOOK
     ].freeze
 
     # Core-gem baseline shared by every config: mruby-compiler (the

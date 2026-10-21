@@ -27,6 +27,7 @@
 #include <mruby/array.h>
 #include <mruby/class.h>
 #include <mruby/data.h>
+#include <mruby/debug.h>
 #include <mruby/dump.h>
 #include <mruby/error.h>
 #include <mruby/hash.h>

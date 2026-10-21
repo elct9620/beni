@@ -367,6 +367,14 @@ mod width {
     include!("../build/width.rs");
 }
 
+/// The build script's debug-hook read, reachable here for the same
+/// reason as the width read above.
+#[cfg(test)]
+mod debug_hook {
+    include!("../build/metadata.rs");
+    include!("../build/debug_hook.rs");
+}
+
 /// The build script's release read, reachable here for the same reason
 /// as the width read above.
 #[cfg(test)]

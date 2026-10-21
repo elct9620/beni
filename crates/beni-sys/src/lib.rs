@@ -258,6 +258,14 @@ mod width {
     include!("../build/width.rs");
 }
 
+/// The build script's debug-hook read, reachable here for the same
+/// reason as the sidecar parse above.
+#[cfg(test)]
+mod debug_hook {
+    use super::declared::{bindings, Bindings};
+    include!("../build/debug_hook.rs");
+}
+
 /// The build script's GC arena check, reachable here for the same reason
 /// as the sidecar parse above.
 #[cfg(test)]
