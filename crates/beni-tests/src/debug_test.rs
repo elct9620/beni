@@ -451,6 +451,48 @@ fn an_inspector_opened_from_rust_reads_its_callers_across_a_moved_frame_stack() 
     );
 }
 
+/// Read the caller's local `x`, let the block drop the caller's
+/// reference to it, collect, and answer whether the read value is
+/// still a String. A collected object reads back with the free tag.
+fn local_survives_its_reassignment(
+    mrb: &Mrb,
+    _self: Value,
+    block: Option<Proc>,
+) -> Result<Value, Error> {
+    let x = id(mrb, "x");
+    mrb.debug_inspector_open(|frames| {
+        let (_, local) = frames
+            .frame_local_variables(1)
+            .expect("the caller runs Ruby")
+            .into_iter()
+            .find(|&(name, _)| name == x)
+            .expect("the caller declares `x`");
+        block.expect("the test passes a block").call(mrb, &[])?;
+        mrb.full_gc();
+        Ok::<_, Error>(RString::from_value(local).is_some())
+    })
+}
+
+#[test]
+fn a_local_read_from_rust_stays_reachable_after_its_frame_lets_it_go() {
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(
+            &mrb,
+            c"local_survives_its_reassignment",
+            beni::method!(local_survives_its_reassignment, 0, &),
+        )
+        .expect("registering the method succeeds");
+
+    let survived = run(
+        &mrb,
+        "def outer\n  x = 'read' * 64\n  local_survives_its_reassignment { x = nil }\nend\nouter\n",
+    )
+    .expect("the source runs");
+
+    assert_eq!(bool::from_value(survived), Some(true));
+}
+
 #[test]
 fn a_hook_in_a_fiber_reads_only_that_fibers_frames() {
     let mut mrb = open_mrb();

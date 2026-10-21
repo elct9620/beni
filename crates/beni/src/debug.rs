@@ -14,6 +14,7 @@
 //! `CALL_CODE_HOOKS` beside `cipush`).
 
 use crate::method::{BlockReturn, InitReturn};
+use crate::sys::AsRawValue;
 use crate::value::ReprValue;
 use crate::{sys, ClassOrModule, Error, FromValue, Id, Mrb, Value};
 use core::marker::PhantomData;
@@ -81,6 +82,7 @@ impl Mrb {
     {
         let inspector = DebugInspector {
             mrb: self.as_ptr(),
+            holds: true,
             _call: PhantomData,
         };
         crate::method::private::BlockReturn::into_block_return(func(inspector), self)
@@ -91,6 +93,7 @@ impl Mrb {
     pub fn debug_inspector_current_depth(&self) -> usize {
         let inspector = DebugInspector {
             mrb: self.as_ptr(),
+            holds: false,
             _call: PhantomData,
         };
         inspector.running_depth() + 1
@@ -205,6 +208,7 @@ impl<'a> TraceArg<'a> {
     pub fn debug_inspector(self) -> DebugInspector<'a> {
         DebugInspector {
             mrb: self.mrb,
+            holds: false,
             _call: PhantomData,
         }
     }
@@ -222,6 +226,10 @@ impl<'a> TraceArg<'a> {
 #[derive(Clone, Copy)]
 pub struct DebugInspector<'a> {
     mrb: *mut sys::mrb_state,
+    /// Whether a read holds what it answers in the arena: opened from
+    /// Rust code, the closure may call Ruby before it uses a value, and
+    /// a hook runs none.
+    holds: bool,
     _call: PhantomData<&'a ()>,
 }
 
@@ -236,7 +244,7 @@ impl<'a> DebugInspector<'a> {
     /// that carries no line numbers or a frame running Rust or C code.
     pub fn frame_path(self, index: usize) -> Option<Cow<'a, str>> {
         let (irep, pc) = self.position(index)?;
-        // SAFETY: the hook call keeps the frame's code live.
+        // SAFETY: a read runs no Ruby, so the frame's code stays live.
         unsafe { path_at(self.mrb, irep, pc) }
     }
 
@@ -261,7 +269,7 @@ impl<'a> DebugInspector<'a> {
         let frame = self.frame(index)?;
         // SAFETY: register `0` of every frame is its `self`, and the frame
         // lies in the stack the call keeps in place.
-        Some(Value::from_raw_unchecked(unsafe { *frame.stack }))
+        Some(self.handed(Value::from_raw_unchecked(unsafe { *frame.stack })))
     }
 
     /// The class or module defining the indexed frame's method, or nothing
@@ -273,7 +281,9 @@ impl<'a> DebugInspector<'a> {
         }
         // SAFETY: `frame` lies in the running fiber's frame stack, which
         // the call keeps in place.
-        defining(unsafe { sys::mrb_vm_ci_target_class(frame) })
+        let class = defining(unsafe { sys::mrb_vm_ci_target_class(frame) })?;
+        self.handed(class.as_value());
+        Some(class)
     }
 
     /// Each local variable the indexed frame's code declares, in order,
@@ -282,7 +292,7 @@ impl<'a> DebugInspector<'a> {
     pub fn frame_local_variables(self, index: usize) -> Option<Vec<(Id, Value)>> {
         let frame = self.frame(index)?;
         // SAFETY: `frame` lies in the running fiber's frame stack, which
-        // the hook call keeps in place.
+        // stays in place while a read runs no Ruby.
         let irep = unsafe { sys::mrb_ci_irep_func(frame) };
         // SAFETY: a non-NULL irep is the frame's live code.
         let Some(irep) = (unsafe { irep.as_ref() }) else {
@@ -303,16 +313,29 @@ impl<'a> DebugInspector<'a> {
             .map(|(slot, &name)| {
                 // SAFETY: register `slot + 1` is the local `name` names.
                 let raw = unsafe { *frame.stack.add(slot + 1) };
-                (Id::from_raw_unchecked(name), Value::from_raw_unchecked(raw))
+                (
+                    Id::from_raw_unchecked(name),
+                    self.handed(Value::from_raw_unchecked(raw)),
+                )
             })
             .collect();
         Some(locals)
     }
 
+    /// `value`, held in the arena when this inspector holds its reads.
+    fn handed(self, value: Value) -> Value {
+        if self.holds {
+            // SAFETY: the call keeps the state live, and protecting an
+            // immediate is a no-op.
+            unsafe { sys::mrb_gc_protect(self.mrb, value.as_raw()) };
+        }
+        value
+    }
+
     /// The running fiber's frame stack: its base and its running frame.
     fn frames(self) -> (*const sys::mrb_callinfo, *const sys::mrb_callinfo) {
-        // SAFETY: the hook call keeps the state and its running context
-        // live.
+        // SAFETY: a read runs no Ruby, so the state and its running
+        // context stay live.
         let context = unsafe { &*(*self.mrb).c };
         (context.cibase, context.ci)
     }
@@ -329,7 +352,8 @@ impl<'a> DebugInspector<'a> {
         let depth = self.frame_depth(index)?;
         let (base, _) = self.frames();
         // SAFETY: `depth` is at most the running frame's, so the frame
-        // lies within the stack the hook call keeps in place.
+        // lies within the stack, which stays in place while a read runs
+        // no Ruby.
         Some(unsafe { &*base.add(depth) })
     }
 
