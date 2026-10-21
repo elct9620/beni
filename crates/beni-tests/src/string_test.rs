@@ -387,15 +387,12 @@ fn substr_reads_a_range_and_clamps_out_of_range() {
 }
 
 #[test]
-#[cfg(target_pointer_width = "64")]
+#[cfg(all(target_pointer_width = "64", not(mrb_int64)))]
 fn substr_saturates_an_out_of_width_beg_rather_than_wrapping() {
     // An out-of-width beg is only representable when `isize` is wider
     // than `mrb_int`, i.e. a 32-bit `mrb_int` on a 64-bit target. Under
     // a 64-bit `mrb_int` the saturation premise is vacuous and the case
-    // is skipped rather than asserted on a width it cannot reach.
-    if core::mem::size_of::<beni::sys::mrb_int>() != 4 {
-        return;
-    }
+    // is left out rather than asserted on a width it cannot reach.
 
     let mrb = open_mrb();
 
@@ -441,15 +438,12 @@ fn index_finds_the_first_match_at_or_after_the_offset() {
 }
 
 #[test]
-#[cfg(target_pointer_width = "64")]
+#[cfg(all(target_pointer_width = "64", not(mrb_int64)))]
 fn index_saturates_an_out_of_width_offset_rather_than_wrapping() {
     // An out-of-width offset is only representable when `isize` is
     // wider than `mrb_int`, i.e. a 32-bit `mrb_int` on a 64-bit target.
     // Under a 64-bit `mrb_int` the saturation premise is vacuous and the
-    // case is skipped rather than asserted on a width it cannot reach.
-    if core::mem::size_of::<beni::sys::mrb_int>() != 4 {
-        return;
-    }
+    // case is left out rather than asserted on a width it cannot reach.
 
     let mrb = open_mrb();
 

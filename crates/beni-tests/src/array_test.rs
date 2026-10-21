@@ -321,15 +321,12 @@ fn splice_surfaces_raising_edges_as_err() {
 }
 
 #[test]
-#[cfg(target_pointer_width = "64")]
+#[cfg(all(target_pointer_width = "64", not(mrb_int64)))]
 fn splice_saturates_an_out_of_width_len_rather_than_wrapping() {
     // An out-of-width len is only representable when `usize` is wider
     // than `mrb_int`, i.e. a 32-bit `mrb_int` on a 64-bit target. Under
     // a 64-bit `mrb_int` the saturation premise is vacuous and the case
-    // is skipped rather than asserted on a width it cannot reach.
-    if core::mem::size_of::<beni::sys::mrb_int>() != 4 {
-        return;
-    }
+    // is left out rather than asserted on a width it cannot reach.
 
     let mrb = open_mrb();
     let ary = mrb.ary_new();
