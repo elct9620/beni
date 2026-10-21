@@ -719,7 +719,9 @@ macro_rules! method {
             // code is never silently wrapped in it.
             let f = $f;
             // SAFETY: mruby invokes the bridge with a live state
-            // pointer that outlives the call frame.
+            // pointer that outlives the call frame, and its `ud` is the
+            // typed surface's slot or empty, as every interpreter the
+            // surface runs on leaves it.
             let mrb = unsafe { $crate::Mrb::borrow_raw(&mrb) };
             // SAFETY: this is the bridge frame the raise contract
             // names. The explicit trait path disambiguates from the
@@ -775,7 +777,9 @@ macro_rules! __method_arity {
             // code is never silently wrapped in it.
             let f = $f;
             // SAFETY: mruby invokes the bridge with a live state
-            // pointer that outlives the call frame.
+            // pointer that outlives the call frame, and its `ud` is the
+            // typed surface's slot or empty, as every interpreter the
+            // surface runs on leaves it.
             let mrb = unsafe { $crate::Mrb::borrow_raw(&mrb) };
             // SAFETY: this is the bridge frame the raise contract
             // names. The explicit trait path disambiguates the
@@ -804,7 +808,9 @@ macro_rules! __method_req_opt {
             // code is never silently wrapped in it.
             let f = $f;
             // SAFETY: mruby invokes the bridge with a live state
-            // pointer that outlives the call frame.
+            // pointer that outlives the call frame, and its `ud` is the
+            // typed surface's slot or empty, as every interpreter the
+            // surface runs on leaves it.
             let mrb = unsafe { $crate::Mrb::borrow_raw(&mrb) };
             // SAFETY: this is the bridge frame the raise contract
             // names.
@@ -831,7 +837,9 @@ macro_rules! __method_block {
             // code is never silently wrapped in it.
             let f = $f;
             // SAFETY: mruby invokes the bridge with a live state
-            // pointer that outlives the call frame.
+            // pointer that outlives the call frame, and its `ud` is the
+            // typed surface's slot or empty, as every interpreter the
+            // surface runs on leaves it.
             let mrb = unsafe { $crate::Mrb::borrow_raw(&mrb) };
             // SAFETY: this is the bridge frame the raise contract
             // names.

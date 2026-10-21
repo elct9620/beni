@@ -1948,7 +1948,16 @@ Readers include a gem's installation and a registered method. A read lasts as lo
 
 A read or a take names the type it expects. Naming a type other than the one held, or reaching an empty slot, answers nothing. A take that answers nothing leaves the slot as it was.
 
-mruby publishes no call for the slot, so it belongs to this surface: a write to it through `beni::sys` is the writer's own unsafe act.
+##### Slot ownership
+
+mruby publishes no call for the slot, so it belongs to this surface on every interpreter the surface runs on.
+
+| Interpreter | Slot as the surface finds it |
+|---|---|
+| opened by `Mrb::open` | the surface's own |
+| opened by a C host | empty; the host leaves it to the surface |
+
+A write to the slot through `beni::sys` is the writer's own unsafe act.
 
 #### Debug hooks
 

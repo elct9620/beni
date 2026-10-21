@@ -225,7 +225,8 @@ unsafe extern "C" fn proc_bridge(
     _self: sys::mrb_value,
 ) -> sys::mrb_value {
     // SAFETY: mruby invokes the bridge with a live state pointer that
-    // outlives the call frame.
+    // outlives the call frame, and its `ud` is the typed surface's slot
+    // or empty, as every interpreter the surface runs on leaves it.
     let mrb = unsafe { Mrb::borrow_raw(&mrb) };
     // SAFETY: this is the bridge frame the raise contract names.
     let value = unsafe { crate::method::handle_error(mrb, || run_body(mrb)) };

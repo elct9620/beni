@@ -110,7 +110,8 @@ unsafe extern "C" fn code_fetch_hook(
     _regs: *mut sys::mrb_value,
 ) {
     // SAFETY: mruby calls the hook with a live state pointer that
-    // outlives the call.
+    // outlives the call, and only an owner installs the hook, so `ud` is
+    // that owner's slot.
     let mrb = unsafe { Mrb::borrow_raw(&mrb) };
     let Some(slot) = mrb.slot() else { return };
     // SAFETY: only this trampoline reaches the hook through a borrow, and
