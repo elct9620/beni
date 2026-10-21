@@ -21,6 +21,9 @@ pub(crate) struct Slot {
     /// the user data, so it sits in its own cell.
     #[cfg(mrb_debug_hook)]
     pub(crate) hook: core::cell::UnsafeCell<Option<crate::debug::Hook>>,
+    /// The lazy-value record, once a read has found it under its global,
+    /// which keeps it reachable.
+    pub(crate) lazy_record: core::cell::Cell<Option<crate::RArray>>,
 }
 
 impl Mrb {

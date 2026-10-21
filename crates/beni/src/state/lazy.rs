@@ -6,7 +6,8 @@
 //! process, and each interpreter keeps the value at that index in its own
 //! record — an Array under a global whose name carries no `$`, which no
 //! Ruby program can read or write. An unheld slot holds undef, a value no
-//! computed handle can be.
+//! computed handle can be. An interpreter beni opened also keeps the
+//! record in its slot once found, so later reads skip the global lookup.
 
 use crate::{FromValue as _, Mrb, Qundef, RArray, ReprValue, Value};
 use beni_sys as sys;
@@ -135,10 +136,18 @@ impl Mrb {
     }
 
     fn lazy_record(&self) -> Option<RArray> {
+        let slot = self.slot();
+        if let Some(record) = slot.and_then(|slot| slot.lazy_record.get()) {
+            return Some(record);
+        }
         let name = self.check_id(RECORD_GLOBAL)?;
         // SAFETY: `self` is alive; reading a global neither raises nor
         // dispatches.
         let record = unsafe { sys::mrb_gv_get(self.as_ptr(), name.to_raw()) };
-        RArray::from_value(Value::from_raw_unchecked(record))
+        let record = RArray::from_value(Value::from_raw_unchecked(record))?;
+        if let Some(slot) = slot {
+            slot.lazy_record.set(Some(record));
+        }
+        Some(record)
     }
 }
