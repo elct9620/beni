@@ -107,6 +107,7 @@ use std::path::{Path, PathBuf};
 include!("build/abi.rs");
 include!("build/arena.rs");
 include!("build/bindings.rs");
+include!("build/boxing.rs");
 include!("build/sidecar.rs");
 include!("build/target.rs");
 include!("build/version.rs");
@@ -318,6 +319,7 @@ fn main() {
 fn check_and_publish_bindings(bindings_rs: &Path) {
     let bindings = Bindings::read(bindings_rs);
     refuse_fixed_arena(&bindings);
+    refuse_unsupported_boxing(&bindings);
     println!("{}", integer_width_directive(&bindings));
     println!("{}", float_width_directive(&bindings));
     println!("{}", release_directive(&bindings));

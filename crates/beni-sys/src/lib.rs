@@ -38,9 +38,9 @@
 //! `beni` crate. This crate stays a pure FFI surface: bindgen
 //! output, the `mrb_func_t` typed-fn alias, the
 //! `mrb_value::zeroed()` constant, the `mrb_args_*` aspec encoders,
-//! the `mrb_object_class` raw-state accessor, and the ABI const
-//! assertions that catch a vendored-mruby layout drift at compile
-//! time.
+//! the `mrb_object_class` raw-state accessor, and the `mrb_state`
+//! field-offset assertion that catches a vendored-mruby layout drift
+//! at compile time.
 //!
 //! ## ABI / opaque types
 //!
@@ -48,10 +48,9 @@
 //! which is the archive's to decide and not this crate's: `build.rs`
 //! reads the defines the archive was built with from its compile-flags
 //! sidecar and hands them to bindgen, so the generated layout is the
-//! linked one whatever a consumer configured. The const assertions
-//! below hold `mrb_value` to a single machine word, so an archive
-//! whose boxing makes it wider fails to compile here rather than
-//! silently breaking the ABI.
+//! linked one whatever a consumer configured. The build stops for an
+//! archive boxed other than the crates above support, so `mrb_value`
+//! is word boxing's single word or no boxing's tagged union.
 
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
@@ -115,21 +114,6 @@ impl mrb_value {
         Self { w: 0 }
     }
 }
-
-// Compile-time pin on the mrb_value layout. mruby falls back to word
-// boxing when a config names no boxing mode
-// (`vendor/mruby/include/mrbconf.h:62-64`), and under it the value is
-// a single machine word on every target (4 bytes on wasm32, 8 on
-// 64-bit hosts). Catches a bindgen or archive drift before it
-// silently breaks ABI.
-const _: () = assert!(
-    core::mem::size_of::<mrb_value>() == core::mem::size_of::<usize>(),
-    "mrb_value size diverged from the word-boxing layout"
-);
-const _: () = assert!(
-    core::mem::align_of::<mrb_value>() == core::mem::align_of::<usize>(),
-    "mrb_value alignment diverged from the word-boxing layout"
-);
 
 // `Mrb::pending_exc` and `Mrb::set_pending_exc` (in the `beni`
 // wrapper crate) read / write `mrb_state.exc` through bindgen's
@@ -280,6 +264,14 @@ mod width {
 mod arena {
     use super::declared::{bindings, Bindings};
     include!("../build/arena.rs");
+}
+
+/// The build script's boxing check, reachable here for the same reason
+/// as the sidecar parse above.
+#[cfg(test)]
+mod boxing {
+    use super::declared::{bindings, Bindings};
+    include!("../build/boxing.rs");
 }
 
 #[cfg(test)]
