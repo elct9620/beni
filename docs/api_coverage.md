@@ -10,8 +10,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
 | function | 317 | 316 (100%) | 251 (79%) |
-| macro | 106 | 29 (27%) | 86 (81%) |
-| total | 423 | 345 (82%) | 337 (80%) |
+| macro | 106 | 30 (28%) | 86 (81%) |
+| total | 423 | 346 (82%) | 337 (80%) |
 
 ## mruby.h
 
@@ -331,7 +331,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
 | `mrb_break_value_get` | macro | ✅ | ✅ | `Break::value` |
-| `mrb_break_value_set` | macro | ❌ | ❌ |  |
+| `mrb_break_value_set` | macro | ✅ | ❌ |  |
 | `mrb_check_error` | fn | ✅ | ✅ | `Mrb::clear_exc` |
 | `mrb_clear_error` | fn | ✅ | ✅ | subsumed: `Mrb::clear_exc` — the inner call of `mrb_check_error`, whose body is `if (mrb->exc) { mrb_clear_error(mrb); return TRUE; }` (`vendor/mruby/src/error.c:876-891`); the bool the C form returns is what the Rust shape drops, and clearing the pending exception is the whole of what remains |
 | `mrb_ensure` | fn | ✅ | ✅ | subsumed: `sys::protect` — `mrb_protect_error`, then the cleanup call, then a rethrow of the caught exception (`vendor/mruby/mrbgems/mruby-error/src/exception.c:56-68`). In Rust the cleanup is the code after the call and the rethrow is the `Err` that call answers, a cleanup's own `Err` replacing it through `?`, so the two `mrb_func_t` + `mrb_value` data pairs are Rust control flow. The C form brackets both calls in one arena save to keep the body's result alive across the cleanup; each `mrb_protect_error` re-protects the value it surfaces before returning (`vendor/mruby/src/vm.c:566-567`), so the call's result outlives the cleanup's own protected calls |
