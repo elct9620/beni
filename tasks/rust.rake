@@ -46,6 +46,14 @@
 #                              set of Rust floats under each configured
 #                              float width, and this is the only leg
 #                              that compiles the 32-bit set.
+#   $ rake rust:test:no_boxing
+#                            — cargo test against an mruby built with
+#                              MRB_NO_BOXING and MRB_INT64, then link the
+#                              wasm32-wasip1 test binaries against the
+#                              same config's wasi archive. The only leg
+#                              where `mrb_value` is a tagged union, and
+#                              the only one pairing a 64-bit `mrb_int`
+#                              with a 32-bit pointer.
 #   $ rake rust:verify       — beni:build + the tasks above; the
 #                              single local entry point for "does the
 #                              Rust side compile and pass everywhere".
@@ -135,9 +143,19 @@ namespace :rust do
     cargo_task(float32: "beni:vendor:setup") do
       BeniRust.float32_test
     end
+
+    # The crates read every value through mruby's own expansion, which
+    # differs per boxing, and every other leg builds word boxing — see
+    # BeniRust.no_boxing_test for the mechanics.
+    desc "cargo test against a MRB_NO_BOXING mruby build, and link it on wasm32-wasip1"
+    cargo_task(no_boxing: "beni:vendor:setup") do
+      BeniRust.require_wasm_target!
+      BeniRust.no_boxing_test
+    end
   end
 
   desc "Full local compile verification: build + host, feature-off, wasm32, documentation and per-ABI legs"
   task verify: ["beni:build", "rust:check", "rust:test", "rust:check:nodefault", "rust:check:wasm",
-                "rust:link:wasm", "rust:check:docs", "rust:test:default", "rust:test:float32"]
+                "rust:link:wasm", "rust:check:docs", "rust:test:default", "rust:test:float32",
+                "rust:test:no_boxing"]
 end

@@ -23,16 +23,6 @@ module BeniRust
   MRUBY_SOURCE_DIR = File.join(VENDOR_DIR, "mruby")
   WASM_TARGET = "wasm32-wasip1"
 
-  # Scratch build dir for the default-ABI leg. Lives under tmp/
-  # (gitignored) and is incremental across runs against one mruby
-  # release.
-  DEFAULT_ABI_BUILD_DIR = File.join(ROOT, "tmp", "mruby-default-build")
-
-  # Scratch build dir for the 32-bit-float leg, kept apart from the
-  # other ABIs' trees for the same reason they are kept apart from
-  # each other.
-  FLOAT32_BUILD_DIR = File.join(ROOT, "tmp", "mruby-float32-build")
-
   # Whether cargo can be spawned. Asking cargo itself needs no lookup
   # tool, which +which+ is on POSIX hosts and is not on Windows.
   def self.cargo_available?
@@ -64,70 +54,13 @@ module BeniRust
 
   # Archive discovery env for wasm32 cargo runs: cross targets never
   # read the vendor tree, so the wasi staged path and the unpacked
-  # wasi-sdk root are named directly.
-  def self.wasm_env
+  # wasi-sdk root are named directly. +lib_dir+ defaults to the wasi
+  # archive `beni:build` stages.
+  def self.wasm_env(lib_dir = File.join(MRUBY_SOURCE_DIR, "build", "wasi", "lib"))
     {
-      "MRUBY_LIB_DIR" => File.join(MRUBY_SOURCE_DIR, "build", "wasi", "lib"),
+      "MRUBY_LIB_DIR" => lib_dir,
       "WASI_SDK_PATH" => File.join(VENDOR_DIR, "wasi-sdk")
     }
-  end
-
-  # The default-ABI leg: build the vendored mruby with NO MRUBY_CONFIG
-  # (mruby falls back to its own build_config/default.rb — what a
-  # clean consumer build gets), then run the wrapper tests against
-  # that archive. On 64-bit hosts this exercises the
-  # mrb_int = int64_t layout the repo's MRB_INT32 validation config
-  # never sees, so type/width coincidences cannot hide. The cargo
-  # target dir is split off so the MRUBY_LIB_DIR switch does not
-  # invalidate the main verification cache.
-  def self.default_abi_test
-    abi_test(upstream_default_lib_dir, "default-abi")
-  end
-
-  # The 32-bit-float leg: build the vendored mruby under the float32
-  # verification config, then run the wrapper tests against that
-  # archive. It is the only build that compiles the crates' 32-bit
-  # float conversions, which no other ABI in the chain reaches. Its own
-  # cargo target dir, since the MRUBY_LIB_DIR switch would otherwise
-  # invalidate the main verification cache.
-  def self.float32_test
-    abi_test(float32_lib_dir, "float32")
-  end
-
-  # Run the wrapper tests against the archive staged in +lib_dir+, in
-  # the cargo target dir +target+ names.
-  def self.abi_test(lib_dir, target)
-    run!({ "MRUBY_LIB_DIR" => lib_dir },
-         "cargo", "test", "-p", "beni", "-p", "beni-tests",
-         "--target-dir", File.join(ROOT, "target", target), *test_harness_args,
-         chdir: ROOT)
-  end
-
-  # Build the vendored mruby under build_config/float32.rb and answer
-  # the staged path.
-  def self.float32_lib_dir
-    staged_abi_lib_dir(FLOAT32_BUILD_DIR,
-                       "MRUBY_CONFIG" => File.join(ROOT, "build_config", "float32.rb"))
-  end
-
-  # Build the vendored mruby with no MRUBY_CONFIG, so mruby's own
-  # build_config/default.rb decides the ABI, and answer the staged path.
-  # The documentation bindings are generated from the same build: both
-  # want the surface a consumer gets before editing anything.
-  def self.upstream_default_lib_dir
-    staged_abi_lib_dir(DEFAULT_ABI_BUILD_DIR)
-  end
-
-  # Build the vendored mruby into +build_dir+ under +env+, and answer
-  # the host archive's staged path.
-  def self.staged_abi_lib_dir(build_dir, env = {})
-    converge_build_dir(build_dir)
-    lib_dir = File.join(build_dir, "host", "lib")
-    run!({ "MRUBY_BUILD_DIR" => build_dir, **env },
-         RbConfig.ruby, "-S", "rake", "default",
-         File.join(lib_dir, Beni::Builder::FLAGS_MAK),
-         chdir: MRUBY_SOURCE_DIR)
-    lib_dir
   end
 
   # What every cargo test leg hands its test binaries: a skip for each
@@ -139,21 +72,6 @@ module BeniRust
     return [] if names.empty?
 
     ["--", *names.flat_map { |name| ["--skip", name] }]
-  end
-
-  # Start +build_dir+ over unless it was built from the mruby release
-  # staged at +source_dir+. The tree lives outside the staged source, so
-  # a re-extraction leaves it in place. mruby's make-style build would
-  # then link the other release's objects.
-  def self.converge_build_dir(build_dir, source_dir = MRUBY_SOURCE_DIR)
-    marker = Beni::Vendor::Tarball::VERSION_MARKER
-    release = File.read(File.join(source_dir, marker))
-    stamp = File.join(build_dir, marker)
-    return if File.exist?(stamp) && File.read(stamp) == release
-
-    FileUtils.rm_rf(build_dir)
-    FileUtils.mkdir_p(build_dir)
-    File.write(stamp, release)
   end
 
   # What a documentation host sets: DOCS_RS on and no archive discovery
@@ -205,3 +123,5 @@ module BeniRust
     false
   end
 end
+
+require_relative "beni_rust/abi_legs"

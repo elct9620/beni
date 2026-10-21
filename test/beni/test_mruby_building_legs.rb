@@ -8,7 +8,7 @@ require "rake"
 # file included, not the mruby source alone.
 class TestMrubyBuildingLegs < Minitest::Test
   TASKS_DIR = File.expand_path("../../tasks", __dir__)
-  LEGS = %w[rust:test:default rust:test:float32 docs:bindings docs:bindings:release].freeze
+  LEGS = %w[rust:test:default rust:test:float32 rust:test:no_boxing docs:bindings docs:bindings:release].freeze
 
   def test_each_mruby_building_leg_runs_after_the_whole_vendor_setup
     with_repo_tasks do |app|
