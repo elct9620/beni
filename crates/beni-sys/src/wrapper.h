@@ -225,6 +225,19 @@ mrb_proc_irep_func(mrb_value proc)
   return p->body.irep;
 }
 
+/* The IREP a call frame runs, or NULL when the frame runs a C function
+ * or carries no proc — the test mruby's own backtrace applies to each
+ * frame it walks (src/backtrace.c). The flags are a bitfield and `body`
+ * a union, so both resolve in the C compiler as `mrb_proc_irep_func`
+ * does. */
+static inline const mrb_irep *
+mrb_ci_irep_func(const mrb_callinfo *ci)
+{
+  const struct RProc *p = ci->proc;
+  if (!p || MRB_PROC_CFUNC_P(p)) return NULL;
+  return p->body.irep;
+}
+
 /* `mrb_dump_irep` is declared in <mruby/internal.h>, a header mruby
  * marks internal to the library and this wrapper does not include:
  * taking that header in whole would admit every declaration in it.

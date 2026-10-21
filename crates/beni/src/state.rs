@@ -326,6 +326,9 @@ impl Mrb {
 
 impl Drop for Mrb {
     fn drop(&mut self) {
+        // A close may run Ruby (`at_exit`), which no hook should see.
+        #[cfg(mrb_debug_hook)]
+        self.remove_code_fetch_hook();
         self.drop_user_data();
         let ud = self.ud_field();
         // SAFETY: `state` was produced by `mrb_open` in `Mrb::open`

@@ -101,6 +101,8 @@ typed:
   mrb_class_new_instance: "`Class::new_instance` — the `MRB_INLINE` `mrb_class_new_instance(mrb, argc, argv, c)` is an `@see mrb_obj_new` alias whose body is `return mrb_obj_new(mrb, c, argc, argv)`, differing only in C parameter order; it yields an identical instance for every receiver and argument list a typed caller can form, so no separate item is needed"
   mrb_class_p: "`RClass::from_value` with `RClass::is_singleton` false — the downcast accepts the class and singleton-class tags alike"
   mrb_data_p: "`RTypedData::from_value`, the downcast reading the value tag"
+  mrb_debug_get_filename: TraceArg::path
+  mrb_debug_get_line: TraceArg::lineno
   mrb_istruct_p: "`RInlineStruct::from_value`, the downcast reading the value tag"
   mrb_cptr_p: "`RCptr::from_value`, the downcast reading the value tag"
   mrb_exception_p: "`Exception::from_value`, the downcast reading the value tag"
@@ -498,6 +500,7 @@ get_args_formats:
   "!": { status: covered, via: "scan_args + FromValue<Option<T>> — nil reads as None, any other value by T's rule" }
   "+": { status: covered, via: "scan_args + ReprValue::check_frozen" }
 subsumed:
+  mrb_debug_get_position: "`TraceArg::lineno` with `TraceArg::path` — both reads in one call"
   mrb_istruct_copy: "`Inline::set` with `Inline::get` — the payload copied between two inline structs of the same type, whose layout the type already carries"
   mrb_funcall: "`ReprValue::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch"
   mrb_funcall_id: "`ReprValue::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc`"
@@ -531,6 +534,9 @@ subsumed:
   mrb_check_string_type: "`FromValue` -> `RString` — the nil-returning String tag check (`vendor/mruby/src/object.c:753-757`), see `mrb_check_array_type`"
   mrb_check_type: "the `FromValue` downcasts — the raising assertion over a raw `enum mrb_vtype` (`vendor/mruby/src/object.c:461-466`); every tag a typed caller can name has a downcast whose `None` it raises from, so the assertion tests nothing the typed surface cannot"
 declined:
+  mrb_debug_info_alloc: "the compiler's line-table writer (`mrbgems/mruby-compiler/core/codegen.c`); an embedder only reads the table"
+  mrb_debug_info_append_file: "the compiler's line-table writer — see `mrb_debug_info_alloc`"
+  mrb_debug_info_free: "the compiler's line-table writer — see `mrb_debug_info_alloc`"
   mrb_define_const_id: "binds a constant without running the receiver's `const_added` hook (`vendor/mruby/src/variable.c:1474` sets the ivar directly) — the one way it differs from `mrb_const_set`, whose `Module::const_set` is the binding magnus offers; CRuby's `rb_define_const` itself goes through `rb_const_set`"
   mrb_define_const: "the C-string-keyed form of `mrb_define_const_id` — see it"
   mrb_define_global_const: "`mrb_define_const_id` on `Object` — see it; `Mrb::define_global_const` binds through `mrb_const_set` on `Object`, as magnus's binds through `rb_const_set`"

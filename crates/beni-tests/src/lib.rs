@@ -14,6 +14,8 @@ mod ccontext_test;
 mod class_test;
 mod convert_test;
 mod data_test;
+#[cfg(mrb_debug_hook)]
+mod debug_test;
 mod define_test;
 mod error_test;
 mod exception_test;

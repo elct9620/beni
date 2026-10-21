@@ -72,6 +72,8 @@ pub mod ccontext;
 pub mod class;
 pub mod convert;
 pub mod data;
+#[cfg(mrb_debug_hook)]
+pub mod debug;
 pub mod error;
 #[cfg(feature = "fiber")]
 mod fiber;

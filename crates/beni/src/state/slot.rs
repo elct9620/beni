@@ -16,6 +16,11 @@ use core::any::Any;
 pub(crate) struct Slot {
     /// The embedder's user data.
     pub(crate) user: Option<Box<dyn Any + Send>>,
+    /// The installed code fetch hook. Its trampoline reaches it through
+    /// a borrow of the interpreter while the owner's borrows may read
+    /// the user data, so it sits in its own cell.
+    #[cfg(mrb_debug_hook)]
+    pub(crate) hook: core::cell::UnsafeCell<Option<crate::debug::Hook>>,
 }
 
 impl Mrb {

@@ -137,8 +137,40 @@ pub trait BlockReturn: private::BlockReturn {}
 
 impl<T> BlockReturn for T where T: private::BlockReturn {}
 
+/// Return seam for a code fetch hook — magnus's `InitReturn`: nothing,
+/// or a `Result` whose `Err` is raised in place of the instruction about
+/// to run. Sealed.
+#[cfg(mrb_debug_hook)]
+pub trait InitReturn: private::InitReturn {}
+
+#[cfg(mrb_debug_hook)]
+impl<T> InitReturn for T where T: private::InitReturn {}
+
 pub(crate) mod private {
     use crate::{Error, IntoValue, Mrb, Value};
+
+    /// The projection sealing `InitReturn` to this crate.
+    #[cfg(mrb_debug_hook)]
+    pub trait InitReturn {
+        /// The error to raise in place of the instruction, if any.
+        fn into_init_return(self) -> Result<(), Error>;
+    }
+
+    #[cfg(mrb_debug_hook)]
+    impl InitReturn for () {
+        #[inline]
+        fn into_init_return(self) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[cfg(mrb_debug_hook)]
+    impl InitReturn for Result<(), Error> {
+        #[inline]
+        fn into_init_return(self) -> Result<(), Error> {
+            self
+        }
+    }
 
     /// Proof that a registration's bridge is projecting its body's
     /// return. Only this crate makes one, so no caller outside a
@@ -215,7 +247,7 @@ pub(crate) mod private {
 ///
 /// Only callable from a bridge frame mruby may unwind out of, with
 /// no live Rust values needing `Drop` on the caller's frame.
-unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
+pub(crate) unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
     let exc = match err {
         Error::Exception(exc) => exc,
         Error::Syntax(parse) => {

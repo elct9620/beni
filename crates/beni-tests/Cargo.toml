@@ -45,11 +45,13 @@ default = ["compiler", "fiber", "bytes", "bindgen-layout-tests"]
 compiler = ["beni/compiler"]
 fiber = ["beni/fiber"]
 bytes = ["beni/bytes", "dep:bytes"]
-bindgen-layout-tests = ["dep:beni-sys", "beni-sys/bindgen-layout-tests"]
+bindgen-layout-tests = ["beni-sys/bindgen-layout-tests"]
 
 [dependencies]
 beni = { path = "../beni" }
-beni-sys = { path = "../beni-sys", optional = true }
+# `beni-sys` directly, so the build script receives the archive's
+# metadata and gates the tests the way `beni` gates the surface.
+beni-sys = { path = "../beni-sys" }
 # `bytemuck` — the `Pod` derive an `InlineStruct` payload needs, as a
 # consumer writes it.
 bytemuck = { version = "1", features = ["derive"] }

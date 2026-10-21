@@ -445,6 +445,24 @@ fn fiber_surface_is_reachable_from_outside() {
     let _ = Mrb::fiber_yield;
 }
 
+/// The debug hooks' surface, present where the archive carries them and
+/// gated as `beni` gates it.
+#[cfg(mrb_debug_hook)]
+#[test]
+fn debug_hook_surface_is_reachable_from_outside() {
+    let _ = Mrb::set_code_fetch_hook::<fn(debug::TraceArg<'_>), ()>;
+    let _ = Mrb::remove_code_fetch_hook;
+    let _ = debug::TraceArg::lineno;
+    let _ = debug::TraceArg::path;
+    let _ = debug::TraceArg::method_id;
+    let _ = debug::TraceArg::debug_inspector;
+    let _ = debug::DebugInspector::frame_depth;
+    let _ = debug::DebugInspector::frame_path;
+    let _ = debug::DebugInspector::frame_lineno;
+    let _ = debug::DebugInspector::frame_method_id;
+    let _ = debug::DebugInspector::frame_local_variables;
+}
+
 /// The `bytes` dependency feature's inherent surface, gated as the
 /// feature gates it.
 #[cfg(feature = "bytes")]
