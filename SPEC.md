@@ -1195,7 +1195,7 @@ A holder's named instance variables support these operations:
 | assign | any `IntoValue` value, in place | when the holder is frozen |
 | presence test | whether it is set | never raises |
 | remove | yields the former value; distinguishes an absent variable from one removed while holding `nil` | only when the holder is frozen |
-| iterate | every set instance variable | see below |
+| iterate | every set instance variable whose name the holder admits | see below |
 
 The iteration hands each set variable's name as a typed symbol, and its value, to a closure that signals whether to continue or stop. Stopping ends the iteration before the remaining variables. It visits the variables and the values they held when the iteration began. A closure that assigns, removes, or adds the holder's instance variables changes the holder but never the visited set. The iteration dispatches no Ruby and surfaces no `Err`; for a holder that holds no instance variables, it visits nothing. A closure panic ends the iteration before the remaining variables and resurfaces on the Rust side, never crossing into mruby's frames.
 
@@ -1301,22 +1301,24 @@ A key too long to intern names no symbol, and is refused as too long before its 
 
 ##### Admitted names
 
-mruby keeps state its C code reads back unchecked under names no Ruby program can write, such as a class's `__attached__`. So a class-variable, constant, or global-variable operation keys only a name Ruby could write in its namespace. Such state is reachable only through `beni::sys`.
+mruby keeps state its C code reads back unchecked under names no Ruby program can write, such as a class's `__attached__`. So a variable or constant operation keys only a name Ruby could write in its namespace. Such state is reachable only through `beni::sys`.
 
 | Namespace | Operations | Admits |
 |---|---|---|
+| instance variable | every instance-variable operation | `@`, then identifier characters; on a data carrier, any name |
 | class variable | every class-variable operation | `@@`, then identifier characters |
 | constant | constant operations, class and module definition and lookup, `define_global_const` | an ASCII uppercase letter, then identifier characters |
 | global variable | every global-variable operation | every name, `$` prefixed when it lacks one |
 
-An identifier character is an ASCII letter or digit, `_`, or any non-ASCII byte. A class variable needs at least one, and its first is not a digit. A global key without `$` names the global with one, as CRuby's `rb_gv_get` and `rb_gv_set` do.
+An identifier character is an ASCII letter or digit, `_`, or any non-ASCII byte. An instance or class variable needs at least one, and its first is not a digit. A data carrier admits every name because its hidden instance variables keep what its payload holds. A global key without `$` names the global with one, as CRuby's `rb_gv_get` and `rb_gv_set` do.
 
 ##### Refused names
 
-A class-variable or constant name its namespace does not admit is refused before the operation acts. The refusal surfaces as a Rust `Err` carrying a `NameError` whose `name` is that name. A total predicate answers `false` instead.
+An instance-variable, class-variable, or constant name its namespace does not admit is refused before the operation acts. The refusal surfaces as a Rust `Err` carrying a `NameError` whose `name` is that name. A total predicate answers `false` instead.
 
 | Namespace | Refusal message |
 |---|---|
+| instance variable | `'NAME' is not allowed as an instance variable name` |
 | class variable | `'NAME' is not allowed as a class variable name` |
 | constant | `wrong constant name NAME` |
 
@@ -1328,6 +1330,7 @@ A checked key carries a name already admitted by one namespace, so its operation
 
 | Key | Namespace |
 |---|---|
+| `IvarId` | instance variable |
 | `CvarId` | class variable |
 | `ConstId` | constant |
 | `GvarId` | global variable, already `$` prefixed |
@@ -2179,7 +2182,7 @@ rule; the consumer upholds it.
 | Kept reachable by | Exempt for as long as |
 |---|---|
 | a root | the root lives |
-| a hidden instance variable | the holding object stays reachable and the variable keeps that value |
+| a hidden instance variable of a data carrier | the carrier stays reachable and the variable keeps that value |
 
 ##### Domain Crossing
 
@@ -2400,7 +2403,7 @@ measures complete.
 | A Ruby method invoked through a value's dispatch, an object `dup` running `initialize_copy` or string coercion running `to_s`, an array join rendering an element via `to_s`, an instance construction running `initialize`, a constant fetch running a `const_missing` hook or resolving to no constant, a constant assignment running a `const_added` hook, a hash read / assignment / fetch / key test / deletion / merge running a key's `hash`/`eql?`, or a hash read running an absent-key `default` lookup, raising; a current-fiber read finding `Fiber` naming no class, or `Fiber.current` raising or answering anything but a Fiber | surfaced as a Rust `Err`, never unwinds across FFI |
 | A numeric conversion of a non-numeric value, or of an infinite / NaN float to integer, or a String-tag coercion of a value carrying no String tag | surfaced as a Rust `Err`, never unwinds across FFI |
 | A name of `UINT16_MAX` bytes or more given to a creating intern, to a string's coercion to a symbol, or as a symbol-or-name key | surfaced as a Rust `Err` carrying the `ArgumentError`, never unwinds across FFI; an operation that reports no failure answers instead as it does for a name nothing is bound under — a predicate `false`, a read `nil`, a removal a no-op |
-| A name the class-variable or constant namespace does not admit, given to an operation in it | surfaced as a Rust `Err` carrying the namespace's `NameError`, without acting; a total predicate answers `false` |
+| A name the instance-variable, class-variable, or constant namespace does not admit, given to an operation in it | surfaced as a Rust `Err` carrying the namespace's `NameError`, without acting; a total predicate answers `false` |
 | A class whose instances are neither plain objects nor data carriers — a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number — marked to carry Rust data | surfaced as a Rust `Err` carrying a `TypeError`; the class stays unmarked |
 | A `TypedData` value wrapped as an instance of a class that cannot carry data — one never marked, breaking the `TypedData` contract | the payload not yet handed to a carrier is reclaimed, never leaked, and the wrap panics; nothing unwinds across FFI |
 | A `TypedData` type's carriers marked in an interpreter where a path resolves to no class, resolves to a value that is not a class, or names a class that refuses the mark | surfaced as a Rust `Err`; whichever classes it marked before the failure stay marked and held |
@@ -2456,7 +2459,7 @@ measures complete.
 | carrier record | one interpreter's record of the class each naming site of a macro-implemented `TypedData` type — its own `class` or an enum variant's — was marked as, and of each class an `InlineStruct` type was marked as together with the type it belongs to and the class `mark_carriers` last prepared for it; `mark_carriers` writes it and every naming of such a class, and every conversion to an inline struct, reads it |
 | instance-variable holder | an object mruby lets hold instance variables — a plain object, a class or module (a singleton class included), a hash, a data carrier, or an exception; reached through `RObject`, `RClass`, `RModule`, `ExceptionClass`, `RHash`, `RTypedData`, `Obj<T>`, or `Exception` |
 | inline struct | an object in mruby's `ISTRUCT` layout, holding up to three pointer widths of plain data inside the object itself — no heap payload, no release hook, no instance variables |
-| hidden instance variable | an instance variable whose name does not begin with `@`, which no Ruby program can read, write, list, or remove; only a caller of the embedder API reaches it |
+| hidden instance variable | an instance variable of a data carrier whose name does not begin with `@`, which no Ruby program can read, write, list, or remove; only a caller of the embedder API reaches it |
 | plain object | an instance in the ordinary object layout `Object` and `BasicObject` give their instances, rather than a built-in type's own layout (an exception, a string, a number, …) or a data carrier's; a class allocates its instances in the layout its superclass allocated in when the class was defined |
 | target declaration | a `target <name>` entry in the Rakefile block — names one build target to verify; its own block holds the target's toolchain references |
 | toolchain reference | a block-less `toolchain <name>` inside a target declaration's block — requests the named toolchain for vendoring |
