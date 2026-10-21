@@ -131,7 +131,7 @@ impl RArray {
         mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive; `self` is Array-tagged by the
             // `from_value_unchecked` contract; `val` shares the VM
-            // by the single-VM contract. `mrb_ary_set` range-checks
+            // by the interpreter pairing. `mrb_ary_set` range-checks
             // `n` and may raise `IndexError`, which `protect` catches
             // into `Err`.
             unsafe { sys::mrb_ary_set(mrb.as_ptr(), self.0.as_raw(), n, val.as_raw()) };
@@ -241,7 +241,7 @@ impl RArray {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract;
-            // `rpl` shares the VM by the single-VM contract and is
+            // `rpl` shares the VM by the interpreter pairing and is
             // handled for any tag (an array splices its elements, any
             // other value inserts as one — no unsafe unbox).
             // `mrb_ary_splice` routes through `mrb_ary_modify` and

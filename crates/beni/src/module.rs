@@ -284,7 +284,7 @@ pub trait Module: Object + private::ClassLike {
     fn path(self, mrb: &Mrb) -> Option<String> {
         use crate::FromValue;
         // SAFETY: `mrb` is alive by the borrow; `self` originates
-        // from the same VM by the single-VM contract. `mrb_class_path`
+        // from the same VM by the interpreter pairing. `mrb_class_path`
         // walks the namespace chain and never raises; it answers nil
         // for an anonymous handle and a String otherwise.
         let value =

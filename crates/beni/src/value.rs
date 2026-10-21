@@ -296,7 +296,7 @@ pub trait ReprValue: private::ReprValue {
     #[inline]
     fn classname(self, mrb: &Mrb) -> String {
         // SAFETY: `mrb` is alive by the borrow; `self` originates
-        // from the same VM by the single-VM contract.
+        // from the same VM by the interpreter pairing.
         let ptr = unsafe { sys::mrb_obj_classname(mrb.as_ptr(), self.as_value().0) };
         if ptr.is_null() {
             return String::new();
@@ -397,7 +397,7 @@ pub trait ReprValue: private::ReprValue {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // and every `args` entry originate from the same VM by the
-            // single-VM contract; `sym` was interned against the same
+            // interpreter pairing; `sym` was interned against the same
             // VM (caller contract). `mrb_funcall_argv` dispatches
             // arbitrary Ruby and may raise — caught by `protect`.
             Value::from_raw_unchecked(unsafe {
@@ -428,7 +428,7 @@ pub trait ReprValue: private::ReprValue {
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`,
             // every `args` entry, and `block` originate from the same VM
-            // by the single-VM contract; `sym` was interned against the
+            // by the interpreter pairing; `sym` was interned against the
             // same VM. `mrb_funcall_with_block` dispatches arbitrary Ruby
             // and may raise — caught by `protect`.
             Value::from_raw_unchecked(unsafe {
@@ -559,7 +559,7 @@ pub trait ReprValue: private::ReprValue {
     #[inline]
     fn is_equal(self, mrb: &Mrb, other: Value) -> bool {
         // SAFETY: `mrb` is alive; `self` and `other` share the VM by
-        // the single-VM contract. `mrb_obj_equal` only inspects the
+        // the interpreter pairing. `mrb_obj_equal` only inspects the
         // two values' identity.
         unsafe { sys::mrb_obj_equal(mrb.as_ptr(), self.as_value().0, other.0) }
     }

@@ -461,7 +461,7 @@ pub trait Class: crate::Module {
     /// are copied out at once and nothing borrows from the VM.
     fn name(self, mrb: &Mrb) -> String {
         // SAFETY: `mrb` is alive by the borrow; `self` originates
-        // from the same VM by the single-VM contract.
+        // from the same VM by the interpreter pairing.
         let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.raw()) };
         if ptr.is_null() {
             return String::new();

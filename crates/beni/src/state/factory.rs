@@ -190,7 +190,7 @@ impl Mrb {
     #[inline]
     pub fn assoc_new(&self, car: Value, cdr: Value) -> RArray {
         // SAFETY: `self` is alive; `car` and `cdr` share the VM by the
-        // single-VM contract. `mrb_assoc_new` always returns an
+        // interpreter pairing. `mrb_assoc_new` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
         unsafe {
             RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_assoc_new(
@@ -212,7 +212,7 @@ impl Mrb {
     pub fn range_new(&self, begin: Value, end: Value, exclusive: bool) -> Result<Range, Error> {
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `begin`
-            // and `end` share the VM by the single-VM contract.
+            // and `end` share the VM by the interpreter pairing.
             // `mrb_range_new` compares the bounds and raises
             // `ArgumentError` on an incomparable pair — caught by
             // `protect` into `Err`.
