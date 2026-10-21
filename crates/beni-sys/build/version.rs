@@ -110,9 +110,8 @@ mod tests {
 
     /// An include root holding one `mruby/version.h` with the given
     /// body, named after the case so concurrent tests cannot collide.
-    fn include_root(case: &str, contents: &str) -> std::path::PathBuf {
-        let root =
-            std::env::temp_dir().join(format!("beni-sys-version-{}-{}", std::process::id(), case));
+    fn include_root(case: &str, contents: &str) -> CaseRoot {
+        let root = CaseRoot::new(case);
         let mruby = root.join("mruby");
         std::fs::create_dir_all(&mruby).expect("the case directory is creatable");
         std::fs::write(mruby.join("version.h"), contents).expect("the header is writable");
@@ -120,12 +119,40 @@ mod tests {
     }
 
     /// An include root with no `mruby/version.h` in it at all.
-    fn headerless_root(case: &str) -> std::path::PathBuf {
-        let root =
-            std::env::temp_dir().join(format!("beni-sys-version-{}-{}", std::process::id(), case));
+    fn headerless_root(case: &str) -> CaseRoot {
+        let root = CaseRoot::new(case);
         std::fs::create_dir_all(root.join("mruby")).expect("the case directory is creatable");
-        let _ = std::fs::remove_file(root.join("mruby").join("version.h"));
         root
+    }
+
+    /// A case's include root under the temporary directory, removed with
+    /// the case.
+    struct CaseRoot(std::path::PathBuf);
+
+    impl CaseRoot {
+        fn new(case: &str) -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "beni-sys-version-{}-{}",
+                std::process::id(),
+                case
+            ));
+            let _ = std::fs::remove_dir_all(&root);
+            Self(root)
+        }
+    }
+
+    impl core::ops::Deref for CaseRoot {
+        type Target = std::path::Path;
+
+        fn deref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    impl Drop for CaseRoot {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
     }
 
     const VERSION_H: &str = concat!(

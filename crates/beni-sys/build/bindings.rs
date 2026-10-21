@@ -66,10 +66,9 @@ mod read_tests {
             std::process::id()
         ));
         std::fs::write(&path, "pub const MRB_INT_BIT: u32 = 64;\n").expect("writable");
-        assert_eq!(
-            Bindings::read(&path).text,
-            "pub const MRB_INT_BIT: u32 = 64;\n"
-        );
+        let text = Bindings::read(&path).text;
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(text, "pub const MRB_INT_BIT: u32 = 64;\n");
     }
 
     #[test]

@@ -265,15 +265,16 @@ mod tests {
             std::env::temp_dir().join(format!("beni-sys-sidecar-{}-{}", std::process::id(), case));
         std::fs::create_dir_all(&dir).expect("the case directory is creatable");
         std::fs::write(dir.join("libmruby.flags.mak"), contents).expect("the sidecar is writable");
-        Sidecar::read(&dir)
+        let sidecar = Sidecar::read(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+        sidecar
     }
 
-    /// A directory with no sidecar in it at all.
+    /// A directory holding no sidecar, which is one that does not exist.
     fn empty_dir(case: &str) -> std::path::PathBuf {
         let dir =
             std::env::temp_dir().join(format!("beni-sys-sidecar-{}-{}", std::process::id(), case));
-        std::fs::create_dir_all(&dir).expect("the case directory is creatable");
-        let _ = std::fs::remove_file(dir.join("libmruby.flags.mak"));
+        let _ = std::fs::remove_dir_all(&dir);
         dir
     }
 

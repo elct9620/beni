@@ -225,8 +225,10 @@ fn main() {
     println!("cargo:rerun-if-env-changed=BENI_VENDOR_DIR");
     println!("cargo:rerun-if-env-changed=WASI_SDK_PATH");
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=build/abi.rs");
     println!("cargo:rerun-if-changed=build/arena.rs");
     println!("cargo:rerun-if-changed=build/bindings.rs");
+    println!("cargo:rerun-if-changed=build/boxing.rs");
     println!("cargo:rerun-if-changed=build/comments.rs");
     println!("cargo:rerun-if-changed=build/debug_hook.rs");
     println!("cargo:rerun-if-changed=build/sidecar.rs");
