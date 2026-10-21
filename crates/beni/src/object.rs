@@ -78,7 +78,7 @@ pub trait Object: ReprValue {
     /// `nil`. Surfaces only the key's or the conversion's `Err`.
     #[inline]
     fn ivar_get<K: IntoId, U: TryConvert>(self, mrb: &Mrb, name: K) -> Result<U, Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = ivar_key(mrb, self.as_value(), name)?.to_raw();
         // SAFETY: `mrb` is alive; `self` is a holder of the same VM, and
         // `mrb_iv_get` reads its table without dispatching.
         let value = mrb.hold(Value::from_raw_unchecked(unsafe {
@@ -91,7 +91,7 @@ pub trait Object: ReprValue {
     /// `name` on `self` to `val`. Surfaces an `Err` when `self` is frozen.
     #[inline]
     fn ivar_set<K: IntoId, U: IntoValue>(self, mrb: &Mrb, name: K, val: U) -> Result<(), Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = ivar_key(mrb, self.as_value(), name)?.to_raw();
         let val = val.into_value(mrb);
         mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self` and
@@ -107,7 +107,7 @@ pub trait Object: ReprValue {
     /// `sys`.
     #[inline]
     fn ivar_defined<K: IntoId>(self, mrb: &Mrb, name: K) -> bool {
-        let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
+        let Ok(sym) = ivar_key(mrb, self.as_value(), name).map(crate::Id::to_raw) else {
             return false;
         };
         // SAFETY: `mrb` is alive; `self` is a holder of the same VM.
@@ -120,7 +120,7 @@ pub trait Object: ReprValue {
     /// `nil`. Surfaces an `Err` only when `self` is frozen.
     #[inline]
     fn ivar_remove<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<Option<Value>, Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = ivar_key(mrb, self.as_value(), name)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_iv_remove` raises
@@ -133,8 +133,8 @@ pub trait Object: ReprValue {
     }
 
     /// `mrb_iv_foreach(mrb, self, …)` — visit each instance variable set
-    /// on `self` in iv-table order, handing its name as a typed `Symbol`
-    /// and its value to `body`. Returning `ForEach::Stop` ends the
+    /// on `self` whose name `self` admits, in iv-table order, handing its
+    /// name as a typed `Symbol` and its value to `body`. Returning `ForEach::Stop` ends the
     /// iteration before the remaining variables; `ForEach::Continue`
     /// proceeds. The iteration visits the variables and the values they
     /// held when it began: `body` reassigning, removing, or adding the
@@ -195,6 +195,9 @@ pub trait Object: ReprValue {
                 &mut pairs as *mut Vec<(crate::Symbol, Value)> as *mut core::ffi::c_void,
             );
         }
+        if self.as_value().tag() != sys::MRB_TT_CDATA {
+            pairs.retain(|&(name, _)| crate::symbol::Namespace::Ivar.admits(mrb, name.into()));
+        }
         let mut body = body;
         for (name, val) in pairs {
             if let crate::ForEach::Stop = body(name, val) {
@@ -238,3 +241,14 @@ impl Object for crate::RHash {}
 impl Object for crate::RTypedData {}
 impl<T: crate::TypedData> Object for crate::typed_data::Obj<T> {}
 impl Object for crate::Exception {}
+
+/// The id `name` keys among `holder`'s instance variables: any name on a
+/// data carrier, whose hidden ones keep what its payload holds, and only
+/// a name Ruby could write on any other holder.
+fn ivar_key<K: IntoId>(mrb: &Mrb, holder: Value, name: K) -> Result<crate::Id, Error> {
+    if holder.tag() == sys::MRB_TT_CDATA {
+        name.into_id(mrb)
+    } else {
+        crate::symbol::key(mrb, crate::symbol::Namespace::Ivar, name)
+    }
+}

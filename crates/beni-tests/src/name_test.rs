@@ -1,6 +1,8 @@
 use crate::support::{open_mrb, OwnedBytes};
 use beni::prelude::*;
-use beni::{ConstId, CvarId, Error, FromValue, GvarId, Id, IntoValue, Mrb, RObject, Symbol};
+use beni::{
+    ConstId, CvarId, Error, FromValue, GvarId, Id, IntoValue, IvarId, Mrb, RObject, Symbol, Value,
+};
 
 fn object(mrb: &Mrb) -> RObject {
     RObject::from_value(mrb.load_string(b"Object.new").expect("Object.new runs"))
@@ -26,11 +28,63 @@ fn refusal(mrb: &Mrb, err: Error) -> (String, Option<Id>) {
 }
 
 #[test]
+fn an_instance_variable_name_no_ruby_program_can_write_is_refused_naming_it() {
+    let mrb = open_mrb();
+    let holder = object(&mrb);
+
+    let err = holder
+        .ivar_set(&mrb, c"__secret__", 1)
+        .expect_err("a name without `@` is refused");
+
+    assert_eq!(
+        refusal(&mrb, err),
+        (
+            "'__secret__' is not allowed as an instance variable name".to_owned(),
+            Some(id(&mrb, "__secret__")),
+        )
+    );
+    assert!(holder.ivar_get::<_, Value>(&mrb, c"__secret__").is_err());
+    assert!(!holder.ivar_defined(&mrb, c"__secret__"));
+    assert!(holder.ivar_remove(&mrb, c"__secret__").is_err());
+    assert!(holder.ivar_set(&mrb, id(&mrb, "@1"), 1).is_err());
+    assert!(holder.ivar_set(&mrb, id(&mrb, "@open"), 1).is_ok());
+}
+
+#[test]
+fn the_iteration_skips_a_hidden_name_on_a_plain_object() {
+    let mrb = open_mrb();
+    let holder = object(&mrb);
+    holder
+        .ivar_set(&mrb, c"@open", 1)
+        .expect("an `@` name assigns");
+    let hidden = id(&mrb, "__hidden__");
+    // SAFETY: `mrb` is live and `holder` belongs to it; a hidden name on
+    // a plain object is what `beni::sys` alone reaches.
+    unsafe {
+        beni::sys::mrb_iv_set(
+            mrb.as_ptr(),
+            beni::sys::AsRawValue::as_raw(holder.as_value()),
+            beni::sys::AsRawId::as_raw(hidden),
+            beni::sys::AsRawValue::as_raw(2i32.into_value(&mrb)),
+        );
+    }
+
+    let mut visited = Vec::new();
+    holder.ivar_foreach(&mrb, |name, _| {
+        visited.push(Id::from(name));
+        beni::ForEach::Continue
+    });
+
+    assert_eq!(visited, [id(&mrb, "@open")]);
+}
+
+#[test]
 fn a_singleton_class_keeps_what_it_is_attached_to() {
     let mrb = open_mrb();
     let holder = object(&mrb);
     let singleton = holder.singleton_class(&mrb).expect("an object has one");
 
+    assert!(singleton.ivar_set(&mrb, c"__attached__", 1).is_err());
     assert!(singleton.const_set(&mrb, c"__attached__", 1).is_err());
     assert!(singleton.cvar_set(&mrb, c"__attached__", 1).is_err());
     mrb.gv_set(c"$holder", holder.as_value())
@@ -111,6 +165,16 @@ fn a_checked_key_keys_its_namespace_and_converts_into_its_id() {
     let mrb = open_mrb();
     let class = mrb.object_class();
     let constant = ConstId::new(&mrb, c"BeniChecked").expect("an uppercase name checks");
+    let ivar = IvarId::new(&mrb, c"@checked").expect("an `@` name checks");
+    let holder = object(&mrb);
+    holder
+        .ivar_set(&mrb, ivar, 2)
+        .expect("the checked key assigns");
+    assert_eq!(
+        i32::from_value(holder.ivar_get(&mrb, ivar).expect("it reads back")),
+        Some(2)
+    );
+    assert!(IvarId::new(&mrb, c"checked").is_err());
 
     class
         .const_set(&mrb, constant, 1)

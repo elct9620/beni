@@ -225,3 +225,27 @@ fn a_hidden_instance_variable_holds_its_value_until_overwritten() {
         "overwriting the variable must let the next collection reclaim the value"
     );
 }
+
+#[beni::wrap(class = "BeniHiddenLister", name = "BeniHiddenLister")]
+struct HiddenLister;
+
+#[test]
+fn a_carriers_iteration_visits_its_hidden_instance_variables() {
+    let mrb = open_mrb();
+    let class = carrier::<HiddenLister>(&mrb, c"BeniHiddenLister");
+    let holder = mrb.wrap_as(HiddenLister, class);
+    holder
+        .ivar_set(&mrb, "held", 1i32)
+        .expect("a carrier takes a hidden instance variable");
+
+    let mut visited = Vec::new();
+    holder.ivar_foreach(&mrb, |name, _| {
+        visited.push(beni::Id::from(name));
+        beni::ForEach::Continue
+    });
+
+    assert_eq!(
+        visited,
+        [mrb.intern(b"held").expect("a short name interns")]
+    );
+}

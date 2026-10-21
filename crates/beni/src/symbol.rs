@@ -16,7 +16,7 @@ mod namespace;
 
 use namespace::Sealed;
 pub(crate) use namespace::{key, Namespace};
-pub use namespace::{ConstId, CvarId, GvarId};
+pub use namespace::{ConstId, CvarId, GvarId, IvarId};
 
 /// An interned symbol id — magnus's `Id`. Compares and hashes by the id,
 /// which interning makes canonical, so two ids are equal exactly when

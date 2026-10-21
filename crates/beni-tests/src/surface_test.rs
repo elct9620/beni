@@ -213,6 +213,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Range::beg_len;
     let _ = Symbol::from_value_unchecked;
     let _ = Symbol::new;
+    let _ = IvarId::new::<&core::ffi::CStr>;
     let _ = CvarId::new::<&core::ffi::CStr>;
     let _ = ConstId::new::<&core::ffi::CStr>;
     let _ = GvarId::new::<&core::ffi::CStr>;

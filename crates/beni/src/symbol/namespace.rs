@@ -4,14 +4,17 @@
 //! program can write: a singleton class's `__attached__`, which class,
 //! constant, and class-variable tables share and `mrb_mod_cv_get` reads
 //! as a class pointer with no type check (`vendor/mruby/src/variable.c`),
-//! and the `_gc_root_` global (`src/gc.c`). CRuby keeps such state in
-//! struct fields and nameless ids, so magnus's `IntoId` checks nothing;
-//! here a key reaches a class variable, constant, or global only under a
-//! name its namespace admits. The rules are those mruby's reflection
-//! applies — `cv_name_p` (`mrbgems/mruby-metaprog`) and
-//! `mrb_const_name_p` (`src/class.c`), neither exported — and a global
-//! name without `$` keys the `$`-prefixed one, as CRuby's `rb_gv_get`
-//! does.
+//! a method object's `_proc` and a binding's `proc` (`mrbgems/mruby-method`,
+//! `mrbgems/mruby-binding`), and the `_gc_root_` global (`src/gc.c`).
+//! CRuby keeps such state in struct fields and nameless ids, so magnus's
+//! `IntoId` checks nothing; here a key reaches a variable or constant
+//! only under a name its namespace admits. The rules are those mruby's
+//! reflection applies — `mrb_iv_name_sym_p` (`src/variable.c`),
+//! `cv_name_p` (`mrbgems/mruby-metaprog`), and `mrb_const_name_p`
+//! (`src/class.c`) — and a global name without `$` keys the `$`-prefixed
+//! one, as CRuby's `rb_gv_get` does. A data carrier's instance variables
+//! are the exception: mruby's data type has no mark hook, so its hidden
+//! ones keep what its payload holds, where magnus's payload marks.
 
 use super::IntoId;
 use crate::{Error, Id, Mrb};
@@ -21,6 +24,7 @@ use core::ffi::CStr;
 /// A namespace a name key reaches.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Namespace {
+    Ivar,
     Cvar,
     Const,
     Gvar,
@@ -51,16 +55,7 @@ impl Namespace {
     /// `id` checked for this namespace; for a global, the id its
     /// `$`-prefixed name interns to when it lacks one.
     pub(crate) fn admit(self, mrb: &Mrb, id: Id) -> Result<Id, Error> {
-        let mut len = 0;
-        // SAFETY: `mrb` is live and `id` was interned against it.
-        let ptr = unsafe { sys::mrb_sym_name_len(mrb.as_ptr(), id.to_raw(), &mut len) };
-        let name = if ptr.is_null() {
-            &[][..]
-        } else {
-            // SAFETY: mruby answers `len` bytes at `ptr`, which no symbol
-            // read overwrites before the check below finishes with them.
-            unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), len as usize) }
-        };
+        let name = name_of(mrb, id);
         if self == Self::Gvar {
             return match name.first() {
                 Some(b'$') => Ok(id),
@@ -73,14 +68,21 @@ impl Namespace {
         }
     }
 
+    /// Whether this namespace admits the name `id` spells.
+    pub(crate) fn admits(self, mrb: &Mrb, id: Id) -> bool {
+        self.refusal(name_of(mrb, id)).is_none()
+    }
+
     /// mruby's `NameError` message for `name` when this namespace does
     /// not admit it, or nothing when it does.
     fn refusal(self, name: &[u8]) -> Option<&'static CStr> {
         let (tail, message) = match (self, name) {
+            (Self::Ivar, [b'@', tail @ ..]) => (tail, IVAR_REFUSAL),
             (Self::Cvar, [b'@', b'@', tail @ ..]) => (tail, CVAR_REFUSAL),
             (Self::Const, [first, tail @ ..]) if first.is_ascii_uppercase() => {
                 return (!tail.iter().all(|&c| identifier(c))).then_some(CONST_REFUSAL);
             }
+            (Self::Ivar, _) => return Some(IVAR_REFUSAL),
             (Self::Cvar, _) => return Some(CVAR_REFUSAL),
             (Self::Const, _) => return Some(CONST_REFUSAL),
             (Self::Gvar, _) => return None,
@@ -91,8 +93,23 @@ impl Namespace {
     }
 }
 
+const IVAR_REFUSAL: &CStr = c"'%n' is not allowed as an instance variable name";
 const CVAR_REFUSAL: &CStr = c"'%n' is not allowed as a class variable name";
 const CONST_REFUSAL: &CStr = c"wrong constant name %n";
+
+/// The name `id` spells.
+fn name_of(mrb: &Mrb, id: Id) -> &[u8] {
+    let mut len = 0;
+    // SAFETY: `mrb` is live and `id` was interned against it.
+    let ptr = unsafe { sys::mrb_sym_name_len(mrb.as_ptr(), id.to_raw(), &mut len) };
+    if ptr.is_null() {
+        return &[];
+    }
+    // SAFETY: mruby answers `len` bytes at `ptr`. A short name unpacks
+    // into the state's scratch buffer, which no caller reads another
+    // symbol into before it is done with these bytes.
+    unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), len as usize) }
+}
 
 /// mruby's `identchar`: an ASCII letter or digit, `_`, or a byte outside
 /// ASCII.
@@ -149,6 +166,12 @@ macro_rules! checked_key {
 }
 
 checked_key!(
+    /// An instance-variable name checked once, so the instance-variable
+    /// operations it keys repeat no check.
+    IvarId,
+    Ivar
+);
+checked_key!(
     /// A class-variable name checked once, so the class-variable
     /// operations it keys repeat no check.
     CvarId,
@@ -166,6 +189,15 @@ checked_key!(
     GvarId,
     Gvar
 );
+
+impl IvarId {
+    /// Check `name` as an instance-variable name, surfacing the
+    /// `NameError` an instance-variable operation would.
+    #[inline]
+    pub fn new<K: IntoId>(mrb: &Mrb, name: K) -> Result<Self, Error> {
+        name.into_id_in(mrb, Namespace::Ivar, Sealed(())).map(Self)
+    }
+}
 
 impl CvarId {
     /// Check `name` as a class-variable name, surfacing the `NameError`
