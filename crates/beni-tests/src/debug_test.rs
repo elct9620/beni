@@ -285,3 +285,10 @@ fn a_raise_from_the_hook_is_backtraced_to_the_instruction_it_replaced() {
     let backtrace = escaped.backtrace(&mrb);
     assert!(backtrace[0].ends_with("debug_test.rb:3"), "{backtrace:?}");
 }
+
+#[test]
+fn the_hook_views_copy_as_magnuss_do() {
+    fn copied<T: Copy>() {}
+    copied::<beni::debug::TraceArg<'static>>();
+    copied::<beni::debug::DebugInspector<'static>>();
+}

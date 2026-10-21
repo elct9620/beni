@@ -124,6 +124,7 @@ unsafe extern "C" fn code_fetch_hook(
 
 /// The instruction a code fetch hook was called before — magnus's
 /// `TraceArg`. Valid only for that call.
+#[derive(Clone, Copy)]
 pub struct TraceArg<'a> {
     mrb: *mut sys::mrb_state,
     irep: *const sys::mrb_irep,
@@ -134,7 +135,7 @@ pub struct TraceArg<'a> {
 impl<'a> TraceArg<'a> {
     /// The line of the instruction, or nothing for code that carries no
     /// line numbers.
-    pub fn lineno(&self) -> Option<NonZero<usize>> {
+    pub fn lineno(self) -> Option<NonZero<usize>> {
         // SAFETY: the hook call keeps the state, the irep, and the pc
         // live.
         unsafe { line_at(self.mrb, self.irep, self.pc) }
@@ -142,20 +143,20 @@ impl<'a> TraceArg<'a> {
 
     /// The file name of the instruction's code, or nothing for code that
     /// carries no line numbers.
-    pub fn path(&self) -> Option<Cow<'a, str>> {
+    pub fn path(self) -> Option<Cow<'a, str>> {
         // SAFETY: as `lineno`.
         unsafe { path_at(self.mrb, self.irep, self.pc) }
     }
 
     /// The name of the method running the instruction, or nothing at the
     /// top level.
-    pub fn method_id(&self) -> Option<Id> {
+    pub fn method_id(self) -> Option<Id> {
         self.debug_inspector().frame_method_id(0)
     }
 
     /// The frames of the fiber running the instruction, valid for the
     /// same call.
-    pub fn debug_inspector(&self) -> DebugInspector<'a> {
+    pub fn debug_inspector(self) -> DebugInspector<'a> {
         DebugInspector {
             mrb: self.mrb,
             _call: PhantomData,
@@ -167,6 +168,7 @@ impl<'a> TraceArg<'a> {
 /// `DebugInspector`. Index `0` is the frame running the instruction and
 /// each next index the frame that called it; an index past the fiber's
 /// outermost frame answers nothing. Reads only.
+#[derive(Clone, Copy)]
 pub struct DebugInspector<'a> {
     mrb: *mut sys::mrb_state,
     _call: PhantomData<&'a ()>,
@@ -175,13 +177,13 @@ pub struct DebugInspector<'a> {
 impl<'a> DebugInspector<'a> {
     /// How many frames lie beneath the indexed one, `0` for the
     /// outermost.
-    pub fn frame_depth(&self, index: usize) -> Option<usize> {
+    pub fn frame_depth(self, index: usize) -> Option<usize> {
         self.running_depth().checked_sub(index)
     }
 
     /// The file name of the indexed frame's code, or nothing for code
     /// that carries no line numbers or a frame running Rust or C code.
-    pub fn frame_path(&self, index: usize) -> Option<Cow<'a, str>> {
+    pub fn frame_path(self, index: usize) -> Option<Cow<'a, str>> {
         let (irep, pc) = self.position(index)?;
         // SAFETY: the hook call keeps the frame's code live.
         unsafe { path_at(self.mrb, irep, pc) }
@@ -190,7 +192,7 @@ impl<'a> DebugInspector<'a> {
     /// The line of the indexed frame's current instruction or pending
     /// call, or nothing for code that carries no line numbers or a frame
     /// running Rust or C code.
-    pub fn frame_lineno(&self, index: usize) -> Option<NonZero<usize>> {
+    pub fn frame_lineno(self, index: usize) -> Option<NonZero<usize>> {
         let (irep, pc) = self.position(index)?;
         // SAFETY: as `frame_path`.
         unsafe { line_at(self.mrb, irep, pc) }
@@ -198,7 +200,7 @@ impl<'a> DebugInspector<'a> {
 
     /// The name of the indexed frame's method, or nothing at the top
     /// level.
-    pub fn frame_method_id(&self, index: usize) -> Option<Id> {
+    pub fn frame_method_id(self, index: usize) -> Option<Id> {
         let mid = self.frame(index)?.mid;
         (mid != 0).then(|| Id::from_raw_unchecked(mid))
     }
@@ -206,7 +208,7 @@ impl<'a> DebugInspector<'a> {
     /// Each local variable the indexed frame's code declares, in order,
     /// with its current value. A frame running Rust or C code, or code
     /// compiled without its local variable names, declares none.
-    pub fn frame_local_variables(&self, index: usize) -> Option<Vec<(Id, Value)>> {
+    pub fn frame_local_variables(self, index: usize) -> Option<Vec<(Id, Value)>> {
         let frame = self.frame(index)?;
         // SAFETY: `frame` lies in the running fiber's frame stack, which
         // the hook call keeps in place.
@@ -237,7 +239,7 @@ impl<'a> DebugInspector<'a> {
     }
 
     /// The running fiber's frame stack: its base and its running frame.
-    fn frames(&self) -> (*const sys::mrb_callinfo, *const sys::mrb_callinfo) {
+    fn frames(self) -> (*const sys::mrb_callinfo, *const sys::mrb_callinfo) {
         // SAFETY: the hook call keeps the state and its running context
         // live.
         let context = unsafe { &*(*self.mrb).c };
@@ -245,14 +247,14 @@ impl<'a> DebugInspector<'a> {
     }
 
     /// How many frames lie beneath the running one.
-    fn running_depth(&self) -> usize {
+    fn running_depth(self) -> usize {
         let (base, running) = self.frames();
         // SAFETY: both point into the same frame stack, the running
         // frame at or above its base.
         unsafe { running.offset_from(base) as usize }
     }
 
-    fn frame(&self, index: usize) -> Option<&'a sys::mrb_callinfo> {
+    fn frame(self, index: usize) -> Option<&'a sys::mrb_callinfo> {
         let depth = self.frame_depth(index)?;
         let (base, _) = self.frames();
         // SAFETY: `depth` is at most the running frame's, so the frame
@@ -263,7 +265,7 @@ impl<'a> DebugInspector<'a> {
     /// The indexed frame's code and the instruction it stands at: the
     /// one about to run for the running frame, the call it waits on for
     /// any other.
-    fn position(&self, index: usize) -> Option<(*const sys::mrb_irep, *const sys::mrb_code)> {
+    fn position(self, index: usize) -> Option<(*const sys::mrb_irep, *const sys::mrb_code)> {
         let frame = self.frame(index)?;
         // SAFETY: as `frame_local_variables`.
         let irep = unsafe { sys::mrb_ci_irep_func(frame) };
