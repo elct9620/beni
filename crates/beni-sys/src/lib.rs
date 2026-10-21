@@ -104,14 +104,14 @@ mod bindings {
 pub use bindings::*;
 
 impl mrb_value {
-    /// All-zero `mrb_value`. Under word boxing this matches
-    /// `mrb_nil_value()` (MRB_Qnil = 0). Out-parameter initialisers
-    /// (`mrb_get_args` writes to it) use this; callers that need a
-    /// guaranteed nil should prefer the
-    /// `value::qnil` function in the `beni` wrapper which reads
-    /// through mruby's helper.
+    /// All-zero `mrb_value`, which is nil in every boxing the build
+    /// admits: word boxing's nil is the zero word, and no boxing's is the
+    /// `false` tag (0) with a zero payload. Out-parameter initialisers
+    /// (`mrb_get_args` writes to it) use this.
     pub const fn zeroed() -> Self {
-        Self { w: 0 }
+        // SAFETY: each layout holds only integers, floats, and raw
+        // pointers, for which all-zero bytes are a valid value.
+        unsafe { core::mem::zeroed() }
     }
 }
 

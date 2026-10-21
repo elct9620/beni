@@ -47,6 +47,15 @@ fn the_undefined_value_converts_into_qundef_and_nil_does_not() {
 }
 
 #[test]
+fn the_all_zero_value_converts_into_qnil() {
+    // SAFETY: the value is only read back here; no Ruby code receives it.
+    let zero =
+        unsafe { <Value as beni::sys::FromRawValue>::from_raw(beni::sys::mrb_value::zeroed()) };
+
+    assert!(Qnil::from_value(zero).is_some());
+}
+
+#[test]
 fn qundef_returns_the_undefined_value_and_converts_back_into_it() {
     // SAFETY: the value is only read back here; no Ruby code receives it.
     let undef = unsafe { beni::value::qundef().as_value() };
