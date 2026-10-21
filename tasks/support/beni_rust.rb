@@ -47,9 +47,10 @@ module BeniRust
 
   # Archive discovery env for host-target cargo runs: the vendor tree
   # `beni:build` populates, named explicitly because beni-sys's
-  # discovery is environment-driven with no fallback.
+  # discovery is environment-driven with no fallback. A shell's
+  # +MRUBY_LIB_DIR+ outranks the vendor tree there, so it is cleared.
   def self.host_env
-    { "BENI_VENDOR_DIR" => VENDOR_DIR }
+    { "BENI_VENDOR_DIR" => VENDOR_DIR, "MRUBY_LIB_DIR" => nil }
   end
 
   # Archive discovery env for wasm32 cargo runs: cross targets never
