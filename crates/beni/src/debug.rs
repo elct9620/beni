@@ -14,12 +14,12 @@
 //! `CALL_CODE_HOOKS` beside `cipush`).
 
 use crate::method::InitReturn;
+use crate::value::ReprValue;
 use crate::{sys, Error, Id, Mrb, Value};
 use core::marker::PhantomData;
 use core::num::NonZero;
 use std::borrow::Cow;
 use std::ffi::CStr;
-use std::panic::AssertUnwindSafe;
 
 /// The closure a code fetch hook runs, with its return projected.
 pub(crate) type Hook = Box<dyn FnMut(TraceArg<'_>) -> Result<(), Error> + Send>;
@@ -98,22 +98,28 @@ unsafe extern "C" fn code_fetch_hook(
         pc,
         _call: PhantomData,
     };
-    let Err(err) = crate::sys::catch_unwind(AssertUnwindSafe(|| hook(arg))).and_then(|res| res)
-    else {
-        return;
-    };
     // mruby finds the rescue covering a raise, and the line its backtrace
     // names, from the frame's pc taken as already past the instruction
     // that raised (`catch_handler_find` in `vendor/mruby/src/vm.c`, and
     // the `pc[-1]` of `src/backtrace.c`). The hook runs before the
-    // instruction, so its pc moves one byte into it first; the raise then
-    // lands on this instruction rather than the one before.
-    // SAFETY: the running frame is the one `pc` stands in, and an
-    // instruction is at least one byte long.
-    unsafe { (*(*(*mrb.as_ptr()).c).ci).pc = pc.add(1) };
+    // instruction, so its pc stands one byte into it while the hook
+    // runs, and a raise lands on this instruction rather than the one
+    // before; a hook that returns puts it back for the VM to decode.
+    // SAFETY: the running frame is the one `pc` stands in, an
+    // instruction is at least one byte long, and the hook runs no Ruby,
+    // so the frame stays where it is until the pc is put back.
+    let frame = unsafe { (*(*mrb.as_ptr()).c).ci };
+    unsafe { (*frame).pc = pc.add(1) };
     // SAFETY: this is a bridge frame mruby may unwind out of, holding
     // nothing that needs `Drop`.
-    unsafe { crate::method::raise_error(mrb, err) }
+    unsafe {
+        crate::method::handle_error(mrb, || {
+            hook(arg)?;
+            Ok(crate::value::qnil().as_value())
+        })
+    };
+    // SAFETY: as above.
+    unsafe { (*frame).pc = pc };
 }
 
 /// The instruction a code fetch hook was called before — magnus's
@@ -134,8 +140,8 @@ impl<'a> TraceArg<'a> {
         unsafe { line_at(self.mrb, self.irep, self.pc) }
     }
 
-    /// The file name of the instruction's code, or nothing for code
-    /// loaded without one.
+    /// The file name of the instruction's code, or nothing for code that
+    /// carries no line numbers.
     pub fn path(&self) -> Option<Cow<'a, str>> {
         // SAFETY: as `lineno`.
         unsafe { path_at(self.mrb, self.irep, self.pc) }
@@ -174,7 +180,7 @@ impl<'a> DebugInspector<'a> {
     }
 
     /// The file name of the indexed frame's code, or nothing for code
-    /// loaded without one or a frame running Rust or C code.
+    /// that carries no line numbers or a frame running Rust or C code.
     pub fn frame_path(&self, index: usize) -> Option<Cow<'a, str>> {
         let (irep, pc) = self.position(index)?;
         // SAFETY: the hook call keeps the frame's code live.

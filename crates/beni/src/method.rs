@@ -247,7 +247,7 @@ pub(crate) mod private {
 ///
 /// Only callable from a bridge frame mruby may unwind out of, with
 /// no live Rust values needing `Drop` on the caller's frame.
-pub(crate) unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
+unsafe fn raise_error(mrb: &Mrb, err: Error) -> ! {
     let exc = match err {
         Error::Exception(exc) => exc,
         Error::Syntax(parse) => {
