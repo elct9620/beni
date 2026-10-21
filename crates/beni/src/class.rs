@@ -100,6 +100,15 @@ pub(crate) mod private {
         }
     }
 
+    impl ClassLike for super::ClassOrModule {
+        fn raw(self) -> *mut sys::RClass {
+            match self {
+                super::ClassOrModule::Class(class) => class.0,
+                super::ClassOrModule::Module(module) => module.0,
+            }
+        }
+    }
+
     impl ClassLike for super::RModule {
         fn raw(self) -> *mut sys::RClass {
             self.0
@@ -607,4 +616,59 @@ try_convert_class!(
     RClass => "a class",
     RModule => "a module",
     ExceptionClass => "a class inheriting Exception",
+    ClassOrModule => "a class or module",
 );
+
+/// A class or a module, where either may stand — the class or module a
+/// method was defined in. Never an include class.
+#[derive(Copy, Clone, Debug)]
+pub enum ClassOrModule {
+    /// A class or a singleton class.
+    Class(RClass),
+    /// A module.
+    Module(RModule),
+}
+
+impl crate::ReprValue for ClassOrModule {
+    #[inline]
+    fn as_value(self) -> Value {
+        match self {
+            ClassOrModule::Class(class) => class.as_value(),
+            ClassOrModule::Module(module) => module.as_value(),
+        }
+    }
+}
+
+impl crate::value::private::ReprValue for ClassOrModule {
+    #[inline]
+    unsafe fn from_value_unchecked(v: Value) -> Self {
+        // SAFETY: `v` boxes a class or a module, by the caller's contract.
+        unsafe {
+            if v.tag() == sys::MRB_TT_MODULE {
+                ClassOrModule::Module(
+                    <RModule as crate::value::private::ReprValue>::from_value_unchecked(v),
+                )
+            } else {
+                ClassOrModule::Class(
+                    <RClass as crate::value::private::ReprValue>::from_value_unchecked(v),
+                )
+            }
+        }
+    }
+}
+
+impl crate::IntoValue for ClassOrModule {
+    #[inline]
+    fn into_value(self, _mrb: &Mrb) -> Value {
+        crate::ReprValue::as_value(self)
+    }
+}
+
+impl FromValue for ClassOrModule {
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        RClass::from_value(value)
+            .map(ClassOrModule::Class)
+            .or_else(|| RModule::from_value(value).map(ClassOrModule::Module))
+    }
+}

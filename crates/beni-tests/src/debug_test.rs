@@ -1,7 +1,9 @@
 use crate::support::open_mrb;
 use beni::debug::TraceArg;
 use beni::prelude::*;
-use beni::{Ccontext, DumpOptions, Error, FromValue, Id, Mrb, Proc, Value};
+use beni::{
+    Ccontext, DumpOptions, Error, FromValue, Id, IntoValue, Mrb, Proc, RArray, RString, Value,
+};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -291,4 +293,160 @@ fn the_hook_views_copy_as_magnuss_do() {
     fn copied<T: Copy>() {}
     copied::<beni::debug::TraceArg<'static>>();
     copied::<beni::debug::DebugInspector<'static>>();
+}
+
+/// Run `source` with a hook that answers `read` once, at the first
+/// instruction of `line`.
+fn read_at<T: Send + 'static>(
+    mrb: &mut Mrb,
+    source: &str,
+    line: usize,
+    read: impl Fn(TraceArg<'_>) -> T + Send + 'static,
+) -> T {
+    let recorded = Arc::new(Mutex::new(None));
+    let sink = Arc::clone(&recorded);
+    mrb.set_code_fetch_hook(move |arg: TraceArg<'_>| {
+        let mut sink = sink.lock().unwrap();
+        if sink.is_none() && arg.lineno().map(|l| l.get()) == Some(line) {
+            *sink = Some(read(arg));
+        }
+    });
+    run(mrb, source).expect("the source runs");
+    mrb.remove_code_fetch_hook();
+    let read = recorded.lock().unwrap().take();
+    read.expect("the hook reached the line")
+}
+
+/// A class or module read as whether it is a module and its identity.
+fn kind_and_id(class: Option<beni::ClassOrModule>) -> Option<(bool, i64)> {
+    class.map(|class| {
+        (
+            matches!(class, beni::ClassOrModule::Module(_)),
+            class.as_value().object_id(),
+        )
+    })
+}
+
+fn object_id(mrb: &Mrb, source: &str) -> i64 {
+    run(mrb, source).expect("the source runs").object_id()
+}
+
+#[test]
+fn the_hook_reads_self_and_the_class_defining_the_method() {
+    let mut mrb = open_mrb();
+    let source = "class Greeter\n  def hello\n    1\n  end\nend\n$g = Greeter.new\n$g.hello\n";
+
+    let (running, caller, defined, caller_defined) = read_at(&mut mrb, source, 3, |arg| {
+        let frames = arg.debug_inspector();
+        (
+            arg.tracearg_self().object_id(),
+            frames.frame_self_get(1).map(|v| v.object_id()),
+            kind_and_id(arg.defined_class()),
+            kind_and_id(frames.frame_class_get(1)),
+        )
+    });
+
+    assert_eq!(running, object_id(&mrb, "$g"));
+    assert_eq!(caller, Some(object_id(&mrb, "self")));
+    assert_eq!(defined, Some((false, object_id(&mrb, "Greeter"))));
+    assert_eq!(caller_defined, None, "the top level has no defining class");
+}
+
+#[test]
+fn a_module_method_answers_its_module_and_a_prepended_class_itself() {
+    let source = "module Helper\n  def help\n    2\n  end\nend\nmodule Loud\nend\n\
+                  class Shout\n  prepend Loud\n  include Helper\n  def say\n    3\n  end\nend\n\
+                  s = Shout.new\ns.help\ns.say\n";
+    let mut mrb = open_mrb();
+
+    let help = read_at(&mut mrb, source, 3, |arg| kind_and_id(arg.defined_class()));
+    let say = read_at(&mut mrb, source, 12, |arg| kind_and_id(arg.defined_class()));
+
+    assert_eq!(help, Some((true, object_id(&mrb, "Helper"))));
+    assert_eq!(say, Some((false, object_id(&mrb, "Shout"))));
+}
+
+#[test]
+fn a_rust_frame_answers_the_module_its_method_was_found_in() {
+    let mut mrb = open_mrb();
+    let helper = mrb
+        .define_module(c"BeniDebugHelper")
+        .expect("defining the module succeeds");
+    helper
+        .define_method(&mrb, c"yield_to", beni::method!(yield_to, 0, &))
+        .expect("registering the method succeeds");
+    let source = "class Holder\n  include BeniDebugHelper\nend\nHolder.new.yield_to do\n  1\nend\n";
+
+    let caller = read_at(&mut mrb, source, 5, |arg| {
+        kind_and_id(arg.debug_inspector().frame_class_get(1))
+    });
+
+    assert_eq!(caller, Some((true, object_id(&mrb, "BeniDebugHelper"))));
+}
+
+fn current_depth(mrb: &Mrb, _self: Value) -> Result<i32, Error> {
+    Ok(mrb.debug_inspector_current_depth() as i32)
+}
+
+#[test]
+fn the_current_depth_counts_every_frame_of_the_running_fiber() {
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"depth", beni::method!(current_depth, 0))
+        .expect("registering the method succeeds");
+
+    let top = run(&mrb, "depth").expect("the source runs");
+    let nested = run(
+        &mrb,
+        "def foo\n  bar\nend\ndef bar\n  baz\nend\ndef baz\n  depth\nend\nfoo\n",
+    )
+    .expect("the source runs");
+
+    assert_eq!(i32::from_value(top), Some(2), "the top level and `depth`");
+    assert_eq!(i32::from_value(nested), Some(5));
+}
+
+/// The line and method of the frame that called this method, read once
+/// before and once after a call deep enough to move the frame stack.
+fn caller_twice(mrb: &Mrb, _self: Value) -> Result<RArray, Error> {
+    let read = mrb.debug_inspector_open(|frames| {
+        let place = |frames: beni::debug::DebugInspector<'_>| {
+            (
+                frames.frame_lineno(1).map_or(0, |line| line.get() as i32),
+                frames.frame_method_id(1),
+            )
+        };
+        let before = place(frames);
+        mrb.load_string(b"def deep(n)\n  n == 0 ? 0 : deep(n - 1)\nend\ndeep(300)\n")?;
+        let after = place(frames);
+        let ary = mrb.ary_new();
+        for (line, method) in [before, after] {
+            ary.push(mrb, line.into_value(mrb))?;
+            ary.push(
+                mrb,
+                method.expect("the caller runs a method").into_value(mrb),
+            )?;
+        }
+        Ok::<_, Error>(ary)
+    })?;
+    Ok(RArray::from_value(read).expect("the closure answers an Array"))
+}
+
+#[test]
+fn an_inspector_opened_from_rust_reads_its_callers_across_a_moved_frame_stack() {
+    let mrb = open_mrb();
+    mrb.object_class()
+        .define_method(&mrb, c"caller_twice", beni::method!(caller_twice, 0))
+        .expect("registering the method succeeds");
+
+    let read =
+        run(&mrb, "def outer\n  caller_twice\nend\nouter.inspect\n").expect("the source runs");
+
+    assert_eq!(
+        RString::from_value(read)
+            .expect("inspect answers a String")
+            .to_string(&mrb)
+            .expect("renders"),
+        "[2, :outer, 2, :outer]"
+    );
 }

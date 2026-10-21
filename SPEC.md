@@ -1949,7 +1949,11 @@ A `TraceArg` reads the instruction about to run.
 | `lineno` | its line, or nothing for code that carries no line numbers |
 | `path` | its file name, or nothing for code that carries no line numbers |
 | `method_id` | the name of the method running it, or nothing at the top level |
+| `tracearg_self` | the `self` of the code running it |
+| `defined_class` | the class or module defining the method running it, or nothing at the top level |
 | `debug_inspector` | a `DebugInspector` over the running fiber's frames, valid for the same call |
+
+A class or module a read answers is a `ClassOrModule`, holding either a class handle or a module handle. It is the class or module the method was defined in, never an include class: a method of a class with prepended modules answers that class.
 
 ##### Frame inspection
 
@@ -1961,9 +1965,22 @@ A `DebugInspector` reads the frames of the running fiber, mirroring `magnus`'s `
 | `frame_path` | the file name of its code, as `path` does |
 | `frame_lineno` | the line of its current instruction or pending call |
 | `frame_method_id` | the name of its method, as `method_id` does |
+| `frame_self_get` | its `self` |
+| `frame_class_get` | the class or module defining its method, as `defined_class` does |
 | `frame_local_variables` | each local variable its code declares, in order, with its current value |
 
 A frame running Rust or C code has no file name, no line, and no local variables. Code compiled without its local variable names declares none. A `DebugInspector` writes nothing.
+
+##### Inspection outside a hook
+
+Rust code a Ruby call reached inspects the frames that led to it, mirroring `magnus`'s `Ruby::debug_inspector_open` and `Ruby::debug_inspector_current_depth`.
+
+| Operation | Outcome |
+|---|---|
+| `Mrb::debug_inspector_open` | runs a closure with a `DebugInspector` whose index `0` is the frame running the Rust code; answers the closure's return as a value, or the `Err` it returns |
+| `Mrb::debug_inspector_current_depth` | how many frames the running fiber holds, its outermost included |
+
+The inspector is valid for the closure's call. Each read answers for the frames as they stand when it is made, so a closure that calls Ruby between reads sees the frames that remain.
 
 #### Precompiled bytecode
 

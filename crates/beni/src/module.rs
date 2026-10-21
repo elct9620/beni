@@ -407,4 +407,5 @@ pub trait Module: Object + private::ClassLike {
 
 impl Module for RClass {}
 impl Module for RModule {}
+impl Module for crate::ClassOrModule {}
 impl Module for ExceptionClass {}

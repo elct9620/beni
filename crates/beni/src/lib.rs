@@ -115,7 +115,7 @@ pub use ccontext::Ccontext;
 pub use fiber::FiberYield;
 
 pub use array::RArray;
-pub use class::{Class, ExceptionClass, RClass, RModule};
+pub use class::{Class, ClassOrModule, ExceptionClass, RClass, RModule};
 pub use convert::{FromValue, IntoValue};
 pub use data::DataType;
 pub use error::Error;

@@ -13,9 +13,9 @@
 //! run on from freed memory once the hook returns (`vendor/mruby/src/vm.c`,
 //! `CALL_CODE_HOOKS` beside `cipush`).
 
-use crate::method::InitReturn;
+use crate::method::{BlockReturn, InitReturn};
 use crate::value::ReprValue;
-use crate::{sys, Error, Id, Mrb, Value};
+use crate::{sys, ClassOrModule, Error, FromValue, Id, Mrb, Value};
 use core::marker::PhantomData;
 use core::num::NonZero;
 use std::borrow::Cow;
@@ -70,6 +70,32 @@ impl Mrb {
         if self.slot().is_some() {
             *self.slot_mut().hook.get_mut() = None;
         }
+    }
+
+    /// Run `func` with a `DebugInspector` over the running fiber's frames,
+    /// index `0` being the frame running the Rust code that calls this,
+    /// and answer what it returns. Mirrors magnus's
+    /// `Ruby::debug_inspector_open`.
+    pub fn debug_inspector_open<F, R>(&self, func: F) -> Result<Value, Error>
+    where
+        F: FnOnce(DebugInspector<'_>) -> R,
+        R: BlockReturn,
+    {
+        let inspector = DebugInspector {
+            mrb: self.as_ptr(),
+            _call: PhantomData,
+        };
+        crate::method::private::BlockReturn::into_block_return(func(inspector), self)
+    }
+
+    /// How many frames the running fiber holds, its outermost included.
+    /// Mirrors magnus's `Ruby::debug_inspector_current_depth`.
+    pub fn debug_inspector_current_depth(&self) -> usize {
+        let inspector = DebugInspector {
+            mrb: self.as_ptr(),
+            _call: PhantomData,
+        };
+        inspector.running_depth() + 1
     }
 }
 
@@ -154,6 +180,20 @@ impl<'a> TraceArg<'a> {
         self.debug_inspector().frame_method_id(0)
     }
 
+    /// The `self` of the code running the instruction.
+    pub fn tracearg_self(self) -> Value {
+        // SAFETY: the hook call keeps the running frame and its registers
+        // live, and register `0` of every frame is its `self`.
+        let frame = unsafe { &*(*(*self.mrb).c).ci };
+        Value::from_raw_unchecked(unsafe { *frame.stack })
+    }
+
+    /// The class or module defining the method running the instruction,
+    /// or nothing at the top level.
+    pub fn defined_class(self) -> Option<ClassOrModule> {
+        self.debug_inspector().frame_class_get(0)
+    }
+
     /// The frames of the fiber running the instruction, valid for the
     /// same call.
     pub fn debug_inspector(self) -> DebugInspector<'a> {
@@ -203,6 +243,26 @@ impl<'a> DebugInspector<'a> {
     pub fn frame_method_id(self, index: usize) -> Option<Id> {
         let mid = self.frame(index)?.mid;
         (mid != 0).then(|| Id::from_raw_unchecked(mid))
+    }
+
+    /// The `self` of the indexed frame.
+    pub fn frame_self_get(self, index: usize) -> Option<Value> {
+        let frame = self.frame(index)?;
+        // SAFETY: register `0` of every frame is its `self`, and the frame
+        // lies in the stack the call keeps in place.
+        Some(Value::from_raw_unchecked(unsafe { *frame.stack }))
+    }
+
+    /// The class or module defining the indexed frame's method, or nothing
+    /// at the top level.
+    pub fn frame_class_get(self, index: usize) -> Option<ClassOrModule> {
+        let frame = self.frame(index)?;
+        if frame.mid == 0 {
+            return None;
+        }
+        // SAFETY: `frame` lies in the running fiber's frame stack, which
+        // the call keeps in place.
+        defining(unsafe { sys::mrb_vm_ci_target_class(frame) })
     }
 
     /// Each local variable the indexed frame's code declares, in order,
@@ -281,6 +341,27 @@ impl<'a> DebugInspector<'a> {
         };
         Some((irep, pc))
     }
+}
+
+/// The class or module `class` stands for. A method's frame holds the
+/// class its method was found in, which for a module's method or a class
+/// with prepended modules is an include class; an include class points at
+/// the class or module it was made from (`include_class_new` and
+/// `prepend_module` in `vendor/mruby/src/class.c`).
+fn defining(class: *mut sys::RClass) -> Option<ClassOrModule> {
+    if class.is_null() {
+        return None;
+    }
+    // SAFETY: a non-NULL target class is a live class-family object, and
+    // `mrb_obj_value` only boxes the pointer.
+    let mut value = Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(class.cast()) });
+    if value.tag() == sys::MRB_TT_ICLASS {
+        // SAFETY: an include class's `c` is the live class or module it
+        // was made from.
+        let real = unsafe { (*class.cast::<sys::RBasic>()).c };
+        value = Value::from_raw_unchecked(unsafe { sys::mrb_obj_value(real.cast()) });
+    }
+    ClassOrModule::from_value(value)
 }
 
 /// The line of `pc` in `irep`, or nothing when it carries no lines.

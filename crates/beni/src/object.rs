@@ -231,6 +231,7 @@ pub trait Object: ReprValue {
 
 impl Object for RClass {}
 impl Object for RModule {}
+impl Object for crate::ClassOrModule {}
 impl Object for ExceptionClass {}
 impl Object for crate::RObject {}
 impl Object for crate::RHash {}
