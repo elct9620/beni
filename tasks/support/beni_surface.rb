@@ -26,8 +26,9 @@ require_relative "beni_surface/macros"
 # body gated on that feature, so enabling the feature has a net of its
 # own and disabling it leaves the ungated net whole. An archive cfg the
 # build script reads from the archive (+mrb_debug_hook+) is an axis the
-# same way. A fn carrying some other +#[cfg]+ is build-specific and
-# stays out of the expectation.
+# same way. An item two axes gate is expected in a net body gated on
+# both. A fn carrying some other +#[cfg]+ is build-specific and stays
+# out of the expectation, and a net body behind one answers no entry.
 module BeniSurface
   ROOT = File.expand_path("../..", __dir__)
   CRATE_SRC = File.join(ROOT, "crates", "beni", "src")

@@ -13,7 +13,7 @@ module BeniSurface
     def call(root)
       Dir.glob(File.join(root, "**", "*.rs")).each_with_object({}) do |file, map|
         gated(File.read(file)).each do |name, feature|
-          files(file, name).each { |path| map[path] = feature }
+          files(file, name).each { |path| map[path] = Gate.combine(map[path], feature) }
         end
       end
     end

@@ -4,20 +4,22 @@ require_relative "gate"
 
 module BeniSurface
   # One inherent public method path, e.g. +Value::zeroed+, together
-  # with the capability feature carrying it — +nil+ when every build
-  # has it.
+  # with the gate key of the capability features and archive cfgs
+  # carrying it — +nil+ when every build has it.
   Entry = Data.define(:type, :name, :feature) do
     def ref
       "#{type}::#{name}"
     end
 
-    # How a diagnostic names the entry: the path, and the capability
-    # feature or archive cfg it sits behind when one does.
+    # How a diagnostic names the entry: the path, and each capability
+    # feature or archive cfg it sits behind.
     def label
       return ref unless feature
 
-      kind = Syntax.archive_cfg?(feature) ? "cfg" : "feature"
-      "#{ref} (#{kind} #{feature})"
+      axes = feature.split(AXIS_SEPARATOR).map do |name|
+        "#{Syntax.archive_cfg?(name) ? "cfg" : "feature"} #{name}"
+      end
+      "#{ref} (#{axes.join(", ")})"
     end
   end
 

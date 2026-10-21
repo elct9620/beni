@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "tmpdir"
 
 require_relative "../../tasks/support/beni_surface"
@@ -14,10 +15,18 @@ module SurfaceHarness
     Dir.mktmpdir do |dir|
       src = File.join(dir, "src")
       Dir.mkdir(src)
-      crate.each { |name, body| File.write(File.join(src, name), body) }
+      write_crate(src, crate)
       BeniSurface.verify(crate_src: src,
                          net_file: write(dir, "surface_test.rs", net),
                          macro_src: write(dir, "macros.rs", macros))
+    end
+  end
+
+  def write_crate(src, crate)
+    crate.each do |name, body|
+      path = File.join(src, name)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, body)
     end
   end
 

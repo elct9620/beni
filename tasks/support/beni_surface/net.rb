@@ -7,8 +7,13 @@ module BeniSurface
   # capability feature, keyed by the feature the body is gated on and
   # +nil+ for the ungated one. An entry a feature carries belongs in
   # that feature's body, so a reference sitting in the wrong body reads
-  # as missing rather than passing.
+  # as missing rather than passing. A body some other +#[cfg]+ makes
+  # build-specific compiles in only some builds, so it stands for no
+  # axis and answers no entry.
   class Net
+    # The key of the bodies no expectation reads.
+    BUILD_SPECIFIC = :build_specific
+
     def self.call(path)
       new(File.read(path).each_line.to_a).read.bodies
     end
@@ -42,7 +47,8 @@ module BeniSurface
     # split across several fns is read whole rather than by its last.
     def collect(index)
       stop = closing_brace(index)
-      (@bodies[@gate.feature] ||= +"") << @lines[index..stop].join
+      key = @gate.excluded ? BUILD_SPECIFIC : @gate.feature
+      (@bodies[key] ||= +"") << @lines[index..stop].join
       @gate = Gate.at(nil)
       @consumed = stop
     end
