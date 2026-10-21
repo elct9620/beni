@@ -102,6 +102,16 @@ mrb_rarray_len_func(mrb_value a)
   return RARRAY_LEN(a);
 }
 
+/* Entry count of a Hash-tagged mrb_value. `mrb_hash_size` and
+ * `mrb_hash_empty_p` read only the hash's own `size` field
+ * (src/hash.c), which <mruby/hash.h> declares, so the count is read
+ * here without the state those calls take. */
+static inline mrb_int
+mrb_rhash_size_func(mrb_value h)
+{
+  return (mrb_int)mrb_hash_ptr(h)->size;
+}
+
 /* Element pointer of an Array-tagged mrb_value. Counterpart to the
  * `RARRAY_PTR(a)` macro, which branches between the embedded buffer
  * and the heap pointer on the same header flags as `mrb_rarray_len_func`. */

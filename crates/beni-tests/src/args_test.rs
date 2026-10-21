@@ -352,7 +352,7 @@ fn clear_then_scan(mrb: &Mrb, _self: Value, args: &[Value]) -> Result<Value, Err
         .expect("the trailing value is the keyword hash");
     handed.clear(mrb)?;
     let bucket = scan_args::<(), (), RArray, (), beni::RHash, ()>(mrb)?.keywords;
-    Ok((bucket.len(mrb) as i32).into_value(mrb))
+    Ok((bucket.len() as i32).into_value(mrb))
 }
 
 #[test]
@@ -376,7 +376,7 @@ fn keywords_after_the_slice(mrb: &Mrb, _self: Value, args: &[Value]) -> Result<V
     Ok(mrb
         .ary_new_from_values(&[
             (args.len() as i32).into_value(mrb),
-            (bucket.len(mrb) as i32).into_value(mrb),
+            (bucket.len() as i32).into_value(mrb),
         ])
         .as_value())
 }

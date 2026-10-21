@@ -41,6 +41,13 @@ use beni_sys as sys;
 /// Construct via `Mrb::define_class` / `Mrb::class_get` (top level),
 /// the `Module` trait's `define_class` / `class_get` (nested), or the
 /// checked `FromValue` downcast of a class value.
+///
+/// A class handle stays on the thread that made it, as every handle does:
+///
+/// ```compile_fail
+/// fn carried<T: Send>() {}
+/// carried::<beni::RClass>();
+/// ```
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
 pub struct RClass(pub(crate) *mut sys::RClass);
@@ -76,28 +83,6 @@ pub struct RModule(pub(crate) *mut sys::RClass);
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
 pub struct ExceptionClass(*mut sys::RClass);
-
-// SAFETY: a class handle carries neither the interpreter nor ownership
-// of the class it names, so crossing a thread with one is inert; it
-// means something only against the interpreter that produced it, the
-// same pairing `Value` leaves to the consumer.
-unsafe impl Send for RClass {}
-unsafe impl Sync for RClass {}
-unsafe impl Send for RModule {}
-unsafe impl Sync for RModule {}
-unsafe impl Send for ExceptionClass {}
-unsafe impl Sync for ExceptionClass {}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn class_handles_cross_threads() {
-        fn crosses<T: Send + Sync>() {}
-        crosses::<crate::RClass>();
-        crosses::<crate::RModule>();
-        crosses::<crate::ExceptionClass>();
-    }
-}
 
 pub(crate) mod private {
     use beni_sys as sys;
@@ -492,8 +477,8 @@ pub trait Class: crate::Module {
     /// wraps still allocate. A singleton class, which Ruby never
     /// allocates through, is left unchanged.
     fn undef_default_alloc_func(self, mrb: &Mrb) {
-        // The `&Mrb` borrow is what serializes this flag write: a class
-        // handle crosses threads on its own, its interpreter does not.
+        // The `&Mrb` borrow is what serializes this flag write: it is
+        // held only by the one caller reaching the class's interpreter.
         let _ = mrb;
         if self.as_value().tag() == sys::MRB_TT_CLASS {
             // SAFETY: `self` is a live plain class of the VM borrowed as

@@ -377,7 +377,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_hash_merge` | fn | ✅ | ✅ | `RHash::update` |
 | `mrb_hash_new` | fn | ✅ | ✅ | `Mrb::hash_new` |
 | `mrb_hash_new_capa` | fn | ✅ | ✅ | `Mrb::hash_new_capa` |
-| `mrb_hash_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RHash*` — see `mrb_str_ptr` |
+| `mrb_hash_ptr` | macro | ✅ | 🚫 | declined: unchecked cast to `struct RHash*` — see `mrb_str_ptr` |
 | `mrb_hash_set` | fn | ✅ | ✅ | `RHash::set` |
 | `mrb_hash_size` | fn | ✅ | ✅ | `RHash::len` |
 | `mrb_hash_value` | macro | ❌ | ✅ | defined as `mrb_obj_value` |

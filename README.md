@@ -97,8 +97,10 @@ fn main() {
 ```
 
 An interpreter is carried between threads but never reached from two at
-once: `Mrb` is `Send` and not `Sync`, so handing one to another thread
-compiles while sharing it needs a `Mutex` of your own.
+once. `Mrb` is `Send` and not `Sync`: handing one to another thread
+compiles, while sharing it needs a `Mutex` of your own. A handle stays on
+the thread that made it; wrap it in `beni::value::Opaque` to carry it
+along, and unwrap it there with `Mrb::get_inner`.
 
 Every build needs the archive: with no discovery variable set the build
 fails naming the ones it looked for, rather than handing you a crate

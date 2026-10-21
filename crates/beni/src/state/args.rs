@@ -114,7 +114,7 @@ pub(crate) fn with_call<R>(mrb: &Mrb, body: impl FnOnce(&[Value], Option<crate::
     let block = crate::Proc::from_value(call.block);
     let keywords = call
         .keywords
-        .filter(|keywords| !keywords.is_empty(mrb))
+        .filter(|keywords| !keywords.is_empty())
         .map(ReprValue::as_value);
     body(ArgsCopy::new(call.positionals, keywords).as_slice(), block)
 }

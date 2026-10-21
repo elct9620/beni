@@ -81,7 +81,7 @@ pub trait Object: ReprValue {
         let sym = name.into_id(mrb)?.to_raw();
         // SAFETY: `mrb` is alive; `self` is a holder of the same VM, and
         // `mrb_iv_get` reads its table without dispatching.
-        let value = mrb.hold(Value(unsafe {
+        let value = mrb.hold(Value::from_raw_unchecked(unsafe {
             sys::mrb_iv_get(mrb.as_ptr(), self.as_value().0, sym)
         }));
         U::try_convert(value, mrb)
@@ -125,7 +125,9 @@ pub trait Object: ReprValue {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_iv_remove` raises
             // `FrozenError` on a frozen holder — caught by `protect`.
-            Value(unsafe { sys::mrb_iv_remove(mrb.as_ptr(), self.as_value().0, sym) })
+            Value::from_raw_unchecked(unsafe {
+                sys::mrb_iv_remove(mrb.as_ptr(), self.as_value().0, sym)
+            })
         })
         .map(|removed| Qundef::from_value(removed).is_none().then_some(removed))
     }

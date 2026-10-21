@@ -1778,7 +1778,7 @@ Rooting keeps its record inside the interpreter. A guest program that enumerates
 | never-released roots | mruby's own |
 | releasable roots, lazy values, and carrier records | beni's, one entry for all three |
 
-Neither entry is named as a Ruby global variable, so no guest program can read or write the record; it is visible to enumeration alone.
+Neither entry is named as a Ruby global variable, and neither record is an object `ObjectSpace` enumerates, so no guest program can read or write it; the entry's name is visible to enumeration alone.
 
 A consumer reaching mruby's own root registry through `beni::sys` owns an invariant the typed shapes encode. That registry is keyed by value rather than by registration. Removing a value removes every root over it, and a released root cannot be told from another holder's. `GcRoot` supplies the per-root identity that makes independent release well defined.
 
@@ -1789,7 +1789,7 @@ A consumer reaching mruby's own root registry through `beni::sys` owns an invari
 | Operation | Behavior |
 |---|---|
 | `Lazy::new` | a const constructor taking the function that computes the value |
-| `Mrb::get_inner` | the value this interpreter holds, computing and holding it first when it holds none |
+| `Mrb::get_inner` | the value this interpreter holds, computing and holding it first when it holds none; for an `Opaque`, the handle it carries |
 | `Lazy::force` | computes and holds the value now when this interpreter holds none |
 | `Lazy::try_get_inner` | the value when this interpreter holds one, `None` otherwise; computes nothing |
 
@@ -2156,10 +2156,21 @@ carried rather than shared.
 
 A guard that borrows the interpreter — an arena scope, a root, a compile
 context — pins both to the thread they were made on for as long as the guard
-lives. A typed handle or `Id` crosses as freely as the interpreter does and
-means something only against the interpreter that produced it. The type system
-does not enforce that pairing; the consumer upholds it, as with the GC
-validity rule above.
+lives. A typed handle stays on the thread it was made on, mirroring `magnus`.
+A handle crosses threads inside an `Opaque`, mirroring `magnus`'s
+`value::Opaque`, which offers nothing until `Mrb::get_inner` hands the handle
+back on the thread holding the interpreter. An `Id` crosses freely.
+
+| Carried across threads | Typed surface |
+|---|---|
+| a typed handle | refuses; the type system rejects it |
+| an `Opaque` holding a handle | permits; unwrapped only through the interpreter |
+| an `Id` | permits |
+
+A handle, an `Opaque`, or an `Id` means something only against the
+interpreter that produced it, and wrapping exempts nothing from the GC
+validity rule. The type system does not enforce that pairing; the consumer
+upholds it, as with the GC validity rule above.
 
 ##### Graduation Bar
 

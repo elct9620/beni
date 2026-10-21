@@ -7,6 +7,7 @@
 //! with `mrb_value`.
 
 use beni_sys as sys;
+use core::marker::PhantomData;
 
 use crate::{sys::AsRawValue, Error, Module, Mrb, RClass};
 use crate::{FromValue, IntoValue, RString};
@@ -78,17 +79,25 @@ impl Immediates {
 /// `beni-tests` pin the `#[repr(transparent)]` contract that
 /// the method-registration `mem::transmute` in `class::protect_register`
 /// depends on.
+///
+/// ## Threads
+///
+/// A handle stays on the thread that made it, mirroring `magnus`; an
+/// `Opaque` carries one across. The marker holds that whatever shape a
+/// boxing ABI gives the payload:
+///
+/// ```compile_fail
+/// fn carried<T: Send>() {}
+/// carried::<beni::Value>();
+/// ```
+///
+/// ```compile_fail
+/// fn shared<T: Sync>() {}
+/// shared::<beni::RString>();
+/// ```
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Value(pub(crate) sys::mrb_value);
-
-// SAFETY: a handle carries neither the interpreter nor ownership of what
-// it names, so crossing a thread with one is inert; it means something
-// only against the interpreter that produced it, a pairing the consumer
-// upholds. Stated here so the contract holds whatever shape a boxing ABI
-// gives the payload.
-unsafe impl Send for Value {}
-unsafe impl Sync for Value {}
+pub struct Value(pub(crate) sys::mrb_value, PhantomData<*mut ()>);
 
 // Manual and deliberately opaque: the boxed payload is meaningless
 // without the VM that produced it (and its layout varies by boxing
@@ -102,13 +111,15 @@ impl core::fmt::Debug for Value {
 
 /// Ruby's `nil`, as magnus's `Ruby::qnil` answers it. It takes no
 /// interpreter handle: magnus's `&Ruby` proves the caller is on a Ruby
-/// thread, while mruby's `mrb_nil_value` needs no `mrb_state` and a beni
-/// handle crosses threads freely.
+/// thread, while mruby's `mrb_nil_value` needs no `mrb_state` and nil
+/// names no object, so no thread reaches a heap through it.
 #[inline]
 pub fn qnil() -> crate::Qnil {
     // SAFETY: the cached value is mruby's own `nil`.
     unsafe {
-        <crate::Qnil as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qnil))
+        <crate::Qnil as private::ReprValue>::from_value_unchecked(Value::from_raw_unchecked(
+            Immediates::get().qnil,
+        ))
     }
 }
 
@@ -118,7 +129,9 @@ pub fn qnil() -> crate::Qnil {
 pub fn qtrue() -> crate::Qtrue {
     // SAFETY: the cached value is mruby's own `true`.
     unsafe {
-        <crate::Qtrue as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qtrue))
+        <crate::Qtrue as private::ReprValue>::from_value_unchecked(Value::from_raw_unchecked(
+            Immediates::get().qtrue,
+        ))
     }
 }
 
@@ -128,7 +141,9 @@ pub fn qtrue() -> crate::Qtrue {
 pub fn qfalse() -> crate::Qfalse {
     // SAFETY: the cached value is mruby's own `false`.
     unsafe {
-        <crate::Qfalse as private::ReprValue>::from_value_unchecked(Value(Immediates::get().qfalse))
+        <crate::Qfalse as private::ReprValue>::from_value_unchecked(Value::from_raw_unchecked(
+            Immediates::get().qfalse,
+        ))
     }
 }
 
@@ -137,7 +152,7 @@ pub fn qfalse() -> crate::Qfalse {
 /// through mruby's own `mrb_undef_value`.
 #[inline]
 pub fn qundef() -> crate::Qundef {
-    crate::Qundef(Value(Immediates::get().qundef))
+    crate::Qundef(Value::from_raw_unchecked(Immediates::get().qundef))
 }
 
 /// A typed handle that stands for a `Value`, carrying the operations any
@@ -169,7 +184,9 @@ pub trait ReprValue: private::ReprValue {
             // `TypeError` on a non-numeric operand and `RangeError` on an
             // integer result past the configured width — both caught by
             // `protect` into `Err`.
-            Value(unsafe { sys::mrb_num_add(mrb.as_ptr(), self.as_value().0, other.0) })
+            Value::from_raw_unchecked(unsafe {
+                sys::mrb_num_add(mrb.as_ptr(), self.as_value().0, other.0)
+            })
         })
     }
 
@@ -186,7 +203,9 @@ pub trait ReprValue: private::ReprValue {
             // SAFETY: as `ReprValue::add`. `mrb_num_sub` raises `TypeError` on
             // a non-numeric operand and `RangeError` on an integer result
             // past the configured width — both caught by `protect`.
-            Value(unsafe { sys::mrb_num_sub(mrb.as_ptr(), self.as_value().0, other.0) })
+            Value::from_raw_unchecked(unsafe {
+                sys::mrb_num_sub(mrb.as_ptr(), self.as_value().0, other.0)
+            })
         })
     }
 
@@ -202,7 +221,9 @@ pub trait ReprValue: private::ReprValue {
             // SAFETY: as `ReprValue::add`. `mrb_num_mul` raises `TypeError` on
             // a non-numeric operand and `RangeError` on an integer result
             // past the configured width — both caught by `protect`.
-            Value(unsafe { sys::mrb_num_mul(mrb.as_ptr(), self.as_value().0, other.0) })
+            Value::from_raw_unchecked(unsafe {
+                sys::mrb_num_mul(mrb.as_ptr(), self.as_value().0, other.0)
+            })
         })
     }
 
@@ -225,7 +246,9 @@ pub trait ReprValue: private::ReprValue {
             // render directly, and a non-string `to_s` falls back to
             // `mrb_any_to_s` — while any raise is caught by `protect`
             // into `Err`.
-            let v = Value(unsafe { sys::mrb_obj_as_string(mrb.as_ptr(), self.as_value().0) });
+            let v = Value::from_raw_unchecked(unsafe {
+                sys::mrb_obj_as_string(mrb.as_ptr(), self.as_value().0)
+            });
             unsafe { RString::from_value_unchecked(v) }
         })
     }
@@ -262,7 +285,7 @@ pub trait ReprValue: private::ReprValue {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_obj_dup` runs
             // `initialize_copy` and may raise — caught by `protect`.
-            Value(unsafe { sys::mrb_obj_dup(mrb.as_ptr(), self.as_value().0) })
+            Value::from_raw_unchecked(unsafe { sys::mrb_obj_dup(mrb.as_ptr(), self.as_value().0) })
         })
     }
 
@@ -377,7 +400,7 @@ pub trait ReprValue: private::ReprValue {
             // single-VM contract; `sym` was interned against the same
             // VM (caller contract). `mrb_funcall_argv` dispatches
             // arbitrary Ruby and may raise — caught by `protect`.
-            Value(unsafe {
+            Value::from_raw_unchecked(unsafe {
                 sys::mrb_funcall_argv(mrb.as_ptr(), self.as_value().0, sym, argc, argv)
             })
         })
@@ -408,7 +431,7 @@ pub trait ReprValue: private::ReprValue {
             // by the single-VM contract; `sym` was interned against the
             // same VM. `mrb_funcall_with_block` dispatches arbitrary Ruby
             // and may raise — caught by `protect`.
-            Value(unsafe {
+            Value::from_raw_unchecked(unsafe {
                 sys::mrb_funcall_with_block(
                     mrb.as_ptr(),
                     self.as_value().0,
@@ -716,7 +739,7 @@ impl Value {
     /// which is `unsafe` for the establishing.
     #[inline]
     pub(crate) const fn from_raw_unchecked(v: sys::mrb_value) -> Self {
-        Self(v)
+        Self(v, PhantomData)
     }
 
     /// `mrb_int_value(mrb, n)` — construct an mruby Integer from `n`,
@@ -728,7 +751,7 @@ impl Value {
     #[inline]
     pub(crate) fn from_int(mrb: &Mrb, n: sys::mrb_int) -> Self {
         // SAFETY: `mrb` is alive by the `&Mrb` borrow.
-        Self(unsafe { sys::mrb_int_value(mrb.as_ptr(), n) })
+        Self::from_raw_unchecked(unsafe { sys::mrb_int_value(mrb.as_ptr(), n) })
     }
 
     /// `mrb_float_value(mrb, f)` — construct an mruby Float from `f`,
@@ -740,7 +763,7 @@ impl Value {
     #[inline]
     pub(crate) fn from_float(mrb: &Mrb, f: sys::mrb_float) -> Self {
         // SAFETY: `mrb` is alive by the `&Mrb` borrow.
-        Self(unsafe { sys::mrb_float_value(mrb.as_ptr(), f) })
+        Self::from_raw_unchecked(unsafe { sys::mrb_float_value(mrb.as_ptr(), f) })
     }
 
     /// `obj.clone` — like `dup` but also copies the singleton class and
@@ -754,7 +777,7 @@ impl Value {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_obj_clone` runs
             // `initialize_copy` and may raise — caught by `protect`.
-            Value(unsafe { sys::mrb_obj_clone(mrb.as_ptr(), self.0) })
+            Value::from_raw_unchecked(unsafe { sys::mrb_obj_clone(mrb.as_ptr(), self.0) })
         })
     }
 
@@ -818,7 +841,9 @@ impl Value {
             // `NameError` for an undefined constant, and runs a
             // `const_missing` hook that may raise — all caught by
             // `protect`.
-            Value(unsafe { sys::mrb_const_get(mrb.as_ptr(), self.0, name.to_raw()) })
+            Value::from_raw_unchecked(unsafe {
+                sys::mrb_const_get(mrb.as_ptr(), self.0, name.to_raw())
+            })
         })
     }
 
@@ -919,6 +944,104 @@ pub(crate) fn narrow_index(n: isize) -> sys::mrb_int {
     })
 }
 
+// --------------------------------------------------------------------
+// Crossing threads.
+// --------------------------------------------------------------------
+
+/// A handle carried across threads — magnus's `value::Opaque`. It offers
+/// nothing until `Mrb::get_inner` or `Mrb::get_inner_ref` hands the
+/// handle back, which takes the interpreter and so runs on the thread
+/// holding it. Wrapping keeps nothing reachable: the handle stays valid
+/// only as the GC validity rule allows.
+///
+/// ```
+/// use beni::value::Opaque;
+/// use beni::{Mrb, ReprValue};
+///
+/// let mrb = Mrb::open().unwrap();
+/// let greeting = Opaque::from(mrb.str_new(b"hello"));
+/// // A global keeps the string reachable while it crosses.
+/// mrb.gv_set(c"$greeting", mrb.get_inner(greeting).as_value()).unwrap();
+///
+/// let handed = std::thread::spawn(move || mrb.get_inner(greeting).to_string(&mrb).unwrap());
+/// assert_eq!(handed.join().unwrap(), "hello");
+/// ```
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct Opaque<T>(T);
+
+impl<T: ReprValue> From<T> for Opaque<T> {
+    #[inline]
+    fn from(val: T) -> Self {
+        Self(val)
+    }
+}
+
+impl<T: IntoValue> IntoValue for Opaque<T> {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        self.0.into_value(mrb)
+    }
+}
+
+// SAFETY: an `Opaque` offers no read of the handle it carries; only
+// `Mrb::get_inner` and `Mrb::get_inner_ref` hand it back, and a `&Mrb`
+// exists only on the thread holding the interpreter, since `Mrb` is not
+// `Sync`.
+unsafe impl<T: ReprValue> Send for Opaque<T> {}
+unsafe impl<T: ReprValue> Sync for Opaque<T> {}
+
+/// What `Mrb::get_inner` unwraps — magnus's `InnerValue`: an `Opaque`, or
+/// a `Lazy` by reference.
+pub trait InnerValue {
+    /// The handle `self` stands for.
+    type Value: ReprValue;
+
+    /// The handle `self` stands for in `mrb`, whose borrow proves the call
+    /// runs on the thread holding the interpreter.
+    fn get_inner_with(self, mrb: &Mrb) -> Self::Value;
+}
+
+impl<T: ReprValue> InnerValue for Opaque<T> {
+    type Value = T;
+
+    #[inline]
+    fn get_inner_with(self, _: &Mrb) -> T {
+        self.0
+    }
+}
+
+/// What `Mrb::get_inner_ref` borrows from — magnus's `InnerRef`. Only an
+/// `Opaque` implements it: a `Lazy` holds its value in each interpreter
+/// rather than in the `static` (`state/lazy.rs`), so there is no place to
+/// borrow it from.
+pub trait InnerRef {
+    /// The handle `self` stands for.
+    type Value: ReprValue;
+
+    /// A reference to the handle `self` holds, borrowed through `mrb` as
+    /// `InnerValue::get_inner_with` is.
+    fn get_inner_ref_with<'a>(&'a self, mrb: &Mrb) -> &'a Self::Value;
+}
+
+impl<T: ReprValue> InnerRef for Opaque<T> {
+    type Value = T;
+
+    #[inline]
+    fn get_inner_ref_with<'a>(&'a self, _: &Mrb) -> &'a T {
+        &self.0
+    }
+}
+
+impl Mrb {
+    /// A reference to the handle `wrapper` holds. Mirrors magnus's
+    /// `Ruby::get_inner_ref`.
+    #[inline]
+    pub fn get_inner_ref<'a, T: ReprValue>(&self, wrapper: &'a impl InnerRef<Value = T>) -> &'a T {
+        wrapper.get_inner_ref_with(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -936,23 +1059,5 @@ mod tests {
             core::mem::align_of::<Value>(),
             core::mem::align_of::<sys::mrb_value>(),
         );
-    }
-
-    #[test]
-    fn typed_handles_cross_threads() {
-        // Every typed handle is a newtype over `Value`, so the markers
-        // stated on `Value` are what carry the whole family. A handle
-        // that grew a field of its own leaves the family here.
-        fn crosses<T: Send + Sync>() {}
-        crosses::<crate::Value>();
-        crosses::<crate::Break>();
-        crosses::<crate::RArray>();
-        crosses::<crate::RHash>();
-        crosses::<crate::Proc>();
-        crosses::<crate::Range>();
-        crosses::<crate::RString>();
-        crosses::<crate::Symbol>();
-        // `Id` holds the integer id itself, which crosses on its own.
-        crosses::<crate::Id>();
     }
 }

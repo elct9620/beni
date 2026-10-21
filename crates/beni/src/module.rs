@@ -368,7 +368,9 @@ pub trait Module: Object + private::ClassLike {
             // originates from the same VM. `mrb_cv_get` raises
             // `NameError` for an undefined class variable — caught by
             // `protect`.
-            Value(unsafe { sys::mrb_cv_get(mrb.as_ptr(), self.as_value().0, sym) })
+            Value::from_raw_unchecked(unsafe {
+                sys::mrb_cv_get(mrb.as_ptr(), self.as_value().0, sym)
+            })
         })?;
         U::try_convert(value, mrb)
     }

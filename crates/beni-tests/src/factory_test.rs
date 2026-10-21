@@ -79,14 +79,14 @@ fn hash_new_capa_preallocates_an_empty_hash() {
     // Capacity is a hint, not content — the hash starts empty and
     // fills as usual.
     let hash = mrb.hash_new_capa(8);
-    assert!(hash.is_empty(&mrb));
+    assert!(hash.is_empty());
     hash.set(
         &mrb,
         mrb.str_new(b"k").as_value(),
         mrb.str_new(b"v").as_value(),
     )
     .expect("set to a fresh hash succeeds");
-    assert_eq!(hash.len(&mrb), 1);
+    assert_eq!(hash.len(), 1);
 }
 
 #[test]

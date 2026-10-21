@@ -140,8 +140,8 @@ fn read_surfaces_a_raising_default_as_err() {
 fn values_size_and_emptiness_read_the_structure() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
-    assert!(hash.is_empty(&mrb));
-    assert_eq!(hash.len(&mrb), 0);
+    assert!(hash.is_empty());
+    assert_eq!(hash.len(), 0);
 
     hash.set(
         &mrb,
@@ -150,8 +150,8 @@ fn values_size_and_emptiness_read_the_structure() {
     )
     .expect("set succeeds");
 
-    assert_eq!(hash.len(&mrb), 1);
-    assert!(!hash.is_empty(&mrb));
+    assert_eq!(hash.len(), 1);
+    assert!(!hash.is_empty());
     assert_eq!(hash.values(&mrb).entry(&mrb, 0).to_string(&mrb), "v");
 }
 
@@ -201,7 +201,7 @@ fn delete_removes_and_update_merges() {
             .to_string(&mrb),
         "v"
     );
-    assert!(hash.is_empty(&mrb));
+    assert!(hash.is_empty());
 
     let other = mrb.hash_new();
     other
@@ -230,10 +230,10 @@ fn clear_empties_the_hash() {
         mrb.str_new(b"v").as_value(),
     )
     .expect("set succeeds");
-    assert!(!hash.is_empty(&mrb));
+    assert!(!hash.is_empty());
 
     hash.clear(&mrb).expect("clear succeeds");
-    assert!(hash.is_empty(&mrb));
+    assert!(hash.is_empty());
 }
 
 #[test]
@@ -269,7 +269,7 @@ fn dup_copies_independently() {
         .expect("delete succeeds");
 
     // Mutating the original leaves the dup untouched.
-    assert!(hash.is_empty(&mrb));
+    assert!(hash.is_empty());
     assert_eq!(
         copy.get(&mrb, mrb.str_new(b"k").as_value())
             .expect("a present string key reads without raising")
@@ -510,7 +510,7 @@ fn foreach_ends_when_a_visit_clears_the_hash() {
     other
         .set(&mrb, mrb.str_new(b"x").as_value(), 9i32.into_value(&mrb))
         .expect("the VM is usable after the walk ends");
-    assert_eq!(other.len(&mrb), 1);
+    assert_eq!(other.len(), 1);
 }
 
 #[test]
@@ -658,5 +658,5 @@ fn foreach_answers_a_closure_panic_as_err() {
 
     assert!(matches!(err, Error::Panic(msg) if msg == "boom in foreach closure"));
     assert_eq!(visited.get(), 1, "the walk stopped at the first pair");
-    assert_eq!(hash.len(&mrb), 3, "the VM survives the caught panic");
+    assert_eq!(hash.len(), 3, "the VM survives the caught panic");
 }

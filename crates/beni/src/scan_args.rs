@@ -323,7 +323,7 @@ where
     for (slot, &name) in optional_values.iter_mut().zip(optional) {
         *slot = take(name)?.1;
     }
-    if !Splat::REQ && !rest.is_empty(mrb) {
+    if !Splat::REQ && !rest.is_empty() {
         let key = rest.keys(mrb).entry(mrb, 0).to_string(mrb);
         return Err(argument_error(mrb, &format!("unknown keyword: {key}")));
     }

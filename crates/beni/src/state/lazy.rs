@@ -10,6 +10,7 @@
 //! computed handle can be. An interpreter beni opened also keeps the
 //! record in its slot once found, so later reads skip the global lookup.
 
+use crate::value::InnerValue;
 use crate::{FromValue as _, Mrb, Qundef, RArray, ReprValue, Value};
 use beni_sys as sys;
 use core::sync::atomic::{AtomicU32, Ordering};
@@ -89,17 +90,27 @@ impl<T: ReprValue> Lazy<T> {
     }
 }
 
-impl Mrb {
-    /// The value `lazy` names in this interpreter, computing and holding
-    /// it first when this interpreter holds none. Mirrors magnus's
-    /// `Ruby::get_inner`.
-    pub fn get_inner<T: ReprValue>(&self, lazy: &Lazy<T>) -> T {
-        if let Some(held) = Lazy::try_get_inner(lazy, self) {
+impl<T: ReprValue> InnerValue for &Lazy<T> {
+    type Value = T;
+
+    fn get_inner_with(self, mrb: &Mrb) -> T {
+        if let Some(held) = Lazy::try_get_inner(self, mrb) {
             return held;
         }
-        let value = (lazy.func)(self);
-        Lazy::hold(lazy, self, value);
+        let value = (self.func)(mrb);
+        Lazy::hold(self, mrb, value);
         value
+    }
+}
+
+impl Mrb {
+    /// The handle `wrapper` stands for in this interpreter: for a `Lazy`,
+    /// the value it names, computed and held first when this interpreter
+    /// holds none; for an `Opaque`, the handle it carries. Mirrors
+    /// magnus's `Ruby::get_inner`.
+    #[inline]
+    pub fn get_inner<T: ReprValue>(&self, wrapper: impl InnerValue<Value = T>) -> T {
+        wrapper.get_inner_with(self)
     }
 
     fn lazy_slot(&self, index: usize) -> Option<Value> {

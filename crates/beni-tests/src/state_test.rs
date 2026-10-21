@@ -13,6 +13,29 @@ fn open_boots_and_closes_a_live_interpreter() {
 }
 
 #[test]
+fn a_handle_crosses_threads_inside_an_opaque_with_its_interpreter() {
+    use beni::value::Opaque;
+    use beni::RString;
+
+    let mrb = open_mrb();
+    let text = mrb.str_new(b"carried");
+    mrb.gv_set(c"$opaque_held", text.as_value())
+        .expect("a global accepts the string");
+    let carried: Opaque<RString> = Opaque::from(text);
+
+    let read = std::thread::spawn(move || {
+        let text = mrb.get_inner(carried);
+        let by_ref = *mrb.get_inner_ref(&carried);
+        assert!(text.as_value().is_equal(&mrb, by_ref.as_value()));
+        text.to_string(&mrb).expect("the carried string renders")
+    })
+    .join()
+    .expect("the thread unwrapping the handle ran to completion");
+
+    assert_eq!(read, "carried");
+}
+
+#[test]
 fn an_interpreter_is_carried_between_threads() {
     use beni::FromValue;
 

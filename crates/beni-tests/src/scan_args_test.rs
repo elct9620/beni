@@ -284,7 +284,7 @@ fn optional_keywords(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, 
         .ary_new_from_values(&[
             or_nil(mrb, c),
             or_nil(mrb, d),
-            (bucket.len(mrb) as i32).into_value(mrb),
+            (bucket.len() as i32).into_value(mrb),
         ])
         .as_value())
 }

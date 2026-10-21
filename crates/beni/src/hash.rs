@@ -114,23 +114,20 @@ impl RHash {
         }
     }
 
-    /// `mrb_hash_size(mrb, self)` — the number of entries, Ruby's
-    /// `Hash#size`. An entry count is never negative, so it is returned
-    /// as `usize`. A pure read that never fails.
+    /// `mrb_hash_size` — the number of entries, Ruby's `Hash#size`.
+    /// Mirrors magnus's `RHash::len`. A pure read that never fails.
     #[inline]
-    pub fn len(self, mrb: &Mrb) -> usize {
-        // SAFETY: `self` is Hash-tagged by the contract; `mrb_hash_size`
-        // reads only the entry count.
-        (unsafe { sys::mrb_hash_size(mrb.as_ptr(), self.0.as_raw()) }) as usize
+    pub fn len(self) -> usize {
+        // SAFETY: `self` is Hash-tagged by the contract; the shim reads
+        // only the entry count.
+        (unsafe { sys::mrb_rhash_size_func(self.0.as_raw()) }) as usize
     }
 
-    /// `mrb_hash_empty_p(mrb, self)` — TRUE when the hash holds no
-    /// entries, Ruby's `Hash#empty?`. A pure read that never fails.
+    /// `mrb_hash_empty_p` — whether the hash holds no entries, Ruby's
+    /// `Hash#empty?`. Mirrors magnus's `RHash::is_empty`.
     #[inline]
-    pub fn is_empty(self, mrb: &Mrb) -> bool {
-        // SAFETY: `self` is Hash-tagged by the contract; `mrb_hash_empty_p`
-        // reads only the entry count.
-        unsafe { sys::mrb_hash_empty_p(mrb.as_ptr(), self.0.as_raw()) }
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
     }
 
     /// `mrb_hash_key_p(mrb, self, key)` — whether `key` is present,
@@ -307,7 +304,7 @@ impl RHash {
     /// An empty Array with room for every pair, key then value, hidden
     /// from Ruby so no visit can take back what it holds.
     fn pair_buffer(self, mrb: &Mrb) -> RArray {
-        mrb.hidden_ary_new_capa(2 * self.len(mrb))
+        mrb.hidden_ary_new_capa(2 * self.len())
     }
 
     /// Run `visit` over each pair, pushing each pair into `held` first when
@@ -352,7 +349,7 @@ impl RHash {
         F: FnMut(Value, Value) -> Result<ForEach, Error>,
     {
         self.walk_live(mrb, Some(snapshot), |_, _| Ok(ForEach::Continue))?;
-        let count = self.len(mrb);
+        let count = self.len();
         for pair in 0..snapshot.len() / 2 {
             // SAFETY: the copy holds two entries per pair and nothing else
             // reaches it, so both indices are in bounds; `snapshot` sits in
@@ -364,7 +361,7 @@ impl RHash {
                 )
             };
             let flow = visit_one(&mut visit, key, val)?;
-            if self.len(mrb) != count {
+            if self.len() != count {
                 return Err(crate::error::core_error(
                     mrb,
                     c"RuntimeError",

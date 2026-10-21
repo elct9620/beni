@@ -300,7 +300,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::assoc_new;
     let _ = Mrb::block_given;
     let _ = Mrb::mid;
-    let _ = Mrb::get_inner::<RClass>;
+    let _: fn(&Mrb, value::Opaque<RClass>) -> RClass = Mrb::get_inner;
+    let _: for<'a> fn(&Mrb, &'a value::Opaque<RClass>) -> &'a RClass = Mrb::get_inner_ref;
     let _ = Mrb::check_id;
     let _ = Mrb::check_symbol;
     let _ = Mrb::class_defined::<&core::ffi::CStr>;
