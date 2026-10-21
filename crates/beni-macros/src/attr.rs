@@ -99,7 +99,7 @@ pub fn unmarked(path: &LitStr, trait_name: &str) -> TokenStream {
         "{{}} was never marked as a carrier class in this interpreter; \
          call <Self as ::beni::{trait_name}>::mark_carriers while the gem installs"
     );
-    quote! { panic!(#message, #text) }
+    quote! { ::core::panic!(#message, #text) }
 }
 
 /// A class path as the C string a carrier mark resolves, rejecting a
