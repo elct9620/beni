@@ -66,8 +66,6 @@
 //! a C callback — the counterpart of magnus's `rb_sys` module.
 
 #![allow(non_camel_case_types)]
-#![allow(non_upper_case_globals)]
-#![allow(non_snake_case)]
 
 pub mod array;
 #[cfg(feature = "compiler")]
