@@ -248,7 +248,7 @@ The crate supports these configurations.
 
 | Configuration | Supported |
 |---|---|
-| boxing | word boxing |
+| boxing | word boxing, no boxing |
 | language standard | any under which mruby declares its never-returning functions as never-returning |
 
 That is the standard in effect under each of mruby's own toolchains, whether set or the compiler's default. A standard losing that form leaves those declarations in a shape the bindings do not carry, and the typed wrapper's diverging raise does not compile. Binding generation parses under the standard the sidecar names. Where it names none, the archive was built under its compiler's default, which binding generation's own toolchain need not share. Binding generation then parses under a standard that keeps the form, not under that toolchain's default.
@@ -263,6 +263,7 @@ The build fails for bindings that declare no integer width, and for bindings of 
 |---|
 | built without floating point |
 | a GC arena of fixed size |
+| built with NaN boxing |
 
 #### Release Metadata
 
