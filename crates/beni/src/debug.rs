@@ -168,14 +168,19 @@ impl<'a> TraceArg<'a> {
     }
 
     /// The file name of the instruction's code, or nothing for code that
-    /// carries no line numbers.
+    /// carries no line numbers. A string slice where magnus answers an
+    /// `RString`: mruby's debug info keeps the name as a C string
+    /// (`mrb_debug_get_filename`), and the hook holds no interpreter to
+    /// make a String with.
     pub fn path(self) -> Option<Cow<'a, str>> {
         // SAFETY: as `lineno`.
         unsafe { path_at(self.mrb, self.irep, self.pc) }
     }
 
     /// The name of the method running the instruction, or nothing at the
-    /// top level.
+    /// top level. An `Id` where magnus answers a `StaticSymbol`: mruby
+    /// keeps every symbol until the interpreter closes (`mrb_free_symtbl`
+    /// in `vendor/mruby/src/state.c`), so no symbol is dynamic.
     pub fn method_id(self) -> Option<Id> {
         self.debug_inspector().frame_method_id(0)
     }
@@ -189,13 +194,16 @@ impl<'a> TraceArg<'a> {
     }
 
     /// The class or module defining the method running the instruction,
-    /// or nothing at the top level.
+    /// or nothing at the top level. A `ClassOrModule` where magnus answers
+    /// an `RClass`: the method may be a module's, and an `RClass` holds a
+    /// class alone.
     pub fn defined_class(self) -> Option<ClassOrModule> {
         self.debug_inspector().frame_class_get(0)
     }
 
     /// The frames of the fiber running the instruction, valid for the
-    /// same call.
+    /// same call. magnus's hook reaches them through `Ruby`, which this
+    /// hook does not hold.
     pub fn debug_inspector(self) -> DebugInspector<'a> {
         DebugInspector {
             mrb: self.mrb,
@@ -208,6 +216,11 @@ impl<'a> TraceArg<'a> {
 /// `DebugInspector`. Index `0` is the frame running the instruction and
 /// each next index the frame that called it; an index past the fiber's
 /// outermost frame answers nothing. Reads only.
+///
+/// magnus answers each read as a `Result`, for CRuby's inspector raises
+/// on an index it has no frame for. mruby has no inspector API; the reads
+/// walk the fiber's frame stack (`mrb_context` in `include/mruby.h`) and
+/// raise nothing, so an index past it answers `None`.
 #[derive(Clone, Copy)]
 pub struct DebugInspector<'a> {
     mrb: *mut sys::mrb_state,
