@@ -130,8 +130,10 @@ impl Mrb {
             let name = self
                 .intern_static(RECORD_GLOBAL)
                 .expect("interning a short static name only allocates");
-            self.gv_set(name, record.as_value())
-                .expect("a global no Ruby program can name is never frozen");
+            // SAFETY: `self` is alive and `record` belongs to it. The
+            // global's name lacks `$`, which the typed `gv_set` would
+            // prefix: no Ruby program and no typed operation reaches it.
+            unsafe { sys::mrb_gv_set(self.as_ptr(), name.to_raw(), record.as_value().0) };
             record
         });
         // SAFETY: the record no Ruby program reaches holds it, and a read

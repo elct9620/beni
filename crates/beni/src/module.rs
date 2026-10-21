@@ -11,7 +11,9 @@ use beni_sys as sys;
 /// Registration and constant surface shared by classes and modules —
 /// beni's mirror of `magnus::Module`. Every raising method runs inside
 /// exception protection, so an mruby raise surfaces as
-/// `Err(Error::Exception)` and never unwinds across FFI.
+/// `Err(Error::Exception)` and never unwinds across FFI. A constant or
+/// class-variable key is a name Ruby could write there, or the operation
+/// surfaces mruby's `NameError` for it and a predicate answers `false`.
 pub trait Module: Object + private::ClassLike {
     /// `mrb_define_class_under_id(mrb, self, name, superclass)` —
     /// define (or fetch) the nested class `self::name` inheriting from
@@ -25,7 +27,7 @@ pub trait Module: Object + private::ClassLike {
         name: K,
         superclass: RClass,
     ) -> Result<RClass, Error> {
-        let sym = name.into_id(mrb)?;
+        let sym = crate::symbol::key(mrb, crate::symbol::Namespace::Const, name)?;
         if let Some(bound) = bound_class(mrb, self.raw(), sym, superclass) {
             return bound;
         }
@@ -65,7 +67,7 @@ pub trait Module: Object + private::ClassLike {
     /// symbol-or-name key (`IntoId`). mruby rejects a same-named
     /// constant that is not a module.
     fn define_module<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = crate::symbol::key(mrb, crate::symbol::Namespace::Const, name)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
             RModule::from_raw_unchecked(unsafe {
@@ -81,7 +83,7 @@ pub trait Module: Object + private::ClassLike {
     /// `src/class.c` documents both), so the lookup is fallible by
     /// contract.
     fn class_get<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<RClass, Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = crate::symbol::key(mrb, crate::symbol::Namespace::Const, name)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
             RClass::from_raw_unchecked(unsafe {
@@ -97,7 +99,7 @@ pub trait Module: Object + private::ClassLike {
     /// `src/class.c` documents both), so the lookup is fallible by
     /// contract.
     fn module_get<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<RModule, Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = crate::symbol::key(mrb, crate::symbol::Namespace::Const, name)?.to_raw();
         mrb.protect(|mrb| {
             // SAFETY: as `define_class`.
             RModule::from_raw_unchecked(unsafe {
@@ -115,7 +117,7 @@ pub trait Module: Object + private::ClassLike {
     /// missing name. A name too long to intern can never be bound, so
     /// it reads `false` too.
     fn class_defined<K: IntoId>(self, mrb: &Mrb, name: K) -> bool {
-        let Ok(sym) = name.into_id(mrb) else {
+        let Ok(sym) = crate::symbol::key(mrb, crate::symbol::Namespace::Const, name) else {
             return false;
         };
         // SAFETY: `mrb` is alive; `self` originates from the same
@@ -298,7 +300,9 @@ pub trait Module: Object + private::ClassLike {
     /// symbol answers false.
     #[inline]
     fn const_defined<K: IntoId>(self, mrb: &Mrb, name: K) -> bool {
-        let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
+        let Ok(sym) =
+            crate::symbol::key(mrb, crate::symbol::Namespace::Const, name).map(crate::Id::to_raw)
+        else {
             return false;
         };
         // SAFETY: `mrb` is alive; `self` is a class or module of the
@@ -312,7 +316,7 @@ pub trait Module: Object + private::ClassLike {
     /// ancestry. A name too long to be a symbol answers false.
     #[inline]
     fn const_defined_at<K: IntoId>(self, mrb: &Mrb, name: K) -> bool {
-        name.into_id(mrb)
+        crate::symbol::key(mrb, crate::symbol::Namespace::Const, name)
             .is_ok_and(|id| self.as_value().defines_const_at(mrb, id))
     }
 
@@ -322,7 +326,10 @@ pub trait Module: Object + private::ClassLike {
     /// the value does not convert.
     #[inline]
     fn const_get<K: IntoId, U: TryConvert>(self, mrb: &Mrb, name: K) -> Result<U, Error> {
-        let value = self.as_value().fetch_const(mrb, name.into_id(mrb)?)?;
+        let value = self.as_value().fetch_const(
+            mrb,
+            crate::symbol::key(mrb, crate::symbol::Namespace::Const, name)?,
+        )?;
         U::try_convert(value, mrb)
     }
 
@@ -331,7 +338,7 @@ pub trait Module: Object + private::ClassLike {
     /// `const_added` hook raises.
     #[inline]
     fn const_set<K: IntoId, U: IntoValue>(self, mrb: &Mrb, name: K, val: U) -> Result<(), Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = crate::symbol::key(mrb, crate::symbol::Namespace::Const, name)?.to_raw();
         let val = val.into_value(mrb);
         mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
@@ -347,7 +354,7 @@ pub trait Module: Object + private::ClassLike {
     /// no-op; surfaces an `Err` when `self` is frozen.
     #[inline]
     fn const_remove<K: IntoId>(self, mrb: &Mrb, name: K) -> Result<(), Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = crate::symbol::key(mrb, crate::symbol::Namespace::Const, name)?.to_raw();
         mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_const_remove` raises
@@ -362,7 +369,7 @@ pub trait Module: Object + private::ClassLike {
     /// the value does not convert.
     #[inline]
     fn cvar_get<K: IntoId, U: TryConvert>(self, mrb: &Mrb, name: K) -> Result<U, Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = crate::symbol::key(mrb, crate::symbol::Namespace::Cvar, name)?.to_raw();
         let value = mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // originates from the same VM. `mrb_cv_get` raises
@@ -380,7 +387,7 @@ pub trait Module: Object + private::ClassLike {
     /// `mrb_mod_cv_set`, the raw-`RClass*` form, stays in `sys`.
     #[inline]
     fn cvar_set<K: IntoId, U: IntoValue>(self, mrb: &Mrb, name: K, val: U) -> Result<(), Error> {
-        let sym = name.into_id(mrb)?.to_raw();
+        let sym = crate::symbol::key(mrb, crate::symbol::Namespace::Cvar, name)?.to_raw();
         let val = val.into_value(mrb);
         mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
@@ -396,7 +403,9 @@ pub trait Module: Object + private::ClassLike {
     /// form, stays in `sys`.
     #[inline]
     fn cvar_defined<K: IntoId>(self, mrb: &Mrb, name: K) -> bool {
-        let Ok(sym) = name.into_id(mrb).map(crate::Id::to_raw) else {
+        let Ok(sym) =
+            crate::symbol::key(mrb, crate::symbol::Namespace::Cvar, name).map(crate::Id::to_raw)
+        else {
             return false;
         };
         // SAFETY: `mrb` is alive; `self` is a class or module of the

@@ -14,6 +14,10 @@
 //!   * `define_global_const` — bind a top-level constant.
 //!   * `mrb_gv_set` / `mrb_gv_get` — assign or read a Ruby `$global`.
 //!
+//! A constant key is a name Ruby could write as one, or the operation
+//! surfaces mruby's `NameError` for it and a predicate answers `false`;
+//! a global key without `$` names the global with one.
+//!
 //! Class and module definitions and lookups run inside
 //! exception protection so an mruby raise surfaces as
 //! `Err(Error::Exception)` — the same contract as the `Module`
@@ -35,7 +39,7 @@ impl Mrb {
     /// same-named constant that is not a module.
     #[inline]
     pub fn define_module<K: IntoId>(&self, name: K) -> Result<RModule, Error> {
-        let sym = name.into_id(self)?.to_raw();
+        let sym = crate::symbol::key(self, crate::symbol::Namespace::Const, name)?.to_raw();
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `sym` was interned against the same VM.
@@ -51,7 +55,7 @@ impl Mrb {
     /// anything else bound there.
     #[inline]
     pub fn define_class<K: IntoId>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
-        let sym = name.into_id(self)?;
+        let sym = crate::symbol::key(self, crate::symbol::Namespace::Const, name)?;
         if let Some(bound) =
             crate::class::bound_class(self, self.object_class().as_internal(), sym, super_)
         {
@@ -100,7 +104,7 @@ impl Mrb {
     /// so the lookup is fallible by contract.
     #[inline]
     pub fn class_get<K: IntoId>(&self, name: K) -> Result<RClass, Error> {
-        let sym = name.into_id(self)?.to_raw();
+        let sym = crate::symbol::key(self, crate::symbol::Namespace::Const, name)?.to_raw();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
             RClass::from_raw_unchecked(unsafe { sys::mrb_class_get_id(mrb.as_ptr(), sym) })
@@ -117,7 +121,7 @@ impl Mrb {
     /// too.
     #[inline]
     pub fn class_defined<K: IntoId>(&self, name: K) -> bool {
-        let Ok(sym) = name.into_id(self) else {
+        let Ok(sym) = crate::symbol::key(self, crate::symbol::Namespace::Const, name) else {
             return false;
         };
         // SAFETY: `self` is alive; `sym` was interned against the
@@ -136,7 +140,7 @@ impl Mrb {
     /// for raising from registered code.
     #[inline]
     pub fn exc_get<K: IntoId>(&self, name: K) -> Result<ExceptionClass, Error> {
-        let sym = name.into_id(self)?.to_raw();
+        let sym = crate::symbol::key(self, crate::symbol::Namespace::Const, name)?.to_raw();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
             let class = unsafe { sys::mrb_exc_get_id(mrb.as_ptr(), sym) };
@@ -153,7 +157,7 @@ impl Mrb {
     /// documents both), so the lookup is fallible by contract.
     #[inline]
     pub fn module_get<K: IntoId>(&self, name: K) -> Result<RModule, Error> {
-        let sym = name.into_id(self)?.to_raw();
+        let sym = crate::symbol::key(self, crate::symbol::Namespace::Const, name)?.to_raw();
         self.protect(|mrb| {
             // SAFETY: as `define_module`.
             RModule::from_raw_unchecked(unsafe { sys::mrb_module_get_id(mrb.as_ptr(), sym) })
@@ -174,23 +178,27 @@ impl Mrb {
     }
 
     /// `mrb_gv_set(mrb, sym, val)` — assign the global variable named
-    /// by a symbol-or-name key (`IntoId`). The assignment itself never
-    /// fails; the `Err` it carries is the key's own.
+    /// by a symbol-or-name key (`IntoId`), `$` prefixed when it lacks
+    /// one, as CRuby's `rb_gv_set`. The assignment itself never fails;
+    /// the `Err` it carries is the key's own.
     #[inline]
     pub fn gv_set<K: IntoId>(&self, name: K, val: Value) -> Result<(), Error> {
-        let sym = name.into_id(self)?.to_raw();
+        let sym = crate::symbol::key(self, crate::symbol::Namespace::Gvar, name)?.to_raw();
         // SAFETY: `self` is alive; `val` originates from the same VM.
         unsafe { sys::mrb_gv_set(self.as_ptr(), sym, val.as_raw()) };
         Ok(())
     }
 
     /// `mrb_gv_get(mrb, sym)` — read the global variable named by a
-    /// symbol-or-name key (`IntoId`); an unset global reads as nil, as
+    /// symbol-or-name key (`IntoId`), `$` prefixed when it lacks one, as
+    /// CRuby's `rb_gv_get`; an unset global reads as nil, as
     /// does a key too long to name a symbol. The read happens at call
     /// time, so a reassigned global yields its current value.
     #[inline]
     pub fn gv_get<K: IntoId>(&self, name: K) -> Value {
-        let Ok(sym) = name.into_id(self).map(crate::Id::to_raw) else {
+        let Ok(sym) =
+            crate::symbol::key(self, crate::symbol::Namespace::Gvar, name).map(crate::Id::to_raw)
+        else {
             return crate::value::qnil().as_value();
         };
         // SAFETY: `self` is alive; `sym` was interned against it.
@@ -200,13 +208,16 @@ impl Mrb {
     }
 
     /// `mrb_gv_remove(mrb, sym)` — remove the global variable named by a
-    /// symbol-or-name key (`IntoId`). Removing an unset global is a
+    /// symbol-or-name key (`IntoId`), `$` prefixed when it lacks one.
+    /// Removing an unset global is a
     /// no-op, as is a key too long to name a symbol; neither case
     /// raises. The global reads as nil afterwards, the same as one never
     /// set.
     #[inline]
     pub fn gv_remove<K: IntoId>(&self, name: K) {
-        let Ok(sym) = name.into_id(self).map(crate::Id::to_raw) else {
+        let Ok(sym) =
+            crate::symbol::key(self, crate::symbol::Namespace::Gvar, name).map(crate::Id::to_raw)
+        else {
             return;
         };
         // SAFETY: `self` is alive; `sym` was interned against it.

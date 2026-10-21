@@ -127,7 +127,7 @@ pub use parse::ParseMessage;
 pub use proc::{DumpOptions, Proc};
 pub use range::{Range, RangeBegLen};
 pub use string::RString;
-pub use symbol::{Id, IntoId, Symbol};
+pub use symbol::{ConstId, CvarId, GvarId, Id, IntoId, Symbol};
 pub use tagged::{
     Exception, Fiber, Float, Integer, Qfalse, Qnil, Qtrue, Qundef, RComplex, RCptr, RInlineStruct,
     RObject, RRational, RSet, RStruct,

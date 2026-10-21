@@ -30,6 +30,7 @@ mod inline_struct_test;
 mod lazy_test;
 mod load_test;
 mod method_test;
+mod name_test;
 mod proc_test;
 mod protect_test;
 mod range_test;

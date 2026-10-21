@@ -1301,22 +1301,18 @@ fn a_rust_string_key_reaches_the_same_definition_as_the_c_string_name() {
 #[test]
 fn a_rust_string_key_names_its_bytes_past_an_embedded_nul() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
 
     // The two string keys differ exactly here: the C-string form stops
     // at the first NUL, the Rust-string form carries every byte, so the
     // two name different symbols and the binding reaches only one of
-    // them. The prefix is read through its own symbol rather than an
-    // intern check, which answers for any short name whether or not one
-    // was ever interned.
-    object
-        .const_set(&mrb, "BENI\0TAIL", beni::value::qnil().as_value())
+    // them. A global takes any name, so the NUL stays in the key.
+    mrb.gv_set("$beni\0tail", 1i32.into_value(&mrb))
         .expect("binding under a key with an embedded NUL must succeed");
 
-    let whole = mrb.intern(b"BENI\0TAIL").expect("the whole name interns");
-    let prefix = mrb.intern(b"BENI").expect("the prefix interns");
-    assert!(object.const_defined_at(&mrb, whole));
-    assert!(!object.const_defined_at(&mrb, prefix));
+    let whole = mrb.intern(b"$beni\0tail").expect("the whole name interns");
+    let prefix = mrb.intern(b"$beni").expect("the prefix interns");
+    assert_eq!(i32::from_value(mrb.gv_get(whole)), Some(1));
+    assert!(mrb.gv_get(prefix).is_nil());
 }
 
 /// The class a Ruby expression evaluates to.

@@ -12,6 +12,12 @@
 use crate::{sys::AsRawValue, Error, IntoValue, Mrb, Value};
 use beni_sys as sys;
 
+mod namespace;
+
+use namespace::Sealed;
+pub(crate) use namespace::{key, Namespace};
+pub use namespace::{ConstId, CvarId, GvarId};
+
 /// An interned symbol id — magnus's `Id`. Compares and hashes by the id,
 /// which interning makes canonical, so two ids are equal exactly when
 /// they name the same bytes.
@@ -193,10 +199,27 @@ impl Symbol {
 /// The string keys differ in what an embedded NUL does: a `&CStr` key
 /// names the bytes before its first NUL, a Rust string key names all of
 /// its bytes.
+///
+/// A variable or constant operation keys only a name its namespace
+/// admits, which magnus's `IntoId` never checks: mruby keeps state its C
+/// code reads back unchecked under names no Ruby program can write, where
+/// CRuby keeps it out of every name table.
 pub trait IntoId {
     /// Resolve this key to its `Id` against `mrb`, or the `Err` its
     /// intern surfaced.
     fn into_id(self, mrb: &Mrb) -> Result<Id, Error>;
+
+    /// Resolve this key in `space`, refusing a name it does not admit.
+    /// `Sealed` keeps it from being overridden outside this crate.
+    #[doc(hidden)]
+    #[inline]
+    fn into_id_in(self, mrb: &Mrb, space: Namespace, _: Sealed) -> Result<Id, Error>
+    where
+        Self: Sized,
+    {
+        let id = self.into_id(mrb)?;
+        space.admit(mrb, id)
+    }
 }
 
 impl IntoId for &core::ffi::CStr {
@@ -205,6 +228,11 @@ impl IntoId for &core::ffi::CStr {
     #[inline]
     fn into_id(self, mrb: &Mrb) -> Result<Id, Error> {
         mrb.intern_cstr(self)
+    }
+
+    #[inline]
+    fn into_id_in(self, mrb: &Mrb, space: Namespace, _: Sealed) -> Result<Id, Error> {
+        space.intern(mrb, self.to_bytes())
     }
 }
 
@@ -215,6 +243,11 @@ impl IntoId for &str {
     fn into_id(self, mrb: &Mrb) -> Result<Id, Error> {
         mrb.intern(self.as_bytes())
     }
+
+    #[inline]
+    fn into_id_in(self, mrb: &Mrb, space: Namespace, _: Sealed) -> Result<Id, Error> {
+        space.intern(mrb, self.as_bytes())
+    }
 }
 
 impl IntoId for String {
@@ -222,6 +255,11 @@ impl IntoId for String {
     #[inline]
     fn into_id(self, mrb: &Mrb) -> Result<Id, Error> {
         self.as_str().into_id(mrb)
+    }
+
+    #[inline]
+    fn into_id_in(self, mrb: &Mrb, space: Namespace, _: Sealed) -> Result<Id, Error> {
+        space.intern(mrb, self.as_bytes())
     }
 }
 

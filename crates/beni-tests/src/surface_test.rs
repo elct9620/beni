@@ -213,6 +213,9 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Range::beg_len;
     let _ = Symbol::from_value_unchecked;
     let _ = Symbol::new;
+    let _ = CvarId::new::<&core::ffi::CStr>;
+    let _ = ConstId::new::<&core::ffi::CStr>;
+    let _ = GvarId::new::<&core::ffi::CStr>;
     let _ = <Value as ReprValue>::as_value;
     let _ = <Value as sys::AsRawValue>::as_raw;
     let _ = <RArray as ReprValue>::as_value;
