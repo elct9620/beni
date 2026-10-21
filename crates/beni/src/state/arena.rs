@@ -19,7 +19,9 @@ use beni_sys as sys;
 /// RAII guard over a GC arena region. Dropping it restores the
 /// arena index recorded at `Mrb::arena_scope`, releasing arena
 /// protection for every value created inside; `keep` instead
-/// carries one surviving value out still protected.
+/// carries one surviving value out still protected. Scopes end in any
+/// order: one ending after a scope opened before it releases nothing
+/// more.
 ///
 /// The guard borrows the interpreter, so it stays on the thread that
 /// made it:
@@ -65,11 +67,9 @@ impl ArenaScope<'_> {
     pub fn keep(self, v: Value) -> Value {
         let mrb = self.mrb;
         let idx = self.idx;
-        // The restore below replaces the one Drop would run.
+        // The release below replaces the one Drop would run.
         core::mem::forget(self);
-        // SAFETY: `mrb` is alive; `idx` was produced by
-        // `arena_scope` against the same VM.
-        unsafe { sys::mrb_gc_arena_restore_func(mrb.as_ptr(), idx) };
+        release_to(mrb, idx);
         // SAFETY: `v` originates from the same VM; the arena has
         // a free slot after the restore.
         unsafe { sys::mrb_gc_protect(mrb.as_ptr(), v.as_raw()) };
@@ -79,9 +79,19 @@ impl ArenaScope<'_> {
 
 impl Drop for ArenaScope<'_> {
     fn drop(&mut self) {
-        // SAFETY: `self.mrb` is alive for the guard's lifetime;
-        // `self.idx` was produced by `arena_scope` against the
-        // same VM.
-        unsafe { sys::mrb_gc_arena_restore_func(self.mrb.as_ptr(), self.idx) };
+        release_to(self.mrb, self.idx);
+    }
+}
+
+/// Lower the arena index to `idx`, the index a scope recorded as it
+/// opened. A scope opened before it and ended first has already lowered
+/// the index past `idx`; raising it back would protect slots that no
+/// longer hold anything live.
+fn release_to(mrb: &Mrb, idx: core::ffi::c_int) {
+    // SAFETY: `mrb` is alive; the save helper only reads the index.
+    if idx < unsafe { sys::mrb_gc_arena_save_func(mrb.as_ptr()) } {
+        // SAFETY: `mrb` is alive, and `idx` lies below the current
+        // index, so the restore only releases.
+        unsafe { sys::mrb_gc_arena_restore_func(mrb.as_ptr(), idx) };
     }
 }

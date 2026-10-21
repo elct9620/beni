@@ -75,3 +75,44 @@ fn keep_survivor_counts_as_created_in_the_opening_context() {
         "dropping the outer scope must release the kept survivor's slot"
     );
 }
+
+#[test]
+fn a_scope_ending_after_an_earlier_one_releases_nothing_more() {
+    let mrb = open_mrb();
+    let before = arena_index(&mrb);
+
+    let outer = mrb.arena_scope();
+    let _ = mrb.str_new(b"between the openings");
+    let inner = mrb.arena_scope();
+    drop(outer);
+    drop(inner);
+
+    assert_eq!(
+        arena_index(&mrb),
+        before,
+        "the later end must not raise the index the earlier end lowered"
+    );
+}
+
+#[test]
+fn keep_after_an_earlier_scope_ended_protects_only_its_survivor() {
+    let mrb = open_mrb();
+    let before = arena_index(&mrb);
+
+    let outer = mrb.arena_scope();
+    let _ = mrb.str_new(b"between the openings");
+    let inner = mrb.arena_scope();
+    drop(outer);
+    let made = arena_index(&mrb);
+    let survivor = inner.keep(mrb.str_new(b"survivor").as_value());
+
+    assert_eq!(made, before, "the earlier end must lower the index");
+    assert!(
+        arena_index(&mrb) <= made + 2,
+        "keep must protect nothing beyond its survivor"
+    );
+    // SAFETY: `mrb` is alive.
+    unsafe { beni::sys::mrb_full_gc(mrb.as_ptr()) };
+    let survived = RString::from_value(survivor).expect("the survivor is String-tagged");
+    assert_eq!(survived.owned_bytes(), b"survivor");
+}

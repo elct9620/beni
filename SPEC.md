@@ -1723,7 +1723,7 @@ Arenas and roots govern which values stay reachable. Collection timing governs w
 
 ##### Arena scopes
 
-`Mrb::arena_scope` bounds GC arena growth across a region of Rust code. Values that cross out to Rust inside the scope stay reachable until the scope ends. The scope's end releases the arena protection taken inside it.
+`Mrb::arena_scope` bounds GC arena growth across a region of Rust code. Values that cross out to Rust inside the scope stay reachable until the scope ends. The scope's end releases the arena protection taken inside it. Scopes end in any order: a scope ending after one opened before it finds its region already released, so its end releases nothing more, and only a `keep` survivor is protected again.
 
 | Scope ends by | Survivor |
 |---|---|
