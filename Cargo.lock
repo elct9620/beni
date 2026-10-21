@@ -43,6 +43,7 @@ name = "beni-tests"
 version = "0.23.1"
 dependencies = [
  "beni",
+ "beni-sys",
  "bytemuck",
  "bytes",
 ]

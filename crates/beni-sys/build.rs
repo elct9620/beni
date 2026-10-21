@@ -395,7 +395,7 @@ fn run_bindgen(
         // `mrb_gc_arena_save_func`, `mrb_proc_new_func`, …).
         .wrap_static_fns(true)
         .wrap_static_fns_path(static_wrappers_c.with_extension(""))
-        .layout_tests(false)
+        .layout_tests(cfg!(feature = "bindgen-layout-tests"))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("bindgen: failed to generate mruby bindings");

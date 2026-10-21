@@ -37,15 +37,19 @@ bench = false
 # default run exercises their conversions too. The suite reaches for the source
 # loader throughout its setup, so it is written against the full
 # surface; the shape a consumer gets with default features off is held
-# by `rake rust:check:nodefault` and the compiler-less scenario.
+# by `rake rust:check:nodefault` and the compiler-less scenario. The
+# layout check rides along by default, so every build that carries the
+# suite also proves the bindings' layouts on its target.
 [features]
-default = ["compiler", "fiber", "bytes"]
+default = ["compiler", "fiber", "bytes", "bindgen-layout-tests"]
 compiler = ["beni/compiler"]
 fiber = ["beni/fiber"]
 bytes = ["beni/bytes", "dep:bytes"]
+bindgen-layout-tests = ["dep:beni-sys", "beni-sys/bindgen-layout-tests"]
 
 [dependencies]
 beni = { path = "../beni" }
+beni-sys = { path = "../beni-sys", optional = true }
 # `bytemuck` — the `Pod` derive an `InlineStruct` payload needs, as a
 # consumer writes it.
 bytemuck = { version = "1", features = ["derive"] }

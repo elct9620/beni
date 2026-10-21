@@ -73,6 +73,12 @@ include = [
 default-target = "x86_64-unknown-linux-gnu"
 targets = []
 
+[features]
+# `bindgen-layout-tests` — fail the build on any generated type whose
+# Rust layout differs from the one bindgen read from the headers. Adds
+# no surface; the documentation bindings never carry it.
+bindgen-layout-tests = []
+
 [lib]
 # `rlib` only — this crate produces no standalone artefact. It is
 # consumed as a path dependency by the `beni` wrapper crate, whose
