@@ -111,11 +111,13 @@ impl Mrb {
     }
 
     /// The class `path` names, each segment fetched as a constant of
-    /// the one before it, starting from `Object`.
+    /// the one before it, starting from `Object`, and refused as any
+    /// constant key Ruby could not write is.
     fn resolve_carrier(&self, path: &'static CStr) -> Result<RClass, Error> {
         let mut named = self.object_class().as_value();
         for segment in segments(path.to_bytes()) {
-            named = named.fetch_const(self, self.intern_static(segment)?)?;
+            let name = crate::symbol::Namespace::Const.intern(self, segment)?;
+            named = named.fetch_const(self, name)?;
         }
         RClass::try_convert(named, self)
     }

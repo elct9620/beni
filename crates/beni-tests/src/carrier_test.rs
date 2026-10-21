@@ -133,6 +133,27 @@ fn a_path_naming_no_class_holds_nothing() {
 }
 
 #[test]
+fn a_path_segment_no_constant_can_be_named_is_refused() {
+    let mrb = open_mrb();
+    let attached = beni::RObject::from_value(
+        mrb.load_string(b"o = Object.new; o.singleton_class; o")
+            .expect("an object with a singleton class"),
+    )
+    .expect("Object.new answers an object");
+    mrb.gv_set(c"$beni_carrier_holder", attached.as_value())
+        .expect("assigning a global succeeds");
+    define(
+        &mrb,
+        b"BeniCarrierHolder = $beni_carrier_holder.singleton_class",
+    );
+
+    let refused = mark(&mrb, c"BeniCarrierHolder::__attached__")
+        .expect_err("a segment Ruby could not write as a constant is refused");
+
+    assert_eq!(refused.message(&mrb), "wrong constant name __attached__");
+}
+
+#[test]
 fn marking_a_held_path_again_replaces_what_it_holds() {
     let mrb = open_mrb();
     define(&mrb, b"class BeniCarrierFirst; end");
