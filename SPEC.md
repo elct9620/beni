@@ -652,7 +652,7 @@ string constructs four ways:
 |---|---|
 | copying | a new string owning a copy of Rust bytes |
 | from a C string | a new string owning a copy of a NUL-terminated C string's bytes before the NUL, mirroring `magnus`'s `str_from_c_str` |
-| with capacity | an empty string with a preallocated buffer, as Ruby's `String.new(capacity:)` reserves for appends that follow |
+| with capacity | an empty string with a preallocated buffer, as Ruby's `String.new(capacity:)` reserves for appends that follow, mirroring `magnus`'s `str_buf_new` |
 | borrowed static | a string aliasing a borrowed static buffer, without copying its bytes |
 
 The borrowed static construction is the no-copy counterpart of the copying

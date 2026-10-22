@@ -468,7 +468,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_str_intern` | fn | ✅ | ✅ | `RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns them as `Mrb::intern_str` does, surfacing an `Err` for bytes too long to be a symbol. Distinct from `mrb_obj_to_sym` → `ReprValue::to_sym`, which coerces an arbitrary value, and from `Symbol::new`, which interns Rust bytes |
 | `mrb_str_modify` | fn | ✅ | ❌ |  |
 | `mrb_str_modify_keep_ascii` | fn | ✅ | ❌ |  |
-| `mrb_str_new_capa` | fn | ✅ | ✅ | `Mrb::str_new_capa` |
+| `mrb_str_new_capa` | fn | ✅ | ✅ | `Mrb::str_buf_new` |
 | `mrb_str_plus` | fn | ✅ | ✅ | `RString::plus` |
 | `mrb_str_ptr` | macro | ❌ | 🚫 | declined: unchecked cast to `struct RString*` — the graduation rule: beni's `RString` is `#[repr(transparent)]` over `Value`, not a struct pointer, so there is no typed shape to add |
 | `mrb_str_resize` | fn | ✅ | ✅ | `RString::resize` |

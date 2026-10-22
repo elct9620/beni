@@ -47,7 +47,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = ArenaScope::keep;
     let _ = Mrb::str_new;
     let _ = Mrb::str_from_c_str;
-    let _ = Mrb::str_new_capa;
+    let _ = Mrb::str_buf_new;
     let _ = Mrb::ary_new;
     let _ = Mrb::hash_new;
     let _ = Mrb::range_new;

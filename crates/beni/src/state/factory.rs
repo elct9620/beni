@@ -56,9 +56,10 @@ impl Mrb {
     /// reallocs a run of `cat` onto a fresh string would otherwise
     /// trigger (Ruby's `String.new(capacity:)`). The string starts empty;
     /// `capa` is a hint, not content. `capa` saturates to the archive's
-    /// `mrb_int` width, mirroring `ary_new_capa`.
+    /// `mrb_int` width, as `ary_new_capa` does. Mirrors magnus's
+    /// `Ruby::str_buf_new`.
     #[inline]
-    pub fn str_new_capa(&self, capa: usize) -> RString {
+    pub fn str_buf_new(&self, capa: usize) -> RString {
         let capa = crate::value::narrow_len(capa);
         // SAFETY: `self` is alive; `mrb_str_new_capa` always returns
         // a String-tagged value, so the unchecked wrap is sound.

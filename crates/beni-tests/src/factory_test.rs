@@ -17,12 +17,12 @@ fn str_factories_roundtrip_their_bytes() {
 }
 
 #[test]
-fn str_new_capa_preallocates_an_empty_string() {
+fn str_buf_new_preallocates_an_empty_string() {
     let mrb = open_mrb();
 
     // Capacity is a hint, not content — the string starts empty and
     // fills as usual through cat.
-    let s = mrb.str_new_capa(16);
+    let s = mrb.str_buf_new(16);
     assert!(s.is_empty());
     s.cat(&mrb, b"reserved")
         .expect("append to a fresh string succeeds");

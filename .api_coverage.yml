@@ -310,7 +310,7 @@ typed:
   mrb_str_index_lit: "`RString::index` — the literal macro `mrb_str_index_lit(mrb, str, lit, off)` is `mrb_str_index` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_str_intern: "`RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns them as `Mrb::intern_str` does, surfacing an `Err` for bytes too long to be a symbol. Distinct from `mrb_obj_to_sym` → `ReprValue::to_sym`, which coerces an arbitrary value, and from `Symbol::new`, which interns Rust bytes"
   mrb_str_new: Mrb::str_new
-  mrb_str_new_capa: Mrb::str_new_capa
+  mrb_str_new_capa: Mrb::str_buf_new
   mrb_str_new_cstr: Mrb::str_from_c_str
   mrb_str_new_static: Mrb::str_new_static
   mrb_str_new_lit: "`Mrb::str_new_static` — the literal macro `mrb_str_new_lit(mrb, lit)` is `mrb_str_new_static` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
