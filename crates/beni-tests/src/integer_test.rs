@@ -44,7 +44,7 @@ fn a_fixed_width_integer_converts_into_a_fixnum() {
 
 #[cfg(mrb_bigint)]
 mod bigint {
-    use super::{eval, rejection};
+    use super::{eval, integer, read, rejection};
     use crate::support::open_mrb;
     use beni::prelude::*;
     use beni::{Fixnum, Integer, RBignum};
@@ -79,6 +79,70 @@ mod bigint {
     }
 
     #[test]
+    fn an_arbitrary_width_integer_reads_out_as_every_rust_integer_its_range_holds() {
+        let mrb = open_mrb();
+
+        assert_eq!(read::<u64>(&mrb, "2 ** 64 - 1"), u64::MAX);
+        assert_eq!(read::<u128>(&mrb, "2 ** 100"), 1u128 << 100);
+        assert_eq!(read::<i128>(&mrb, "-(2 ** 100)"), -(1i128 << 100));
+        // A 32-bit configured integer width already outgrows the
+        // fixed-width tag here; a 64-bit one keeps it.
+        assert_eq!(read::<i64>(&mrb, "2 ** 40"), 1i64 << 40);
+        let big = RBignum::from_value(eval(&mrb, "2 ** 64 - 1")).expect("an RBignum");
+        assert_eq!(big.to_u64(&mrb).expect("fits"), u64::MAX);
+        assert_eq!(big.to_u128(&mrb).expect("fits"), u128::from(u64::MAX));
+        assert_eq!(big.to_i128(&mrb).expect("fits"), i128::from(u64::MAX));
+    }
+
+    #[test]
+    fn the_most_negative_i64_reads_out_whichever_tag_carries_it() {
+        let mrb = open_mrb();
+
+        assert_eq!(read::<i64>(&mrb, "-(2 ** 63)"), i64::MIN);
+        assert_eq!(
+            integer(&mrb, "-(2 ** 63)").to_i64(&mrb).expect("fits"),
+            i64::MIN
+        );
+        assert_eq!(
+            rejection::<i64>(&mrb, "-(2 ** 63) - 1"),
+            range_error("integer out of range")
+        );
+    }
+
+    #[test]
+    fn an_arbitrary_width_integer_outside_the_target_surfaces_mrubys_wording() {
+        let mrb = open_mrb();
+
+        assert_eq!(
+            rejection::<u64>(&mrb, "2 ** 64"),
+            range_error("integer out of range")
+        );
+        assert_eq!(
+            rejection::<u64>(&mrb, "-(2 ** 64)"),
+            range_error("integer out of range")
+        );
+        assert_eq!(
+            rejection::<i64>(&mrb, "2 ** 63"),
+            range_error("integer out of range")
+        );
+        assert_eq!(
+            rejection::<u128>(&mrb, "2 ** 128"),
+            range_error("integer out of range")
+        );
+        assert_eq!(
+            rejection::<u128>(&mrb, "-(2 ** 100)"),
+            range_error("integer out of range")
+        );
+        assert_eq!(
+            rejection::<i8>(&mrb, "2 ** 100"),
+            range_error("integer out of range")
+        );
+        let big = RBignum::from_value(eval(&mrb, "2 ** 100")).expect("an RBignum");
+        assert!(big.to_i32(&mrb).is_err());
+        assert!(big.to_usize(&mrb).is_err());
+    }
+
+    #[test]
     fn an_rbignum_answers_its_sign() {
         let mrb = open_mrb();
         let positive = RBignum::from_value(eval(&mrb, "2 ** 100")).expect("an RBignum");
@@ -89,4 +153,50 @@ mod bigint {
         assert!(negative.is_negative(&mrb));
         assert!(!negative.is_positive(&mrb));
     }
+}
+
+fn read<T: TryConvert>(mrb: &Mrb, source: &str) -> T {
+    T::try_convert(eval(mrb, source), mrb)
+        .unwrap_or_else(|err| panic!("{source} must convert: {}", err.message(mrb)))
+}
+
+fn integer(mrb: &Mrb, source: &str) -> Integer {
+    Integer::from_value(eval(mrb, source)).expect("an Integer")
+}
+
+#[test]
+fn a_fixed_width_integer_reads_out_as_every_rust_integer_its_range_holds() {
+    let mrb = open_mrb();
+    let fixnum = Fixnum::from_value(eval(&mrb, "-7")).expect("a Fixnum");
+
+    assert_eq!(fixnum.to_i64(), -7);
+    assert_eq!(read::<i32>(&mrb, "-7"), -7);
+    assert_eq!(fixnum.to_i128(), -7);
+    assert_eq!(fixnum.to_i8(&mrb).expect("fits"), -7);
+    assert_eq!(fixnum.to_isize(&mrb).expect("fits"), -7);
+    assert_eq!(integer(&mrb, "300").to_u16(&mrb).expect("fits"), 300);
+    assert_eq!(integer(&mrb, "300").to_u128(&mrb).expect("fits"), 300);
+}
+
+#[test]
+fn a_fixed_width_integer_outside_the_target_surfaces_its_value_out_of_range() {
+    let mrb = open_mrb();
+    let out_of_range = |result: Result<u8, beni::Error>| match result {
+        Ok(n) => panic!("{n} must not fit"),
+        Err(err) => err.message(&mrb),
+    };
+
+    assert_eq!(
+        out_of_range(integer(&mrb, "300").to_u8(&mrb)),
+        "300 out of range"
+    );
+    assert_eq!(
+        out_of_range(integer(&mrb, "-1").to_u8(&mrb)),
+        "-1 out of range"
+    );
+    assert!(integer(&mrb, "-1").to_u64(&mrb).is_err());
+    assert_eq!(
+        rejection::<i8>(&mrb, "300"),
+        ("RangeError".to_owned(), "300 out of range".to_owned())
+    );
 }

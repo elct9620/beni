@@ -147,13 +147,11 @@ impl<T: TryConvert> TryConvert for Option<T> {
 unsafe impl<T: TryConvertOwned> TryConvertOwned for Option<T> {}
 
 macro_rules! try_convert_integer {
-    ($($int:ty),* $(,)?) => {$(
+    ($($int:ty => $read:ident),* $(,)?) => {$(
         impl TryConvert for $int {
             #[inline]
             fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-                let n = crate::Integer::try_convert(val, mrb)?.to_i64(mrb)?;
-                <$int>::try_from(n)
-                    .map_err(|_| core_error(mrb, c"RangeError", &format!("{n} out of range")))
+                crate::Integer::try_convert(val, mrb)?.$read(mrb)
             }
         }
 
@@ -161,7 +159,20 @@ macro_rules! try_convert_integer {
     )*};
 }
 
-try_convert_integer!(i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, isize, usize);
+try_convert_integer!(
+    i8 => to_i8,
+    i16 => to_i16,
+    i32 => to_i32,
+    i64 => to_i64,
+    i128 => to_i128,
+    u8 => to_u8,
+    u16 => to_u16,
+    u32 => to_u32,
+    u64 => to_u64,
+    u128 => to_u128,
+    isize => to_isize,
+    usize => to_usize,
+);
 
 macro_rules! try_convert_non_zero {
     ($($non_zero:ty => $int:ty),* $(,)?) => {$(

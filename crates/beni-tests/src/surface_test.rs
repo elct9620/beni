@@ -370,6 +370,29 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <Value as ReprValue>::add;
     let _ = Float::to_f64;
     let _ = Integer::to_i64;
+    let _ = Integer::to_i8;
+    let _ = Integer::to_i16;
+    let _ = Integer::to_i32;
+    let _ = Integer::to_i128;
+    let _ = Integer::to_isize;
+    let _ = Integer::to_u8;
+    let _ = Integer::to_u16;
+    let _ = Integer::to_u32;
+    let _ = Integer::to_u64;
+    let _ = Integer::to_u128;
+    let _ = Integer::to_usize;
+    let _ = beni::Fixnum::to_i64;
+    let _ = beni::Fixnum::to_i8;
+    let _ = beni::Fixnum::to_i16;
+    let _ = beni::Fixnum::to_i32;
+    let _ = beni::Fixnum::to_i128;
+    let _ = beni::Fixnum::to_isize;
+    let _ = beni::Fixnum::to_u8;
+    let _ = beni::Fixnum::to_u16;
+    let _ = beni::Fixnum::to_u32;
+    let _ = beni::Fixnum::to_u64;
+    let _ = beni::Fixnum::to_u128;
+    let _ = beni::Fixnum::to_usize;
     let _ = <Value as ReprValue>::check_frozen;
     let _ = <Value as ReprValue>::class;
     let _ = <Value as ReprValue>::cmp;
@@ -482,6 +505,14 @@ fn debug_hook_surface_is_reachable_from_outside() {
 #[test]
 fn bigint_surface_is_reachable_from_outside() {
     let _ = beni::RBignum::is_positive;
+    let _ = beni::RBignum::to_i32;
+    let _ = beni::RBignum::to_i64;
+    let _ = beni::RBignum::to_i128;
+    let _ = beni::RBignum::to_isize;
+    let _ = beni::RBignum::to_u32;
+    let _ = beni::RBignum::to_u64;
+    let _ = beni::RBignum::to_u128;
+    let _ = beni::RBignum::to_usize;
     let _ = beni::RBignum::is_negative;
 }
 
