@@ -209,12 +209,16 @@ fn the_inspector_walks_from_the_running_frame_to_its_callers() {
     assert_eq!(frames.locals, vec![(x, Some(5))]);
 }
 
+fn define_yield_to(mrb: &Mrb) {
+    mrb.object_class()
+        .define_method(mrb, c"yield_to", beni::method!(yield_to, 0, &))
+        .expect("registering the method succeeds");
+}
+
 #[test]
 fn a_frame_running_rust_has_no_place_and_no_locals() {
     let mut mrb = open_mrb();
-    mrb.object_class()
-        .define_method(&mrb, c"yield_to", beni::method!(yield_to, 0, &))
-        .expect("registering the method succeeds");
+    define_yield_to(&mrb);
     let (yield_to, y) = (id(&mrb, "yield_to"), id(&mrb, "y"));
     let source = "yield_to do\n  y = 7\n  y\nend\n";
 
@@ -228,12 +232,6 @@ fn a_frame_running_rust_has_no_place_and_no_locals() {
         vec![(y, Some(7))],
         "the block reads its own locals"
     );
-}
-
-fn define_yield_to(mrb: &Mrb) {
-    mrb.object_class()
-        .define_method(mrb, c"yield_to", beni::method!(yield_to, 0, &))
-        .expect("registering the method succeeds");
 }
 
 #[test]
