@@ -290,9 +290,11 @@ pub trait ReprValue: private::ReprValue {
     }
 
     /// `mrb_obj_classname(mrb, self)` — the Ruby class name of `self`
-    /// as an owned `String`, or `""` when mruby returns NULL. mruby
-    /// builds the name into a GC-managed temporary, so the bytes are
-    /// copied out at once rather than borrowed.
+    /// as an owned `String`, or `""` when mruby returns NULL. A byte
+    /// sequence that is not UTF-8, which a constant name may hold, reads
+    /// as U+FFFD, as magnus's `classname` reads it. mruby builds the name
+    /// into a GC-managed temporary, so the bytes are copied out at once
+    /// rather than borrowed.
     #[inline]
     fn classname(self, mrb: &Mrb) -> String {
         // SAFETY: `mrb` is alive by the borrow; `self` originates
@@ -305,9 +307,8 @@ pub trait ReprValue: private::ReprValue {
         // call; copy its bytes before the temporary it points into
         // can be collected.
         unsafe { core::ffi::CStr::from_ptr(ptr) }
-            .to_str()
-            .unwrap_or("")
-            .to_owned()
+            .to_string_lossy()
+            .into_owned()
     }
 
     /// Coerce to a Rust `String` by calling `Object#to_s` and copying
@@ -320,8 +321,8 @@ pub trait ReprValue: private::ReprValue {
     /// and must survive, yet `mrb_str_to_cstr` truncates at and raises
     /// on a NUL — and on the outcome-encode path (a `#eval` / `#run`
     /// result, a Panic message) that raise has no protect frame and
-    /// aborts the guest. Bytes that are not valid UTF-8 collapse to an
-    /// empty `String`.
+    /// aborts the guest. Each byte sequence that is not UTF-8 reads as
+    /// U+FFFD, as magnus's `Display` renders it.
     ///
     /// ## Exception handling
     ///
@@ -821,7 +822,7 @@ impl Value {
         // SAFETY: `from_value` confirmed the String tag; the bytes are
         // copied before any further mruby call.
         let bytes = unsafe { s.as_bytes(mrb) };
-        core::str::from_utf8(bytes).unwrap_or("").to_string()
+        String::from_utf8_lossy(bytes).into_owned()
     }
 
     /// Recover the `*mut RClass` pointer from a class, singleton-class,

@@ -456,7 +456,8 @@ pub trait Class: crate::Module {
 
     /// `mrb_class_name(mrb, self)` — the class's full Ruby name (e.g.
     /// `"MyService::KV"`), synthesizing a `#<Class:0x…>` form for a class
-    /// with no path. Safe and owned where magnus's borrow is `unsafe`:
+    /// with no path, reading a byte sequence that is not UTF-8 as U+FFFD
+    /// as magnus's does. Safe and owned where magnus's borrow is `unsafe`:
     /// mruby builds the name into a GC-managed temporary, so the bytes
     /// are copied out at once and nothing borrows from the VM.
     fn name(self, mrb: &Mrb) -> String {
@@ -470,9 +471,8 @@ pub trait Class: crate::Module {
         // call; copy its bytes before the temporary it points into
         // can be collected.
         unsafe { core::ffi::CStr::from_ptr(ptr) }
-            .to_str()
-            .unwrap_or("")
-            .to_owned()
+            .to_string_lossy()
+            .into_owned()
     }
 
     /// The general class handle on this same class, for the operations

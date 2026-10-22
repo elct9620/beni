@@ -280,10 +280,10 @@ pub trait Module: Object + private::ClassLike {
     /// class, the bare name for a top-level one), or `None` when the
     /// handle is anonymous and has no place in any namespace. A total
     /// read that never raises, returning an owned `String` copied out of
-    /// mruby's freshly built string. A class handle's `Class::name`
-    /// answers a synthesized stand-in where this answers nothing.
+    /// mruby's freshly built string, a byte sequence that is not UTF-8
+    /// read as U+FFFD. A class handle's `Class::name` answers a
+    /// synthesized stand-in where this answers nothing.
     fn path(self, mrb: &Mrb) -> Option<String> {
-        use crate::FromValue;
         // SAFETY: `mrb` is alive by the borrow; `self` originates
         // from the same VM by the interpreter pairing. `mrb_class_path`
         // walks the namespace chain and never raises; it answers nil
@@ -293,7 +293,7 @@ pub trait Module: Object + private::ClassLike {
         if value.is_nil() {
             return None;
         }
-        String::from_value(value)
+        Some(value.string_lossy(mrb))
     }
 
     /// `mrb_const_defined(mrb, self, sym)` — TRUE when constant `name`

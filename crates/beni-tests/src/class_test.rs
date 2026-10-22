@@ -1024,6 +1024,25 @@ fn path_yields_none_for_an_anonymous_class() {
 }
 
 #[test]
+fn a_constant_name_that_is_not_utf8_reads_lossily_as_magnus_reads_it() {
+    let mrb = open_mrb();
+    let object = mrb.class_object();
+    let class = RClass::new(&mrb, object).expect("an anonymous class creates");
+    let name = mrb.intern(b"B\xff").expect("the name interns");
+    object
+        .const_set(&mrb, name, class)
+        .expect("a non-ASCII byte is an identifier character");
+
+    assert_eq!(class.path(&mrb).as_deref(), Some("B\u{FFFD}"));
+    assert_eq!(class.name(&mrb), "B\u{FFFD}");
+    let instance = class
+        .new_instance(&mrb, ())
+        .expect("the class instantiates");
+    assert_eq!(instance.classname(&mrb), "B\u{FFFD}");
+    assert_eq!(instance.inspect(&mrb).get(..3), Some("#<B"));
+}
+
+#[test]
 fn exception_class_registers_methods_through_the_module_trait() {
     let mrb = open_mrb();
     let runtime_error = mrb
