@@ -224,9 +224,9 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RHash::to_hash_map::<i64, i64>;
     let _ = RHash::to_btree_map::<i64, i64>;
     let _ = Range::from_value_unchecked;
-    let _ = Range::begin;
-    let _ = Range::end;
-    let _ = Range::is_exclusive;
+    let _ = Range::beg::<Value>;
+    let _ = Range::end::<Value>;
+    let _ = Range::excl;
     let _ = Range::beg_len;
     let _ = Symbol::from_value_unchecked;
     let _ = Symbol::new;

@@ -9,7 +9,7 @@
 //! Mirrors magnus's `src/r_range.rs`: the `range_new` factory lives on
 //! `Mrb`, the begin / end / exclusive-end reads live here.
 
-use crate::{sys::AsRawValue, Error, Mrb, Value};
+use crate::{sys::AsRawValue, Error, Mrb, TryConvert, Value};
 use beni_sys as sys;
 
 /// The three-way outcome of `Range::beg_len` — the normalized slice a
@@ -63,33 +63,42 @@ impl Range {
     }
 
     /// `mrb_range_beg(mrb, self)` — the begin value, Ruby's
-    /// `Range#begin`, via the `mrb_range_beg_func` shim (the macro
-    /// expanded in the C compiler so the embed-vs-edges `RRange` read
-    /// matches the linked archive). A pure field read that dispatches
-    /// nothing, so it never raises.
+    /// `Range#begin`, converted to `T`, via the `mrb_range_beg_func` shim
+    /// (the macro expanded in the C compiler so the embed-vs-edges
+    /// `RRange` read matches the linked archive). The read dispatches
+    /// nothing; the `Err` is a value `T` rejects. Mirrors magnus's
+    /// `Range::beg`.
     #[inline]
-    pub fn begin(self, mrb: &Mrb) -> Value {
+    pub fn beg<T: TryConvert>(self, mrb: &Mrb) -> Result<T, Error> {
         // SAFETY: `self` is Range-tagged by the `from_value_unchecked`
         // contract; `mrb` is alive by the borrow. `mrb_range_beg_func`
         // reads only the `RRange` begin field.
-        Value::from_raw_unchecked(unsafe { sys::mrb_range_beg_func(mrb.as_ptr(), self.0.as_raw()) })
+        let v = Value::from_raw_unchecked(unsafe {
+            sys::mrb_range_beg_func(mrb.as_ptr(), self.0.as_raw())
+        });
+        T::try_convert(v, mrb)
     }
 
     /// `mrb_range_end(mrb, self)` — the end value, Ruby's `Range#end`,
-    /// the mirror of `begin`. A pure field read that never raises.
+    /// converted to `T`, the mirror of `beg`. Mirrors magnus's
+    /// `Range::end`.
     #[inline]
-    pub fn end(self, mrb: &Mrb) -> Value {
-        // SAFETY: as `begin`; `mrb_range_end_func` reads only the
-        // `RRange` end field.
-        Value::from_raw_unchecked(unsafe { sys::mrb_range_end_func(mrb.as_ptr(), self.0.as_raw()) })
+    pub fn end<T: TryConvert>(self, mrb: &Mrb) -> Result<T, Error> {
+        // SAFETY: as `beg`; `mrb_range_end_func` reads only the `RRange`
+        // end field.
+        let v = Value::from_raw_unchecked(unsafe {
+            sys::mrb_range_end_func(mrb.as_ptr(), self.0.as_raw())
+        });
+        T::try_convert(v, mrb)
     }
 
     /// `mrb_range_excl_p(mrb, self)` — TRUE when the range excludes its
     /// end value, Ruby's `Range#exclude_end?`. A pure flag read that
-    /// dispatches nothing, so it never raises.
+    /// dispatches nothing, so it never raises. Mirrors magnus's
+    /// `Range::excl`.
     #[inline]
-    pub fn is_exclusive(self, mrb: &Mrb) -> bool {
-        // SAFETY: as `begin`; `mrb_range_excl_p_func` reads only the
+    pub fn excl(self, mrb: &Mrb) -> bool {
+        // SAFETY: as `beg`; `mrb_range_excl_p_func` reads only the
         // `RRange` exclude-end flag.
         unsafe { sys::mrb_range_excl_p_func(mrb.as_ptr(), self.0.as_raw()) }
     }

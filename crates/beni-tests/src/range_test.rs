@@ -11,9 +11,11 @@ fn range_new_constructs_and_reads_back_its_bounds() {
     let r = mrb
         .range_new(0.into_value(&mrb), 10.into_value(&mrb), false)
         .expect("a comparable integer range constructs");
-    assert_eq!(i32::from_value(r.begin(&mrb)), Some(0));
-    assert_eq!(i32::from_value(r.end(&mrb)), Some(10));
-    assert!(!r.is_exclusive(&mrb));
+    assert_eq!(r.beg::<i32>(&mrb).ok(), Some(0));
+    assert_eq!(r.end::<i32>(&mrb).ok(), Some(10));
+    assert!(!r.excl(&mrb));
+    // A bound converts through TryConvert, so a target it misses is an Err.
+    assert!(matches!(r.beg::<String>(&mrb), Err(Error::Exception(_))));
 }
 
 #[test]
@@ -23,7 +25,7 @@ fn range_new_carries_the_exclusive_flag() {
     let r = mrb
         .range_new(1.into_value(&mrb), 5.into_value(&mrb), true)
         .expect("a comparable integer range constructs");
-    assert!(r.is_exclusive(&mrb));
+    assert!(r.excl(&mrb));
 }
 
 #[test]
@@ -67,9 +69,9 @@ fn reads_track_an_exclusive_literal() {
             .expect("the test source must compile and run"),
     )
     .expect("a Range literal is Range-tagged");
-    assert_eq!(i32::from_value(r.begin(&mrb)), Some(1));
-    assert_eq!(i32::from_value(r.end(&mrb)), Some(5));
-    assert!(r.is_exclusive(&mrb));
+    assert_eq!(r.beg::<i32>(&mrb).ok(), Some(1));
+    assert_eq!(r.end::<i32>(&mrb).ok(), Some(5));
+    assert!(r.excl(&mrb));
 }
 
 #[test]

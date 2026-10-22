@@ -287,10 +287,10 @@ typed:
   mrb_prepend_module: Module::prepend_module
   mrb_protect_error: sys::protect
   mrb_raise: ExceptionClass::raise
-  mrb_range_beg: Range::begin
+  mrb_range_beg: Range::beg
   mrb_range_beg_len: "`Range::beg_len` — the normalized slice a Range covers of a collection of a given length (Ruby's `Array#[range]` / `String#[range]`); returns the three-way `RangeBegLen` outcome (in-range, out-of-range, non-Range mismatch), raising TypeError on a non-integer bound, caught by exception protection into `Err`"
   mrb_range_end: Range::end
-  mrb_range_excl_p: Range::is_exclusive
+  mrb_range_excl_p: Range::excl
   mrb_range_new: Mrb::range_new
   mrb_read_irep_buf: Mrb::read_irep
   mrb_remove_method: "`Module::remove_method` — Ruby's `Module#remove_method`; deletes the method's own definition from the handle (the name reverts to an ancestor's method), distinct from `Module::undef_method` which masks ancestor lookups. The symbol-or-name key routes through this raising form, which takes a `mrb_sym` directly with no string variant"

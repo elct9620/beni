@@ -923,7 +923,7 @@ A Range constructs and reads its parts as follows:
 |---|---|
 | construct from begin value, end value, exclusive-end flag | a Range, mirroring Ruby's `Range.new(begin, end, exclusive)` |
 | construct with bounds that cannot be compared | an `Err` — the `ArgumentError` mruby raises for a bad range |
-| read begin value, end value, or whether it excludes its end | three non-dispatching reads that never raise |
+| read begin value, end value, or whether it excludes its end | three non-dispatching reads under `magnus`'s `beg`, `end`, and `excl`: a bound converts through `TryConvert`, its rejection the one `Err`, and the exclusive-end read never fails |
 
 ##### Slice Computation
 
