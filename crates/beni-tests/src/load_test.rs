@@ -302,7 +302,7 @@ fn load_irep_inside_a_method_of_another_class_runs_at_the_top_level() {
     let mrb = open_mrb();
     let bytes = dumped(&mrb, TOP_LEVEL_PROGRAM);
     let loader = mrb
-        .define_class(c"BeniBytecodeLoader", mrb.object_class())
+        .define_class(c"BeniBytecodeLoader", mrb.class_object())
         .expect("defining the class must succeed");
     loader
         .define_method(&mrb, c"run", beni::method!(load_irep_in_loader, 1))
@@ -325,7 +325,7 @@ fn load_irep_inside_a_method_of_another_class_runs_at_the_top_level() {
 #[test]
 fn load_string_inside_a_registered_method_hands_the_raise_back_as_err() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"load_inside", beni::method!(load_string_inside, 0))
         .expect("defining the method must succeed");
 
@@ -344,7 +344,7 @@ fn load_string_inside_a_registered_method_hands_the_raise_back_as_err() {
 fn load_irep_inside_a_registered_method_hands_the_raise_back_as_err() {
     let mrb = open_mrb();
     let bytes = dumped(&mrb, b"raise ArgumentError, 'from the nested program'");
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"load_inside", beni::method!(load_irep_inside, 1))
         .expect("defining the method must succeed");
 

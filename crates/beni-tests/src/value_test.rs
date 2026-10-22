@@ -690,7 +690,7 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
     // A `to_a` that returns `nil` falls back to wrapping the receiver
     // in a one-element array.
     let nil_class =
-        RClass::new(&mrb, mrb.object_class()).expect("an anonymous class under Object constructs");
+        RClass::new(&mrb, mrb.class_object()).expect("an anonymous class under Object constructs");
     nil_class
         .define_method(&mrb, c"to_a", beni::method!(to_a_returns_nil, 0))
         .expect("registering to_a must succeed");
@@ -705,7 +705,7 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
     // A `to_a` that returns a non-array non-`nil` value raises a
     // genuine `TypeError`, caught into the `Err` rather than wrapping.
     let class =
-        RClass::new(&mrb, mrb.object_class()).expect("an anonymous class under Object constructs");
+        RClass::new(&mrb, mrb.class_object()).expect("an anonymous class under Object constructs");
     class
         .define_method(&mrb, c"to_a", beni::method!(to_a_returns_int, 0))
         .expect("registering to_a must succeed");
@@ -1141,7 +1141,7 @@ fn as_break_views_a_real_escaping_break() {
     let mrb = open_mrb();
 
     let class = mrb
-        .define_class(c"BeniBreakYielder", mrb.object_class())
+        .define_class(c"BeniBreakYielder", mrb.class_object())
         .expect("defining the yielder class must succeed");
     class
         .define_method(&mrb, c"run", beni::method!(report_break, -1))
@@ -1235,7 +1235,7 @@ fn kind_predicates_take_an_exception_class_handle() {
 fn singleton_class_reads_a_stable_eigenclass() {
     let mrb = open_mrb();
     let s = RObject::from_value(
-        mrb.object_class()
+        mrb.class_object()
             .new_instance(&mrb, &[])
             .expect("Object.new constructs without raising"),
     )
@@ -1429,7 +1429,7 @@ fn ivar_foreach_visits_nothing_for_a_receiver_without_instance_variables() {
     // A fresh object holds no instance variables, so the foreach
     // returns without ever calling back.
     let holder = RObject::from_value(
-        mrb.object_class()
+        mrb.class_object()
             .new_instance(&mrb, &[])
             .expect("Object.new constructs without raising"),
     )
@@ -1649,7 +1649,7 @@ fn a_boxed_c_pointer_converts_into_rcptr_alone() {
     assert!(beni::RCptr::from_value(cptr).is_some());
     assert!(beni::RInlineStruct::from_value(cptr).is_none());
     assert!(beni::RCptr::from_value(beni::value::qnil().as_value()).is_none());
-    assert!(beni::RCptr::from_value(mrb.object_class().as_value()).is_none());
+    assert!(beni::RCptr::from_value(mrb.class_object().as_value()).is_none());
 }
 
 /// Assign and read back one instance variable through `holder`.

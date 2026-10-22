@@ -114,7 +114,7 @@ impl Mrb {
     /// the one before it, starting from `Object`, and refused as any
     /// constant key Ruby could not write is.
     fn resolve_carrier(&self, path: &'static CStr) -> Result<RClass, Error> {
-        let mut named = self.object_class().as_value();
+        let mut named = self.class_object().as_value();
         for segment in segments(path.to_bytes()) {
             let name = crate::symbol::Namespace::Const.intern(self, segment)?;
             named = named.fetch_const(self, name)?;

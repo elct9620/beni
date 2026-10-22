@@ -17,7 +17,22 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::pending_exc;
     let _ = Mrb::set_pending_exc;
     let _ = Mrb::clear_exc;
-    let _ = Mrb::object_class;
+    let _ = Mrb::class_object;
+    let _ = Mrb::class_class;
+    let _ = Mrb::class_module;
+    let _ = Mrb::class_proc;
+    let _ = Mrb::class_string;
+    let _ = Mrb::class_symbol;
+    let _ = Mrb::class_array;
+    let _ = Mrb::class_hash;
+    let _ = Mrb::class_range;
+    let _ = Mrb::class_integer;
+    let _ = Mrb::class_float;
+    let _ = Mrb::class_true_class;
+    let _ = Mrb::class_false_class;
+    let _ = Mrb::class_nil_class;
+    let _ = Mrb::module_kernel;
+    let _ = Mrb::define_global_function::<&core::ffi::CStr>;
     let _ = Mrb::warn;
     let _ = beni::error::bug;
     let _ = Mrb::define_module::<&core::ffi::CStr>;
@@ -84,7 +99,7 @@ fn full_api_surface_is_reachable_from_outside() {
         // SAFETY: never wrapped; named only for its paths.
         unsafe impl TypedData for Probe {
             fn class(mrb: &Mrb) -> RClass {
-                mrb.object_class()
+                mrb.class_object()
             }
             fn data_type() -> &'static DataType<Self> {
                 &PROBE
@@ -127,7 +142,7 @@ fn full_api_surface_is_reachable_from_outside() {
         // SAFETY: never wrapped; named only for its paths.
         unsafe impl InlineStruct for Packed {
             fn class(mrb: &Mrb) -> RClass {
-                mrb.object_class()
+                mrb.class_object()
             }
             fn inline_type() -> &'static InlineType<Self> {
                 &PACKED

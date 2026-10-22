@@ -54,7 +54,7 @@ fn fallible(mrb: &Mrb, _self: Value) -> Result<i32, Error> {
 }
 
 fn fresh_class(mrb: &Mrb, name: &core::ffi::CStr) -> beni::RClass {
-    mrb.define_class(name, mrb.object_class())
+    mrb.define_class(name, mrb.class_object())
         .expect("defining the test class must succeed")
 }
 
@@ -739,7 +739,7 @@ fn any_arity_receiver_len(_mrb: &Mrb, rb_self: RString, _args: &[Value]) -> i32 
 #[test]
 fn a_typed_receiver_converts_before_the_body_runs() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"typed_len", beni::method!(receiver_len, 1))
         .expect("registering the typed-receiver method must succeed");
 
@@ -765,7 +765,7 @@ fn a_typed_receiver_converts_before_the_body_runs() {
 #[test]
 fn a_wrong_count_raises_before_the_receiver_converts() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"typed_len", beni::method!(receiver_len, 1))
         .expect("registering the typed-receiver method must succeed");
 
@@ -783,7 +783,7 @@ fn a_wrong_count_raises_before_the_receiver_converts() {
 #[test]
 fn an_any_arity_method_converts_its_receiver() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"any_len", beni::method!(any_arity_receiver_len, -1))
         .expect("registering the any-arity method must succeed");
 

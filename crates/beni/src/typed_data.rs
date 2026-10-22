@@ -29,7 +29,7 @@ use core::ops::Deref;
 /// struct Counter(u32);
 /// static COUNTER: DataType<Counter> = DataType::new(c"Counter");
 /// unsafe impl TypedData for Counter {
-///     fn class(mrb: &Mrb) -> RClass { mrb.object_class() }
+///     fn class(mrb: &Mrb) -> RClass { mrb.class_object() }
 ///     fn data_type() -> &'static DataType<Self> { &COUNTER }
 /// }
 /// ```
@@ -39,7 +39,7 @@ use core::ops::Deref;
 /// struct Bare(*const ());
 /// static BARE: DataType<Bare> = DataType::new(c"Bare");
 /// unsafe impl TypedData for Bare {
-///     fn class(mrb: &Mrb) -> RClass { mrb.object_class() }
+///     fn class(mrb: &Mrb) -> RClass { mrb.class_object() }
 ///     fn data_type() -> &'static DataType<Self> { &BARE }
 /// }
 /// ```

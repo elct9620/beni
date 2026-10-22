@@ -16,7 +16,7 @@ struct Other;
 
 fn define_marked(mrb: &Mrb, name: &core::ffi::CStr) -> RClass {
     let class = mrb
-        .define_class(name, mrb.object_class())
+        .define_class(name, mrb.class_object())
         .expect("defining the carrier class must succeed");
     class
         .set_instance_data_tt(mrb)
@@ -200,7 +200,7 @@ unsafe impl TypedData for Unmarked {
 fn wrapping_into_an_unmarked_class_panics_after_reclaiming_the_payload() {
     UNMARKED_DROPS.store(0, Ordering::SeqCst);
     let mrb = open_mrb();
-    mrb.define_class(c"BeniUnmarked", mrb.object_class())
+    mrb.define_class(c"BeniUnmarked", mrb.class_object())
         .expect("defining the class must succeed");
 
     let panicked =

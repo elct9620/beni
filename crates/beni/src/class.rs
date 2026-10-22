@@ -77,7 +77,7 @@ pub struct RModule(pub(crate) *mut sys::RClass);
 /// ```compile_fail
 /// # use beni::Mrb;
 /// fn build(mrb: &Mrb) {
-///     let _ = mrb.object_class().new_str(mrb, mrb.str_new(b"boom"));
+///     let _ = mrb.class_object().new_str(mrb, mrb.str_new(b"boom"));
 /// }
 /// ```
 #[repr(transparent)]
@@ -217,7 +217,7 @@ pub(crate) fn instance_tt(class: *mut sys::RClass) -> sys::mrb_vtype {
 /// wrap refuses a class before allocating instead of catching the raise.
 pub(crate) fn allocates_as(mrb: &Mrb, class: RClass, tt: sys::mrb_vtype) -> bool {
     instance_tt(class.as_internal()) == tt
-        || class.as_internal() == mrb.object_class().as_internal()
+        || class.as_internal() == mrb.class_object().as_internal()
 }
 
 /// Whether `class` is an exception class — `Exception` itself or a class

@@ -173,7 +173,7 @@ fn every_class_family_handle_round_trips_through_its_value() {
 
     let class = mrb.class_get(c"String").expect("String is a core class");
     let object = mrb
-        .object_class()
+        .class_object()
         .new_instance(&mrb, &[])
         .expect("Object.new constructs without raising");
     let singleton = RObject::from_value(object)
@@ -373,7 +373,7 @@ fn an_f32_converts_under_every_configured_float_width() {
 #[test]
 fn a_class_handle_reads_out_as_its_value_and_crosses_back_through_the_downcast() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // The raw form of a class handle is its class value, and that value
     // is the way back in: crossed as a value, downcast to the handle.

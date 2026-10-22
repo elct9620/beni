@@ -17,7 +17,7 @@ fn answer_nine(_mrb: &Mrb, _self: Value) -> i32 {
 #[test]
 fn symbol_key_reaches_the_same_definition_as_the_name() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // Defining with an already-interned Symbol must reach the same
     // definition path as a name key: the class is then fetchable by
@@ -67,7 +67,7 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
 #[test]
 fn symbol_key_and_name_key_are_interchangeable_for_lookup() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // A class defined by name is fetchable by Symbol, and one defined
     // by Symbol is fetchable by name — the two key forms are
@@ -83,7 +83,7 @@ fn symbol_key_and_name_key_are_interchangeable_for_lookup() {
 #[test]
 fn symbol_key_registers_private_singleton_and_module_function() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // Each registration variant routes its Symbol key through the
     // matching `_id` C function; a method registered under a Symbol
@@ -150,7 +150,7 @@ fn symbol_key_registers_private_singleton_and_module_function() {
 #[test]
 fn nested_definition_accepts_a_symbol_key() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // The namespaced Module-trait define/get also accept a Symbol key.
     let outer = mrb
@@ -177,7 +177,7 @@ fn nested_definition_accepts_a_symbol_key() {
 #[test]
 fn define_class_surfaces_mruby_rejection_as_err() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let base = mrb
         .define_class(c"BeniErrBase", object)
@@ -247,7 +247,7 @@ fn module_get_fetches_a_nested_module_by_either_key() {
 #[test]
 fn module_get_surfaces_err_for_missing_and_non_module() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let outer = mrb
         .define_module(c"BeniModNsErr")
@@ -274,7 +274,7 @@ fn module_get_surfaces_err_for_missing_and_non_module() {
 #[test]
 fn class_defined_answers_a_total_bool_within_a_namespace() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let outer = mrb
         .define_module(c"BeniDefinedNs")
@@ -349,7 +349,7 @@ fn registering_onto_a_frozen_class_surfaces_as_err() {
 #[test]
 fn private_method_rejects_public_dispatch_but_is_attached() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let class = mrb
         .define_class(c"BeniPrivate", object)
@@ -390,7 +390,7 @@ fn private_method_rejects_public_dispatch_but_is_attached() {
 #[test]
 fn alias_method_keys_both_names_as_symbol_or_name() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let class = mrb
         .define_class(c"BeniAliasKeyed", object)
@@ -433,7 +433,7 @@ fn alias_method_keys_both_names_as_symbol_or_name() {
 #[test]
 fn module_and_object_traits_register_methods() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // Module trait: nested definition + instance-method
     // registration, exercised end-to-end through a Ruby call.
@@ -582,7 +582,7 @@ fn const_set_binds_a_constant_readable_from_ruby() {
 #[test]
 fn alias_method_binds_a_second_name_for_an_existing_method() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let class = mrb
         .define_class(c"BeniAlias", object)
@@ -609,7 +609,7 @@ fn alias_method_binds_a_second_name_for_an_existing_method() {
 #[test]
 fn include_module_mixes_in_and_rejects_a_cyclic_include() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let helper = mrb
         .define_module(c"BeniMixin")
@@ -641,7 +641,7 @@ fn include_module_mixes_in_and_rejects_a_cyclic_include() {
 #[test]
 fn prepend_module_overrides_the_receiver_and_rejects_a_cyclic_prepend() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let helper = mrb
         .define_module(c"BeniPrependMixin")
@@ -688,7 +688,7 @@ fn prepend_module_overrides_the_receiver_and_rejects_a_cyclic_prepend() {
 #[test]
 fn alias_method_surfaces_name_error_for_missing_original() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let class = mrb
         .define_class(c"BeniAliasMissing", object)
@@ -711,7 +711,7 @@ fn alias_method_surfaces_name_error_for_missing_original() {
 #[test]
 fn undef_method_marks_a_method_undefined_on_the_handle() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let class = mrb
         .define_class(c"BeniUndef", object)
@@ -751,7 +751,7 @@ fn undef_method_marks_a_method_undefined_on_the_handle() {
 #[test]
 fn undef_method_surfaces_name_error_for_absent_method() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let class = mrb
         .define_class(c"BeniUndefMissing", object)
@@ -774,7 +774,7 @@ fn undef_method_surfaces_name_error_for_absent_method() {
 #[test]
 fn remove_method_strips_a_method_defined_on_the_handle() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let class = mrb
         .define_class(c"BeniRemove", object)
@@ -808,7 +808,7 @@ fn remove_method_strips_a_method_defined_on_the_handle() {
 #[test]
 fn remove_method_surfaces_name_error_for_absent_method() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let class = mrb
         .define_class(c"BeniRemoveMissing", object)
@@ -830,7 +830,7 @@ fn remove_method_surfaces_name_error_for_absent_method() {
 #[test]
 fn undef_singleton_method_marks_a_class_method_undefined() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let class = mrb
         .define_class(c"BeniUndefClassMethod", object)
@@ -871,7 +871,7 @@ fn real_returns_a_real_class_handle_unchanged() {
     // A real class resolves to itself: the handle a safe lookup
     // hands back is already past any singleton / include link, so
     // `real` returns the same class — same pointer, same name.
-    let object = mrb.object_class();
+    let object = mrb.class_object();
     let resolved = object.real();
     assert!(same_object(&mrb, resolved, object));
     assert_eq!(resolved.name(&mrb), "Object");
@@ -891,7 +891,7 @@ fn name_survives_a_gc_cycle() {
     // temporary, so a handle held across a collection — the anonymous
     // case synthesizes a fresh `#<Class:0x..>` string each call — must
     // keep reading correctly rather than dangle into freed storage.
-    let object = mrb.object_class();
+    let object = mrb.class_object();
     let named = object.name(&mrb);
     let anonymous =
         RClass::new(&mrb, object).expect("creating an anonymous class under Object must succeed");
@@ -910,7 +910,7 @@ fn name_survives_a_gc_cycle() {
 #[test]
 fn real_resolves_a_singleton_class_to_its_attached_object_class() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // A class's singleton class is an SCLASS whose real class is the
     // first user-facing class above it. The metaclass of `Object`
@@ -988,7 +988,7 @@ fn new_str_carries_an_existing_string_value_without_raising() {
 #[test]
 fn path_reads_the_qualified_namespace_chain() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // A nested class reads its full namespace path, not just its leaf
     // name — the consumer-visible point of the path read.
@@ -1013,7 +1013,7 @@ fn path_reads_the_qualified_namespace_chain() {
 #[test]
 fn path_yields_none_for_an_anonymous_class() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // An anonymous class has no place in any namespace, so its path is
     // nothing — distinct from `name`, which synthesizes a stand-in.
@@ -1125,7 +1125,7 @@ fn new_instance_runs_initialize_without_dispatching_the_class_new() {
 fn obj_alloc_refuses_a_singleton_class() {
     let mrb = open_mrb();
     let singleton = mrb
-        .object_class()
+        .class_object()
         .singleton_class(&mrb)
         .expect("Object has a singleton class");
 
@@ -1242,7 +1242,7 @@ fn a_name_key_too_long_to_intern_surfaces_as_the_operations_own_argument_error()
         .expect("ArgumentError is built in");
     let name =
         std::ffi::CString::new(vec![b'a'; u16::MAX as usize]).expect("the name holds no NUL");
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     let errs = [
         mrb.define_module(name.as_c_str())
@@ -1268,13 +1268,13 @@ fn class_defined_answers_false_for_a_name_too_long_to_intern() {
         std::ffi::CString::new(vec![b'a'; u16::MAX as usize]).expect("the name holds no NUL");
 
     assert!(!mrb.class_defined(name.as_c_str()));
-    assert!(!mrb.object_class().class_defined(&mrb, name.as_c_str()));
+    assert!(!mrb.class_object().class_defined(&mrb, name.as_c_str()));
 }
 
 #[test]
 fn a_rust_string_key_reaches_the_same_definition_as_the_c_string_name() {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
 
     // A &str key and an owned String key must resolve to the symbol
     // their bytes name, so a definition made under one is reachable
@@ -1370,7 +1370,7 @@ fn superclass_answers_what_class_superclass_answers() {
         ruby_class(&mrb, "BeniSupChild.singleton_class.superclass")
     ));
 
-    let object = mrb.object_class();
+    let object = mrb.class_object();
     let read = object.superclass(&mrb).expect("Object has a superclass");
     assert_eq!(read.name(&mrb), "BasicObject");
 }

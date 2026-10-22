@@ -99,7 +99,7 @@ fn panics(_mrb: &Mrb, _self: beni::Value) -> beni::Value {
 /// argument to an Array, and `panics`.
 fn interpreter_raising_its_own() -> Mrb {
     let mrb = open_mrb();
-    let object = mrb.object_class();
+    let object = mrb.class_object();
     object
         .define_method(&mrb, c"takes_array", beni::method!(takes_array, 1))
         .expect("registering the converting method must succeed");

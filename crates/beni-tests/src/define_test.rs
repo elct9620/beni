@@ -14,7 +14,7 @@ fn new_creates_an_unnamed_usable_class() {
     // no name until bound to a constant, yet is fully usable through
     // the returned handle: a method registered on it is callable on
     // an instance.
-    let class = RClass::new(&mrb, mrb.object_class())
+    let class = RClass::new(&mrb, mrb.class_object())
         .expect("creating an anonymous class under Object must succeed");
     // An unbound class has no constant path: mruby synthesizes an
     // `#<Class:0x..>` name rather than a real one.
@@ -54,7 +54,7 @@ fn new_surfaces_err_for_a_rejected_superclass() {
 fn new_surfaces_err_for_a_singleton_superclass() {
     let mrb = open_mrb();
     let singleton = mrb
-        .object_class()
+        .class_object()
         .singleton_class(&mrb)
         .expect("Object has a singleton class");
 
@@ -82,7 +82,7 @@ fn module_new_creates_an_unnamed_mixable_module() {
         .expect("registering a method on the anonymous module must succeed");
 
     let class =
-        RClass::new(&mrb, mrb.object_class()).expect("creating the host class must succeed");
+        RClass::new(&mrb, mrb.class_object()).expect("creating the host class must succeed");
     class
         .include_module(&mrb, module)
         .expect("mixing the anonymous module in must succeed");
@@ -101,7 +101,7 @@ fn module_new_takes_its_name_from_the_constant_it_is_assigned_to() {
     // An anonymous module reaches a constant only as a value; the
     // assignment is what gives it a name.
     let module = mrb.module_new();
-    mrb.object_class()
+    mrb.class_object()
         .const_set(
             &mrb,
             mrb.intern_cstr(c"BeniBoundModule")
@@ -154,7 +154,7 @@ fn class_defined_answers_a_total_bool_for_top_level_names() {
 
     // A defined top-level class reads `true` by name and by Symbol
     // key — both route through `mrb_class_defined_id`.
-    mrb.define_class(c"BeniDefined", mrb.object_class())
+    mrb.define_class(c"BeniDefined", mrb.class_object())
         .expect("defining the class must succeed");
     assert!(mrb.class_defined(c"BeniDefined"));
     assert!(mrb.class_defined(beni::Symbol::new(&mrb, c"BeniDefined").expect("the name interns")));
@@ -224,7 +224,7 @@ fn define_error_yields_an_exception_class_ruby_code_rescues() {
         .expect("defining the exception class must succeed");
     assert_eq!(own.name(&mrb), "BeniRaisedError");
 
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"beni_raise", beni::method!(raise_own_error, 0))
         .expect("registering the raising method must succeed");
     let cxt = beni::Ccontext::new(&mrb, c"define_error_test.rb")
@@ -285,7 +285,7 @@ fn define_error_fetches_a_same_named_class_and_rejects_a_conflict() {
         "a different superclass must surface as Err"
     );
 
-    mrb.object_class()
+    mrb.class_object()
         .const_set(&mrb, c"BeniNotAClass", 1i32)
         .expect("binding the constant must succeed");
     assert!(
@@ -317,7 +317,7 @@ fn define_class_fetches_a_prepended_class_as_itself() {
 
     let before = mrb.class_get(c"BeniPrepended").expect("the class is bound");
     let fetched = mrb
-        .define_class(c"BeniPrepended", mrb.object_class())
+        .define_class(c"BeniPrepended", mrb.class_object())
         .expect("the same superclass must fetch the bound class");
     assert!(same_object(&mrb, fetched, before));
     assert!(fetched.as_value().is::<beni::RClass>());
@@ -326,7 +326,7 @@ fn define_class_fetches_a_prepended_class_as_itself() {
         .module_get(c"BeniPrependNs")
         .expect("the namespace is bound");
     let inner = ns
-        .define_class(&mrb, c"Inner", mrb.object_class())
+        .define_class(&mrb, c"Inner", mrb.class_object())
         .expect("the same superclass must fetch the nested class");
     assert!(inner.as_value().is::<beni::RClass>());
     let unchanged = mrb
@@ -382,7 +382,7 @@ fn define_class_refuses_a_name_bound_to_a_singleton_class() {
         .expect("StandardError is a core exception class");
 
     let err = mrb
-        .define_class(c"BeniBoundSingleton", mrb.object_class())
+        .define_class(c"BeniBoundSingleton", mrb.class_object())
         .expect_err("a singleton class is not an ordinary class");
     assert_type_error(&mrb, err);
     let err = mrb
@@ -395,7 +395,7 @@ fn define_class_refuses_a_name_bound_to_a_singleton_class() {
 fn define_class_refuses_a_superclass_mismatch_as_a_type_error() {
     let mrb = open_mrb();
     let string = mrb.class_get(c"String").expect("String is a core class");
-    mrb.define_class(c"BeniMismatched", mrb.object_class())
+    mrb.define_class(c"BeniMismatched", mrb.class_object())
         .expect("the first definition must succeed");
 
     let err = mrb
@@ -403,7 +403,7 @@ fn define_class_refuses_a_superclass_mismatch_as_a_type_error() {
         .expect_err("a different superclass must be refused");
     assert_type_error(&mrb, err);
     let err = mrb
-        .object_class()
+        .class_object()
         .define_class(&mrb, c"BeniMismatched", string)
         .expect_err("the namespaced form refuses it too");
     assert_type_error(&mrb, err);
@@ -507,7 +507,7 @@ fn const_set_names_an_anonymous_class_by_its_constant_path() {
     let outer = mrb
         .define_module(c"BeniNamingOuter")
         .expect("defining a module must succeed");
-    let anon = RClass::new(&mrb, mrb.object_class())
+    let anon = RClass::new(&mrb, mrb.class_object())
         .expect("creating an anonymous class under Object must succeed");
 
     outer
@@ -530,4 +530,45 @@ fn define_global_const_runs_the_const_added_hook() {
         .load_string(b"$beni_added")
         .expect("the hook's record reads back");
     assert_eq!(added.inspect(&mrb), ":BeniHooked");
+}
+
+#[test]
+fn each_core_accessor_answers_the_class_its_name_binds() {
+    let mrb = open_mrb();
+    let pairs = [
+        (mrb.class_object(), "Object"),
+        (mrb.class_class(), "Class"),
+        (mrb.class_module(), "Module"),
+        (mrb.class_proc(), "Proc"),
+        (mrb.class_string(), "String"),
+        (mrb.class_symbol(), "Symbol"),
+        (mrb.class_array(), "Array"),
+        (mrb.class_hash(), "Hash"),
+        (mrb.class_range(), "Range"),
+        (mrb.class_integer(), "Integer"),
+        (mrb.class_float(), "Float"),
+        (mrb.class_true_class(), "TrueClass"),
+        (mrb.class_false_class(), "FalseClass"),
+        (mrb.class_nil_class(), "NilClass"),
+    ];
+    for (class, name) in pairs {
+        assert_eq!(class.name(&mrb), name);
+    }
+    assert_eq!(mrb.module_kernel().as_value().inspect(&mrb), "Kernel");
+}
+
+fn shout(_mrb: &beni::Mrb, _self: beni::Value, word: String) -> String {
+    word.to_uppercase()
+}
+
+#[test]
+fn a_global_function_is_callable_bare_from_any_receiver() {
+    let mrb = open_mrb();
+    mrb.define_global_function(c"beni_shout", beni::method!(shout, 1))
+        .expect("registering the global function must succeed");
+
+    let got = mrb
+        .load_string(b"[beni_shout('a'), 1.instance_eval { beni_shout('b') }]")
+        .expect("the bare calls must not raise");
+    assert_eq!(got.inspect(&mrb), "[\"A\", \"B\"]");
 }

@@ -11,6 +11,8 @@
 //!   * `mrb_class_get` / `mrb_module_get` — look one up by name.
 //!   * `mrb_class_defined` — test whether one is defined by name.
 //!   * `mrb_exc_get_id` — look up a built-in exception class by name.
+//!   * `define_global_function` — register a module function of
+//!     `Kernel`.
 //!   * `define_global_const` — bind a top-level constant.
 //!   * `mrb_gv_set` / `mrb_gv_get` — assign or read a Ruby `$global`.
 //!
@@ -57,7 +59,7 @@ impl Mrb {
     pub fn define_class<K: IntoId>(&self, name: K, super_: RClass) -> Result<RClass, Error> {
         let sym = crate::symbol::key(self, crate::symbol::Namespace::Const, name)?;
         if let Some(bound) =
-            crate::class::bound_class(self, self.object_class().as_internal(), sym, super_)
+            crate::class::bound_class(self, self.class_object().as_internal(), sym, super_)
         {
             return bound;
         }
@@ -164,6 +166,20 @@ impl Mrb {
         })
     }
 
+    /// Register `method` as a global function: a module function of
+    /// `Kernel`, callable bare from any receiver. Mirrors magnus's
+    /// `Ruby::define_global_function`; the aspec derivation and rejection
+    /// contract match `Module::define_method`.
+    #[inline]
+    pub fn define_global_function<K: IntoId>(
+        &self,
+        name: K,
+        method: crate::MethodDef,
+    ) -> Result<(), Error> {
+        self.module_kernel()
+            .define_module_function(self, name, method)
+    }
+
     /// Bind a top-level constant: a constant assignment on `Object`, as
     /// magnus's `define_global_const` binds through CRuby's `rb_const_set`.
     /// Reachable as `name` and as `Object::name`; surfaces an `Err` when
@@ -174,7 +190,7 @@ impl Mrb {
         name: K,
         val: U,
     ) -> Result<(), Error> {
-        self.object_class().const_set(self, name, val)
+        self.class_object().const_set(self, name, val)
     }
 
     /// `mrb_gv_set(mrb, sym, val)` — assign the global variable named

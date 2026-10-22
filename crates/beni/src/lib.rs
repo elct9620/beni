@@ -163,7 +163,7 @@ pub use typed_data::{RTypedData, TypedData};
 /// # #[beni::wrap(class = "Point")]
 /// # struct Point { x: i32 }
 /// fn init(mrb: &Mrb) -> Result<(), Error> {
-///     mrb.define_class(c"Point", mrb.object_class())?;
+///     mrb.define_class(c"Point", mrb.class_object())?;
 ///     Point::mark_carriers(mrb)
 /// }
 /// ```

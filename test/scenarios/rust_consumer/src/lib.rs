@@ -16,7 +16,7 @@ pub struct Doubler;
 
 impl Gem for Doubler {
     fn init(mrb: &Mrb) -> Result<(), Error> {
-        let class = mrb.define_class(c"Doubler", mrb.object_class())?;
+        let class = mrb.define_class(c"Doubler", mrb.class_object())?;
         class.define_method(mrb, c"call", beni::method!(double, 1))?;
         Ok(())
     }

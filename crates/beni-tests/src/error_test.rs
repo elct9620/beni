@@ -231,7 +231,7 @@ fn is_kind_of_walks_the_ancestry_of_the_carried_exception() {
 
     assert!(err.is_kind_of(&mrb, class(c"ArgumentError")));
     assert!(err.is_kind_of(&mrb, class(c"StandardError")));
-    assert!(err.is_kind_of(&mrb, mrb.object_class()));
+    assert!(err.is_kind_of(&mrb, mrb.class_object()));
     assert!(!err.is_kind_of(&mrb, class(c"TypeError")));
 }
 
@@ -291,7 +291,7 @@ fn break_is_an_exception(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Val
 fn is_kind_of_answers_false_for_a_break_object() {
     let mrb = open_mrb();
     let class = mrb
-        .define_class(c"BeniBreakKindProbe", mrb.object_class())
+        .define_class(c"BeniBreakKindProbe", mrb.class_object())
         .expect("defining the probe class must succeed");
     class
         .define_method(&mrb, c"run", beni::method!(break_is_an_exception, -1))

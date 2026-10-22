@@ -112,7 +112,7 @@ impl Mrb {
         let carrier = unsafe {
             sys::mrb_data_object_alloc(
                 self.as_ptr(),
-                self.object_class().as_internal(),
+                self.class_object().as_internal(),
                 ptr.cast(),
                 PROC_BODY.as_raw(),
             )

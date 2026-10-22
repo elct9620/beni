@@ -99,7 +99,7 @@ fn a_singleton_class_keeps_what_it_is_attached_to() {
 #[test]
 fn class_variable_and_constant_names_follow_ruby() {
     let mrb = open_mrb();
-    let class = mrb.object_class();
+    let class = mrb.class_object();
 
     let cvar = class
         .cvar_set(&mrb, c"@one", 1)
@@ -163,7 +163,7 @@ fn the_lazy_record_survives_its_name_given_to_a_global_operation() {
 #[test]
 fn a_checked_key_keys_its_namespace_and_converts_into_its_id() {
     let mrb = open_mrb();
-    let class = mrb.object_class();
+    let class = mrb.class_object();
     let constant = ConstId::new(&mrb, c"BeniChecked").expect("an uppercase name checks");
     let ivar = IvarId::new(&mrb, c"@checked").expect("an `@` name checks");
     let holder = object(&mrb);
@@ -200,7 +200,7 @@ fn a_name_too_long_to_intern_is_refused_as_too_long() {
     let long = "x".repeat(usize::from(u16::MAX));
 
     let err = mrb
-        .object_class()
+        .class_object()
         .const_set(&mrb, long.as_str(), 1)
         .expect_err("a too-long name is refused");
 

@@ -21,7 +21,7 @@ impl Drop for Probe {
 /// A carrier whose only hold, once this returns, is whatever `store`
 /// put it in: the arena scope it was made in has already ended.
 fn stored_carrier(mrb: &Mrb, drops: &'static AtomicUsize, store: impl FnOnce(Value)) {
-    mrb.define_class(c"BeniReachCarrier", mrb.object_class())
+    mrb.define_class(c"BeniReachCarrier", mrb.class_object())
         .expect("defining the carrier class must succeed");
     Probe::mark_carriers(mrb).expect("marking an ordinary class must succeed");
     let class = Probe::class(mrb);
@@ -65,7 +65,7 @@ fn an_instance_variable_outlives_its_overwrite() {
     static DROPS: AtomicUsize = AtomicUsize::new(0);
     let mrb = open_mrb();
     let holder = mrb
-        .object_class()
+        .class_object()
         .new_instance(&mrb, &[])
         .expect("an Object constructs without raising");
     let _root = mrb
@@ -142,7 +142,7 @@ fn a_walk_err_exception_outlives_the_walk() {
     let hash = mrb.hash_new();
     hash.set(&mrb, true.into_value(&mrb), true.into_value(&mrb))
         .expect("set must succeed");
-    mrb.define_class(c"BeniReachCarrier", mrb.object_class())
+    mrb.define_class(c"BeniReachCarrier", mrb.class_object())
         .expect("defining the carrier class must succeed");
     Probe::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
 

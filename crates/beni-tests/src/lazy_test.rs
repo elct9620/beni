@@ -54,7 +54,7 @@ static PROBE: Lazy<beni::RTypedData> = Lazy::new(|mrb| mrb.wrap(Probe(&DROPS)));
 #[test]
 fn a_held_value_outlives_the_scope_that_computed_it() {
     let mrb = open_mrb();
-    mrb.define_class(c"BeniLazyCarrier", mrb.object_class())
+    mrb.define_class(c"BeniLazyCarrier", mrb.class_object())
         .expect("defining the carrier class must succeed");
     Probe::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
 
@@ -81,7 +81,7 @@ fn enumerated_globals(mrb: &beni::Mrb) -> Vec<String> {
 fn every_record_beni_keeps_shares_one_global() {
     static ROOTED_DROPS: AtomicUsize = AtomicUsize::new(0);
     let mrb = open_mrb();
-    mrb.define_class(c"BeniLazyCarrier", mrb.object_class())
+    mrb.define_class(c"BeniLazyCarrier", mrb.class_object())
         .expect("defining the carrier class must succeed");
     let before = enumerated_globals(&mrb);
 

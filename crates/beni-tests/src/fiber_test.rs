@@ -112,7 +112,7 @@ fn a_fiber_resuming_itself_is_refused() {
     }
 
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_singleton_method(&mrb, "resume_self", beni::method!(resume_self, 1))
         .unwrap();
     let fiber = fiber(
@@ -189,7 +189,7 @@ fn the_current_fiber_is_the_root_outside_any_resumed_fiber() {
 #[test]
 fn the_current_fiber_inside_a_resumed_fiber_is_that_fiber() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_singleton_method(&mrb, "rust_current", beni::method!(current, 0))
         .unwrap();
 
@@ -258,11 +258,11 @@ fn refuse(mrb: &Mrb, _self: Value) -> Result<FiberYield, Error> {
 }
 
 fn pause_through_dispatch(mrb: &Mrb, _self: Value, arg: Value) -> Result<Value, Error> {
-    mrb.object_class().as_value().funcall(mrb, "pause", &[arg])
+    mrb.class_object().as_value().funcall(mrb, "pause", &[arg])
 }
 
 fn with_pause(mrb: &Mrb) {
-    let object = mrb.object_class();
+    let object = mrb.class_object();
     object
         .define_singleton_method(mrb, "pause", beni::method!(pause, -1))
         .unwrap();

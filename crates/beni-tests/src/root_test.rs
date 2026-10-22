@@ -51,7 +51,7 @@ impl Drop for SharedProbe {
 /// name of its own so the probes cannot collide and marked as the
 /// probe type's carrier.
 fn carrier<T: TypedData>(mrb: &Mrb, name: &'static core::ffi::CStr) -> RClass {
-    mrb.define_class(name, mrb.object_class())
+    mrb.define_class(name, mrb.class_object())
         .expect("defining the carrier class must succeed");
     T::mark_carriers(mrb).expect("marking an ordinary class must succeed");
     T::class(mrb)

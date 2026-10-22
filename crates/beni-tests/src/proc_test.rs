@@ -371,7 +371,7 @@ fn the_closure_is_dropped_once_the_proc_and_its_copies_are_reclaimed() {
     mrb.full_gc();
     let kept = CLOSURE_DROPS.load(Ordering::SeqCst);
 
-    mrb.object_class().const_remove(&mrb, "COPY").unwrap();
+    mrb.class_object().const_remove(&mrb, "COPY").unwrap();
     mrb.full_gc();
 
     assert_eq!(kept, 0, "a live copy keeps the closure");

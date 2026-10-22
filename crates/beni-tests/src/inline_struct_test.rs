@@ -40,7 +40,7 @@ unsafe impl InlineStruct for Cell {
 }
 
 fn define(mrb: &Mrb, name: &core::ffi::CStr) -> RClass {
-    mrb.define_class(name, mrb.object_class())
+    mrb.define_class(name, mrb.class_object())
         .expect("defining an ordinary class must succeed")
 }
 
@@ -157,7 +157,7 @@ fn a_value_of_another_kind_is_a_type_error_naming_it_as_mruby_does() {
     Cell::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
     let cell = Inline::new(&mrb, Cell(1)).as_value();
     let plain = mrb
-        .object_class()
+        .class_object()
         .new_instance(&mrb, &[])
         .expect("an Object constructs");
 
@@ -445,7 +445,7 @@ fn an_inline_struct_of_any_type_converts_into_rinlinestruct() {
     prepared(&mrb);
     let inline = Inline::new(&mrb, Vector2D { x: 0.0, y: 0.0 }).as_value();
     let plain = mrb
-        .object_class()
+        .class_object()
         .new_instance(&mrb, &[])
         .expect("an Object constructs");
 

@@ -51,6 +51,7 @@
 pub mod arena;
 pub mod args;
 pub mod carrier;
+mod classes;
 pub mod define;
 pub mod exception;
 pub mod factory;
@@ -62,7 +63,7 @@ pub(crate) mod slot;
 pub mod symbol;
 pub mod user_data;
 
-use crate::{sys::AsRawValue, Error, RClass, ReprValue, Value};
+use crate::{sys::AsRawValue, Error, ReprValue, Value};
 use beni_sys as sys;
 use core::ptr::NonNull;
 
@@ -309,18 +310,6 @@ impl Mrb {
         // carved from it.
         let pages = unsafe { sys::mrb_gc_add_region(self.as_ptr(), start, len) };
         usize::try_from(pages).unwrap_or(0)
-    }
-
-    /// Return `mrb->object_class` as a typed `RClass` handle.
-    /// Replaces direct field access — the `object_class` field on
-    /// the `crate::mrb_state` struct is `pub(crate)` so this
-    /// accessor is the one external entry point. The free function
-    /// `crate::mrb_object_class` remains for code paths that hold
-    /// only a raw `*mut mrb_state`.
-    #[inline]
-    pub fn object_class(&self) -> RClass {
-        // SAFETY: `self.state` is alive by the `&self` borrow.
-        RClass::from_raw_unchecked(unsafe { sys::mrb_object_class(self.as_ptr()) })
     }
 }
 

@@ -107,7 +107,7 @@ fn a_registered_method_reads_what_the_owner_installed() {
     let mut mrb = open_mrb();
     mrb.set_user_data(Realm { name: "game" })
         .expect("an empty slot accepts the value");
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"realm_name", beni::method!(realm_name, 0))
         .expect("defining the method must succeed");
 

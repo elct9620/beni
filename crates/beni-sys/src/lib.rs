@@ -134,7 +134,7 @@ const _: () = assert!(
 /// `Mrb` borrow — typically install/registration helpers that mruby
 /// calls back with a bare `*mut mrb_state`.
 ///
-/// Prefer the `beni` wrapper's `Mrb::object_class` when an `Mrb`
+/// Prefer the `beni` wrapper's `Mrb::class_object` when an `Mrb`
 /// borrow is in scope.
 ///
 /// # Safety

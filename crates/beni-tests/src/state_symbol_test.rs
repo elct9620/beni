@@ -263,7 +263,7 @@ fn intern_a_name_too_long(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
 fn a_method_body_hands_an_over_long_intern_to_ruby_as_a_rescuable_argument_error() {
     let mrb = open_mrb();
     let class = mrb
-        .define_class(c"BeniLongInternProbe", mrb.object_class())
+        .define_class(c"BeniLongInternProbe", mrb.class_object())
         .expect("defining the probe class must succeed");
     class
         .define_method(&mrb, c"run", beni::method!(intern_a_name_too_long, 0))

@@ -23,7 +23,7 @@ fn a_splat_reads_the_argc_mruby_writes() {
     use beni::Module;
 
     let mrb = open_mrb();
-    let class = mrb.object_class();
+    let class = mrb.class_object();
     class
         .define_method(&mrb, c"rest_count", beni::method!(rest_count, -1))
         .expect("registering the bridge must succeed");
@@ -82,7 +82,7 @@ fn arg1_reads_the_single_argument() {
     use beni::{FromValue, Module};
 
     let mrb = open_mrb();
-    let class = mrb.object_class();
+    let class = mrb.class_object();
     class
         .define_method(&mrb, c"arg1_echo", beni::method!(arg1_echo, -1))
         .expect("registering the bridge must succeed");
@@ -101,7 +101,7 @@ fn arg1_raises_argument_error_on_wrong_count() {
     use beni::{Error, Module};
 
     let mrb = open_mrb();
-    let class = mrb.object_class();
+    let class = mrb.class_object();
     class
         .define_method(&mrb, c"arg1_echo", beni::method!(arg1_echo, -1))
         .expect("registering the bridge must succeed");
@@ -126,7 +126,7 @@ fn an_any_arity_method_receives_every_argument() {
     use beni::{FromValue, Module};
 
     let mrb = open_mrb();
-    let class = mrb.object_class();
+    let class = mrb.class_object();
     class
         .define_method(&mrb, c"args_sum", beni::method!(args_sum, -1))
         .expect("registering the bridge must succeed");
@@ -160,7 +160,7 @@ fn block_given_reports_whether_a_block_was_passed() {
     use beni::{Ccontext, FromValue, Module};
 
     let mrb = open_mrb();
-    let class = mrb.object_class();
+    let class = mrb.class_object();
     class
         .define_method(&mrb, c"block_report", beni::method!(block_report, -1))
         .expect("registering the bridge must succeed");
@@ -219,7 +219,7 @@ fn a_call_the_single_argument_read_does_not_fit_leaves_the_body_through_its_own_
     use beni::Module;
 
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"read_arg1", beni::method!(guarded_arg1, -1))
         .expect("registering the reader must succeed");
     let one = 1i32.into_value(&mrb);
@@ -258,7 +258,7 @@ fn the_argument_slice_survives_vm_reentry() {
     use beni::Module;
 
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(
             &mrb,
             c"args_survive_reentry",
@@ -288,7 +288,7 @@ fn the_slice_holds_a_non_empty_keyword_hash_as_one_trailing_value() {
     use beni::{FromValue, Module};
 
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"args_len", beni::method!(args_len, -1))
         .expect("registering the bridge must succeed");
     let len = |source: &str| i32::from_value(eval(&mrb, source));
@@ -316,7 +316,7 @@ fn the_argument_slice_ends_with_the_keyword_hash() {
     use beni::Module;
 
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"args_inspect", beni::method!(args_inspect, -1))
         .expect("registering the bridge must succeed");
 
@@ -335,7 +335,7 @@ fn the_argument_slice_holds_every_positional_mruby_packs_into_one_array() {
     use beni::Module;
 
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"args_inspect", beni::method!(args_inspect, -1))
         .expect("registering the bridge must succeed");
 
@@ -360,7 +360,7 @@ fn the_slice_carries_the_calls_own_keyword_hash() {
     use beni::{FromValue, Module};
 
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"clear_then_scan", beni::method!(clear_then_scan, -1))
         .expect("registering the bridge must succeed");
 
@@ -386,7 +386,7 @@ fn a_scan_read_still_finds_the_keywords_after_the_slice() {
     use beni::Module;
 
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(
             &mrb,
             c"keywords_after",
@@ -407,7 +407,7 @@ fn arg_count(_mrb: &Mrb, _self: Value, args: &[Value]) -> i32 {
 #[test]
 fn an_any_arity_call_without_keywords_allocates_no_hash() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_singleton_method(&mrb, "count", beni::method!(arg_count, -1))
         .unwrap();
     let calls = mrb
@@ -433,7 +433,7 @@ fn a_method_reads_the_name_its_call_reached_it_by() {
     use beni::Module;
     let mrb = open_mrb();
     let class = mrb
-        .define_class(c"BeniCalledAs", mrb.object_class())
+        .define_class(c"BeniCalledAs", mrb.class_object())
         .expect("defining the class must succeed");
     class
         .define_method(&mrb, c"first", beni::method!(called_as, 0))

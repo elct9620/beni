@@ -13,7 +13,7 @@ struct WidgetGem;
 impl Gem for WidgetGem {
     fn init(mrb: &Mrb) -> Result<(), Error> {
         let outer = mrb.define_module(c"BeniGem")?;
-        let class = outer.define_class(mrb, c"Widget", mrb.object_class())?;
+        let class = outer.define_class(mrb, c"Widget", mrb.class_object())?;
         class.define_method(mrb, c"answer", beni::method!(answer, 0))?;
         Ok(())
     }
@@ -27,7 +27,7 @@ impl Gem for RefusingGem {
     fn init(mrb: &Mrb) -> Result<(), Error> {
         // A real rejection: redefining Object's superclass
         // cannot succeed, so surface the resulting Err.
-        let object = mrb.object_class();
+        let object = mrb.class_object();
         let base = mrb.define_class(c"BeniGemBase", object)?;
         mrb.define_class(c"BeniGemBase", base).map(|_| ())
     }

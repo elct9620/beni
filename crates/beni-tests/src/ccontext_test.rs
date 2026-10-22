@@ -193,7 +193,7 @@ fn compile_and_call_in_compiler(mrb: &Mrb, _self: Value) -> Value {
 fn compile_inside_a_method_of_another_class_runs_at_the_top_level() {
     let mrb = open_mrb();
     let compiler = mrb
-        .define_class(c"BeniSourceCompiler", mrb.object_class())
+        .define_class(c"BeniSourceCompiler", mrb.class_object())
         .expect("defining the class must succeed");
     compiler
         .define_method(&mrb, c"run", beni::method!(compile_and_call_in_compiler, 0))
@@ -300,7 +300,7 @@ fn load_nstring_inside(mrb: &Mrb, _self: Value) -> Value {
 #[test]
 fn load_nstring_inside_a_registered_method_hands_the_raise_back_as_err() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"load_inside", beni::method!(load_nstring_inside, 0))
         .expect("defining the method must succeed");
 

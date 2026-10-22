@@ -71,7 +71,7 @@ fn add(_mrb: &Mrb, _self: Value, a: i32, b: i32) -> i32 {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mrb = Mrb::open()?;
-    let calc = mrb.define_class(c"Calc", mrb.object_class())?;
+    let calc = mrb.define_class(c"Calc", mrb.class_object())?;
     calc.define_method(&mrb, c"add", beni::method!(add, 2))?;
     Ok(())
 }

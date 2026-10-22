@@ -5,7 +5,7 @@ use beni::{Error, FromValue, IntoValue, Mrb, Proc, RArray, RHash, Value};
 
 /// Define `name` on `Object` as a `-1` method running `body`.
 fn define(mrb: &Mrb, name: &core::ffi::CStr, def: beni::MethodDef) {
-    mrb.object_class()
+    mrb.class_object()
         .define_method(mrb, name, def)
         .expect("registering the reader must succeed");
 }

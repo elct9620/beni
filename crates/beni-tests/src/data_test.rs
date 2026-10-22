@@ -28,7 +28,7 @@ fn release_hook_drops_the_boxed_value_on_close() {
     {
         let mrb = open_mrb();
         let class = mrb
-            .define_class(c"BeniDropHolder", mrb.object_class())
+            .define_class(c"BeniDropHolder", mrb.class_object())
             .expect("defining the carrier class must succeed");
         DropProbe::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
 
@@ -63,7 +63,7 @@ impl Drop for ThreadProbe {
 fn release_hook_runs_on_the_thread_the_interpreter_was_carried_to() {
     let mrb = open_mrb();
     let class = mrb
-        .define_class(c"BeniThreadHolder", mrb.object_class())
+        .define_class(c"BeniThreadHolder", mrb.class_object())
         .expect("defining the carrier class must succeed");
     ThreadProbe::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
 
@@ -114,7 +114,7 @@ fn release_hook_contains_a_panicking_drop_on_close() {
     {
         let mrb = open_mrb();
         let class = mrb
-            .define_class(c"BeniPanicHolder", mrb.object_class())
+            .define_class(c"BeniPanicHolder", mrb.class_object())
             .expect("defining the carrier class must succeed");
         PanicOnDrop::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
 
@@ -161,7 +161,7 @@ fn marking_refuses_a_singleton_class_so_no_carrier_shares_it() {
         .singleton_class(&mrb)
         .expect("an ordinary object has a singleton class");
 
-    mrb.define_class(c"BeniDataMarkedBase", mrb.object_class())
+    mrb.define_class(c"BeniDataMarkedBase", mrb.class_object())
         .expect("defining the holder's class must succeed");
     Holder::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
 
@@ -249,7 +249,7 @@ fn marking_refuses_every_built_in_layout_so_its_instances_keep_it() {
 fn a_class_defined_from_a_marked_class_carries_data_and_accepts_the_mark() {
     let mrb = open_mrb();
     let base = mrb
-        .define_class(c"BeniDataMarkedBase", mrb.object_class())
+        .define_class(c"BeniDataMarkedBase", mrb.class_object())
         .expect("defining the base class must succeed");
     Holder::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
     let derived = mrb
@@ -278,7 +278,7 @@ fn assert_allocator_undefined(mrb: &beni::Mrb, err: beni::Error, class: &str) {
 fn an_undefined_allocator_refuses_new_and_allocate_but_not_a_wrap_or_copy() {
     let mrb = open_mrb();
     let class = mrb
-        .define_class(c"BeniDataMarkedBase", mrb.object_class())
+        .define_class(c"BeniDataMarkedBase", mrb.class_object())
         .expect("defining the class must succeed");
     Holder::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
 
@@ -308,7 +308,7 @@ fn an_undefined_allocator_refuses_new_and_allocate_but_not_a_wrap_or_copy() {
 fn only_a_class_defined_after_the_allocator_is_undefined_inherits_it() {
     let mrb = open_mrb();
     let base = mrb
-        .define_class(c"BeniDataAllocBase", mrb.object_class())
+        .define_class(c"BeniDataAllocBase", mrb.class_object())
         .expect("defining the base class must succeed");
     let earlier = mrb
         .define_class(c"BeniDataAllocEarlier", base)
@@ -331,7 +331,7 @@ fn only_a_class_defined_after_the_allocator_is_undefined_inherits_it() {
 fn a_payload_reads_back_as_a_raw_pointer_through_either_handle() {
     let mrb = open_mrb();
     let class = mrb
-        .define_class(c"BeniDataMarkedBase", mrb.object_class())
+        .define_class(c"BeniDataMarkedBase", mrb.class_object())
         .expect("defining the class must succeed");
     Holder::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
 

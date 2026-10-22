@@ -210,7 +210,7 @@ fn the_inspector_walks_from_the_running_frame_to_its_callers() {
 }
 
 fn define_yield_to(mrb: &Mrb) {
-    mrb.object_class()
+    mrb.class_object()
         .define_method(mrb, c"yield_to", beni::method!(yield_to, 0, &))
         .expect("registering the method succeeds");
 }
@@ -453,7 +453,7 @@ fn current_depth(mrb: &Mrb, _self: Value) -> Result<i32, Error> {
 #[test]
 fn the_current_depth_counts_every_frame_of_the_running_fiber() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"depth", beni::method!(current_depth, 0))
         .expect("registering the method succeeds");
 
@@ -497,7 +497,7 @@ fn caller_twice(mrb: &Mrb, _self: Value) -> Result<RArray, Error> {
 #[test]
 fn an_inspector_opened_from_rust_reads_its_callers_across_a_moved_frame_stack() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(&mrb, c"caller_twice", beni::method!(caller_twice, 0))
         .expect("registering the method succeeds");
 
@@ -538,7 +538,7 @@ fn local_survives_its_reassignment(
 #[test]
 fn a_local_read_from_rust_stays_reachable_after_its_frame_lets_it_go() {
     let mrb = open_mrb();
-    mrb.object_class()
+    mrb.class_object()
         .define_method(
             &mrb,
             c"local_survives_its_reassignment",

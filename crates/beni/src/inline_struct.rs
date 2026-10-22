@@ -27,7 +27,7 @@ use core::marker::PhantomData;
 /// struct Vector2D { x: f64, y: f64 }
 /// static VECTOR2D: InlineType<Vector2D> = InlineType::new(c"Vector2D");
 /// unsafe impl InlineStruct for Vector2D {
-///     fn class(mrb: &Mrb) -> RClass { mrb.object_class() }
+///     fn class(mrb: &Mrb) -> RClass { mrb.class_object() }
 ///     fn inline_type() -> &'static InlineType<Self> { &VECTOR2D }
 /// }
 /// ```
@@ -41,7 +41,7 @@ use core::marker::PhantomData;
 /// struct Wide([usize; 4]);
 /// static WIDE: InlineType<Wide> = InlineType::new(c"Wide");
 /// unsafe impl InlineStruct for Wide {
-///     fn class(mrb: &Mrb) -> RClass { mrb.object_class() }
+///     fn class(mrb: &Mrb) -> RClass { mrb.class_object() }
 ///     fn inline_type() -> &'static InlineType<Self> { &WIDE }
 /// }
 /// let mrb = Mrb::open().unwrap();
@@ -57,7 +57,7 @@ use core::marker::PhantomData;
 /// struct Holder(Value);
 /// static HOLDER: InlineType<Holder> = InlineType::new(c"Holder");
 /// unsafe impl InlineStruct for Holder {
-///     fn class(mrb: &Mrb) -> RClass { mrb.object_class() }
+///     fn class(mrb: &Mrb) -> RClass { mrb.class_object() }
 ///     fn inline_type() -> &'static InlineType<Self> { &HOLDER }
 /// }
 /// ```
