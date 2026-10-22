@@ -246,7 +246,7 @@ fn a_sequence_target_holds_symbols_and_immediates_past_the_arena() {
     let mrb = open_mrb();
     let symbols = convert::<Vec<Symbol>>(&mrb, "Array.new(64) { |i| :\"dynamic_#{i}\" }");
     mrb.gc_start();
-    assert_eq!(symbols[63].name(&mrb).as_deref(), Some("dynamic_63"));
+    assert_eq!(symbols[63].name(&mrb).as_deref().ok(), Some("dynamic_63"));
     assert_eq!(convert::<Vec<beni::Qnil>>(&mrb, "[nil, nil]").len(), 2);
     assert_eq!(convert::<Vec<beni::Qtrue>>(&mrb, "[true]").len(), 1);
     assert_eq!(convert::<Vec<beni::Qfalse>>(&mrb, "[false]").len(), 1);

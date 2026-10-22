@@ -8,14 +8,14 @@ fn name_sym_and_rebuild_roundtrip() {
     let mrb = open_mrb();
     let sym = Symbol::new(&mrb, c"flags").expect("the name interns");
 
-    assert_eq!(sym.name(&mrb).as_deref(), Some("flags"));
+    assert_eq!(sym.name(&mrb).as_deref().ok(), Some("flags"));
     // It must equal interning the same name — a wrong boxing shift in
     // the unbox shim would diverge here.
     assert_eq!(sym, mrb.intern_cstr(c"flags").expect("the name interns"));
     // Unboxing to the id and boxing it again yields an equal symbol.
     let reboxed = Symbol::from(Id::from(sym));
     assert_eq!(reboxed, sym);
-    assert_eq!(reboxed.name(&mrb).as_deref(), Some("flags"));
+    assert_eq!(reboxed.name(&mrb).as_deref().ok(), Some("flags"));
 }
 
 #[test]
@@ -24,8 +24,8 @@ fn name_bytes_and_dump_read_the_symbol_name() {
 
     // A plain identifier: bytes equal the name, dump is bare.
     let plain = Symbol::new(&mrb, c"fred").expect("the name interns");
-    assert_eq!(plain.name_bytes(&mrb).as_deref(), Some(&b"fred"[..]));
-    assert_eq!(plain.dump(&mrb).as_deref(), Some("fred"));
+    assert_eq!(plain.name_bytes(&mrb).as_deref().ok(), Some(&b"fred"[..]));
+    assert_eq!(plain.dump(&mrb).as_deref().ok(), Some("fred"));
 
     // An embedded NUL: `name` escapes it to the dump form, only
     // `name_bytes` returns the raw bytes.
@@ -33,15 +33,60 @@ fn name_bytes_and_dump_read_the_symbol_name() {
         mrb.intern_str(mrb.str_new(b"a\0b").as_value())
             .expect("the name interns"),
     );
-    assert_eq!(nul.name(&mrb).as_deref(), Some("\"a\\x00b\""));
-    assert_eq!(nul.name_bytes(&mrb).as_deref(), Some(&b"a\0b"[..]));
+    assert_eq!(nul.name(&mrb).as_deref().ok(), Some("\"a\\x00b\""));
+    assert_eq!(nul.name_bytes(&mrb).as_deref().ok(), Some(&b"a\0b"[..]));
 
     // A name needing escaping dumps quoted.
     let spaced = Symbol::from(
         mrb.intern_str(mrb.str_new(b"a b").as_value())
             .expect("the name interns"),
     );
-    assert_eq!(spaced.dump(&mrb).as_deref(), Some("\"a b\""));
+    assert_eq!(spaced.dump(&mrb).as_deref().ok(), Some("\"a b\""));
+}
+
+#[test]
+fn a_name_that_is_not_utf8_reads_as_an_argument_error_and_its_bytes_read_raw() {
+    let mrb = open_mrb();
+    let sym = Symbol::from(
+        mrb.intern_str(mrb.str_new(b"\xff").as_value())
+            .expect("the name interns"),
+    );
+
+    let err = sym
+        .name(&mrb)
+        .expect_err("a name that is not UTF-8 has no String");
+    assert_eq!(err.message(&mrb), "invalid UTF-8 byte sequence");
+    let beni::Error::Exception(exc) = err else {
+        panic!("the read must surface an exception, got {err}");
+    };
+    assert_eq!(exc.classname(&mrb), "ArgumentError");
+    assert_eq!(sym.name_bytes(&mrb).as_deref().ok(), Some(&b"\xff"[..]));
+    assert_eq!(sym.dump(&mrb).as_deref().ok(), Some("\"\\xff\""));
+}
+
+#[test]
+fn an_id_the_interpreter_holds_no_name_for_reads_as_a_range_error() {
+    let mrb = open_mrb();
+    // The largest id mruby looks up in its symbol table; every id above it
+    // packs a short name into itself (`SYMBOL_INLINE_P`,
+    // `vendor/mruby/src/symbol.c`).
+    let past_the_table: beni::sys::mrb_sym = (1 << 20) - 1;
+    // SAFETY: deliberately breaks the interpreter pairing with an id past
+    // the symbol table; the name reads must answer an `Err` rather than
+    // read through the NULL mruby answers.
+    let unnamed = unsafe { <Id as beni::sys::FromRawId>::from_raw(past_the_table) };
+
+    for err in [
+        unnamed.name(&mrb).expect_err("no name to read"),
+        unnamed.name_bytes(&mrb).expect_err("no bytes to read"),
+        unnamed.dump(&mrb).expect_err("no name to dump"),
+    ] {
+        assert_eq!(err.message(&mrb), "symbol id out of range");
+        let beni::Error::Exception(exc) = err else {
+            panic!("the read must surface an exception, got {err}");
+        };
+        assert_eq!(exc.classname(&mrb), "RangeError");
+    }
 }
 
 #[test]

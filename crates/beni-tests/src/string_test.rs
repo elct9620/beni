@@ -212,7 +212,7 @@ fn intern_names_the_symbol_for_the_receiver_bytes() {
         .str_new(b"flags")
         .intern(&mrb)
         .expect("the name interns");
-    assert_eq!(sym.name(&mrb).as_deref(), Some("flags"));
+    assert_eq!(sym.name(&mrb).as_deref().ok(), Some("flags"));
 
     // It equals interning the same name directly — a wrong tag or
     // boxing in the unchecked wrap would diverge here.

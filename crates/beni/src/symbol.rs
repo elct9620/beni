@@ -43,82 +43,89 @@ impl Id {
         self.0
     }
 
-    /// `mrb_sym_name(mrb, id)` — the id's name as an owned `String`, or
-    /// `None` if mruby yields a NULL pointer (e.g. uninterned id). Mirrors
-    /// magnus's `Id::name`, but copies where magnus borrows a
+    /// `mrb_sym_name(mrb, id)` — the id's name as an owned `String`.
+    /// Surfaces an `Err` carrying an `ArgumentError` for a name that is not
+    /// UTF-8, as magnus's `Id::name` errs, with mruby's wording for invalid
+    /// UTF-8; mruby has no `EncodingError`. Copies where magnus borrows a
     /// `&'static str`: a short symbol name unpacks into a per-read scratch
     /// buffer the next name read overwrites (`mrb_sym_name_len`,
     /// `vendor/mruby/src/symbol.c`). A name carrying an embedded NUL comes
-    /// back escaped to its quoted dump form; `Id::name_bytes` reads the
-    /// raw bytes. mruby escapes non-identifier names into a quoted ASCII
-    /// form, so a name is always valid UTF-8; the empty-string fallback on
-    /// a non-UTF-8 name is defensive — reach for `Id::name_bytes` to
-    /// read raw bytes.
+    /// back escaped to its quoted dump form; `Id::name_bytes` reads the raw
+    /// bytes.
     #[inline]
-    pub fn name(self, mrb: &Mrb) -> Option<String> {
+    pub fn name(self, mrb: &Mrb) -> Result<String, Error> {
         // SAFETY: `mrb` is alive.
         let ptr = unsafe { sys::mrb_sym_name(mrb.as_ptr(), self.to_raw()) };
-        if ptr.is_null() {
-            return None;
-        }
-        // SAFETY: `ptr` is a valid C string for the duration of this
-        // call; copy its bytes out at once, before the next name read
-        // can overwrite the scratch buffer a short name unpacks into.
-        Some(
-            unsafe { core::ffi::CStr::from_ptr(ptr) }
-                .to_str()
-                .unwrap_or("")
-                .to_owned(),
-        )
+        // SAFETY: a non-NULL `ptr` is a valid C string for the duration of
+        // this call; it is copied out at once, before the next name read can
+        // overwrite the scratch buffer a short name unpacks into.
+        let name = unsafe { self.name_cstr(mrb, ptr) }?;
+        name.to_str()
+            .map(str::to_owned)
+            .map_err(|_| crate::try_convert::invalid_utf8(mrb))
     }
 
-    /// `mrb_sym_name_len(mrb, id, &len)` — the id's raw name bytes as an owned `Vec<u8>`, its true length carried out of band so
-    /// an embedded NUL is preserved unescaped rather than driving
-    /// `Id::name` to its quoted dump form. `None` when mruby yields a
-    /// NULL pointer (e.g. uninterned id). A short symbol name unpacks into
-    /// a per-read scratch buffer the next name read overwrites, so the
-    /// bytes are copied out before this returns rather than borrowed.
+    /// `mrb_sym_name_len(mrb, id, &len)` — the id's raw name bytes as an
+    /// owned `Vec<u8>`, its true length carried out of band so an embedded
+    /// NUL is preserved unescaped rather than driving `Id::name` to its
+    /// quoted dump form. A short symbol name unpacks into a per-read scratch
+    /// buffer the next name read overwrites, so the bytes are copied out
+    /// before this returns rather than borrowed.
     #[inline]
-    pub fn name_bytes(self, mrb: &Mrb) -> Option<Vec<u8>> {
+    pub fn name_bytes(self, mrb: &Mrb) -> Result<Vec<u8>, Error> {
         let mut len: sys::mrb_int = 0;
         // SAFETY: `mrb` is alive; `&mut len` is a valid out-pointer.
         let ptr = unsafe { sys::mrb_sym_name_len(mrb.as_ptr(), self.to_raw(), &mut len) };
         if ptr.is_null() {
-            return None;
+            return Err(unnamed(mrb));
         }
         // SAFETY: mruby reports a non-negative length for a live name,
         // and `ptr` spans that many valid bytes for the duration of
         // this call; copy them out at once, before the next name read
         // can overwrite the scratch buffer a short name unpacks into.
-        Some(unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), len as usize) }.to_vec())
+        Ok(unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), len as usize) }.to_vec())
     }
 
     /// `mrb_sym_dump(mrb, id)` — the dump form of the id's name as an
     /// owned `String`: the bare name for a plain identifier, otherwise
     /// the quoted and escaped form (Ruby's `Symbol#inspect` without the
-    /// leading colon). `None` when mruby yields a NULL pointer (e.g.
-    /// uninterned id). Reads without dispatching and never raises. The dump
-    /// form draws on the same per-read scratch buffer a short name unpacks
-    /// into, so the bytes are copied out before this returns rather than
-    /// borrowed. The dump form is always ASCII, so the empty-string
-    /// fallback on a non-UTF-8 name is defensive and unreachable.
+    /// leading colon), which escapes every byte outside printable ASCII.
+    /// Reads without dispatching. The dump form draws on the same per-read
+    /// scratch buffer a short name unpacks into, so the bytes are copied
+    /// out before this returns rather than borrowed.
     #[inline]
-    pub fn dump(self, mrb: &Mrb) -> Option<String> {
+    pub fn dump(self, mrb: &Mrb) -> Result<String, Error> {
         // SAFETY: `mrb` is alive.
         let ptr = unsafe { sys::mrb_sym_dump(mrb.as_ptr(), self.to_raw()) };
-        if ptr.is_null() {
-            return None;
-        }
-        // SAFETY: `ptr` is a valid C string for the duration of this
-        // call; copy its bytes out at once, before the next name read
-        // can overwrite the scratch buffer a short name unpacks into.
-        Some(
-            unsafe { core::ffi::CStr::from_ptr(ptr) }
-                .to_str()
-                .unwrap_or("")
-                .to_owned(),
-        )
+        // SAFETY: as `name`.
+        let dump = unsafe { self.name_cstr(mrb, ptr) }?;
+        Ok(dump.to_string_lossy().into_owned())
     }
+
+    /// The C string a name read answered, or the `RangeError` for the NULL
+    /// it answers when the interpreter holds no name for the id.
+    ///
+    /// # Safety
+    ///
+    /// A non-NULL `ptr` must be a valid C string for the returned borrow.
+    unsafe fn name_cstr<'a>(
+        self,
+        mrb: &Mrb,
+        ptr: *const core::ffi::c_char,
+    ) -> Result<&'a core::ffi::CStr, Error> {
+        if ptr.is_null() {
+            return Err(unnamed(mrb));
+        }
+        // SAFETY: the caller's guarantee for a non-NULL `ptr`.
+        Ok(unsafe { core::ffi::CStr::from_ptr(ptr) })
+    }
+}
+
+/// The `RangeError` a name read surfaces for an id the interpreter holds no
+/// name for — one past its symbol table, which only an id breaking the
+/// interpreter pairing is (`sym2name_len`, `vendor/mruby/src/symbol.c`).
+fn unnamed(mrb: &Mrb) -> Error {
+    crate::error::core_error(mrb, c"RangeError", "symbol id out of range")
 }
 
 /// Typed handle on an mruby `Symbol`. `#[repr(transparent)]` over
@@ -212,38 +219,26 @@ impl Symbol {
         mrb.intern_cstr(name).map(Self::from)
     }
 
-    /// The symbol's name as an owned `String`, via `Id::name`.
-    /// `None` when mruby yields a NULL name. A name
-    /// carrying an embedded NUL comes back escaped to its quoted dump form;
-    /// `name_bytes` reads the raw bytes — also the path for any non-UTF-8
-    /// name, which mruby's escaping keeps unreachable here. A short name
-    /// unpacks into a per-read scratch buffer the next name read overwrites,
-    /// so the name is copied out rather than borrowed.
+    /// The symbol's name as an owned `String`, via `Id::name`, and with its
+    /// `Err` for a name that is not UTF-8. Mirrors magnus's `Symbol::name`.
     #[inline]
-    pub fn name(self, mrb: &Mrb) -> Option<String> {
+    pub fn name(self, mrb: &Mrb) -> Result<String, Error> {
         Id::from(self).name(mrb)
     }
 
     /// The symbol's raw name bytes as an owned `Vec<u8>`, via
     /// `Id::name_bytes` — an embedded NUL preserved unescaped, where
-    /// `name` returns the quoted dump form. `None` when mruby yields a NULL
-    /// name. A short name unpacks into a per-read scratch buffer the next
-    /// name read overwrites, so the bytes are copied out rather than
-    /// borrowed.
+    /// `name` returns the quoted dump form.
     #[inline]
-    pub fn name_bytes(self, mrb: &Mrb) -> Option<Vec<u8>> {
+    pub fn name_bytes(self, mrb: &Mrb) -> Result<Vec<u8>, Error> {
         Id::from(self).name_bytes(mrb)
     }
 
-    /// The symbol's dump form as an owned `String`, via `Id::dump`
-    /// — the bare name for a plain identifier, otherwise the
-    /// quoted and escaped form (Ruby's `Symbol#inspect` without the leading
-    /// colon). `None` when mruby yields a NULL name. Reads without
-    /// dispatching and never raises. A short name unpacks into a per-read
-    /// scratch buffer the next name read overwrites, so the dump form is
-    /// copied out rather than borrowed.
+    /// The symbol's dump form as an owned `String`, via `Id::dump` — the
+    /// bare name for a plain identifier, otherwise the quoted and escaped
+    /// form (Ruby's `Symbol#inspect` without the leading colon).
     #[inline]
-    pub fn dump(self, mrb: &Mrb) -> Option<String> {
+    pub fn dump(self, mrb: &Mrb) -> Result<String, Error> {
         Id::from(self).dump(mrb)
     }
 
