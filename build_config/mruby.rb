@@ -7,7 +7,11 @@
 # `rake beni:config` seeds (generate the upstream default, then edit):
 # a native +host+ build plus a wasm32-wasip1 cross build, sharing one
 # set of ABI-bearing defines and one mrbgem baseline, so the beni
-# crates verify against both targets.
+# crates verify against both targets. Both add the arbitrary-width
+# Integer gem beside the baseline, making this the bigint archive with
+# a 32-bit +mrb_int+ — the pairing where values a Rust +i64+ holds
+# already outgrow the fixed-width tag — while the float32 and
+# no-boxing configs stay without it. mruby-rational needs it to build.
 #
 # The file is `load`ed by mruby's rake when +Beni::Builder+ sets
 # +MRUBY_CONFIG+ to its absolute path. The wasi cross build's
@@ -23,6 +27,8 @@ MRuby::Lockfile.disable
 
 require_relative "beni_build_config"
 
+bigint_gems = %w[mruby-bigint mruby-rational].freeze
+
 # Native host build — the full archive plus the host mrbc the cross build
 # borrows. +:gcc+ forces a bare +gcc+ so +Toolchain.guess+ cannot pick
 # +:clang+ on macOS and resolve through PATH into wasi-sdk's clang
@@ -35,7 +41,7 @@ MRuby::Build.new("host") do |conf|
     conf.cxx.defines << define
   end
 
-  BeniBuildConfig::MRBGEM_BASELINE.each { |gem_name| conf.gem core: gem_name }
+  (BeniBuildConfig::MRBGEM_BASELINE + bigint_gems).each { |gem_name| conf.gem core: gem_name }
   conf.build_mrbc_exec
 end
 
@@ -47,5 +53,5 @@ MRuby::CrossBuild.new("wasi") do |conf|
     conf.cxx.defines << define
   end
 
-  BeniBuildConfig::MRBGEM_BASELINE.each { |gem_name| conf.gem core: gem_name }
+  (BeniBuildConfig::MRBGEM_BASELINE + bigint_gems).each { |gem_name| conf.gem core: gem_name }
 end

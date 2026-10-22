@@ -189,6 +189,21 @@ fn a_tagged_handle_takes_an_argument_of_its_own_tag() {
     assert_eq!(accepts("Complex(1, 2)"), Some(9));
 }
 
+// mruby-rational compiles only beside mruby-bigint, so a Rational exists
+// only in a build against a bigint archive; every such build the chain
+// runs carries the gem.
+#[cfg(mrb_bigint)]
+#[test]
+fn a_rational_converts_into_its_own_handle_and_no_other() {
+    let mrb = open_mrb();
+    let rational = eval(&mrb, "Rational(1, 3)");
+
+    assert!(RRational::from_value(rational).is_some());
+    assert!(RRational::try_convert(rational, &mrb).is_ok());
+    assert!(RComplex::from_value(rational).is_none());
+    assert!(RObject::from_value(rational).is_none());
+}
+
 #[test]
 fn a_tagged_handle_words_a_mismatch_as_mruby_type_check_does() {
     let mrb = open_mrb();
