@@ -1029,7 +1029,7 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Mutates a receiver: array append / remove / extend / replace / clear; array indexed write and resize; hash assign / delete / merge / clear; string append and resize; instance-variable assignment and removal; class-variable assignment; constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range (a negative index past the beginning, or one too large); a string resize also when the requested length is negative or overflows | `Result` |
 | Dispatches Ruby: a method call; `==` / `eql?`; a `<=>` comparison; an object `dup`; string coercion; a splat coercion to an array running a non-array's `to_a`; an array join rendering each element via `to_s`; an instance construction running `initialize`; a constant fetch running a `const_missing` hook; a constant assignment running a `const_added` hook; a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`; a hash read running a `default` lookup for an absent key; a range construction comparing its two bounds; a current-fiber read running `Fiber.current` | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared; a current-fiber read also when `Fiber` names no class, or `Fiber.current` answers anything but a Fiber (`TypeError`) | `Result`; a `<=>` comparison yields nothing when the two values are incomparable |
 | Reads a named variable that raises on absence: a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
-| Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read or a Range begin / end read converted to a requested type; an Integer read out as a Rust integer, a `Fixnum` read into `i64` or `i128` aside; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an Integer read out beyond its Rust target's range (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width against an archive other than a bigint archive (`RangeError`) | `Result` |
+| Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read, a Range begin / end read, an array element or hash value read or removed, or a global-variable read, converted to a requested type; an Integer read out as a Rust integer, a `Fixnum` read into `i64` or `i128` aside; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an Integer read out beyond its Rust target's range (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width against an archive other than a bigint archive (`RangeError`) | `Result` |
 | Interns a name, creating its symbol: a C-string, byte-slice, String-value, or static-buffer intern; a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (`ArgumentError`) | `Result` |
 | Reads or renders without dispatching but can still raise: a string's NUL-terminated C-string view; a strict parse of a string to an integer in a given radix, or to a float; rendering an integer to a string in a given radix; computing a Range's normalized slice of a collection length; reading an instance-variable holder's singleton class; a symbol or `Id` name read, as a UTF-8 string, as bytes, or in dump form | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; a parsed integer is beyond what the configured integer width or `i64` holds; the bytes are not a valid float; the render radix is outside 2 through 36; a Range slice's present bound is neither an integer nor integer-convertible (`TypeError`); mruby gives the object no singleton class (`TypeError`); a name read as a UTF-8 string: the name is not UTF-8 (`ArgumentError`); any name read: the interpreter holds no name for the id (`RangeError`) | `Result`; a Range slice that does not raise returns its three-way outcome: in-range with begin offset and length, out-of-range, or a non-Range mismatch |
 | Allocates an instance without dispatching: a class's bare allocation | the class is a singleton class, its default allocator is undefined, or its instances are of an immediate or C-pointer type (`TypeError`) | `Result` |
@@ -1039,7 +1039,7 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Reads the call's arguments by shape: a scan read or the single-argument read in a method registered for any arity; a named keyword read of a keyword hash | the call does not fit the read's shape: too few or too many positionals; an argument or keyword value of the wrong type; a missing required block; a missing required keyword; a keyword no list names when the read collects no rest. A scan read of an array-handle splat and an optional block alone fits every call | `Result` |
 | Compiles and runs Ruby source, under a caller's compile context or one borrowed for the load | the source does not parse; the context's filename is too long to be a symbol; a codegen step fails; the program raises while it runs | `Result`; a parse failure carries a parse message, every other failure carries the exception |
 | Switches fibers: a fiber creation, resume, or alive test; a registered method's returned fiber yield | creation: the `Proc` is backed by a C function; resume: the fiber has finished, is the running fiber or one already resumed, was transferred to, or was never initialized, or its block raises; alive test: the fiber was never initialized; fiber yield: the method runs outside a resumed fiber, or a call from C or Rust code into Ruby stands between the fiber's block and the method | `Result`; a fiber yield's `Err` raised to the method's Ruby caller |
-| Reads or examines without dispatching: indexed read; an array's borrowed slice; keys; values; size; emptiness; container duplication; substring read by character range; substring search by byte index; byte comparison; a range's exclusive-end read; instance-variable, class-variable, and constant presence; `respond_to?`; `equal?`; `is_a?`; `instance_of?`; class; type downcast; `nil` test | never | a bare value, or the absent value when the substring range falls outside the read |
+| Reads or examines without dispatching: an array's borrowed slice; keys; values; size; emptiness; container duplication; substring read by character range; substring search by byte index; byte comparison; a range's exclusive-end read; instance-variable, class-variable, and constant presence; `respond_to?`; `equal?`; `is_a?`; `instance_of?`; class; type downcast; `nil` test | never | a bare value, or the absent value when the substring range falls outside the read |
 
 ##### Warnings and bugs
 
@@ -1054,7 +1054,9 @@ warn writes on every call: mruby keeps no verbose switch, where `magnus`'s `Ruby
 
 #### Containers
 
-The typed array carries Ruby `Array`'s surface:
+A container operation takes each key or value through `IntoValue`, and reads
+each element or value out through `TryConvert` into the type its caller names,
+mirroring `magnus`'s signatures. The typed array carries Ruby `Array`'s surface:
 
 | Operation | Behavior |
 |---|---|
@@ -1286,11 +1288,12 @@ A global variable belongs to the interpreter rather than to any value. So it rea
 
 | Operation | Behavior |
 |---|---|
-| read | an unset global reads as `nil` |
+| read | the global converted through `TryConvert` into the requested type; an unset global reads as `nil` |
 | remove | removing an unset global is a no-op |
-| assign | reports no failure of its own, carrying only the one its key can surface |
+| assign | takes the value through `IntoValue`; reports no failure of its own, carrying only the one its key can surface |
 
-Neither the read nor the removal dispatches Ruby or raises.
+Neither the read nor the removal dispatches Ruby or raises; the read surfaces
+only its conversion's `Err`.
 
 #### Classes, modules, and methods
 
