@@ -6,7 +6,7 @@ use beni::{Ccontext, DumpOptions, Error, FromValue, Module, Mrb, RString, Value}
 const HEADER_LEN: usize = core::mem::size_of::<beni::sys::rite_binary_header>();
 
 #[test]
-fn load_string_evaluates_a_valid_expression_to_its_value() {
+fn eval_evaluates_a_valid_expression_to_its_value() {
     let mrb = open_mrb();
 
     let got = mrb
@@ -21,7 +21,7 @@ fn load_string_evaluates_a_valid_expression_to_its_value() {
 }
 
 #[test]
-fn load_string_surfaces_a_raising_script_as_err() {
+fn eval_surfaces_a_raising_script_as_err() {
     let mrb = open_mrb();
 
     let err = mrb
@@ -39,7 +39,7 @@ fn load_string_surfaces_a_raising_script_as_err() {
 }
 
 #[test]
-fn load_string_surfaces_a_parse_failure_with_its_location() {
+fn eval_surfaces_a_parse_failure_with_its_location() {
     let mrb = open_mrb();
 
     let err = mrb
@@ -64,7 +64,7 @@ fn load_string_surfaces_a_parse_failure_with_its_location() {
 }
 
 #[test]
-fn load_string_stamps_no_filename_so_a_raise_carries_no_backtrace() {
+fn eval_stamps_no_filename_so_a_raise_carries_no_backtrace() {
     let mrb = open_mrb();
 
     let err = mrb
@@ -78,7 +78,7 @@ fn load_string_stamps_no_filename_so_a_raise_carries_no_backtrace() {
 }
 
 #[test]
-fn load_string_still_runs_source_the_compiler_warns_about() {
+fn eval_still_runs_source_the_compiler_warns_about() {
     let mrb = open_mrb();
 
     // The borrowed context captures the warning and is released with
@@ -278,7 +278,7 @@ fn caught(outcome: Result<Value, Error>) -> Value {
     }
 }
 
-fn load_string_inside(mrb: &Mrb, _self: Value) -> Value {
+fn eval_inside(mrb: &Mrb, _self: Value) -> Value {
     caught(mrb.eval::<beni::Value>("raise 'from the nested load'"))
 }
 
@@ -323,10 +323,10 @@ fn load_irep_inside_a_method_of_another_class_runs_at_the_top_level() {
 }
 
 #[test]
-fn load_string_inside_a_registered_method_hands_the_raise_back_as_err() {
+fn eval_inside_a_registered_method_hands_the_raise_back_as_err() {
     let mrb = open_mrb();
     mrb.class_object()
-        .define_method(&mrb, c"load_inside", beni::method!(load_string_inside, 0))
+        .define_method(&mrb, c"load_inside", beni::method!(eval_inside, 0))
         .expect("defining the method must succeed");
 
     let exc = beni::value::qnil()

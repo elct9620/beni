@@ -3,7 +3,7 @@ use beni::prelude::*;
 use beni::{IntoValue, Value};
 
 #[test]
-fn set_and_get_roundtrip_with_nil_for_an_absent_key() {
+fn aset_and_aref_roundtrip_with_nil_for_an_absent_key() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
 
@@ -159,7 +159,7 @@ fn values_size_and_emptiness_read_the_structure() {
 }
 
 #[test]
-fn contains_key_and_fetch_read_by_key() {
+fn contains_key_and_lookup2_read_by_key() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
     let k = mrb.str_new(b"k").as_value();

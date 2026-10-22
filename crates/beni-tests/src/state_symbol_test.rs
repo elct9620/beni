@@ -13,7 +13,7 @@ fn too_long_cstr() -> CString {
 }
 
 #[test]
-fn intern_cstr_roundtrips_through_sym_name() {
+fn intern_cstr_roundtrips_through_id_name() {
     let mrb = open_mrb();
 
     let sym = mrb.intern_cstr(c"beni_sym").expect("the name interns");
@@ -79,7 +79,7 @@ fn intern_static_yields_the_same_id_as_the_copying_intern() {
 }
 
 #[test]
-fn sym_name_len_carries_the_full_bytes_past_an_embedded_nul() {
+fn id_name_bytes_carries_the_full_bytes_past_an_embedded_nul() {
     let mrb = open_mrb();
 
     // Intern a name with an embedded NUL through the bytes path; the
@@ -132,7 +132,7 @@ fn check_symbol_answers_the_symbol_of_an_interned_name_and_misses_an_uninterned_
 }
 
 #[test]
-fn sym_dump_quotes_a_non_identifier_name() {
+fn id_dump_quotes_a_non_identifier_name() {
     let mrb = open_mrb();
 
     // A plain identifier dumps bare; a name needing escaping is quoted.
@@ -152,7 +152,7 @@ fn sym_dump_quotes_a_non_identifier_name() {
 }
 
 #[test]
-fn sym_name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
+fn id_name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     let mrb = open_mrb();
 
     // Two short names pack inline (<=4 packable chars), so mruby unpacks
@@ -170,7 +170,7 @@ fn sym_name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
 }
 
 #[test]
-fn sym_name_len_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
+fn id_name_bytes_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     let mrb = open_mrb();
 
     // Same aliasing net as `sym_name`: hold the first read's bytes
@@ -186,7 +186,7 @@ fn sym_name_len_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
 }
 
 #[test]
-fn sym_dump_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
+fn id_dump_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     let mrb = open_mrb();
 
     // Same aliasing net as `sym_name`: hold the first dump across a
