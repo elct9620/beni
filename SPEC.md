@@ -443,6 +443,7 @@ raise nothing and run no Ruby:
 | `T: TypedData` | a data carrier: a new instance of the class its type names for it, as `obj_wrap` does | for every type keeping the `TypedData` contract |
 | `Inline<T>` | the handle's own value, an inline struct | for every type keeping the `InlineStruct` contract |
 | a `T` the `InlineStruct` macros implement | a new instance of its type's class, as `Inline::new` does | for every type keeping the `InlineStruct` contract |
+| `&CStr` | a copy of its bytes before the NUL in a new String | — |
 | `Bytes`, with the `bytes` feature | a copy of the bytes in a new String | — |
 
 A Rust number type converts into an Integer or Float `Value` only where every
@@ -561,6 +562,7 @@ element by its own type's rule:
 |---|---|---|
 | `String` | UTF-8 bytes | `String` |
 | `char` | UTF-8 bytes holding exactly one character | `String` |
+| `CString` | any bytes without an embedded NUL | `String` |
 | `PathBuf` | any bytes on a Unix target, UTF-8 bytes on any other | `String` |
 | `Bytes`, with the `bytes` feature | any bytes | `String` |
 | `Vec<T>` / `[T; N]` / a tuple of 1 to 12 elements | an Array | `Array` |
@@ -568,7 +570,8 @@ element by its own type's rule:
 
 Bytes that are not UTF-8 where UTF-8 is required surface the `ArgumentError`
 "invalid UTF-8 byte sequence". For `char`, a string of any other length than one
-character surfaces the `TypeError` with *target* `char`. No path protocol
+character surfaces the `TypeError` with *target* `char`. For `CString`, an
+embedded NUL surfaces the `ArgumentError` mruby raises for it. No path protocol
 applies — mruby has no `to_path`.
 
 A sequence surfaces the first element's `Err`, a map the first `Err`. A
@@ -632,11 +635,12 @@ from its own metadata alone.
 #### Strings
 
 Rust bytes convert to a new mruby string, returned as a typed `RString`. A
-string constructs three ways:
+string constructs four ways:
 
 | Construction | Result |
 |---|---|
 | copying | a new string owning a copy of Rust bytes |
+| from a C string | a new string owning a copy of a NUL-terminated C string's bytes before the NUL, mirroring `magnus`'s `str_from_c_str` |
 | with capacity | an empty string with a preallocated buffer, as Ruby's `String.new(capacity:)` reserves for appends that follow |
 | borrowed static | a string aliasing a borrowed static buffer, without copying its bytes |
 
@@ -670,10 +674,9 @@ A string handle also reads its bytes in ways that surface an `Err`:
 | `char` | the one character | bytes not UTF-8: the same `Err`; other than exactly one character: a `TypeError` |
 | NUL-terminated C-string view | the bytes, guaranteed to end in a `\0`, suitable for a C boundary | an embedded NUL: the `ArgumentError` mruby raises |
 
-The `String` and `char` reads mirror `magnus`'s `RString::to_string` and
-`to_char`, the reads the `String` and `char` `TryConvert` rules make. A C string
-cannot carry an embedded NUL. magnus offers no direct C-string accessor, so that
-read anchors on mruby's own `mrb_string_cstr`.
+The `String`, `char`, and C-string reads mirror `magnus`'s `RString::to_string`,
+`to_char`, and `to_c_string`, the reads the `String`, `char`, and `CString`
+`TryConvert` rules make. A C string cannot carry an embedded NUL.
 
 ##### Numeric Parses
 
@@ -749,12 +752,11 @@ extends its receiver, by appending:
 |---|---|
 | bytes | Rust bytes |
 | string | another mruby string's bytes |
-| C string | a NUL-terminated C string's content up to the terminating NUL |
 | coerced value | any value coerced to a string, as Ruby's `String#concat` accepts a non-string argument |
 
-The C-string append is the C-boundary counterpart of the byte append, anchored on
-mruby's own `mrb_str_cat_cstr`. The coerced append is the dispatching
-counterpart to the byte and string appends.
+A C string appends as its bytes before the NUL, as `magnus`'s byte append takes
+it. The coerced append is the dispatching counterpart to the byte and string
+appends.
 
 ##### String Operations
 
@@ -2541,7 +2543,7 @@ measures complete.
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
 | documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated from an mruby built with the upstream default configuration, and carrying what the generating host decides alongside it — type widths, the form of `va_list`, the constants its headers define. Never hand-written and never tracked by the repository: the published package carries the copy a release generated, and every other copy is generated where it is read |
 | lazy value | a value a `Lazy` names, which each interpreter computes once and holds for its own lifetime |
-| owned type | a type whose values hold nothing the collector can free, so a Rust heap structure may store them past the arena: Rust numbers, `bool`, `String`, `char`, `PathBuf`, `Bytes`, a non-zero integer, the payload copy a macro-implemented inline struct converts to, the `Qnil` / `Qtrue` / `Qfalse` handles, whose values are immediate under every boxing, the `Symbol` handle, whose symbol lives until the interpreter closes, and an `Option`, `Vec`, map, tuple, or fixed-length array of owned types; a consumer marks its own type as one only when the type holds no collectable `Value` |
+| owned type | a type whose values hold nothing the collector can free, so a Rust heap structure may store them past the arena: Rust numbers, `bool`, `String`, `CString`, `char`, `PathBuf`, `Bytes`, a non-zero integer, the payload copy a macro-implemented inline struct converts to, the `Qnil` / `Qtrue` / `Qfalse` handles, whose values are immediate under every boxing, the `Symbol` handle, whose symbol lives until the interpreter closes, and an `Option`, `Vec`, map, tuple, or fixed-length array of owned types; a consumer marks its own type as one only when the type holds no collectable `Value` |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
 | capability feature | a cargo feature on the `beni` crate carrying a capability mruby keeps in a gem rather than its core — declared by the consumer rather than probed from the archive, enabled by default, and additive, so enabling one only adds surface |
