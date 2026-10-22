@@ -75,10 +75,11 @@ impl RString {
     /// backing buffer may reallocate, but `self` keeps naming the same
     /// `RString`. Appending to a frozen string raises `FrozenError`; the
     /// call runs under exception protection, so that surfaces as `Err` rather
-    /// than long-jumping. Self-append (`s.cat_str(&mrb, s)`) is handled
+    /// than long-jumping. Self-append (`s.buf_append(&mrb, s)`) is handled
     /// by `mrb_str_cat_str`, which snapshots the source before growing.
+    /// Mirrors magnus's `RString::buf_append`.
     #[inline]
-    pub fn cat_str(self, mrb: &Mrb, other: RString) -> Result<(), Error> {
+    pub fn buf_append(self, mrb: &Mrb, other: RString) -> Result<(), Error> {
         mrb.protect_unit(|mrb| {
             // SAFETY: `self` and `other` are String-tagged by the
             // newtype contract; `mrb` is alive inside the protect
@@ -92,7 +93,7 @@ impl RString {
     }
 
     /// `mrb_str_concat(mrb, self, other)` — append `other` coerced to a
-    /// String, the dispatching counterpart of `cat_str`, the way Ruby's
+    /// String, the dispatching counterpart of `buf_append`, the way Ruby's
     /// `String#concat` accepts a non-string argument. A non-string
     /// `other` runs the same coercion as `ReprValue::to_r_string`, which
     /// may raise; appending to a frozen receiver raises `FrozenError`.
@@ -343,7 +344,7 @@ impl RString {
     /// `mrb_str_plus(mrb, self, other)` — concatenate into a fresh String
     /// holding both operands' bytes, Ruby's `String#+`. It allocates a new
     /// string and copies the bytes, mutating neither operand — the
-    /// non-mutating counterpart of `cat_str`, which grows its receiver in
+    /// non-mutating counterpart of `buf_append`, which grows its receiver in
     /// place. With both sides String-tagged it dispatches nothing and never
     /// raises, so it returns the new `RString` directly. Mirrors `dup`.
     #[inline]

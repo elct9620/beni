@@ -762,7 +762,7 @@ extends its receiver, by appending:
 | Append | Source |
 |---|---|
 | bytes | Rust bytes |
-| string | another mruby string's bytes |
+| string (`buf_append`) | another mruby string's bytes |
 | coerced value | any value coerced to a string, as Ruby's `String#concat` accepts a non-string argument |
 
 A C string appends as its bytes before the NUL, as `magnus`'s byte append takes

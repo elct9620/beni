@@ -450,7 +450,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature) |
 | `mrb_obj_as_string` | fn | ✅ | ✅ | `ReprValue::to_r_string` |
 | `mrb_ptr_to_str` | fn | ✅ | ❌ |  |
-| `mrb_str_append` | fn | ✅ | ✅ | `RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed |
+| `mrb_str_append` | fn | ✅ | ✅ | `RString::buf_append` — `mrb_ensure_string_type` then `mrb_str_cat_str`, and an `RString` argument always passes the ensure |
 | `mrb_str_buf_append` | macro | ❌ | ✅ | defined as `mrb_str_cat_str` |
 | `mrb_str_buf_cat` | macro | ❌ | ✅ | defined as `mrb_str_cat` |
 | `mrb_str_buf_new` | macro | ❌ | ✅ | defined as `mrb_str_new_capa` |
@@ -458,7 +458,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_str_cat2` | macro | ❌ | ✅ | defined as `mrb_str_cat_cstr` |
 | `mrb_str_cat_cstr` | fn | ✅ | ✅ | `RString::cat` over `CStr::to_bytes`, as magnus folds `rb_str_cat_cstr` into `cat` |
 | `mrb_str_cat_lit` | macro | ❌ | ✅ | `RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
-| `mrb_str_cat_str` | fn | ✅ | ✅ | `RString::cat_str` |
+| `mrb_str_cat_str` | fn | ✅ | ✅ | `RString::buf_append` |
 | `mrb_str_cmp` | fn | ✅ | ✅ | `RString::cmp` |
 | `mrb_str_concat` | fn | ✅ | ✅ | `RString::concat` |
 | `mrb_str_dup` | fn | ✅ | ✅ | `RString::dup` |

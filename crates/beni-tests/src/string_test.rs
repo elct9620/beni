@@ -31,12 +31,12 @@ fn cat_appends_a_static_literal_in_place() {
 }
 
 #[test]
-fn cat_str_appends_another_string_in_place() {
+fn buf_append_appends_another_string_in_place() {
     let mrb = open_mrb();
 
     let s = mrb.str_new(b"foo");
     let tail = mrb.str_new(b"bar");
-    s.cat_str(&mrb, tail)
+    s.buf_append(&mrb, tail)
         .expect("appending a string to a mutable string succeeds");
     // The receiver grew in place; the source is untouched.
     assert_eq!(s.owned_bytes(), b"foobar".to_vec());
@@ -44,12 +44,12 @@ fn cat_str_appends_another_string_in_place() {
 
     // Self-append doubles the receiver — the source snapshot is taken
     // before the buffer grows.
-    s.cat_str(&mrb, s).expect("self-append succeeds");
+    s.buf_append(&mrb, s).expect("self-append succeeds");
     assert_eq!(s.owned_bytes(), b"foobarfoobar".to_vec());
 }
 
 #[test]
-fn cat_str_surfaces_frozen_receiver_as_err() {
+fn buf_append_surfaces_frozen_receiver_as_err() {
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
 
@@ -64,7 +64,7 @@ fn cat_str_surfaces_frozen_receiver_as_err() {
         mrb.pending_exc().to_string(&mrb)
     );
 
-    let result = frozen.cat_str(&mrb, mrb.str_new(b"more"));
+    let result = frozen.buf_append(&mrb, mrb.str_new(b"more"));
     assert!(matches!(result, Err(Error::Exception(_))));
 }
 
@@ -137,7 +137,7 @@ fn plus_concatenates_into_a_new_string_leaving_operands_unchanged() {
     assert_eq!(joined.owned_bytes(), b"foobar".to_vec());
 
     // Neither operand was mutated — plus builds a new string rather
-    // than growing the receiver the way cat_str does.
+    // than growing the receiver the way buf_append does.
     assert_eq!(a.owned_bytes(), a_before);
     assert_eq!(b.owned_bytes(), b_before);
 
@@ -233,7 +233,7 @@ fn an_owned_byte_read_copies_arbitrary_bytes() {
 fn concat_coerces_a_non_string_argument_in_place() {
     let mrb = open_mrb();
 
-    // A plain String argument appends like cat_str.
+    // A plain String argument appends like buf_append.
     let s = mrb.str_new(b"foo");
     s.concat(&mrb, mrb.str_new(b"bar").as_value())
         .expect("appending a string succeeds");

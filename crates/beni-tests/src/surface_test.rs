@@ -206,7 +206,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RArray::is_empty;
     let _ = RString::from_value_unchecked;
     let _ = RString::cat;
-    let _ = RString::cat_str;
+    let _ = RString::buf_append;
     let _ = RString::as_bytes;
     let _ = RString::to_char;
     let _ = RString::to_string;
