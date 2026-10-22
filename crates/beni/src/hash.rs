@@ -7,7 +7,7 @@
 //! `Value`; element operations cluster on the resulting newtype.
 //!
 //! Mirrors magnus's `src/r_hash.rs`: factories live on `Ruby` /
-//! `Mrb`, per-hash ops (`set`, `get`, `keys`) live here.
+//! `Mrb`, per-hash ops (`aset`, `aref`, `keys`) live here.
 
 use crate::{
     sys::AsRawValue, Error, IntoValue, Mrb, RArray, ReprValue, TryConvert, TryConvertOwned, Value,
@@ -55,9 +55,11 @@ impl RHash {
     /// Assigning into a frozen hash raises `FrozenError`, and storing a
     /// key runs its Ruby `hash`/`eql?` which may raise; the call runs
     /// under exception protection, so either surfaces as `Err` rather than
-    /// long-jumping.
+    /// long-jumping. Mirrors magnus's `RHash::aset`.
     #[inline]
-    pub fn set(self, mrb: &Mrb, key: Value, val: Value) -> Result<(), Error> {
+    pub fn aset<K: IntoValue, V: IntoValue>(self, mrb: &Mrb, key: K, val: V) -> Result<(), Error> {
+        let key = key.into_value(mrb);
+        let val = val.into_value(mrb);
         mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Hash-tagged by the `from_value_unchecked` contract;
@@ -69,27 +71,31 @@ impl RHash {
         })
     }
 
-    /// `mrb_hash_get(mrb, self, key)` — the value for `key`, or `nil`
-    /// when absent. The lookup runs the key's `hash`/`eql?`, and an
-    /// absent key runs the hash's `default`; either may raise, so the
-    /// call runs under exception protection and surfaces that as `Err`.
+    /// `mrb_hash_get(mrb, self, key)` — the value for `key`, or the
+    /// hash's default when absent, converted to `U`. The lookup runs the
+    /// key's `hash`/`eql?`, and an absent key runs the hash's `default`;
+    /// either may raise, so the call runs under exception protection and
+    /// surfaces that as `Err`, as does a value `U` rejects. Mirrors
+    /// magnus's `RHash::aref`.
     #[inline]
-    pub fn get(self, mrb: &Mrb, key: Value) -> Result<Value, Error> {
-        mrb.protect(|mrb| {
+    pub fn aref<K: IntoValue, U: TryConvert>(self, mrb: &Mrb, key: K) -> Result<U, Error> {
+        let key = key.into_value(mrb);
+        let v = mrb.protect(|mrb| {
             // SAFETY: as `contains_key`; `mrb_hash_get` runs the key's
             // `hash`/`eql?` and an absent-key `default` lookup, both of
             // which may raise — caught by `protect`.
             Value::from_raw_unchecked(unsafe {
                 sys::mrb_hash_get(mrb.as_ptr(), self.0.as_raw(), key.as_raw())
             })
-        })
+        })?;
+        U::try_convert(v, mrb)
     }
 
     /// `mrb_hash_keys(mrb, self)` — return the Array of keys as a
     /// typed `RArray`.
     #[inline]
     pub fn keys(self, mrb: &Mrb) -> RArray {
-        // SAFETY: as `set`; `mrb_hash_keys` always returns an
+        // SAFETY: as `aset`; `mrb_hash_keys` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
         unsafe {
             RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_keys(
@@ -149,12 +155,21 @@ impl RHash {
     }
 
     /// `mrb_hash_fetch(mrb, self, key, default)` — the value for `key`,
-    /// or `default` when absent, like Ruby's `Hash#fetch(key, default)`.
-    /// The lookup runs the key's `hash`/`eql?`, which may raise; the call
-    /// runs under exception protection, so that surfaces as `Err`.
+    /// or `default` when absent, converted to `V`, without running the
+    /// hash's own default. The lookup runs the key's `hash`/`eql?`, which
+    /// may raise; the call runs under exception protection, so that
+    /// surfaces as `Err`, as does a value `V` rejects. Mirrors magnus's
+    /// `RHash::lookup2`.
     #[inline]
-    pub fn fetch(self, mrb: &Mrb, key: Value, default: Value) -> Result<Value, Error> {
-        mrb.protect(|mrb| {
+    pub fn lookup2<K: IntoValue, D: IntoValue, V: TryConvert>(
+        self,
+        mrb: &Mrb,
+        key: K,
+        default: D,
+    ) -> Result<V, Error> {
+        let key = key.into_value(mrb);
+        let default = default.into_value(mrb);
+        let v = mrb.protect(|mrb| {
             // SAFETY: as `contains_key`; `mrb_hash_fetch` runs the key's
             // `hash`/`eql?` and may raise — caught by `protect`.
             Value::from_raw_unchecked(unsafe {
@@ -165,7 +180,8 @@ impl RHash {
                     default.as_raw(),
                 )
             })
-        })
+        })?;
+        V::try_convert(v, mrb)
     }
 
     /// `mrb_hash_delete_key(mrb, self, key)` — remove `key` and return
@@ -175,7 +191,7 @@ impl RHash {
     #[inline]
     pub fn delete(self, mrb: &Mrb, key: Value) -> Result<Value, Error> {
         mrb.protect(|mrb| {
-            // SAFETY: as `set`; `mrb_hash_delete_key` modifies the hash
+            // SAFETY: as `aset`; `mrb_hash_delete_key` modifies the hash
             // (raises `FrozenError` when frozen) and runs the key's
             // `hash`/`eql?` — caught by `protect`.
             Value::from_raw_unchecked(unsafe {
@@ -191,7 +207,7 @@ impl RHash {
     #[inline]
     pub fn update(self, mrb: &Mrb, other: RHash) -> Result<(), Error> {
         mrb.protect_unit(|mrb| {
-            // SAFETY: as `set`; `self` and `other` are Hash-tagged and
+            // SAFETY: as `aset`; `self` and `other` are Hash-tagged and
             // share the VM. `mrb_hash_merge` modifies `self` (raises
             // `FrozenError` when frozen) and runs each key's
             // `hash`/`eql?` — caught by `protect`.

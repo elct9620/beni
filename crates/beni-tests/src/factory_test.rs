@@ -80,7 +80,7 @@ fn hash_new_capa_preallocates_an_empty_hash() {
     // fills as usual.
     let hash = mrb.hash_new_capa(8);
     assert!(hash.is_empty());
-    hash.set(
+    hash.aset(
         &mrb,
         mrb.str_new(b"k").as_value(),
         mrb.str_new(b"v").as_value(),

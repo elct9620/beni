@@ -1105,9 +1105,9 @@ A typed hash constructs empty, or empty with a preallocated capacity. The capaci
 
 | Operation | Behavior |
 |---|---|
-| assign | set a key's value |
-| read | the value, or `nil` when the key is absent; `Err` when a key's `hash` / `eql?` or an absent-key `default` lookup raises |
-| fetch | the value, or a supplied default when the key is absent, like Ruby's `Hash#fetch(key, default)` |
+| assign (`aset`) | set a key's value |
+| read (`aref`) | the value, or the hash's default when the key is absent; `Err` when a key's `hash` / `eql?` or the absent-key `default` lookup raises |
+| read with a default (`lookup2`) | the value, or a supplied default when the key is absent, without running the hash's own default |
 | key test | whether a key is present |
 | delete | remove a key, returning its former value |
 | merge | fold another hash into this one |
@@ -1118,7 +1118,7 @@ A typed hash constructs empty, or empty with a preallocated capacity. The capaci
 | convert to a Rust map | each key and value through `TryConvert` into owned types, as a Rust hash map or ordered map, converting each pair as the walk visits it; surfaces the first `Err`, and a conversion's panic as iterate surfaces a closure's |
 | iterate | visit each key-value pair in insertion order |
 
-The Rust map conversion mirrors `magnus`'s `RHash::to_hash_map` and `to_btree_map`.
+Assign, read, and read with a default carry `magnus`'s `RHash` names: a key or value given converts through `IntoValue`, and a value read converts through `TryConvert`, its rejection an `Err`. The Rust map conversion mirrors `magnus`'s `RHash::to_hash_map` and `to_btree_map`.
 
 ##### Hash iteration
 

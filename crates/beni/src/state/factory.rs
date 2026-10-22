@@ -4,7 +4,7 @@
 //! slices or a NUL-terminated `&CStr`; `str_new_static` aliases a
 //! `'static` buffer without copying. `ary_new` / `hash_new` return
 //! typed `RArray` / `RHash` newtypes, and `range_new` returns a typed
-//! `Range` — per-collection operations (`push`, `set`, `get`, `keys`,
+//! `Range` — per-collection operations (`push`, `aset`, `aref`, `keys`,
 //! the range bound reads) live on the value newtype rather than on
 //! `Mrb` so the call shape mirrors Ruby (`arr.push(x)`, not
 //! `mrb.ary_push(arr, x)`). `range_new` is the one factory that can
@@ -156,7 +156,7 @@ impl Mrb {
     }
 
     /// `mrb_hash_new(mrb)` — construct a fresh empty mruby `Hash` as
-    /// a typed `RHash`. Element operations (`set`, `get`, `keys`)
+    /// a typed `RHash`. Element operations (`aset`, `aref`, `keys`)
     /// live on the returned newtype.
     #[inline]
     pub fn hash_new(&self) -> RHash {

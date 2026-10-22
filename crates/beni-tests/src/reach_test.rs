@@ -117,7 +117,7 @@ fn a_walked_hash_value_outlives_the_hash_clearing() {
         .gc_root(hash.as_value())
         .expect("rooting the hash must succeed");
     stored_carrier(&mrb, &DROPS, |obj| {
-        hash.set(&mrb, true.into_value(&mrb), obj)
+        hash.aset(&mrb, true.into_value(&mrb), obj)
             .expect("set must succeed")
     });
 
@@ -140,7 +140,7 @@ fn a_walk_err_exception_outlives_the_walk() {
     static DROPS: AtomicUsize = AtomicUsize::new(0);
     let mrb = open_mrb();
     let hash = mrb.hash_new();
-    hash.set(&mrb, true.into_value(&mrb), true.into_value(&mrb))
+    hash.aset(&mrb, true.into_value(&mrb), true.into_value(&mrb))
         .expect("set must succeed");
     mrb.define_class(c"BeniReachCarrier", mrb.class_object())
         .expect("defining the carrier class must succeed");
@@ -224,7 +224,7 @@ fn a_walk_visits_every_pair_after_a_visit_clears_every_array() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
     for (key, val) in [(1, "one"), (2, "two")] {
-        hash.set(
+        hash.aset(
             &mrb,
             key.into_value(&mrb),
             mrb.str_new(val.as_bytes()).as_value(),

@@ -7,7 +7,7 @@ fn set_and_get_roundtrip_with_nil_for_an_absent_key() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
 
-    hash.set(
+    hash.aset(
         &mrb,
         mrb.str_new(b"k").as_value(),
         mrb.str_new(b"v").as_value(),
@@ -15,13 +15,13 @@ fn set_and_get_roundtrip_with_nil_for_an_absent_key() {
     .expect("assigning into a fresh hash succeeds");
 
     assert_eq!(
-        hash.get(&mrb, mrb.str_new(b"k").as_value())
+        hash.aref::<_, Value>(&mrb, mrb.str_new(b"k").as_value())
             .expect("a present string key reads without raising")
             .to_string(&mrb),
         "v"
     );
     assert!(hash
-        .get(&mrb, mrb.str_new(b"absent").as_value())
+        .aref::<_, Value>(&mrb, mrb.str_new(b"absent").as_value())
         .expect("an absent string key reads without raising")
         .is_nil());
 }
@@ -31,7 +31,7 @@ fn keys_returns_the_typed_key_array() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
 
-    hash.set(
+    hash.aset(
         &mrb,
         mrb.str_new(b"k").as_value(),
         mrb.str_new(b"v").as_value(),
@@ -59,7 +59,7 @@ fn set_surfaces_frozen_receiver_as_err() {
     )
     .expect("a frozen Hash literal is Hash-tagged");
     assert!(matches!(
-        frozen.set(
+        frozen.aset(
             &mrb,
             mrb.str_new(b"k").as_value(),
             mrb.str_new(b"v").as_value()
@@ -88,7 +88,7 @@ fn keyed_operations_surface_a_raising_key_as_err() {
     );
 
     let hash = mrb.hash_new();
-    hash.set(
+    hash.aset(
         &mrb,
         mrb.str_new(b"seed").as_value(),
         beni::value::qnil().as_value(),
@@ -96,14 +96,17 @@ fn keyed_operations_surface_a_raising_key_as_err() {
     .expect("seeding a plain key does not raise");
 
     let v = mrb.str_new(b"v").as_value();
-    assert!(matches!(hash.set(&mrb, key, v), Err(Error::Exception(_))));
-    assert!(matches!(hash.get(&mrb, key), Err(Error::Exception(_))));
+    assert!(matches!(hash.aset(&mrb, key, v), Err(Error::Exception(_))));
+    assert!(matches!(
+        hash.aref::<_, Value>(&mrb, key),
+        Err(Error::Exception(_))
+    ));
     assert!(matches!(
         hash.contains_key(&mrb, key),
         Err(Error::Exception(_))
     ));
     assert!(matches!(
-        hash.fetch(&mrb, key, beni::value::qnil().as_value()),
+        hash.lookup2::<_, _, Value>(&mrb, key, beni::value::qnil().as_value()),
         Err(Error::Exception(_))
     ));
     assert!(matches!(hash.delete(&mrb, key), Err(Error::Exception(_))));
@@ -131,7 +134,7 @@ fn read_surfaces_a_raising_default_as_err() {
     );
 
     assert!(matches!(
-        hash.get(&mrb, mrb.str_new(b"absent").as_value()),
+        hash.aref::<_, Value>(&mrb, mrb.str_new(b"absent").as_value()),
         Err(Error::Exception(_))
     ));
 }
@@ -143,7 +146,7 @@ fn values_size_and_emptiness_read_the_structure() {
     assert!(hash.is_empty());
     assert_eq!(hash.len(), 0);
 
-    hash.set(
+    hash.aset(
         &mrb,
         mrb.str_new(b"k").as_value(),
         mrb.str_new(b"v").as_value(),
@@ -160,7 +163,7 @@ fn contains_key_and_fetch_read_by_key() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
     let k = mrb.str_new(b"k").as_value();
-    hash.set(&mrb, k, mrb.str_new(b"v").as_value())
+    hash.aset(&mrb, k, mrb.str_new(b"v").as_value())
         .expect("set succeeds");
 
     assert!(hash.contains_key(&mrb, k).expect("key test succeeds"));
@@ -169,14 +172,14 @@ fn contains_key_and_fetch_read_by_key() {
         .expect("key test succeeds"));
 
     assert_eq!(
-        hash.fetch(&mrb, k, mrb.str_new(b"def").as_value())
+        hash.lookup2::<_, _, Value>(&mrb, k, mrb.str_new(b"def").as_value())
             .expect("fetch succeeds")
             .to_string(&mrb),
         "v"
     );
     // An absent key returns the supplied default, not an error.
     assert_eq!(
-        hash.fetch(
+        hash.lookup2::<_, _, Value>(
             &mrb,
             mrb.str_new(b"absent").as_value(),
             mrb.str_new(b"def").as_value(),
@@ -192,7 +195,7 @@ fn delete_removes_and_update_merges() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
     let k = mrb.str_new(b"k").as_value();
-    hash.set(&mrb, k, mrb.str_new(b"v").as_value())
+    hash.aset(&mrb, k, mrb.str_new(b"v").as_value())
         .expect("set succeeds");
 
     assert_eq!(
@@ -205,7 +208,7 @@ fn delete_removes_and_update_merges() {
 
     let other = mrb.hash_new();
     other
-        .set(
+        .aset(
             &mrb,
             mrb.str_new(b"a").as_value(),
             mrb.str_new(b"1").as_value(),
@@ -213,7 +216,7 @@ fn delete_removes_and_update_merges() {
         .expect("set succeeds");
     hash.update(&mrb, other).expect("update succeeds");
     assert_eq!(
-        hash.get(&mrb, mrb.str_new(b"a").as_value())
+        hash.aref::<_, Value>(&mrb, mrb.str_new(b"a").as_value())
             .expect("a present string key reads without raising")
             .to_string(&mrb),
         "1"
@@ -224,7 +227,7 @@ fn delete_removes_and_update_merges() {
 fn clear_empties_the_hash() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
-    hash.set(
+    hash.aset(
         &mrb,
         mrb.str_new(b"k").as_value(),
         mrb.str_new(b"v").as_value(),
@@ -257,7 +260,7 @@ fn clear_surfaces_frozen_receiver_as_err() {
 fn dup_copies_independently() {
     let mrb = open_mrb();
     let hash = mrb.hash_new();
-    hash.set(
+    hash.aset(
         &mrb,
         mrb.str_new(b"k").as_value(),
         mrb.str_new(b"v").as_value(),
@@ -271,7 +274,7 @@ fn dup_copies_independently() {
     // Mutating the original leaves the dup untouched.
     assert!(hash.is_empty());
     assert_eq!(
-        copy.get(&mrb, mrb.str_new(b"k").as_value())
+        copy.aref::<_, Value>(&mrb, mrb.str_new(b"k").as_value())
             .expect("a present string key reads without raising")
             .to_string(&mrb),
         "v"
@@ -315,7 +318,7 @@ fn update_surfaces_frozen_receiver_as_err() {
     .expect("a frozen Hash literal is Hash-tagged");
     let other = mrb.hash_new();
     other
-        .set(
+        .aset(
             &mrb,
             mrb.str_new(b"b").as_value(),
             mrb.str_new(b"2").as_value(),
@@ -330,7 +333,7 @@ fn update_surfaces_frozen_receiver_as_err() {
 fn abc_hash(mrb: &beni::Mrb) -> beni::RHash {
     let hash = mrb.hash_new();
     for (key, val) in [(b"a", 1i32), (b"b", 2), (b"c", 3)] {
-        hash.set(mrb, mrb.str_new(key).as_value(), val.into_value(mrb))
+        hash.aset(mrb, mrb.str_new(key).as_value(), val.into_value(mrb))
             .expect("set succeeds");
     }
     hash
@@ -448,7 +451,7 @@ fn foreach_ends_when_a_visit_adds_a_pair() {
     let err = hash
         .foreach(&mrb, |_: Value, _: Value| {
             visited += 1;
-            hash.set(&mrb, mrb.str_new(b"d").as_value(), 4i32.into_value(&mrb))
+            hash.aset(&mrb, mrb.str_new(b"d").as_value(), 4i32.into_value(&mrb))
                 .expect("the in-walk set itself does not raise");
             Ok(ForEach::Continue)
         })
@@ -508,7 +511,7 @@ fn foreach_ends_when_a_visit_clears_the_hash() {
     assert_hash_modified(&mrb, &err);
     let other = mrb.hash_new();
     other
-        .set(&mrb, mrb.str_new(b"x").as_value(), 9i32.into_value(&mrb))
+        .aset(&mrb, mrb.str_new(b"x").as_value(), 9i32.into_value(&mrb))
         .expect("the VM is usable after the walk ends");
     assert_eq!(other.len(), 1);
 }
@@ -567,7 +570,7 @@ fn a_visit_swapping_pairs_hands_over_only_pairs_the_hash_held() {
     // under the walk.
     let hash = mrb.hash_new();
     for key in 0..4i32 {
-        hash.set(&mrb, key.into_value(&mrb), key.into_value(&mrb))
+        hash.aset(&mrb, key.into_value(&mrb), key.into_value(&mrb))
             .expect("set succeeds");
     }
     hash.delete(&mrb, 1i32.into_value(&mrb))
@@ -580,7 +583,7 @@ fn a_visit_swapping_pairs_hands_over_only_pairs_the_hash_held() {
         if seen.len() == 2 {
             hash.delete(&mrb, 3i32.into_value(&mrb))
                 .expect("the in-walk delete itself does not raise");
-            hash.set(&mrb, 100i32.into_value(&mrb), 0i32.into_value(&mrb))
+            hash.aset(&mrb, 100i32.into_value(&mrb), 0i32.into_value(&mrb))
                 .expect("the in-walk set itself does not raise");
         }
         Ok(ForEach::Continue)
@@ -659,4 +662,27 @@ fn foreach_answers_a_closure_panic_as_err() {
     assert!(matches!(err, Error::Panic(msg) if msg == "boom in foreach closure"));
     assert_eq!(visited.get(), 1, "the walk stopped at the first pair");
     assert_eq!(hash.len(), 3, "the VM survives the caught panic");
+}
+
+#[test]
+fn aref_runs_the_default_where_lookup2_answers_the_one_given() {
+    let mrb = open_mrb();
+    let hash = beni::RHash::from_value(
+        mrb.load_string(b"Hash.new('fallback')")
+            .expect("the hash builds"),
+    )
+    .expect("a Hash");
+    hash.aset(&mrb, "k", 1)
+        .expect("assigning a Rust key succeeds");
+
+    assert_eq!(hash.aref::<_, i32>(&mrb, "k").expect("present"), 1);
+    assert_eq!(
+        hash.aref::<_, String>(&mrb, "absent").expect("the default"),
+        "fallback"
+    );
+    assert_eq!(
+        hash.lookup2::<_, _, i32>(&mrb, "absent", 0).expect("given"),
+        0
+    );
+    assert!(hash.aref::<_, i32>(&mrb, "absent").is_err());
 }

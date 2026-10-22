@@ -369,16 +369,16 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_hash_delete_key` | fn | ✅ | ✅ | `RHash::delete` |
 | `mrb_hash_dup` | fn | ✅ | ✅ | `RHash::dup` |
 | `mrb_hash_empty_p` | fn | ✅ | ✅ | `RHash::is_empty` |
-| `mrb_hash_fetch` | fn | ✅ | ✅ | `RHash::fetch` |
+| `mrb_hash_fetch` | fn | ✅ | ✅ | `RHash::lookup2` |
 | `mrb_hash_foreach` | fn | ✅ | ✅ | `RHash::foreach` — magnus's shape: each pair converted through `TryConvert`, the closure answering `ForEach::{Continue,Stop}` or an `Err` (magnus's `Delete` is dropped: mruby's foreach has no delete path); a closure `Err` or panic stops the walk and surfaces as `Err`; a visit that changes the pair count ends the walk with `RuntimeError` "hash modified" (below mruby 4.1 the walk runs over a copy of the pairs and checks the count itself, since mruby's own walk overruns a deletion ahead of it); `RHash::to_hash_map` / `to_btree_map` convert each pair inside the same walk |
-| `mrb_hash_get` | fn | ✅ | ✅ | `RHash::get` |
+| `mrb_hash_get` | fn | ✅ | ✅ | `RHash::aref` |
 | `mrb_hash_key_p` | fn | ✅ | ✅ | `RHash::contains_key` |
 | `mrb_hash_keys` | fn | ✅ | ✅ | `RHash::keys` |
 | `mrb_hash_merge` | fn | ✅ | ✅ | `RHash::update` |
 | `mrb_hash_new` | fn | ✅ | ✅ | `Mrb::hash_new` |
 | `mrb_hash_new_capa` | fn | ✅ | ✅ | `Mrb::hash_new_capa` |
 | `mrb_hash_ptr` | macro | ✅ | 🚫 | declined: unchecked cast to `struct RHash*` — see `mrb_str_ptr` |
-| `mrb_hash_set` | fn | ✅ | ✅ | `RHash::set` |
+| `mrb_hash_set` | fn | ✅ | ✅ | `RHash::aset` |
 | `mrb_hash_size` | fn | ✅ | ✅ | `RHash::len` |
 | `mrb_hash_value` | macro | ❌ | ✅ | defined as `mrb_obj_value` |
 | `mrb_hash_values` | fn | ✅ | ✅ | `RHash::values` |

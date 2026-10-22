@@ -218,8 +218,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::proc_new::<Value>;
     let _ = Mrb::proc_from_fn::<fn(&Mrb, &[Value], Option<Proc>) -> Value, Value>;
     let _ = RHash::from_value_unchecked;
-    let _ = RHash::set;
-    let _ = RHash::get;
+    let _ = RHash::aset::<Value, Value>;
+    let _ = RHash::aref::<Value, Value>;
     let _ = RHash::keys;
     let _ = RHash::to_hash_map::<i64, i64>;
     let _ = RHash::to_btree_map::<i64, i64>;
@@ -308,7 +308,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RHash::delete;
     let _ = RHash::dup;
     let _ = RHash::foreach::<fn(Value, Value) -> Result<ForEach, beni::Error>, Value, Value>;
-    let _ = RHash::fetch;
+    let _ = RHash::lookup2::<Value, Value, Value>;
     let _ = RHash::is_empty;
     let _ = RHash::len;
     let _ = RHash::update;
