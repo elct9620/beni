@@ -1656,6 +1656,8 @@ A wrapped payload reads back as `&T` through three paths.
 | an `RTypedData` handle's read | that rule's `Result` |
 | an `Obj<T>` handle | dereferences to the payload it was converted or wrapped with |
 
+The handle paths also answer the payload as a raw `*mut T`, mirroring `magnus`'s `as_ptr`: the `RTypedData` handle with its read's `Result`, the `Obj<T>` handle always. Taking the pointer is safe; dereferencing it is `unsafe`, the caller keeping the carrier reachable and the payload free of aliased writes.
+
 A payload is installed only into a carrier holding none, and nothing on the typed surface replaces or removes one once a carrier holds it. A reference therefore stays valid for as long as its carrier stays reachable.
 
 ##### Payload installation
