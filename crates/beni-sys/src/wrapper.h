@@ -260,6 +260,29 @@ mrb_ci_irep_func(const mrb_callinfo *ci)
   return p->body.irep;
 }
 
+/* One step out of the scope `p` runs, as mruby's local-variable walk
+ * takes it (`mrb_proc_local_variables` in src/proc.c,
+ * `binding_local_variable_search` in mruby-binding): the enclosing
+ * scope's proc, with `*env` set to the environment `p` captured from
+ * it, or NULL where `p` starts a scope of its own or a C function backs
+ * it. The flags are a bitfield, resolved in the C compiler as
+ * `mrb_proc_irep_func` resolves them. */
+static inline const struct RProc *
+mrb_proc_enclosing_func(const struct RProc *p, struct REnv **env)
+{
+  if (!p || MRB_PROC_CFUNC_P(p) || MRB_PROC_SCOPE_P(p)) return NULL;
+  *env = MRB_PROC_ENV(p);
+  return p->upper;
+}
+
+/* How many variables an environment holds. Counterpart to the
+ * `MRB_ENV_LEN(e)` macro, which reads the flags bitfield. */
+static inline mrb_int
+mrb_env_len_func(const struct REnv *e)
+{
+  return MRB_ENV_LEN(e);
+}
+
 /* `mrb_dump_irep` is declared in <mruby/internal.h>, a header mruby
  * marks internal to the library and this wrapper does not include:
  * taking that header in whole would admit every declaration in it.
