@@ -296,12 +296,11 @@ int mrb_dump_irep(mrb_state *mrb, const mrb_irep *irep, uint8_t flags, uint8_t *
  * `mrb_dump_irep` is, for the `beni` crate's Integer reads and
  * constructions. mruby compiles them only into a bigint archive, so
  * they are declared under the same flag; under `MRB_INT64` the signed
- * pair are macros over the `mrb_int` forms, which the `beni` crate
+ * read is a macro over the `mrb_int` form, which the `beni` crate
  * reaches through the published API instead. Signatures copied from
- * `vendor/mruby/include/mruby/internal.h:221-271`. */
+ * `vendor/mruby/include/mruby/internal.h:227-271`. */
 #ifdef MRB_USE_BIGINT
 #ifndef MRB_INT64
-mrb_value mrb_bint_new_int64(mrb_state *mrb, int64_t x);
 int64_t mrb_bint_as_int64(mrb_state *mrb, mrb_value x);
 #endif
 mrb_value mrb_bint_new_uint64(mrb_state *mrb, uint64_t x);

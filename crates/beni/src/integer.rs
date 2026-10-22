@@ -394,9 +394,7 @@ impl RBignum {
     /// signs it — the one form mruby publishes for a value wider than 64
     /// bits.
     fn hex(self, mrb: &Mrb) -> Result<String, Error> {
-        // SAFETY: an `RBignum` carries the arbitrary-width Integer tag.
-        let int = unsafe { Integer::from_value_unchecked(self.as_value()) };
-        int.to_r_string_radix(mrb, 16)?.to_string(mrb)
+        self.as_integer().to_r_string_radix(mrb, 16)?.to_string(mrb)
     }
 
     /// The integer as an `i32`, surfacing an `Err` carrying a `RangeError`
@@ -440,5 +438,177 @@ impl RBignum {
     /// `RBignum::is_negative`.
     pub fn is_negative(self, mrb: &Mrb) -> bool {
         !self.is_positive(mrb)
+    }
+}
+
+impl Mrb {
+    /// An `Integer` holding `n`, of the fixed-width tag where the
+    /// configured integer width holds it and the arbitrary-width tag
+    /// otherwise. Mirrors magnus's `Ruby::integer_from_i64`.
+    #[cfg(any(mrb_int64, mrb_bigint))]
+    pub fn integer_from_i64(&self, n: i64) -> Integer {
+        let v = match sys::mrb_int::try_from(n) {
+            Ok(fixed) => Value::from_int(self, fixed),
+            #[cfg(mrb_int64)]
+            Err(never) => match never {},
+            #[cfg(not(mrb_int64))]
+            Err(_) => self.bignum_from_i64_unchecked(n),
+        };
+        // SAFETY: either construction answers an Integer.
+        unsafe { Integer::from_value_unchecked(v) }
+    }
+
+    /// An `Integer` holding `n`, of the fixed-width tag where the
+    /// configured integer width holds it and the arbitrary-width tag
+    /// otherwise. Mirrors magnus's `Ruby::integer_from_u64`.
+    #[cfg(mrb_bigint)]
+    pub fn integer_from_u64(&self, n: u64) -> Integer {
+        match self.fixnum_from_u64(n) {
+            Ok(fix) => fix.as_integer(),
+            Err(big) => big.as_integer(),
+        }
+    }
+
+    /// An `Integer` holding `n`, of the fixed-width tag where the
+    /// configured integer width holds it and the arbitrary-width tag
+    /// otherwise. Mirrors magnus's `Ruby::integer_from_i128`.
+    #[cfg(mrb_bigint)]
+    pub fn integer_from_i128(&self, n: i128) -> Integer {
+        match i64::try_from(n) {
+            Ok(n) => self.integer_from_i64(n),
+            Err(_) => self.integer_from_hex(n < 0, n.unsigned_abs()),
+        }
+    }
+
+    /// An `Integer` holding `n`, of the fixed-width tag where the
+    /// configured integer width holds it and the arbitrary-width tag
+    /// otherwise. Mirrors magnus's `Ruby::integer_from_u128`.
+    #[cfg(mrb_bigint)]
+    pub fn integer_from_u128(&self, n: u128) -> Integer {
+        match u64::try_from(n) {
+            Ok(n) => self.integer_from_u64(n),
+            Err(_) => self.integer_from_hex(false, n),
+        }
+    }
+
+    /// The `Fixnum` holding `n` where the configured integer width holds
+    /// it, otherwise an `Err` carrying the `RBignum`. Mirrors magnus's
+    /// `Ruby::fixnum_from_i64`.
+    #[cfg(mrb_bigint)]
+    pub fn fixnum_from_i64(&self, n: i64) -> Result<Fixnum, RBignum> {
+        match sys::mrb_int::try_from(n) {
+            // SAFETY: a value the width holds boxes into the fixed-width tag.
+            Ok(fixed) => Ok(unsafe { Fixnum::from_value_unchecked(Value::from_int(self, fixed)) }),
+            #[cfg(mrb_int64)]
+            Err(never) => match never {},
+            // SAFETY: a value past the width boxes into the arbitrary-width
+            // tag.
+            #[cfg(not(mrb_int64))]
+            Err(_) => {
+                Err(unsafe { RBignum::from_value_unchecked(self.bignum_from_i64_unchecked(n)) })
+            }
+        }
+    }
+
+    /// The `Fixnum` holding `n` where the configured integer width holds
+    /// it, otherwise an `Err` carrying the `RBignum`. Mirrors magnus's
+    /// `Ruby::fixnum_from_u64`.
+    #[cfg(mrb_bigint)]
+    pub fn fixnum_from_u64(&self, n: u64) -> Result<Fixnum, RBignum> {
+        match sys::mrb_int::try_from(n) {
+            // SAFETY: a value the width holds boxes into the fixed-width tag.
+            Ok(fixed) => Ok(unsafe { Fixnum::from_value_unchecked(Value::from_int(self, fixed)) }),
+            Err(_) => {
+                // SAFETY: `self` is alive by the `&self` borrow; mruby
+                // allocates the arbitrary-width Integer, raising nothing
+                // but the out-of-memory error every allocation may.
+                let v = Value::from_raw_unchecked(unsafe {
+                    sys::mrb_bint_new_uint64(self.as_ptr(), n)
+                });
+                // SAFETY: a value past the width boxes into the
+                // arbitrary-width tag.
+                Err(unsafe { RBignum::from_value_unchecked(v) })
+            }
+        }
+    }
+
+    /// The `RBignum` holding `n` where the configured integer width does
+    /// not hold it, otherwise an `Err` carrying the `Fixnum`. Mirrors
+    /// magnus's `Ruby::bignum_from_i64`.
+    #[cfg(mrb_bigint)]
+    pub fn bignum_from_i64(&self, n: i64) -> Result<RBignum, Fixnum> {
+        match self.fixnum_from_i64(n) {
+            Ok(fix) => Err(fix),
+            Err(big) => Ok(big),
+        }
+    }
+
+    /// The `RBignum` holding `n` where the configured integer width does
+    /// not hold it, otherwise an `Err` carrying the `Fixnum`. Mirrors
+    /// magnus's `Ruby::bignum_from_u64`.
+    #[cfg(mrb_bigint)]
+    pub fn bignum_from_u64(&self, n: u64) -> Result<RBignum, Fixnum> {
+        match self.fixnum_from_u64(n) {
+            Ok(fix) => Err(fix),
+            Err(big) => Ok(big),
+        }
+    }
+
+    /// The arbitrary-width Integer holding `n`, which a 32-bit configured
+    /// integer width does not.
+    #[cfg(all(mrb_bigint, not(mrb_int64)))]
+    fn bignum_from_i64_unchecked(&self, n: i64) -> Value {
+        // mruby's signed 64-bit construction fills a limb buffer it never
+        // initialized (`mrb_bint_new_int64`), so a negative value is built
+        // from its text and a positive one through the unsigned call.
+        match u64::try_from(n) {
+            Ok(n) => match self.fixnum_from_u64(n) {
+                Ok(fix) => fix.as_value(),
+                Err(big) => big.as_value(),
+            },
+            Err(_) => self
+                .integer_from_hex(true, u128::from(n.unsigned_abs()))
+                .as_value(),
+        }
+    }
+
+    /// The Integer whose base-16 text is `magnitude`, negated when
+    /// `negative` — the one form mruby publishes for building a value
+    /// wider than 64 bits.
+    #[cfg(mrb_bigint)]
+    fn integer_from_hex(&self, negative: bool, magnitude: u128) -> Integer {
+        let text = if negative {
+            format!("-{magnitude:x}")
+        } else {
+            format!("{magnitude:x}")
+        };
+        let digits = self.str_new(text.as_bytes());
+        // SAFETY: `self` is alive by the `&self` borrow and `digits` is a
+        // String. The lenient parse raises only on a radix outside 2
+        // through 36, and the text is clean base 16; the strict parse is
+        // avoided because it refuses a bigint's digits as trailing bytes.
+        let v = Value::from_raw_unchecked(unsafe {
+            sys::mrb_str_to_integer(self.as_ptr(), digits.as_value().as_raw(), 16, false)
+        });
+        // SAFETY: the parse answers an Integer.
+        unsafe { Integer::from_value_unchecked(v) }
+    }
+}
+
+impl Fixnum {
+    /// The same value as an `Integer`, which takes either tag.
+    #[cfg(mrb_bigint)]
+    fn as_integer(self) -> Integer {
+        // SAFETY: a Fixnum is an Integer.
+        unsafe { Integer::from_value_unchecked(self.as_value()) }
+    }
+}
+
+#[cfg(mrb_bigint)]
+impl RBignum {
+    /// The same value as an `Integer`, which takes either tag.
+    fn as_integer(self) -> Integer {
+        // SAFETY: an RBignum is an Integer.
+        unsafe { Integer::from_value_unchecked(self.as_value()) }
     }
 }

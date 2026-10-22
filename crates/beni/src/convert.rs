@@ -20,10 +20,13 @@ use crate::{sys, Mrb, RString, ReprValue, Value};
 /// magnus's `IntoValue`; the call shape is `n.into_value(mrb)`.
 ///
 /// A Rust integer converts only where every value it holds fits the
-/// archive's configured integer width: `i8` / `i16` / `i32` / `u8` /
-/// `u16` under every width, `u32` / `i64` under a 64-bit width, and
-/// `isize` wherever the target's pointer width fits the configured one.
-/// Rendered documentation shows the 64-bit set.
+/// archive's configured integer width, or where a bigint archive holds it
+/// as an arbitrary-width Integer: `i8` / `i16` / `i32` / `u8` / `u16`
+/// everywhere, `u32` / `i64` under a 64-bit width or a bigint archive,
+/// `isize` wherever the target's pointer width fits the configured one or
+/// the archive is a bigint archive, and `u64` / `usize` / `i128` / `u128`
+/// only against a bigint archive. Rendered documentation shows the set of
+/// a 64-bit bigint archive.
 ///
 /// ```
 /// fn converts<T: beni::IntoValue>() {}
@@ -32,33 +35,44 @@ use crate::{sys, Mrb, RString, ReprValue, Value};
 /// converts::<i32>();
 /// converts::<u8>();
 /// converts::<u16>();
-/// #[cfg(mrb_int64)]
+/// #[cfg(any(mrb_int64, mrb_bigint))]
 /// {
 ///     converts::<u32>();
 ///     converts::<i64>();
 ///     converts::<isize>();
 /// }
+/// #[cfg(mrb_bigint)]
+/// {
+///     converts::<u64>();
+///     converts::<usize>();
+///     converts::<i128>();
+///     converts::<u128>();
+/// }
 /// ```
 ///
-/// A 32-bit width does not hold every `i64`:
+/// A 32-bit width without a bigint archive does not hold every `i64`:
 ///
 /// ```compile_fail
 /// fn converts<T: beni::IntoValue>() {}
-/// #[cfg(mrb_int64)]
-/// compile_error!("a 64-bit width holds every i64");
+/// #[cfg(any(mrb_int64, mrb_bigint))]
+/// compile_error!("a 64-bit width or a bigint archive holds every i64");
 /// converts::<i64>();
 /// ```
 ///
-/// No width holds every `u64` or `usize`:
+/// No width alone holds every `u64`, `usize`, `i128`, or `u128`:
 ///
 /// ```compile_fail
 /// fn converts<T: beni::IntoValue>() {}
+/// #[cfg(mrb_bigint)]
+/// compile_error!("a bigint archive holds every u64");
 /// converts::<u64>();
 /// ```
 ///
 /// ```compile_fail
 /// fn converts<T: beni::IntoValue>() {}
-/// converts::<usize>();
+/// #[cfg(mrb_bigint)]
+/// compile_error!("a bigint archive holds every i128");
+/// converts::<i128>();
 /// ```
 ///
 /// A Rust float converts by the same rule against the configured float
@@ -137,16 +151,67 @@ macro_rules! into_value_widening {
 }
 
 into_value_widening!(i8, i16, i32, u8, u16);
-#[cfg(mrb_int64)]
-into_value_widening!(u32, i64);
 
-#[cfg(any(mrb_int64, not(target_pointer_width = "64")))]
+#[cfg(any(mrb_int64, mrb_bigint))]
+impl IntoValue for i64 {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        mrb.integer_from_i64(self).as_value()
+    }
+}
+
+#[cfg(any(mrb_int64, mrb_bigint))]
+impl IntoValue for u32 {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        mrb.integer_from_i64(i64::from(self)).as_value()
+    }
+}
+
+#[cfg(any(mrb_int64, mrb_bigint, not(target_pointer_width = "64")))]
 impl IntoValue for isize {
     #[inline]
     fn into_value(self, mrb: &Mrb) -> Value {
-        // The cfg admits only a pointer width the configured integer
-        // width holds, so the cast never truncates.
-        Value::from_int(mrb, self as sys::mrb_int)
+        // Every cargo target's pointer width is at most 64 bits, so the
+        // casts never truncate; without either 64-bit holder the cfg
+        // admits only a pointer width the configured integer width holds.
+        #[cfg(any(mrb_int64, mrb_bigint))]
+        return mrb.integer_from_i64(self as i64).as_value();
+        #[cfg(not(any(mrb_int64, mrb_bigint)))]
+        return Value::from_int(mrb, self as sys::mrb_int);
+    }
+}
+
+#[cfg(mrb_bigint)]
+impl IntoValue for u64 {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        mrb.integer_from_u64(self).as_value()
+    }
+}
+
+#[cfg(mrb_bigint)]
+impl IntoValue for usize {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        // Every cargo target's pointer width is at most 64 bits.
+        mrb.integer_from_u64(self as u64).as_value()
+    }
+}
+
+#[cfg(mrb_bigint)]
+impl IntoValue for i128 {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        mrb.integer_from_i128(self).as_value()
+    }
+}
+
+#[cfg(mrb_bigint)]
+impl IntoValue for u128 {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        mrb.integer_from_u128(self).as_value()
     }
 }
 

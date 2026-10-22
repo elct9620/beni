@@ -505,6 +505,13 @@ fn debug_hook_surface_is_reachable_from_outside() {
 #[test]
 fn bigint_surface_is_reachable_from_outside() {
     let _ = beni::RBignum::is_positive;
+    let _ = Mrb::integer_from_u64;
+    let _ = Mrb::integer_from_i128;
+    let _ = Mrb::integer_from_u128;
+    let _ = Mrb::fixnum_from_i64;
+    let _ = Mrb::fixnum_from_u64;
+    let _ = Mrb::bignum_from_i64;
+    let _ = Mrb::bignum_from_u64;
     let _ = beni::RBignum::to_i32;
     let _ = beni::RBignum::to_i64;
     let _ = beni::RBignum::to_i128;

@@ -47,7 +47,7 @@ mod bigint {
     use super::{eval, integer, read, rejection};
     use crate::support::open_mrb;
     use beni::prelude::*;
-    use beni::{Fixnum, Integer, RBignum};
+    use beni::{Fixnum, Integer, IntoValue, RBignum, TryConvert};
 
     fn range_error(message: &str) -> (String, String) {
         ("RangeError".to_owned(), message.to_owned())
@@ -140,6 +140,84 @@ mod bigint {
         let big = RBignum::from_value(eval(&mrb, "2 ** 100")).expect("an RBignum");
         assert!(big.to_i32(&mrb).is_err());
         assert!(big.to_usize(&mrb).is_err());
+    }
+
+    /// Whether `value` is the Integer `source` evaluates to, by Ruby's `==`.
+    fn is(mrb: &beni::Mrb, value: beni::Value, source: &str) -> bool {
+        value
+            .equal(mrb, eval(mrb, source))
+            .expect("Integer#== raises nothing")
+    }
+
+    #[test]
+    fn a_rust_integer_past_the_width_builds_an_arbitrary_width_integer() {
+        let mrb = open_mrb();
+
+        let max = mrb.integer_from_u64(u64::MAX);
+        assert!(RBignum::from_value(max.as_value()).is_some());
+        assert!(is(&mrb, max.as_value(), "2 ** 64 - 1"));
+        assert!(is(
+            &mrb,
+            mrb.integer_from_i128(-(1i128 << 100)).as_value(),
+            "-(2 ** 100)"
+        ));
+        assert!(is(
+            &mrb,
+            mrb.integer_from_u128(u128::MAX).as_value(),
+            "2 ** 128 - 1"
+        ));
+        assert!(is(
+            &mrb,
+            mrb.integer_from_i64(-(1i64 << 40)).as_value(),
+            "-(2 ** 40)"
+        ));
+        // A value the width holds stays fixed-width.
+        assert!(Fixnum::from_value(mrb.integer_from_u128(42).as_value()).is_some());
+    }
+
+    #[test]
+    fn a_rust_integer_round_trips_through_its_integer() {
+        let mrb = open_mrb();
+
+        for n in [u64::MAX, 1 << 63, 0, 42] {
+            assert_eq!(u64::try_convert(n.into_value(&mrb), &mrb).expect("fits"), n);
+        }
+        for n in [i64::MIN, i64::MAX, -1, 0] {
+            assert_eq!(i64::try_convert(n.into_value(&mrb), &mrb).expect("fits"), n);
+        }
+        for n in [i128::MIN, i128::MAX, -(1 << 100), 7] {
+            assert_eq!(
+                i128::try_convert(n.into_value(&mrb), &mrb).expect("fits"),
+                n
+            );
+        }
+        assert_eq!(
+            u128::try_convert(u128::MAX.into_value(&mrb), &mrb).expect("fits"),
+            u128::MAX
+        );
+        assert_eq!(
+            usize::try_convert(usize::MAX.into_value(&mrb), &mrb).expect("fits"),
+            usize::MAX
+        );
+    }
+
+    #[test]
+    fn a_tag_construction_answers_the_other_tag_where_the_value_needs_it() {
+        let mrb = open_mrb();
+
+        let Ok(fix) = mrb.fixnum_from_u64(42) else {
+            panic!("42 is fixed-width")
+        };
+        assert_eq!(fix.to_i64(), 42);
+        let Err(big) = mrb.fixnum_from_u64(u64::MAX) else {
+            panic!("u64::MAX is arbitrary-width")
+        };
+        assert_eq!(big.to_u64(&mrb).expect("fits"), u64::MAX);
+        let Err(fix) = mrb.bignum_from_i64(-42) else {
+            panic!("-42 is fixed-width")
+        };
+        assert_eq!(fix.to_i64(), -42);
+        assert!(mrb.bignum_from_u64(u64::MAX).is_ok());
     }
 
     #[test]
