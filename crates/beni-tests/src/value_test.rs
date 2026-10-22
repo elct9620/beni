@@ -11,7 +11,7 @@ use beni::{
 /// `break` report its carried value back as the method's result.
 fn report_break(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let block = scan_args::<(Symbol,), (), RArray, (), (), Proc>(mrb)?.block;
-    Ok(match block.call(mrb, &[]) {
+    Ok(match block.call::<_, beni::Value>(mrb, ()) {
         Ok(_) => (-1i32).into_value(mrb),
         Err(Error::Exception(exc)) => match exc.as_break() {
             Some(brk) => brk.value(),
@@ -39,7 +39,7 @@ fn funcall_dispatches_a_method_and_returns_its_value() {
     // `42.to_s` dispatches `Integer#to_s` and hands back its String.
     let got = 42i32
         .into_value(&mrb)
-        .funcall(&mrb, c"to_s", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"to_s", ())
         .expect("a non-raising dispatch must come back Ok");
     assert_eq!(got.to_string(&mrb), "42");
 }
@@ -51,7 +51,7 @@ fn funcall_passes_the_argument_slice_to_the_method() {
     // `40 + 2` proves the arg slice reaches the dispatched method.
     let got = 40i32
         .into_value(&mrb)
-        .funcall(&mrb, c"+", &[2i32.into_value(&mrb)])
+        .funcall(&mrb, c"+", [2i32.into_value(&mrb)])
         .expect("a non-raising dispatch must come back Ok");
     assert_eq!(i32::from_value(got), Some(42));
 }
@@ -64,7 +64,7 @@ fn funcall_surfaces_a_raised_exception_as_err() {
     // protect frame catches into `Err` rather than long-jumping.
     let err = 42i32
         .into_value(&mrb)
-        .funcall(&mrb, c"no_such_method", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"no_such_method", ())
         .expect_err("a raising dispatch must surface as Err");
     match err {
         Error::Exception(_) => {}
@@ -73,7 +73,7 @@ fn funcall_surfaces_a_raised_exception_as_err() {
     // The VM stays usable after the protected raise.
     let again = 7i32
         .into_value(&mrb)
-        .funcall(&mrb, c"to_s", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"to_s", ())
         .expect("the VM must survive the protected raise");
     assert_eq!(again.to_string(&mrb), "7");
 }
@@ -86,18 +86,18 @@ fn funcall_accepts_a_symbol_key_identical_to_the_name() {
     // equivalent name, proving the `IntoId` generalization routes
     // both through the same interned id.
     let recv = 42i32.into_value(&mrb);
-    let by_name = recv
-        .funcall(&mrb, c"to_s", &[])
+    let by_name: String = recv
+        .funcall(&mrb, c"to_s", ())
         .expect("the name key must dispatch");
-    let by_sym = recv
+    let by_sym: String = recv
         .funcall(
             &mrb,
             Symbol::new(&mrb, "to_s").expect("the name interns"),
-            &[],
+            (),
         )
         .expect("the symbol key must dispatch");
-    assert_eq!(by_name.to_string(&mrb), by_sym.to_string(&mrb));
-    assert_eq!(by_sym.to_string(&mrb), "42");
+    assert_eq!(by_name, by_sym);
+    assert_eq!(by_sym, "42");
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn funcall_with_block_yields_to_the_passed_block() {
         .load_nstring(b"[1, 2, 3]")
         .expect("the test source must compile and run");
     receiver
-        .funcall_with_block(&mrb, c"each", &[], block)
+        .funcall_with_block::<_, _, Value>(&mrb, c"each", (), block)
         .expect("yielding through each must come back Ok");
 
     assert_eq!(
@@ -150,7 +150,7 @@ fn funcall_with_block_surfaces_a_raised_exception_as_err() {
         .load_nstring(b"[1]")
         .expect("the test source must compile and run");
     let err = receiver
-        .funcall_with_block(&mrb, c"each", &[], block)
+        .funcall_with_block::<_, _, Value>(&mrb, c"each", (), block)
         .expect_err("a raising block must surface as Err");
     match err {
         Error::Exception(_) => assert!(err.message(&mrb).contains("boom from block")),
@@ -158,11 +158,11 @@ fn funcall_with_block_surfaces_a_raised_exception_as_err() {
     }
 
     // The VM stays usable after the protected raise.
-    let again = 7i32
+    let again: String = 7i32
         .into_value(&mrb)
-        .funcall(&mrb, c"to_s", &[])
+        .funcall(&mrb, c"to_s", ())
         .expect("the VM must survive the protected raise");
-    assert_eq!(again.to_string(&mrb), "7");
+    assert_eq!(again, "7");
 }
 
 #[test]
@@ -471,7 +471,7 @@ fn dup_and_clone_surface_a_raising_initialize_copy_as_err() {
     // Err instead of unwinding across the call.
     assert!(matches!(obj.dup(&mrb), Err(Error::Exception(_))));
     assert!(matches!(
-        obj.funcall(&mrb, c"clone", &[]),
+        obj.funcall::<_, _, beni::Value>(&mrb, c"clone", ()),
         Err(Error::Exception(_))
     ));
 }
@@ -698,7 +698,7 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
         .define_method(&mrb, c"to_a", beni::method!(to_a_returns_nil, 0))
         .expect("registering to_a must succeed");
     let nil_obj = nil_class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the class whose to_a returns nil instantiates");
     let nil_returned =
         RArray::to_ary(nil_obj, &mrb).expect("a nil-returning to_a wraps without raising");
@@ -718,7 +718,7 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
         .define_method(&mrb, c"to_a", beni::method!(to_a_returns_int, 0))
         .expect("registering to_a must succeed");
     let obj = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the class with a misbehaving to_a instantiates");
     match RArray::to_ary(obj, &mrb) {
         Err(Error::Exception(exc)) => {
@@ -1131,15 +1131,15 @@ fn clone_carries_frozen_state_where_dup_drops_it() {
     // clone is the deeper copy — it preserves the frozen state;
     // dup always yields an unfrozen object.
     assert!(frozen
-        .funcall(&mrb, c"clone", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"clone", ())
         .expect("clone does not raise")
-        .funcall(&mrb, c"frozen?", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"frozen?", ())
         .expect("frozen? does not raise")
         .to_bool());
     assert!(!frozen
         .dup(&mrb)
         .expect("dup does not raise")
-        .funcall(&mrb, c"frozen?", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"frozen?", ())
         .expect("frozen? does not raise")
         .to_bool());
 }
@@ -1156,7 +1156,7 @@ fn as_break_views_a_real_escaping_break() {
         .expect("registering the yielder method must succeed");
 
     let recv = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     mrb.gv_set(c"$beni_break_recv", recv)
         .expect("the name interns");
@@ -1244,7 +1244,7 @@ fn singleton_class_reads_a_stable_eigenclass() {
     let mrb = open_mrb();
     let s = RObject::from_value(
         mrb.class_object()
-            .new_instance(&mrb, &[])
+            .new_instance(&mrb, ())
             .expect("Object.new constructs without raising"),
     )
     .expect("Object.new answers a plain object");
@@ -1268,13 +1268,13 @@ fn freeze_marks_the_value_frozen() {
     let mrb = open_mrb();
     let s = mrb.str_new(b"x").as_value();
     assert!(!s
-        .funcall(&mrb, c"frozen?", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"frozen?", ())
         .expect("frozen? does not raise")
         .to_bool());
 
     let frozen = s.freeze(&mrb);
     assert!(frozen
-        .funcall(&mrb, c"frozen?", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"frozen?", ())
         .expect("frozen? does not raise")
         .to_bool());
 }
@@ -1438,7 +1438,7 @@ fn ivar_foreach_visits_nothing_for_a_receiver_without_instance_variables() {
     // returns without ever calling back.
     let holder = RObject::from_value(
         mrb.class_object()
-            .new_instance(&mrb, &[])
+            .new_instance(&mrb, ())
             .expect("Object.new constructs without raising"),
     )
     .expect("Object.new answers a plain object");

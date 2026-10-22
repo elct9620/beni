@@ -37,7 +37,7 @@ fn opt_only(_mrb: &Mrb, _self: Value, a: Option<i32>) -> i32 {
 // the slot binds `None` and the body returns the argument unchanged.
 fn apply_block(mrb: &Mrb, _self: Value, a: i32, block: Option<beni::Proc>) -> Result<Value, Error> {
     match block {
-        Some(b) => b.call(mrb, &[a.into_value(mrb)]),
+        Some(b) => b.call(mrb, [a.into_value(mrb)]),
         None => Ok(a.into_value(mrb)),
     }
 }
@@ -67,11 +67,11 @@ fn typed_method_roundtrips_scalars() {
         .expect("registering the typed method must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let args = [1i32.into_value(&mrb), 2i32.into_value(&mrb)];
     let got = receiver
-        .funcall(&mrb, c"add", &args)
+        .funcall(&mrb, c"add", args)
         .expect("the call must not raise");
     assert_eq!(i32::from_value(got), Some(3));
 }
@@ -85,7 +85,7 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
         .expect("registering the fixed-arity method must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
 
     // `mrb_get_args` enforces the `MRB_ARGS_REQ(2)` count before any
@@ -100,7 +100,7 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
         ],
     ] {
         let err = receiver
-            .funcall(&mrb, c"add", &wrong)
+            .funcall::<_, _, beni::Value>(&mrb, c"add", wrong.as_slice())
             .expect_err("a wrong argument count must surface as Err");
         match err {
             Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
@@ -111,11 +111,7 @@ fn fixed_arity_raises_argument_error_on_wrong_count() {
     // The count error left the VM intact: a correctly-counted
     // call still dispatches and returns.
     let got = receiver
-        .funcall(
-            &mrb,
-            c"add",
-            &[1i32.into_value(&mrb), 2i32.into_value(&mrb)],
-        )
+        .funcall(&mrb, c"add", [1i32.into_value(&mrb), 2i32.into_value(&mrb)])
         .expect("the VM survives the count error and the next call runs");
     assert_eq!(i32::from_value(got), Some(3));
 }
@@ -187,11 +183,11 @@ fn conversion_failure_raises_before_body_runs() {
     // raise mruby's TypeError to the Ruby caller and the wrapped
     // function must never run.
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let args = [mrb.str_new(b"x").as_value(), 2i32.into_value(&mrb)];
     let err = receiver
-        .funcall(&mrb, c"add", &args)
+        .funcall::<_, _, beni::Value>(&mrb, c"add", args)
         .expect_err("the conversion failure must surface as a raise");
     assert_eq!(err.message(&mrb), "String cannot be converted to Integer");
     assert!(
@@ -209,23 +205,19 @@ fn optional_argument_defaults_to_none_when_omitted() {
         .expect("registering the optional-arg method must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
 
     // Omitting the optional argument binds `None`: the body sees
     // the default base of 0.
     let omitted = receiver
-        .funcall(&mrb, c"add", &[7i32.into_value(&mrb)])
+        .funcall(&mrb, c"add", [7i32.into_value(&mrb)])
         .expect("the call with the optional omitted must not raise");
     assert_eq!(i32::from_value(omitted), Some(7));
 
     // Supplying it binds `Some`.
     let supplied = receiver
-        .funcall(
-            &mrb,
-            c"add",
-            &[7i32.into_value(&mrb), 5i32.into_value(&mrb)],
-        )
+        .funcall(&mrb, c"add", [7i32.into_value(&mrb), 5i32.into_value(&mrb)])
         .expect("the call with the optional supplied must not raise");
     assert_eq!(i32::from_value(supplied), Some(12));
 }
@@ -239,16 +231,16 @@ fn all_optional_method_reads_its_lone_slot() {
         .expect("registering the all-optional method must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
 
     let omitted = receiver
-        .funcall(&mrb, c"v", &[])
+        .funcall(&mrb, c"v", ())
         .expect("the call with no arguments must not raise");
     assert_eq!(i32::from_value(omitted), Some(-1));
 
     let supplied = receiver
-        .funcall(&mrb, c"v", &[42i32.into_value(&mrb)])
+        .funcall(&mrb, c"v", [42i32.into_value(&mrb)])
         .expect("the call with the optional supplied must not raise");
     assert_eq!(i32::from_value(supplied), Some(42));
 }
@@ -262,13 +254,13 @@ fn a_float_argument_truncates_into_an_integer_parameter() {
         .expect("registering the optional-arg method must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let got = receiver
         .funcall(
             &mrb,
             c"add",
-            &[1.5f32.into_value(&mrb), 2.75f32.into_value(&mrb)],
+            [1.5f32.into_value(&mrb), 2.75f32.into_value(&mrb)],
         )
         .expect("a Float argument converts into an i32 parameter");
     assert_eq!(i32::from_value(got), Some(3));
@@ -286,13 +278,13 @@ fn supplied_optional_failing_conversion_raises() {
     // as a required argument does — an omitted slot would bind None
     // instead, so the raise is specific to the supplied case.
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let err = receiver
-        .funcall(
+        .funcall::<_, _, beni::Value>(
             &mrb,
             c"add",
-            &[1i32.into_value(&mrb), mrb.str_new(b"x").as_value()],
+            [1i32.into_value(&mrb), mrb.str_new(b"x").as_value()],
         )
         .expect_err("the supplied optional's conversion failure must raise");
     assert_eq!(err.message(&mrb), "String cannot be converted to Integer");
@@ -332,10 +324,10 @@ fn block_accepting_method_binds_none_without_a_block() {
     // No block passed: the slot is nil, the parameter binds `None`,
     // and the body returns the argument unchanged.
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let got = receiver
-        .funcall(&mrb, c"apply", &[7i32.into_value(&mrb)])
+        .funcall(&mrb, c"apply", [7i32.into_value(&mrb)])
         .expect("the call without a block must not raise");
     assert_eq!(i32::from_value(got), Some(7));
 }
@@ -352,10 +344,10 @@ fn panicking_method_surfaces_as_ruby_exception() {
     // RuntimeError the Ruby-side caller (here: the protect frame)
     // observes — never an unwind through mruby's C frames.
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let err = receiver
-        .funcall(&mrb, c"detonate", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"detonate", ())
         .expect_err("the panic must surface as a Ruby exception");
     assert!(matches!(err, Error::Exception(_)));
     assert!(
@@ -374,10 +366,10 @@ fn result_returning_method_raises_its_err() {
         .expect("registering the fallible method must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let err = receiver
-        .funcall(&mrb, c"try", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"try", ())
         .expect_err("the body's Err must surface as a raise");
     assert!(
         err.message(&mrb).contains("fallible body says no"),
@@ -399,10 +391,10 @@ fn unit_returning_method_answers_nil() {
         .expect("registering the unit-returning method must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let answer = receiver
-        .funcall(&mrb, c"settle", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"settle", ())
         .expect("an Ok body must not raise");
     assert!(answer.is_nil());
 }
@@ -520,7 +512,7 @@ fn nilable_parameters_bind_none_for_nil_and_the_value_otherwise() {
         .define_method(&mrb, c"error", beni::method!(report, 3))
         .expect("registering the typed method must succeed");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs");
     let message = mrb.str_new(b"boom").as_value();
 
@@ -528,7 +520,7 @@ fn nilable_parameters_bind_none_for_nil_and_the_value_otherwise() {
         .funcall(
             &mrb,
             c"error",
-            &[
+            [
                 message,
                 beni::value::qnil().as_value(),
                 beni::value::qnil().as_value(),
@@ -539,7 +531,7 @@ fn nilable_parameters_bind_none_for_nil_and_the_value_otherwise() {
         .funcall(
             &mrb,
             c"error",
-            &[
+            [
                 message,
                 mrb.str_new(b"a.rb").as_value(),
                 42i32.into_value(&mrb),
@@ -559,14 +551,14 @@ fn a_nilable_parameter_still_rejects_what_its_inner_type_rejects() {
         .define_method(&mrb, c"error", beni::method!(report, 3))
         .expect("registering the typed method must succeed");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs");
 
     let err = receiver
-        .funcall(
+        .funcall::<_, _, beni::Value>(
             &mrb,
             c"error",
-            &[
+            [
                 mrb.str_new(b"boom").as_value(),
                 1i32.into_value(&mrb),
                 beni::value::qnil().as_value(),
@@ -588,12 +580,12 @@ fn a_value_parameter_receives_the_argument_itself() {
         .define_method(&mrb, c"pass", beni::method!(passthrough, 1))
         .expect("registering the typed method must succeed");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs");
     let argument = mrb.str_new(b"same").as_value();
 
     let got = receiver
-        .funcall(&mrb, c"pass", &[argument])
+        .funcall::<_, _, beni::Value>(&mrb, c"pass", [argument])
         .expect("any value is accepted");
 
     assert!(got.is_equal(&mrb, argument));
@@ -607,7 +599,7 @@ fn a_nilable_optional_tells_omission_from_an_explicit_nil() {
         .define_method(&mrb, c"given", beni::method!(nilable_optional, 0, 1))
         .expect("registering the typed method must succeed");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs");
     let call = |args: &[Value]| {
         i32::from_value(
@@ -639,7 +631,7 @@ fn assert_each_raises_argument_error(
 ) {
     for args in calls {
         let err = receiver
-            .funcall(mrb, name, args)
+            .funcall::<_, _, beni::Value>(mrb, name, args.as_slice())
             .expect_err("a call the declared arity does not accept must surface as Err");
         let Error::Exception(exc) = err else {
             panic!("a wrong argument count must raise, not panic, got {err}");
@@ -656,7 +648,7 @@ fn optional_arity_raises_argument_error_outside_its_range() {
         .define_method(&mrb, c"add", beni::method!(opt_add, 1, 1))
         .expect("registering the typed method must succeed");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs");
     let one = 1i32.into_value(&mrb);
 
@@ -731,7 +723,7 @@ fn block_accepting_arity_raises_argument_error_on_wrong_count() {
         .define_method(&mrb, c"apply", beni::method!(apply_block, 1, &))
         .expect("registering the typed method must succeed");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs");
     let one = 1i32.into_value(&mrb);
 
@@ -760,14 +752,14 @@ fn a_typed_receiver_converts_before_the_body_runs() {
     let got = mrb
         .str_new(b"abc")
         .as_value()
-        .funcall(&mrb, c"typed_len", &[10i32.into_value(&mrb)])
+        .funcall(&mrb, c"typed_len", [10i32.into_value(&mrb)])
         .expect("a String receiver converts");
     assert_eq!(i32::from_value(got), Some(13));
 
     STRING_RECEIVER_BODY_RAN.store(false, Ordering::SeqCst);
     let err = 1i32
         .into_value(&mrb)
-        .funcall(&mrb, c"typed_len", &[10i32.into_value(&mrb)])
+        .funcall::<_, _, beni::Value>(&mrb, c"typed_len", [10i32.into_value(&mrb)])
         .expect_err("an Integer receiver fails the String conversion");
     assert_eq!(err.message(&mrb), "Integer cannot be converted to String");
     assert!(
@@ -786,7 +778,7 @@ fn a_wrong_count_raises_before_the_receiver_converts() {
     // Both the count and the receiver are wrong: the count check wins.
     let err = 1i32
         .into_value(&mrb)
-        .funcall(&mrb, c"typed_len", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"typed_len", ())
         .expect_err("a wrong count must surface as Err");
     match err {
         Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
@@ -804,13 +796,13 @@ fn an_any_arity_method_converts_its_receiver() {
     let got = mrb
         .str_new(b"abcd")
         .as_value()
-        .funcall(&mrb, c"any_len", &[])
+        .funcall(&mrb, c"any_len", ())
         .expect("a String receiver converts");
     assert_eq!(i32::from_value(got), Some(4));
 
     let err = beni::value::qnil()
         .as_value()
-        .funcall(&mrb, c"any_len", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"any_len", ())
         .expect_err("nil fails the String conversion");
     assert_eq!(err.message(&mrb), "nil cannot be converted to String");
 }

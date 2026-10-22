@@ -28,7 +28,7 @@ impl Drop for Tracked {
 }
 
 fn yield_to(mrb: &Mrb, _self: Value, block: Option<Proc>) -> Result<Value, Error> {
-    block.expect("the test passes a block").call(mrb, &[])
+    block.expect("the test passes a block").call(mrb, ())
 }
 
 #[test]
@@ -529,7 +529,9 @@ fn local_survives_its_reassignment(
             .into_iter()
             .find(|&(name, _)| name == x)
             .expect("the caller declares `x`");
-        block.expect("the test passes a block").call(mrb, &[])?;
+        block
+            .expect("the test passes a block")
+            .call::<_, beni::Value>(mrb, ())?;
         mrb.gc_start();
         Ok::<_, Error>(RString::from_value(local).is_some())
     })

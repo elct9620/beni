@@ -153,7 +153,9 @@ fn an_array_splat_and_an_optional_block_fit_every_call() {
 fn splat_across_reentry(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let splat = scan_args::<(), (), RArray, (), (), ()>(mrb)?.splat;
     mrb.gc_start();
-    splat.as_value().funcall(mrb, "inspect", &[])?;
+    splat
+        .as_value()
+        .funcall::<_, _, Value>(mrb, "inspect", ())?;
     Ok(splat.as_value())
 }
 
@@ -172,7 +174,7 @@ fn an_array_splat_survives_a_collection_and_a_reentry() {
 
 fn required_block(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let block = scan_args::<(), (), (), (), (), Proc>(mrb)?.block;
-    block.call(mrb, &[])
+    block.call(mrb, ())
 }
 
 fn optional_block(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {

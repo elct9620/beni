@@ -173,7 +173,7 @@ fn compile_yields_a_program_that_has_not_run_yet() {
         "compiling must not run what it compiled"
     );
     let got = program
-        .call(&mrb, &[])
+        .call(&mrb, ())
         .unwrap_or_else(|_| panic!("the program must run when called"));
     assert_eq!(i32::from_value(got), Some(7));
     assert!(
@@ -189,7 +189,7 @@ fn compile_and_call_in_compiler(mrb: &Mrb, _self: Value) -> Value {
         .expect("allocating the compile context must succeed")
         .compile(b"TOP_LEVEL_COMPILED = 42\ndef top_level_compiled; TOP_LEVEL_COMPILED; end")
         .expect("the source must compile")
-        .call(mrb, &[])
+        .call(mrb, ())
         .unwrap_or_else(|_| panic!("the program must run when called"))
 }
 
@@ -204,9 +204,9 @@ fn compile_inside_a_method_of_another_class_runs_at_the_top_level() {
         .expect("defining the method must succeed");
 
     compiler
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("instantiating must succeed")
-        .funcall(&mrb, c"run", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"run", ())
         .expect("the program must come back Ok");
 
     for name in ["TOP_LEVEL_COMPILED", "top_level_compiled"] {
@@ -281,7 +281,7 @@ fn a_compiled_program_starts_without_the_contexts_top_level_locals() {
         .expect("a load through the same context sees the local");
     let program = cxt.compile(b"x").expect("the same source must compile");
     let seen_by_the_program = program
-        .call(&mrb, &[])
+        .call::<_, beni::Value>(&mrb, ())
         .unwrap_or_else(|_| panic!("the program must run when called"));
 
     assert_eq!(i32::from_value(seen_by_a_load), Some(5));
@@ -310,7 +310,7 @@ fn load_nstring_inside_a_registered_method_hands_the_raise_back_as_err() {
 
     let exc = beni::value::qnil()
         .as_value()
-        .funcall(&mrb, c"load_inside", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"load_inside", ())
         .expect("the raise must come back to the method that ran the load");
 
     assert_eq!(exc.classname(&mrb), "RuntimeError");

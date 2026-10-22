@@ -426,7 +426,7 @@ pub trait Class: crate::Module {
     /// then run `initialize` with `args` and no block. The class's own
     /// `new` is never called. Surfaces an `Err` when allocation is
     /// refused or `initialize` raises.
-    fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Self::Instance, Error>;
+    fn new_instance<A: crate::ArgList>(self, mrb: &Mrb, args: A) -> Result<Self::Instance, Error>;
 
     /// Allocate an instance of this class without running `initialize`,
     /// the instance mruby's built-in `allocate` makes. Dispatches no Ruby,
@@ -511,8 +511,9 @@ impl Class for RClass {
     }
 
     #[inline]
-    fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
-        let (argc, argv) = crate::state::args::argv_from_slice(args);
+    fn new_instance<A: crate::ArgList>(self, mrb: &Mrb, args: A) -> Result<Value, Error> {
+        let args = args.into_arg_list_with(mrb);
+        let (argc, argv) = crate::state::args::argv_from_slice(args.as_ref());
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame;
             // `self` and every `args` entry originate from the same
@@ -544,7 +545,11 @@ impl Class for ExceptionClass {
     }
 
     #[inline]
-    fn new_instance(self, mrb: &Mrb, args: &[Value]) -> Result<crate::Exception, Error> {
+    fn new_instance<A: crate::ArgList>(
+        self,
+        mrb: &Mrb,
+        args: A,
+    ) -> Result<crate::Exception, Error> {
         self.as_r_class()
             .new_instance(mrb, args)
             .map(Self::exception_unchecked)

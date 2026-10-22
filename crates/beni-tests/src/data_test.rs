@@ -295,7 +295,7 @@ fn an_undefined_allocator_refuses_new_and_allocate_but_not_a_wrap_or_copy() {
     for copy in [c"dup", c"clone"] {
         let copied = wrapped
             .as_value()
-            .funcall(&mrb, copy, &[])
+            .funcall::<_, _, beni::Value>(&mrb, copy, ())
             .expect("copying a carrier still allocates");
         assert!(copied.is_kind_of(&mrb, class));
     }

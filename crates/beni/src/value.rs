@@ -332,7 +332,7 @@ pub trait ReprValue: private::ReprValue {
     /// `mrb->exc` to corrupt subsequent mruby calls in the same C bridge.
     #[inline]
     fn to_string(self, mrb: &Mrb) -> String {
-        let Ok(s_val) = self.funcall(mrb, c"to_s", &[]) else {
+        let Ok(s_val) = self.funcall::<_, _, Value>(mrb, c"to_s", ()) else {
             return String::new();
         };
         s_val.string_lossy(mrb)
@@ -388,13 +388,19 @@ pub trait ReprValue: private::ReprValue {
     /// `self.<method>(args...)`, naming the method by a symbol-or-name
     /// key (`IntoId`). The method runs arbitrary Ruby, so the call runs
     /// under exception protection: a normal return is the `Ok` value, any
-    /// raise is `Err` rather than a long-jump across FFI. Mirrors
-    /// magnus's `funcall`.
+    /// raise is `Err` rather than a long-jump across FFI, as is a result
+    /// `T` rejects. Mirrors magnus's `funcall`.
     #[inline]
-    fn funcall<K: crate::IntoId>(self, mrb: &Mrb, name: K, args: &[Value]) -> Result<Value, Error> {
+    fn funcall<K, A, T>(self, mrb: &Mrb, name: K, args: A) -> Result<T, Error>
+    where
+        K: crate::IntoId,
+        A: crate::ArgList,
+        T: crate::TryConvert,
+    {
         let sym = name.into_id(mrb)?.to_raw();
-        let (argc, argv) = crate::state::args::argv_from_slice(args);
-        mrb.protect(|mrb| {
+        let args = args.into_arg_list_with(mrb);
+        let (argc, argv) = crate::state::args::argv_from_slice(args.as_ref());
+        let v = mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // and every `args` entry originate from the same VM by the
             // interpreter pairing; `sym` was interned against the same
@@ -403,7 +409,8 @@ pub trait ReprValue: private::ReprValue {
             Value::from_raw_unchecked(unsafe {
                 sys::mrb_funcall_argv(mrb.as_ptr(), self.as_value().0, sym, argc, argv)
             })
-        })
+        })?;
+        T::try_convert(v, mrb)
     }
 
     /// `mrb_funcall_with_block(mrb, self, sym, argc, argv, block)` —
@@ -415,17 +422,23 @@ pub trait ReprValue: private::ReprValue {
     /// catches into `Err` rather than long-jumping across FFI. Mirrors
     /// magnus's `funcall_with_block`.
     #[inline]
-    fn funcall_with_block<K: crate::IntoId>(
+    fn funcall_with_block<K, A, T>(
         self,
         mrb: &Mrb,
         name: K,
-        args: &[Value],
+        args: A,
         block: crate::Proc,
-    ) -> Result<Value, Error> {
+    ) -> Result<T, Error>
+    where
+        K: crate::IntoId,
+        A: crate::ArgList,
+        T: crate::TryConvert,
+    {
         let sym = name.into_id(mrb)?.to_raw();
         let block_raw = block.as_raw();
-        let (argc, argv) = crate::state::args::argv_from_slice(args);
-        mrb.protect(|mrb| {
+        let args = args.into_arg_list_with(mrb);
+        let (argc, argv) = crate::state::args::argv_from_slice(args.as_ref());
+        let v = mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`,
             // every `args` entry, and `block` originate from the same VM
             // by the interpreter pairing; `sym` was interned against the
@@ -441,7 +454,8 @@ pub trait ReprValue: private::ReprValue {
                     block_raw,
                 )
             })
-        })
+        })?;
+        T::try_convert(v, mrb)
     }
 
     /// TRUE when `self` is `nil`. Pure tag predicate via mruby's
@@ -653,6 +667,11 @@ pub(crate) mod private {
         ///
         /// `v` must be a value `Self::as_value` produced.
         unsafe fn from_value_unchecked(v: Value) -> Self;
+
+        /// Whether `Self` is `#[repr(transparent)]` over `Value`, so a
+        /// slice of it reads in place as a slice of values; a class
+        /// handle, which holds the class pointer, is not.
+        const VALUE_LAYOUT: bool = false;
     }
 }
 
@@ -668,6 +687,8 @@ impl private::ReprValue for Value {
     unsafe fn from_value_unchecked(v: Value) -> Self {
         v
     }
+
+    const VALUE_LAYOUT: bool = true;
 }
 
 /// The `ReprValue` and `IntoValue` of a handle that is a tagged `Value`
@@ -687,6 +708,10 @@ macro_rules! value_backed_repr {
                 // SAFETY: forwarded from the caller.
                 unsafe { <$handle>::from_value_unchecked(v) }
             }
+
+            // Every handle this macro serves is `#[repr(transparent)]`
+            // over `Value`.
+            const VALUE_LAYOUT: bool = true;
         }
 
         impl $crate::IntoValue for $handle {

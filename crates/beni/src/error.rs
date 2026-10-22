@@ -91,10 +91,7 @@ impl Error {
         };
         // The conversion rejects the `nil` an exception with no backtrace
         // answers, so the absent case needs no test of its own.
-        let Ok(frames) = exc
-            .funcall(mrb, c"backtrace", &[])
-            .and_then(|frames| <crate::RArray as crate::TryConvert>::try_convert(frames, mrb))
-        else {
+        let Ok(frames) = exc.funcall::<_, _, crate::RArray>(mrb, c"backtrace", ()) else {
             return Vec::new();
         };
         frames

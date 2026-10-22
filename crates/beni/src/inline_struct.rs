@@ -262,6 +262,8 @@ impl<T: InlineStruct> crate::value::private::ReprValue for Inline<T> {
             _marker: PhantomData,
         }
     }
+
+    const VALUE_LAYOUT: bool = true;
 }
 
 #[cfg(test)]

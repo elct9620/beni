@@ -28,9 +28,9 @@ fn new_creates_an_unnamed_usable_class() {
         .define_method(&mrb, c"answer", beni::method!(answer_seven, 0))
         .expect("registering a method on the anonymous class must succeed");
     let got = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the anonymous class instantiates")
-        .funcall(&mrb, c"answer", &[])
+        .funcall(&mrb, c"answer", ())
         .expect("the method on the anonymous class must be callable");
     assert_eq!(i32::from_value(got), Some(7));
 }
@@ -87,9 +87,9 @@ fn module_new_creates_an_unnamed_mixable_module() {
         .include_module(&mrb, module)
         .expect("mixing the anonymous module in must succeed");
     let got = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the host class instantiates")
-        .funcall(&mrb, c"answer", &[])
+        .funcall(&mrb, c"answer", ())
         .expect("the mixed-in method must be reachable");
     assert_eq!(i32::from_value(got), Some(7));
 }

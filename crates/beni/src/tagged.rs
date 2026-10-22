@@ -47,6 +47,8 @@ macro_rules! tagged_handle {
             unsafe fn from_value_unchecked(v: Value) -> Self {
                 Self(v)
             }
+
+            const VALUE_LAYOUT: bool = true;
         }
     };
     ($(#[$doc:meta])* $name:ident => $expected:literal, |$value:ident| $accepts:expr) => {

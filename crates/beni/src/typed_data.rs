@@ -203,6 +203,8 @@ impl<T: TypedData> crate::value::private::ReprValue for Obj<T> {
             _marker: PhantomData,
         }
     }
+
+    const VALUE_LAYOUT: bool = true;
 }
 
 impl<T: TypedData> ReprValue for Obj<T> {
@@ -418,4 +420,6 @@ impl crate::value::private::ReprValue for RTypedData {
     unsafe fn from_value_unchecked(v: Value) -> Self {
         Self(v)
     }
+
+    const VALUE_LAYOUT: bool = true;
 }

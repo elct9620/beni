@@ -53,11 +53,21 @@ impl Proc {
     /// carried value, while the call-info frame indices that separate a
     /// break from a return-past-frame are VM internals reached through
     /// the unsafe `beni::sys` escape hatch.
+    ///
+    /// The block's value converts to `T`, a value `T` rejects surfacing as
+    /// `Err`. magnus's `call` takes an `RArrayArgList` because CRuby's
+    /// proc call reads an Array; mruby's reads the values in place, so this
+    /// takes an `ArgList`.
     #[inline]
-    pub fn call(self, mrb: &Mrb, args: &[Value]) -> Result<Value, Error> {
+    pub fn call<A: crate::ArgList, T: crate::TryConvert>(
+        self,
+        mrb: &Mrb,
+        args: A,
+    ) -> Result<T, Error> {
         let block_raw = self.0.as_raw();
-        mrb.protect(|inner| {
-            let (argc, argv) = crate::state::args::argv_from_slice(args);
+        let args = args.into_arg_list_with(mrb);
+        let v = mrb.protect(|inner| {
+            let (argc, argv) = crate::state::args::argv_from_slice(args.as_ref());
             // SAFETY: `inner` is the live VM inside the protected
             // frame; `block_raw` is Proc-tagged by the
             // `from_value_unchecked` contract; every `args` entry
@@ -65,7 +75,8 @@ impl Proc {
             // call.
             let raw = unsafe { sys::mrb_yield_argv(inner.as_ptr(), block_raw, argc, argv) };
             Value::from_raw_unchecked(raw)
-        })
+        })?;
+        T::try_convert(v, mrb)
     }
 }
 

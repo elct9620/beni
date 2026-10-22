@@ -86,21 +86,21 @@ fn a_method_takes_its_receiver_and_returns_a_payload_as_typed_data() {
     let point = mrb.obj_wrap(Point { x: 2 }).as_value();
 
     let x = point
-        .funcall(&mrb, c"x", &[])
+        .funcall(&mrb, c"x", ())
         .expect("x reads the receiver's payload");
     assert_eq!(i32::from_value(x), Some(2));
 
     let moved = point
-        .funcall(&mrb, c"moved", &[3i32.into_value(&mrb)])
+        .funcall::<_, _, beni::Value>(&mrb, c"moved", [3i32.into_value(&mrb)])
         .expect("moved wraps its result");
     assert_eq!(moved.classname(&mrb), "BeniPoint");
     let x = moved
-        .funcall(&mrb, c"x", &[])
+        .funcall(&mrb, c"x", ())
         .expect("the new instance carries its payload");
     assert_eq!(i32::from_value(x), Some(5));
 
     let same = point
-        .funcall(&mrb, c"same?", &[point])
+        .funcall::<_, _, beni::Value>(&mrb, c"same?", [point])
         .expect("Obj<T> converts receiver and argument");
     assert!(same.is::<beni::Qtrue>());
 }
@@ -139,7 +139,7 @@ fn a_mismatch_raises_mrubys_data_type_error() {
     let err = mrb
         .obj_wrap(Point { x: 1 })
         .as_value()
-        .funcall(&mrb, c"same?", &[1i32.into_value(&mrb)])
+        .funcall::<_, _, beni::Value>(&mrb, c"same?", [1i32.into_value(&mrb)])
         .expect_err("an Integer argument does not convert to Obj<Point>");
     assert_eq!(
         type_error_message(&mrb, err),
@@ -154,7 +154,7 @@ fn a_duplicated_carrier_holds_no_payload() {
     let point = mrb.obj_wrap(Point { x: 4 }).as_value();
 
     let copy = point
-        .funcall(&mrb, c"dup", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"dup", ())
         .expect("mruby's dup copies the object");
     assert!(copy.is::<beni::RTypedData>());
     assert!(
@@ -163,7 +163,7 @@ fn a_duplicated_carrier_holds_no_payload() {
     );
 
     let err = copy
-        .funcall(&mrb, c"x", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"x", ())
         .expect_err("a bare carrier converts to no Point");
     assert_eq!(
         type_error_message(&mrb, err),
@@ -302,7 +302,7 @@ fn define_counter(mrb: &Mrb) {
 }
 
 fn read_n(mrb: &Mrb, obj: Value) -> i32 {
-    let n = obj.funcall(mrb, c"n", &[]).expect("n reads the payload");
+    let n = obj.funcall(mrb, c"n", ()).expect("n reads the payload");
     i32::from_value(n).expect("n is an Integer")
 }
 
@@ -316,12 +316,15 @@ fn dup_carries_an_independent_copy_of_the_payload() {
         })
         .as_value();
 
-    let copy = original.funcall(&mrb, c"dup", &[]).expect("dup copies");
+    let copy = original
+        .funcall::<_, _, beni::Value>(&mrb, c"dup", ())
+        .expect("dup copies");
     assert_eq!(copy.classname(&mrb), "BeniCounter");
     assert!(!copy.is_equal(&mrb, original), "dup answers a new object");
     assert_eq!(read_n(&mrb, copy), 1);
 
-    copy.funcall(&mrb, c"bump", &[]).expect("bump the copy");
+    copy.funcall::<_, _, beni::Value>(&mrb, c"bump", ())
+        .expect("bump the copy");
     assert_eq!(read_n(&mrb, copy), 2);
     assert_eq!(
         read_n(&mrb, original),
@@ -345,19 +348,22 @@ fn clone_keeps_singleton_and_frozen_state_with_a_copied_payload() {
         .expect("registering a singleton method must succeed");
     original.freeze(&mrb);
 
-    let copy = original.funcall(&mrb, c"clone", &[]).expect("clone copies");
+    let copy = original
+        .funcall::<_, _, beni::Value>(&mrb, c"clone", ())
+        .expect("clone copies");
     assert!(!copy.is_equal(&mrb, original), "clone answers a new object");
     assert_eq!(read_n(&mrb, copy), 5);
     let frozen = copy
-        .funcall(&mrb, c"frozen?", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"frozen?", ())
         .expect("frozen? answers");
     assert!(frozen.is::<beni::Qtrue>(), "clone keeps the frozen state");
     let mine = copy
-        .funcall(&mrb, c"only_mine", &[])
+        .funcall(&mrb, c"only_mine", ())
         .expect("clone keeps the singleton class");
     assert_eq!(i32::from_value(mine), Some(5));
 
-    copy.funcall(&mrb, c"bump", &[]).expect("bump the copy");
+    copy.funcall::<_, _, beni::Value>(&mrb, c"bump", ())
+        .expect("bump the copy");
     assert_eq!(
         read_n(&mrb, original),
         5,
@@ -607,13 +613,13 @@ fn dup_clone_keeps_the_payload_initialize_copy_installed() {
 
     let copy = original
         .as_value()
-        .funcall(&mrb, c"clone", &[])
+        .funcall(&mrb, c"clone", ())
         .expect("clone completes the copy");
 
     assert_eq!(read_ledger(&mrb, copy), 103);
 }
 
 fn read_ledger(mrb: &Mrb, obj: Value) -> i32 {
-    let n = obj.funcall(mrb, c"n", &[]).expect("n reads the payload");
+    let n = obj.funcall(mrb, c"n", ()).expect("n reads the payload");
     i32::from_value(n).expect("n is an Integer")
 }

@@ -51,10 +51,10 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
     // The method and constant keyed by Symbol read back through the
     // equivalent name — both keys resolve to the same interned sym.
     let receiver = fetched
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let got = receiver
-        .funcall(&mrb, c"answer", &[])
+        .funcall(&mrb, c"answer", ())
         .expect("the Symbol-keyed method must be callable by name");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 
@@ -107,16 +107,16 @@ fn symbol_key_registers_private_singleton_and_module_function() {
         .expect("registering the singleton method under a Symbol key must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     // funcall bypasses visibility, reaching the private body.
     let private = receiver
-        .funcall(&mrb, c"secret", &[])
+        .funcall(&mrb, c"secret", ())
         .expect("the Symbol-keyed private method must be reachable via funcall");
     assert_eq!(i64::from_value(private).expect("an Integer"), 7);
     let singleton = class
         .as_value()
-        .funcall(&mrb, c"klass_answer", &[])
+        .funcall(&mrb, c"klass_answer", ())
         .expect("the Symbol-keyed singleton method must be callable");
     assert_eq!(i64::from_value(singleton).expect("an Integer"), 9);
 
@@ -316,7 +316,7 @@ fn new_instance_surfaces_a_raising_initialize_as_err() {
         .class_get(c"BeniBoomInit")
         .expect("the class is defined");
     assert!(matches!(
-        class.new_instance(&mrb, &[]),
+        class.new_instance(&mrb, ()),
         Err(Error::Exception(_))
     ));
 }
@@ -358,7 +358,7 @@ fn private_method_rejects_public_dispatch_but_is_attached() {
         .define_private_method(&mrb, c"secret", beni::method!(answer_seven, 0))
         .expect("registering the private method must succeed");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
 
     // VM-dispatched code with an explicit receiver must observe
@@ -382,7 +382,7 @@ fn private_method_rejects_public_dispatch_but_is_attached() {
     // mrb_funcall bypasses visibility, confirming the body is
     // attached and runs.
     let got = receiver
-        .funcall(&mrb, c"secret", &[])
+        .funcall(&mrb, c"secret", ())
         .expect("funcall dispatch must reach the private body");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 }
@@ -414,16 +414,16 @@ fn define_alias_keys_both_names_as_symbol_or_name() {
         .expect("aliasing under a name key must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let original = receiver
-        .funcall(&mrb, c"answer", &[])
+        .funcall(&mrb, c"answer", ())
         .expect("the original method must be callable");
     let by_sym = receiver
-        .funcall(&mrb, c"by_sym", &[])
+        .funcall(&mrb, c"by_sym", ())
         .expect("the Symbol-keyed alias must be callable");
     let by_name = receiver
-        .funcall(&mrb, c"by_name", &[])
+        .funcall(&mrb, c"by_name", ())
         .expect("the name-keyed alias must be callable");
     assert_eq!(i64::from_value(original).expect("an Integer"), 7);
     assert_eq!(i64::from_value(by_sym).expect("an Integer"), 7);
@@ -449,10 +449,10 @@ fn module_and_object_traits_register_methods() {
         .define_method(&mrb, c"answer", beni::method!(answer_seven, 0))
         .expect("registering the instance method must succeed");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let got = receiver
-        .funcall(&mrb, c"answer", &[])
+        .funcall(&mrb, c"answer", ())
         .expect("the registered method must not raise");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 
@@ -463,7 +463,7 @@ fn module_and_object_traits_register_methods() {
         .expect("registering the singleton method must succeed");
     let class_value = class.as_value();
     let got = class_value
-        .funcall(&mrb, c"class_answer", &[])
+        .funcall(&mrb, c"class_answer", ())
         .expect("the registered class method must not raise");
     assert_eq!(i64::from_value(got).expect("an Integer"), 9);
 
@@ -598,10 +598,10 @@ fn define_alias_binds_a_second_name_for_an_existing_method() {
     // The alias resolves to the same body as the original — the
     // consumer-visible point of preserving a method before override.
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let got = receiver
-        .funcall(&mrb, c"original_answer", &[])
+        .funcall(&mrb, c"original_answer", ())
         .expect("the aliased method must not raise");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 }
@@ -627,10 +627,10 @@ fn include_module_mixes_in_and_rejects_a_cyclic_include() {
 
     // An instance of the host now answers the mixed-in method.
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let got = receiver
-        .funcall(&mrb, c"helped", &[])
+        .funcall(&mrb, c"helped", ())
         .expect("the mixed-in method must not raise");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 
@@ -666,18 +666,18 @@ fn prepend_module_overrides_the_receiver_and_rejects_a_cyclic_prepend() {
         .expect("prepending the module must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
 
     // The prepended module sits ahead of the receiver, so its method wins.
     let overridden = receiver
-        .funcall(&mrb, c"answer", &[])
+        .funcall(&mrb, c"answer", ())
         .expect("the overriding method must not raise");
     assert_eq!(i64::from_value(overridden).expect("an Integer"), 9);
 
     // A method only the prepended module defines is callable.
     let only = receiver
-        .funcall(&mrb, c"helped", &[])
+        .funcall(&mrb, c"helped", ())
         .expect("the module-only method must not raise");
     assert_eq!(i64::from_value(only).expect("an Integer"), 7);
 
@@ -722,10 +722,10 @@ fn undef_method_marks_a_method_undefined_on_the_handle() {
 
     // The method responds before undefinition.
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let got = receiver
-        .funcall(&mrb, c"answer", &[])
+        .funcall(&mrb, c"answer", ())
         .expect("the defined method must be callable before undefinition");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 
@@ -786,7 +786,7 @@ fn remove_method_strips_a_method_defined_on_the_handle() {
     // The method responds before removal.
     let answer = c"answer".into_id(&mrb).expect("the name interns");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     assert!(
         receiver.respond_to(&mrb, answer),
@@ -842,7 +842,7 @@ fn undef_singleton_method_marks_a_class_method_undefined() {
     // The class method responds before undefinition.
     let class_value = class.as_value();
     let got = class_value
-        .funcall(&mrb, c"class_answer", &[])
+        .funcall(&mrb, c"class_answer", ())
         .expect("the class method must be callable before undefinition");
     assert_eq!(i64::from_value(got).expect("an Integer"), 9);
 
@@ -1036,7 +1036,7 @@ fn exception_class_registers_methods_through_the_module_trait() {
     let got = runtime_error
         .new_str(&mrb, mrb.str_new("carrying a code".as_bytes()))
         .as_value()
-        .funcall(&mrb, c"beni_code", &[])
+        .funcall(&mrb, c"beni_code", ())
         .expect("the registered method must be callable on the exception");
     assert_eq!(i64::from_value(got).expect("an Integer"), 7);
 }
@@ -1067,10 +1067,10 @@ fn obj_alloc_allocates_without_running_initialize() {
 
     assert!(instance.is_instance_of(&mrb, class));
     let ran = instance
-        .funcall(
+        .funcall::<_, _, beni::Value>(
             &mrb,
             c"instance_variable_get",
-            &[mrb.str_new(b"@ran").as_value()],
+            [mrb.str_new(b"@ran").as_value()],
         )
         .expect("reading the ivar must succeed");
     assert!(ran.is_nil(), "initialize must not have run");
@@ -1108,14 +1108,14 @@ fn new_instance_runs_initialize_without_dispatching_the_class_new() {
     );
 
     let instance = class
-        .new_instance(&mrb, &[7.into_value(&mrb)])
+        .new_instance(&mrb, [7.into_value(&mrb)])
         .expect("construction must not call the class's own new");
 
     let v = instance
         .funcall(
             &mrb,
             c"instance_variable_get",
-            &[mrb.str_new(b"@v").as_value()],
+            [mrb.str_new(b"@v").as_value()],
         )
         .expect("reading the ivar must succeed");
     assert_eq!(i32::from_value(v), Some(7), "initialize must have run");
@@ -1198,14 +1198,14 @@ fn exception_class_reaches_the_class_trait() {
         .superclass(&mrb)
         .expect("an anonymous exception class has a parent");
     let exception = anonymous
-        .new_instance(&mrb, &[mrb.str_new(b"boom").as_value()])
+        .new_instance(&mrb, [mrb.str_new(b"boom").as_value()])
         .expect("Exception#initialize accepts a message");
 
     assert!(same_object(&mrb, parent, runtime_error));
     assert!(anonymous.name(&mrb).starts_with("#<Class:"));
     assert!(exception.is_instance_of(&mrb, anonymous));
     let message = exception
-        .funcall(&mrb, c"message", &[])
+        .funcall(&mrb, c"message", ())
         .expect("an exception answers its message");
     assert_eq!(String::from_value(message).as_deref(), Some("boom"));
 }
@@ -1221,7 +1221,7 @@ fn exception_class_undefines_its_default_allocator_through_the_class_trait() {
 
     anonymous.undef_default_alloc_func(&mrb);
 
-    let Err(err) = anonymous.new_instance(&mrb, &[]) else {
+    let Err(err) = anonymous.new_instance(&mrb, ()) else {
         panic!("construction must refuse a class without an allocator");
     };
     assert!(err.message(&mrb).contains("allocator undefined"));
@@ -1252,7 +1252,7 @@ fn a_name_key_too_long_to_intern_surfaces_as_the_operations_own_argument_error()
             .expect_err("a namespaced definition must refuse the name"),
         beni::value::qnil()
             .as_value()
-            .funcall(&mrb, name.as_c_str(), &[])
+            .funcall::<_, _, beni::Value>(&mrb, name.as_c_str(), ())
             .expect_err("a dispatch must refuse the name before looking up a method"),
     ];
 
@@ -1290,10 +1290,10 @@ fn a_rust_string_key_reaches_the_same_definition_as_the_c_string_name() {
     let instance = mrb
         .class_get(c"BeniStrKeyed")
         .expect("the class is fetchable by its C-string name")
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the class instantiates");
     let answered = instance
-        .funcall(&mrb, c"answer", &[])
+        .funcall(&mrb, c"answer", ())
         .expect("the method registered under a String key is callable");
     assert_eq!(i32::from_value(answered), Some(7));
 }

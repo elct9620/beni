@@ -29,7 +29,7 @@ fn a_splat_reads_the_argc_mruby_writes() {
         .expect("registering the bridge must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let args = [
         1i32.into_value(&mrb),
@@ -37,7 +37,7 @@ fn a_splat_reads_the_argc_mruby_writes() {
         3i32.into_value(&mrb),
     ];
     let count = receiver
-        .funcall(&mrb, c"rest_count", &args)
+        .funcall::<_, _, beni::Value>(&mrb, c"rest_count", args)
         .expect("the bridge must not raise");
 
     assert!(count.is::<beni::Integer>(), "bridge must return an Integer");
@@ -88,10 +88,10 @@ fn arg1_reads_the_single_argument() {
         .expect("registering the bridge must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     let got = receiver
-        .funcall(&mrb, c"arg1_echo", &[42i32.into_value(&mrb)])
+        .funcall(&mrb, c"arg1_echo", [42i32.into_value(&mrb)])
         .expect("the single-argument read must not raise");
     assert_eq!(i32::from_value(got), Some(42));
 }
@@ -107,13 +107,13 @@ fn arg1_raises_argument_error_on_wrong_count() {
         .expect("registering the bridge must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     // Two positionals: `mrb_get_arg1` raises ArgumentError rather
     // than returning the first — the strict-count contract.
     let args = [1i32.into_value(&mrb), 2i32.into_value(&mrb)];
     let err = receiver
-        .funcall(&mrb, c"arg1_echo", &args)
+        .funcall::<_, _, beni::Value>(&mrb, c"arg1_echo", args)
         .expect_err("a non-single argument count must surface as Err");
     match err {
         Error::Exception(exc) => assert_eq!(exc.classname(&mrb), "ArgumentError"),
@@ -132,7 +132,7 @@ fn an_any_arity_method_receives_every_argument() {
         .expect("registering the bridge must succeed");
 
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
 
     // Several arguments: the body reads every slot and sums them, so
@@ -143,14 +143,14 @@ fn an_any_arity_method_receives_every_argument() {
         30i32.into_value(&mrb),
     ];
     let got = receiver
-        .funcall(&mrb, c"args_sum", &args)
+        .funcall(&mrb, c"args_sum", args)
         .expect("the call must not raise");
     assert_eq!(i32::from_value(got), Some(60));
 
     // No arguments: the slice is empty, summed to 0, without forming a
     // slice from the call frame pointer.
     let empty = receiver
-        .funcall(&mrb, c"args_sum", &[])
+        .funcall(&mrb, c"args_sum", ())
         .expect("the empty call must not raise");
     assert_eq!(i32::from_value(empty), Some(0));
 }
@@ -166,7 +166,7 @@ fn block_given_reports_whether_a_block_was_passed() {
         .expect("registering the bridge must succeed");
 
     let recv = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
     mrb.gv_set(c"$beni_block_recv", recv)
         .expect("the name interns");
@@ -227,7 +227,7 @@ fn a_call_the_single_argument_read_does_not_fit_leaves_the_body_through_its_own_
 
     let err = beni::value::qnil()
         .as_value()
-        .funcall(&mrb, c"read_arg1", &[one, one])
+        .funcall::<_, _, beni::Value>(&mrb, c"read_arg1", [one, one])
         .expect_err("a call the read does not fit must reach the caller as a raise");
 
     let Error::Exception(exc) = err else {
@@ -272,7 +272,7 @@ fn the_argument_slice_survives_vm_reentry() {
 
     let got = beni::value::qnil()
         .as_value()
-        .funcall(&mrb, c"args_survive_reentry", &args)
+        .funcall::<_, _, beni::Value>(&mrb, c"args_survive_reentry", args)
         .expect("the call must not raise");
 
     assert_eq!(got.to_string(&mrb), "alpha");
@@ -416,7 +416,7 @@ fn an_any_arity_call_without_keywords_allocates_no_hash() {
     let calls = beni::Proc::from_value(calls).unwrap();
     let before = hashes_on_the_heap(&mrb);
 
-    calls.call(&mrb, &[]).unwrap();
+    calls.call::<_, beni::Value>(&mrb, ()).unwrap();
 
     assert_eq!(hashes_on_the_heap(&mrb), before);
 }

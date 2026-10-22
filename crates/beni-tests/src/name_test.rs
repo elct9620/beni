@@ -24,7 +24,7 @@ fn refusal(mrb: &Mrb, err: Error) -> (String, Option<Id>) {
     };
     assert_eq!(exc.classname(mrb), "NameError");
     let name = exc
-        .funcall(mrb, c"name", &[])
+        .funcall(mrb, c"name", ())
         .expect("NameError#name answers");
     let message = Error::Exception(exc).message(mrb);
     (message, Symbol::from_value(name).map(Id::from))

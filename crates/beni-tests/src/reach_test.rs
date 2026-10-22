@@ -66,7 +66,7 @@ fn an_instance_variable_outlives_its_overwrite() {
     let mrb = open_mrb();
     let holder = mrb
         .class_object()
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("an Object constructs without raising");
     let _root = mrb
         .gc_root(holder)

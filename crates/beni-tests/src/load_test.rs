@@ -209,7 +209,7 @@ fn read_irep_yields_a_program_that_runs_only_when_called() {
     );
 
     let got = program
-        .call(&mrb, &[])
+        .call(&mrb, ())
         .unwrap_or_else(|_| panic!("the program must run when called"));
     assert_eq!(i64::from_value(got), Some(42));
     assert_eq!(
@@ -226,7 +226,7 @@ fn read_irep_and_load_irep_answer_the_same_value_for_a_top_level_return() {
     // SAFETY: the blob is this interpreter's own dump.
     let called = unsafe { mrb.read_irep(&bytes) }
         .expect("the dump must read back")
-        .call(&mrb, &[])
+        .call(&mrb, ())
         .unwrap_or_else(|_| panic!("the program must run when called"));
     // SAFETY: as above.
     let loaded = unsafe { mrb.load_irep(&bytes) }.expect("the dump must load");
@@ -263,7 +263,7 @@ fn read_irep_leaves_a_script_error_the_program_raises_to_its_call() {
     let program =
         unsafe { mrb.read_irep(&bytes) }.expect("a program that raises when run still reads");
     let err = program
-        .call(&mrb, &[])
+        .call::<_, beni::Value>(&mrb, ())
         .expect_err("the raise must come back from the call");
 
     let Error::Exception(exc) = &err else {
@@ -314,9 +314,9 @@ fn load_irep_inside_a_method_of_another_class_runs_at_the_top_level() {
         .expect("defining the method must succeed");
 
     loader
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("instantiating must succeed")
-        .funcall(&mrb, c"run", &[mrb.str_new(&bytes).as_value()])
+        .funcall::<_, _, beni::Value>(&mrb, c"run", [mrb.str_new(&bytes).as_value()])
         .expect("the load must come back Ok");
 
     for name in ["TOP_LEVEL_ANSWER", "top_level_answer"] {
@@ -336,7 +336,7 @@ fn eval_inside_a_registered_method_hands_the_raise_back_as_err() {
 
     let exc = beni::value::qnil()
         .as_value()
-        .funcall(&mrb, c"load_inside", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"load_inside", ())
         .expect("the raise must come back to the method that ran the load");
 
     assert_eq!(exc.classname(&mrb), "RuntimeError");
@@ -355,7 +355,7 @@ fn load_irep_inside_a_registered_method_hands_the_raise_back_as_err() {
 
     let exc = beni::value::qnil()
         .as_value()
-        .funcall(&mrb, c"load_inside", &[mrb.str_new(&bytes).as_value()])
+        .funcall::<_, _, beni::Value>(&mrb, c"load_inside", [mrb.str_new(&bytes).as_value()])
         .expect("the raise must come back to the method that ran the load");
 
     assert_eq!(exc.classname(&mrb), "ArgumentError");

@@ -4,7 +4,7 @@
 //! Ruby source to evaluate.
 
 use crate::Doubler;
-use beni::{Class, FromValue, IntoValue, Mrb, ReprValue};
+use beni::{Class, Mrb, ReprValue};
 
 #[test]
 fn a_gem_answers_where_no_compiler_is_linked() {
@@ -16,11 +16,11 @@ fn a_gem_answers_where_no_compiler_is_linked() {
         .class_get(c"Doubler")
         .expect("the gem defined the class");
     let receiver = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs without raising");
-    let got = receiver
-        .funcall(&mrb, c"call", &[21.into_value(&mrb)])
+    let got: i32 = receiver
+        .funcall(&mrb, c"call", (21,))
         .expect("dispatching to the gem's method must not raise");
 
-    assert_eq!(i32::from_value(got), Some(42));
+    assert_eq!(got, 42);
 }

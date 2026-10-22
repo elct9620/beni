@@ -11,7 +11,7 @@ fn fiber(mrb: &Mrb, source: &str) -> Fiber {
 }
 
 fn inspect(mrb: &Mrb, value: Value) -> String {
-    let rendered = value.funcall(mrb, "inspect", &[]).expect("inspect renders");
+    let rendered = value.funcall(mrb, "inspect", ()).expect("inspect renders");
     String::from_utf8(Vec::<u8>::from_value(rendered).expect("inspect answers a String"))
         .expect("inspect renders UTF-8")
 }
@@ -46,14 +46,17 @@ fn a_fiber_from_a_ruby_block_resumes_until_its_block_finishes() {
         fiber.is_alive(&mrb).unwrap(),
         "a created fiber has not finished"
     );
-    assert_eq!(fiber.resume::<i32>(&mrb, &[5.into_value(&mrb)]).unwrap(), 6);
     assert_eq!(
-        fiber.resume::<i32>(&mrb, &[7.into_value(&mrb)]).unwrap(),
+        fiber.resume::<_, i32>(&mrb, [5.into_value(&mrb)]).unwrap(),
+        6
+    );
+    assert_eq!(
+        fiber.resume::<_, i32>(&mrb, [7.into_value(&mrb)]).unwrap(),
         14
     );
     assert!(!fiber.is_alive(&mrb).unwrap(), "the block has finished");
 
-    let err = fiber.resume::<Value>(&mrb, &[]).unwrap_err();
+    let err = fiber.resume::<_, Value>(&mrb, ()).unwrap_err();
     assert_fiber_error(&mrb, &err, "dead fiber");
 }
 
@@ -65,11 +68,11 @@ fn a_slice_crossing_a_switch_arrives_as_one_value() {
     let two = 2.into_value(&mrb);
 
     let yields = [
-        fiber.resume::<Value>(&mrb, &[]).unwrap(),
-        fiber.resume::<Value>(&mrb, &[]).unwrap(),
-        fiber.resume::<Value>(&mrb, &[one]).unwrap(),
+        fiber.resume::<_, Value>(&mrb, ()).unwrap(),
+        fiber.resume::<_, Value>(&mrb, ()).unwrap(),
+        fiber.resume::<_, Value>(&mrb, [one]).unwrap(),
     ];
-    let finished = fiber.resume::<Value>(&mrb, &[one, two]).unwrap();
+    let finished = fiber.resume::<_, Value>(&mrb, [one, two]).unwrap();
 
     let rendered: Vec<String> = yields.iter().map(|v| inspect(&mrb, *v)).collect();
     assert_eq!(rendered, ["nil", "1", "[1, 2]"]);
@@ -85,7 +88,7 @@ fn a_raise_inside_the_fiber_surfaces_and_leaves_the_resumer_current() {
         "Fiber.new { raise ArgumentError, 'inside the fiber' }",
     );
 
-    let err = fiber.resume::<Value>(&mrb, &[]).unwrap_err();
+    let err = fiber.resume::<_, Value>(&mrb, ()).unwrap_err();
 
     let argument_error = mrb.exc_get("ArgumentError").unwrap();
     assert!(err.is_kind_of(&mrb, argument_error));
@@ -101,14 +104,14 @@ fn a_raise_inside_the_fiber_surfaces_and_leaves_the_resumer_current() {
 
 fn fiber_after_raise(mrb: &Mrb) -> i32 {
     fiber(mrb, "Fiber.new { Fiber.yield 3 }")
-        .resume(mrb, &[])
+        .resume(mrb, ())
         .unwrap()
 }
 
 #[test]
 fn a_fiber_resuming_itself_is_refused() {
     fn resume_self(mrb: &Mrb, _self: Value, fiber: Fiber) -> Result<Value, Error> {
-        fiber.resume(mrb, &[])
+        fiber.resume(mrb, ())
     }
 
     let mrb = open_mrb();
@@ -120,7 +123,7 @@ fn a_fiber_resuming_itself_is_refused() {
         "f = Fiber.new { begin; Object.resume_self(f); rescue FiberError => e; e.message; end }; f",
     );
 
-    let message = fiber.resume::<Value>(&mrb, &[]).unwrap();
+    let message = fiber.resume::<_, Value>(&mrb, ()).unwrap();
 
     assert!(
         inspect(&mrb, message).contains("current fiber"),
@@ -136,7 +139,7 @@ fn an_uninitialized_fiber_answers_fiber_error() {
     assert_fiber_error(&mrb, &fiber.is_alive(&mrb).unwrap_err(), "uninitialized");
     assert_fiber_error(
         &mrb,
-        &fiber.resume::<Value>(&mrb, &[]).unwrap_err(),
+        &fiber.resume::<_, Value>(&mrb, ()).unwrap_err(),
         "uninitialized",
     );
 }
@@ -163,7 +166,7 @@ fn a_resumed_value_converts_to_the_requested_type() {
     let mrb = open_mrb();
     let fiber = fiber(&mrb, "Fiber.new { 'not a number' }");
 
-    let err = fiber.resume::<i32>(&mrb, &[]).unwrap_err();
+    let err = fiber.resume::<_, i32>(&mrb, ()).unwrap_err();
 
     let type_error = mrb.exc_get("TypeError").unwrap();
     assert!(
@@ -258,7 +261,7 @@ fn refuse(mrb: &Mrb, _self: Value) -> Result<FiberYield, Error> {
 }
 
 fn pause_through_dispatch(mrb: &Mrb, _self: Value, arg: Value) -> Result<Value, Error> {
-    mrb.class_object().as_value().funcall(mrb, "pause", &[arg])
+    mrb.class_object().as_value().funcall(mrb, "pause", [arg])
 }
 
 fn with_pause(mrb: &Mrb) {
@@ -288,9 +291,9 @@ fn a_method_returning_a_fiber_yield_suspends_its_fiber() {
     );
     let ten = 10.into_value(&mrb);
 
-    let first = fiber.resume::<Value>(&mrb, &[]).unwrap();
-    let second = fiber.resume::<Value>(&mrb, &[ten]).unwrap();
-    let finished = fiber.resume::<Value>(&mrb, &[ten, ten]).unwrap();
+    let first = fiber.resume::<_, Value>(&mrb, ()).unwrap();
+    let second = fiber.resume::<_, Value>(&mrb, [ten]).unwrap();
+    let finished = fiber.resume::<_, Value>(&mrb, [ten, ten]).unwrap();
 
     assert_eq!(inspect(&mrb, first), "1");
     assert_eq!(inspect(&mrb, second), "[11, 3]");
@@ -364,7 +367,7 @@ fn a_fiber_yield_behind_a_dispatch_from_rust_raises_fiber_error() {
         "Fiber.new { begin; Object.pause_through_dispatch(1); rescue FiberError => e; e.message; end }",
     );
 
-    let message = fiber.resume::<Value>(&mrb, &[]).unwrap();
+    let message = fiber.resume::<_, Value>(&mrb, ()).unwrap();
 
     assert!(
         inspect(&mrb, message).contains("C function boundary"),
@@ -386,7 +389,7 @@ fn an_err_before_the_fiber_yield_raises_without_suspending() {
         "Fiber.new { begin; Object.refuse; rescue => e; e.message; end }",
     );
 
-    let message = fiber.resume::<Value>(&mrb, &[]).unwrap();
+    let message = fiber.resume::<_, Value>(&mrb, ()).unwrap();
 
     assert_eq!(inspect(&mrb, message), "\"refused before yielding\"");
 }

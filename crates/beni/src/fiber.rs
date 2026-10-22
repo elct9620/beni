@@ -41,11 +41,9 @@ impl Mrb {
     /// dispatch and answers `Err` when `Fiber` names no class, the
     /// dispatch raises, or it answers anything but a Fiber.
     pub fn fiber_current(&self) -> Result<Fiber, Error> {
-        let current = self
-            .class_get("Fiber")?
+        self.class_get("Fiber")?
             .as_value()
-            .funcall(self, "current", &[])?;
-        Fiber::try_convert(current, self)
+            .funcall(self, "current", ())
     }
 
     /// A fiber yield of `args`, which a registered method returns to
@@ -64,9 +62,9 @@ impl Mrb {
     /// }
     /// # let _ = beni::method!(pause, -1);
     /// ```
-    pub fn fiber_yield(&self, args: &[Value]) -> FiberYield {
+    pub fn fiber_yield<A: crate::ArgList>(&self, args: A) -> FiberYield {
         FiberYield {
-            args: ArgsCopy::new(args, None),
+            args: ArgsCopy::new(args.into_arg_list_with(self).as_ref(), None),
         }
     }
 }
@@ -84,7 +82,7 @@ impl Mrb {
 ///
 /// ```compile_fail
 /// fn pause(mrb: &beni::Mrb, _self: beni::Value) -> beni::FiberYield {
-///     mrb.fiber_yield(&[])
+///     mrb.fiber_yield(())
 /// }
 ///
 /// fn early(mrb: &beni::Mrb, self_: beni::Value) {
@@ -123,10 +121,11 @@ impl Fiber {
     /// fiber that has finished, is running or already resumed, was
     /// transferred to, or was never initialized surfaces `FiberError`;
     /// an exception the block raises surfaces as the `Err` carrying it.
-    pub fn resume<T: TryConvert>(self, mrb: &Mrb, args: &[Value]) -> Result<T, Error> {
+    pub fn resume<A: crate::ArgList, T: TryConvert>(self, mrb: &Mrb, args: A) -> Result<T, Error> {
         let fiber_raw = self.as_value().as_raw();
+        let args = args.into_arg_list_with(mrb);
         let value = mrb.protect(|inner| {
-            let (argc, argv) = crate::state::args::argv_from_slice(args);
+            let (argc, argv) = crate::state::args::argv_from_slice(args.as_ref());
             // SAFETY: `inner` is the live VM inside the protected frame;
             // `fiber_raw` is Fiber-tagged; every `args` entry comes from
             // the same VM and the slice outlives the call.

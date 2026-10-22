@@ -124,7 +124,7 @@ fn to_str_reifies_the_name_as_a_mutable_string() {
     // consumer may mutate it — `Symbol#name` would come back frozen.
     assert!(!str
         .as_value()
-        .funcall(&mrb, c"frozen?", &[])
+        .funcall::<_, _, beni::Value>(&mrb, c"frozen?", ())
         .expect("frozen? does not raise")
         .to_bool());
 }
@@ -214,10 +214,8 @@ fn an_id_keys_a_named_operation_like_its_name() {
     let receiver = mrb.str_new(b"beni").as_value();
     let id = mrb.intern(b"upcase").expect("the name interns");
 
-    let by_id = receiver.funcall(&mrb, id, &[]).expect("the call runs");
-    let by_name = receiver
-        .funcall(&mrb, "upcase", &[])
-        .expect("the call runs");
+    let by_id = receiver.funcall(&mrb, id, ()).expect("the call runs");
+    let by_name = receiver.funcall(&mrb, "upcase", ()).expect("the call runs");
 
     assert_eq!(String::from_value(by_id), Some("BENI".to_owned()));
     assert_eq!(String::from_value(by_id), String::from_value(by_name));

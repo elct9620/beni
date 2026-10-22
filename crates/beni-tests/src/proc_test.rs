@@ -23,7 +23,7 @@ fn call_yields_to_the_block_and_returns_its_value() {
     let block = proc_from(&mrb, b"proc { |x| x + 1 }");
 
     let got = block
-        .call(&mrb, &[41i32.into_value(&mrb)])
+        .call(&mrb, [41i32.into_value(&mrb)])
         .expect("yielding a non-raising block must come back Ok");
 
     assert_eq!(i32::from_value(got), Some(42));
@@ -35,7 +35,7 @@ fn call_surfaces_a_raised_exception_as_err() {
     let block = proc_from(&mrb, b"proc { raise 'boom from block' }");
 
     let err = block
-        .call(&mrb, &[])
+        .call::<_, beni::Value>(&mrb, ())
         .expect_err("a raise inside the block must surface as Err");
 
     match err {
@@ -45,7 +45,7 @@ fn call_surfaces_a_raised_exception_as_err() {
     // The VM stays usable after the protected raise.
     let again = proc_from(&mrb, b"proc { 7 }");
     let got = again
-        .call(&mrb, &[])
+        .call(&mrb, ())
         .expect("the VM must survive the protected raise");
     assert_eq!(i32::from_value(got), Some(7));
 }
@@ -253,7 +253,7 @@ fn a_rust_defined_proc_called_without_keywords_allocates_no_hash() {
     let calls = Proc::from_value(calls).unwrap();
     let before = hashes_on_the_heap(&mrb);
 
-    calls.call(&mrb, &[]).unwrap();
+    calls.call::<_, beni::Value>(&mrb, ()).unwrap();
 
     assert_eq!(hashes_on_the_heap(&mrb), before);
 }
@@ -285,7 +285,7 @@ fn an_err_from_the_body_raises_to_the_procs_caller() {
         "begin; P.call; rescue ArgumentError => e; e.message; end",
     );
     let err = block
-        .call(&mrb, &[])
+        .call::<_, beni::Value>(&mrb, ())
         .expect_err("Proc::call answers the raise as Err");
 
     assert_eq!(rescued, "\"refused by the body\"");
@@ -368,8 +368,14 @@ fn the_closure_is_dropped_once_the_proc_and_its_copies_are_reclaimed() {
             let _ = &counted;
             true
         });
-        mrb.define_global_const("COPY", block.as_value().funcall(&mrb, "dup", &[]).unwrap())
-            .unwrap();
+        mrb.define_global_const(
+            "COPY",
+            block
+                .as_value()
+                .funcall::<_, _, beni::Value>(&mrb, "dup", ())
+                .unwrap(),
+        )
+        .unwrap();
     }
     mrb.gc_start();
     let kept = CLOSURE_DROPS.load(Ordering::SeqCst);

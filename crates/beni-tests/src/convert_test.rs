@@ -179,7 +179,7 @@ fn every_class_family_handle_round_trips_through_its_value() {
     let class = mrb.class_get(c"String").expect("String is a core class");
     let object = mrb
         .class_object()
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("Object.new constructs without raising");
     let singleton = RObject::from_value(object)
         .expect("Object.new answers a plain object")

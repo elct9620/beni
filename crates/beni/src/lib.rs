@@ -118,7 +118,7 @@ pub use fiber::FiberYield;
 pub use array::RArray;
 pub use bundled::{Enumerator, RFile, Time};
 pub use class::{Class, ClassOrModule, ExceptionClass, RClass, RModule};
-pub use convert::{FromValue, IntoValue, IntoValueFromNative};
+pub use convert::{ArgList, FromValue, IntoValue, IntoValueFromNative};
 pub use data::DataType;
 pub use error::Error;
 pub use gem::Gem;

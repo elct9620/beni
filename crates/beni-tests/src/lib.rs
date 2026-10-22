@@ -7,6 +7,7 @@
 mod support;
 
 mod arena_test;
+mod arg_list_test;
 mod args_test;
 mod array_test;
 mod carrier_test;

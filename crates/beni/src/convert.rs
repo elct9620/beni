@@ -491,6 +491,80 @@ into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
 into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10);
 into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10, T11 11);
 
+/// The positional arguments a Ruby call is handed. Mirrors magnus's
+/// `ArgList`: a slice or fixed-length array of value handles, or a tuple
+/// of up to twelve Rust values each through `IntoValue`.
+///
+/// It carries no keywords, where magnus's tuples may end in `KwArgs`:
+/// mruby's C call passes none (`funcall_args_capture` sets no keyword
+/// count, `vendor/mruby/src/vm.c`), so a trailing hash is a positional
+/// argument.
+pub trait ArgList {
+    /// The values the call reads, in order.
+    type Output: AsRef<[Value]>;
+
+    /// Convert `self` into the values the call reads.
+    fn into_arg_list_with(self, mrb: &Mrb) -> Self::Output;
+}
+
+impl<'a, T: ReprValue> ArgList for &'a [T] {
+    /// Borrowed in place for a handle laid out as a `Value`; a slice of
+    /// class handles, which hold the class pointer, is copied as values.
+    type Output = std::borrow::Cow<'a, [Value]>;
+
+    #[inline]
+    fn into_arg_list_with(self, _mrb: &Mrb) -> Self::Output {
+        if <T as crate::value::private::ReprValue>::VALUE_LAYOUT {
+            // SAFETY: `VALUE_LAYOUT` holds only for a type
+            // `#[repr(transparent)]` over `Value`, so the slice is a slice
+            // of values in place.
+            std::borrow::Cow::Borrowed(unsafe {
+                core::slice::from_raw_parts(self.as_ptr().cast::<Value>(), self.len())
+            })
+        } else {
+            std::borrow::Cow::Owned(self.iter().map(|v| v.as_value()).collect())
+        }
+    }
+}
+
+impl<T: ReprValue, const N: usize> ArgList for [T; N] {
+    type Output = [Value; N];
+
+    #[inline]
+    fn into_arg_list_with(self, _mrb: &Mrb) -> Self::Output {
+        self.map(ReprValue::as_value)
+    }
+}
+
+macro_rules! arg_list_tuple {
+    ($len:literal; $($t:ident $i:tt),*) => {
+        impl<$($t: IntoValue),*> ArgList for ($($t,)*) {
+            type Output = [Value; $len];
+
+            #[inline]
+            fn into_arg_list_with(self, mrb: &Mrb) -> Self::Output {
+                // The empty list converts nothing.
+                let _ = mrb;
+                [$(self.$i.into_value(mrb)),*]
+            }
+        }
+    };
+}
+
+arg_list_tuple!(0;);
+arg_list_tuple!(1; T0 0);
+arg_list_tuple!(2; T0 0, T1 1);
+arg_list_tuple!(3; T0 0, T1 1, T2 2);
+arg_list_tuple!(4; T0 0, T1 1, T2 2, T3 3);
+arg_list_tuple!(5; T0 0, T1 1, T2 2, T3 3, T4 4);
+arg_list_tuple!(6; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5);
+arg_list_tuple!(7; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6);
+arg_list_tuple!(8; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7);
+arg_list_tuple!(9; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
+arg_list_tuple!(10; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
+arg_list_tuple!(11; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10);
+arg_list_tuple!(12; T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10, T11 11);
+
 #[cfg(feature = "bytes")]
 impl IntoValue for bytes::Bytes {
     #[inline]

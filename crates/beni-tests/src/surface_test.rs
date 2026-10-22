@@ -72,7 +72,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <Value as ReprValue>::dup;
     let _ = <Value as ReprValue>::classname;
     let _ = <Value as ReprValue>::to_string;
-    let _ = <Value as ReprValue>::funcall::<&core::ffi::CStr>;
+    let _ = <Value as ReprValue>::funcall::<&core::ffi::CStr, (), Value>;
     let _ = <Value as ReprValue>::is_nil;
     let _ = <RObject as Object>::ivar_set::<&core::ffi::CStr, Value>;
     let _ = <RObject as Object>::ivar_get::<&core::ffi::CStr, Value>;
@@ -87,14 +87,14 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RClass::real;
     let _ = RClass::set_instance_data_tt;
     let _ = <RClass as Class>::new;
-    let _ = <RClass as Class>::new_instance;
+    let _ = <RClass as Class>::new_instance::<()>;
     let _ = <RClass as Class>::obj_alloc;
     let _ = <RClass as Class>::superclass;
     let _ = <RClass as Class>::name;
     let _ = <RClass as Class>::as_r_class;
     let _ = <RClass as Class>::undef_default_alloc_func;
     let _ = <ExceptionClass as Class>::new;
-    let _ = <ExceptionClass as Class>::new_instance;
+    let _ = <ExceptionClass as Class>::new_instance::<()>;
     let _ = <ExceptionClass as Class>::obj_alloc;
     let _ = <ExceptionClass as Class>::as_r_class;
     {
@@ -217,7 +217,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RString::len;
     let _ = RString::is_empty;
     let _ = Proc::from_value_unchecked;
-    let _ = Proc::call;
+    let _ = Proc::call::<(), Value>;
     let _ = Proc::dump;
     let _ = Mrb::proc_new::<Value>;
     let _ = Mrb::proc_from_fn::<fn(&Mrb, &[Value], Option<Proc>) -> Value, Value>;
@@ -427,7 +427,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Float::to_integer;
     let _ = <Value as ReprValue>::freeze;
     let _ = <Value as sys::FromRawValue>::from_raw;
-    let _ = <Value as ReprValue>::funcall_with_block::<&core::ffi::CStr>;
+    let _ = <Value as ReprValue>::funcall_with_block::<&core::ffi::CStr, (), Value>;
     let _ = <Value as ReprValue>::inspect;
     let _ = Integer::to_r_string_radix;
     let _ = <Value as ReprValue>::is_instance_of::<RClass>;
@@ -488,9 +488,9 @@ fn compiler_surface_is_reachable_from_outside() {
 fn fiber_surface_is_reachable_from_outside() {
     let _ = Mrb::fiber_new;
     let _ = Mrb::fiber_current;
-    let _ = Fiber::resume::<Value>;
+    let _ = Fiber::resume::<(), Value>;
     let _ = Fiber::is_alive;
-    let _ = Mrb::fiber_yield;
+    let _ = Mrb::fiber_yield::<()>;
 }
 
 /// The debug hooks' surface, present where the archive carries them and

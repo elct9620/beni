@@ -276,7 +276,9 @@ fn is_kind_of_answers_false_for_an_error_carrying_no_exception() {
 fn break_is_an_exception(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let block = scan_args::<(Symbol,), (), RArray, (), (), Proc>(mrb)?.block;
     let exception = mrb.exc_get(c"Exception")?;
-    let err = block.call(mrb, &[]).expect_err("the block breaks out");
+    let err = block
+        .call::<_, beni::Value>(mrb, ())
+        .expect_err("the block breaks out");
     let Error::Exception(escaped) = &err else {
         panic!("a break surfaces as Error::Exception, got {err}");
     };
@@ -297,7 +299,7 @@ fn is_kind_of_answers_false_for_a_break_object() {
         .define_method(&mrb, c"run", beni::method!(break_is_an_exception, -1))
         .expect("registering the probe method must succeed");
     let recv = class
-        .new_instance(&mrb, &[])
+        .new_instance(&mrb, ())
         .expect("the receiver constructs");
     mrb.gv_set(c"$beni_break_kind_recv", recv)
         .expect("the name interns");
