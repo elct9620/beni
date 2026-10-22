@@ -1193,7 +1193,7 @@ These operations call, render, copy, or freeze a value:
 
 Dispatch can also pass an explicit block — a typed `Proc` the method yields to — alongside the argument list. The plain dispatch is the no-block call; a caller wanting no block uses it rather than passing a nil block.
 
-A raise inside `inspect` yields an empty string. Default render gives `#<ClassName>` for an immediate and `#<ClassName:0x...>` for a heap object. It builds from the class name without dispatching the value's own `to_s`.
+A raise inside `inspect` yields an empty string, and a render answered as a Rust string replaces each byte sequence that is not UTF-8 with U+FFFD. Default render gives `#<ClassName>` for an immediate and `#<ClassName:0x...>` for a heap object. It builds from the class name without dispatching the value's own `to_s`.
 
 A `dup` copy is unfrozen and carries no singleton class; an immediate returns itself. The frozen check is a precondition guard, and an immediate counts as frozen.
 
@@ -1495,6 +1495,8 @@ A class or module handle reads its fully-qualified path: the namespace chain lea
 | anonymous, with no place in any namespace | nothing |
 
 A class handle also reads its name through the `Class` trait, a total non-dispatching read. The name is the qualified path when the class has one, and a synthesized `#<Class:0x…>` stand-in when the path read answers nothing.
+
+A constant name may hold bytes that are not UTF-8, so the path read, the `Class` name, and a value's class name each replace such a byte sequence with U+FFFD, as `magnus`'s lossy name reads do.
 
 ##### Receiver conversion
 
