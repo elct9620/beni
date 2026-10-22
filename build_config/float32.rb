@@ -9,10 +9,11 @@
 # archive that compiles and runs the 32-bit set, which the validation
 # config's double-width build never reaches.
 #
-# It pins no integer width, so a 64-bit host settles on MRB_INT64 and
-# the two configured widths differ from the validation build's in both
-# axes at once. Nothing here is a product posture — it exists to be
-# verified against.
+# It also pins +MRB_INT32+ without the arbitrary-width Integer gem, the
+# one integer posture no other verification build covers: the crates
+# offer a narrower set of integer conversions where a 32-bit +mrb_int+
+# has no bigint to fall back on. Nothing here is a product posture — it
+# exists to be verified against.
 #
 # The file is `load`ed by mruby's rake when +MRUBY_CONFIG+ points at it.
 
@@ -23,8 +24,10 @@ require_relative "beni_build_config"
 MRuby::Build.new("host") do |conf|
   conf.toolchain :gcc
 
-  conf.cc.defines  << "MRB_USE_FLOAT32"
-  conf.cxx.defines << "MRB_USE_FLOAT32"
+  %w[MRB_USE_FLOAT32 MRB_INT32].each do |define|
+    conf.cc.defines  << define
+    conf.cxx.defines << define
+  end
 
   BeniBuildConfig::MRBGEM_BASELINE.each { |gem_name| conf.gem core: gem_name }
   conf.build_mrbc_exec

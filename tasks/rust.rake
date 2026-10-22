@@ -45,7 +45,9 @@
 #                              `float`. The crates convert a different
 #                              set of Rust floats under each configured
 #                              float width, and this is the only leg
-#                              that compiles the 32-bit set.
+#                              that compiles the 32-bit set. It pins
+#                              MRB_INT32 without bigint, the integer
+#                              posture no other leg builds.
 #   $ rake rust:test:no_boxing
 #                            — cargo test against an mruby built with
 #                              MRB_NO_BOXING and MRB_INT64, then link the

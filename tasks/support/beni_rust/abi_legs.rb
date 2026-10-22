@@ -33,7 +33,8 @@ module BeniRust
   # The 32-bit-float leg: build the vendored mruby under the float32
   # verification config, then run the wrapper tests against that
   # archive. It is the only build that compiles the crates' 32-bit
-  # float conversions, which no other ABI in the chain reaches. Its own
+  # float conversions, and the only one with a 32-bit `mrb_int` and no
+  # bigint, which no other ABI in the chain reaches. Its own
   # cargo target dir, since the MRUBY_LIB_DIR switch would otherwise
   # invalidate the main verification cache.
   def self.float32_test
