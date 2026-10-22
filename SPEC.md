@@ -925,10 +925,9 @@ mruby has no storage a short symbol name can be borrowed from stably: a short
 name unpacks into a buffer that the next name read overwrites. The typed surface
 therefore copies the name out rather than aliasing it.
 
-A symbol also reifies its name as an mruby String value, the way Ruby's
-`Symbol#to_s` does. Unlike the three reads, it produces a distinct, mutable
-mruby `RString` value whose bytes are the symbol's name — unfrozen, unlike
-`Symbol#name`. It dispatches nothing and never raises.
+A symbol's string coercion reifies its name as an mruby String value, the way
+Ruby's `Symbol#to_s` does: a distinct, mutable `RString` whose bytes are the
+symbol's name — unfrozen, unlike `Symbol#name` — built without dispatching.
 
 #### Ranges
 
@@ -1205,7 +1204,7 @@ String coercion dispatches `to_s` only for a value outside the first four rows:
 | Value | Renders as |
 |---|---|
 | String | itself |
-| Symbol | its name |
+| Symbol | its name, as a new unfrozen string |
 | Integer | its decimal digits |
 | class or module | the built-in `Module#to_s` form |
 | any other | its `to_s`; default render for a non-string answer |
