@@ -241,24 +241,6 @@ impl Symbol {
     pub fn dump(self, mrb: &Mrb) -> Result<String, Error> {
         Id::from(self).dump(mrb)
     }
-
-    /// The symbol's name reified as an mruby String, via `mrb_sym_str`
-    /// (Ruby's `Symbol#to_s`). Where `name`/`name_bytes`/`dump` copy the
-    /// name into an owned Rust value, this yields a distinct, mutable
-    /// `RString` the consumer owns — unfrozen, unlike `Symbol#name`. Builds
-    /// the value without dispatching and never raises.
-    #[inline]
-    pub fn to_str(self, mrb: &Mrb) -> crate::RString {
-        // SAFETY: `self`'s id is interned against `mrb`, whose
-        // pointer is live. `mrb_sym_str` reads the name and boxes a
-        // String value; the result is String-tagged by construction.
-        unsafe {
-            crate::RString::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_sym_str(
-                mrb.as_ptr(),
-                Id::from(self).0,
-            )))
-        }
-    }
 }
 
 /// A name keying an operation — beni's mirror of `magnus`'s `IntoId`.

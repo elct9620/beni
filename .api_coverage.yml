@@ -325,7 +325,7 @@ typed:
   mrb_sym_name: "`Id::name`, `Symbol::name` — owned, since a short name unpacks into the `mrb->symbuf` scratch the next read overwrites; a name carrying a NUL comes back in its dump form"
   mrb_sym_name_len: "`Id::name_bytes`, `Symbol::name_bytes` — owned for the same scratch reuse; the length keeps an embedded NUL unescaped"
   mrb_sym_dump: "`Id::dump`, `Symbol::dump` — owned for the same scratch reuse; never raises"
-  mrb_sym_str: "`Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises"
+  mrb_sym_str: "`ReprValue::to_r_string` on a `Symbol` — the name as a distinct, unfrozen String (Ruby's `Symbol#to_s`), without dispatching"
   mrb_symbol_value: "`Symbol::from` an `Id`, `IntoValue for Id` — boxing the interned id into its symbol value, magnus's `From<Id> for Symbol`"
   mrb_test: ReprValue::to_bool
   mrb_top_run: Mrb::load_irep

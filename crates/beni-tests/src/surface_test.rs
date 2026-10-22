@@ -386,7 +386,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RString::to_inum;
     let _ = Symbol::dump;
     let _ = Symbol::name_bytes;
-    let _ = Symbol::to_str;
     let _ = <Value as ReprValue>::add;
     let _ = Float::to_f64;
     let _ = Integer::to_i64;

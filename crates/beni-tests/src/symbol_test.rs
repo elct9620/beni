@@ -112,12 +112,14 @@ fn name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
 }
 
 #[test]
-fn to_str_reifies_the_name_as_a_mutable_string() {
+fn string_coercion_reifies_the_name_as_a_mutable_string() {
     let mrb = open_mrb();
     let sym = Symbol::new(&mrb, "flags").expect("the name interns");
 
     // The reified String carries the symbol's name bytes verbatim.
-    let str = sym.to_str(&mrb);
+    let str = sym
+        .to_r_string(&mrb)
+        .expect("a symbol coerces without raising");
     assert_eq!(str.owned_bytes(), b"flags");
 
     // It is `Symbol#to_s`, not `#name`: the value is unfrozen, so a

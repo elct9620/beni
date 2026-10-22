@@ -204,7 +204,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_sym_dump` | fn | ✅ | ✅ | `Id::dump`, `Symbol::dump` — owned for the same scratch reuse; never raises |
 | `mrb_sym_name` | fn | ✅ | ✅ | `Id::name`, `Symbol::name` — owned, since a short name unpacks into the `mrb->symbuf` scratch the next read overwrites; a name carrying a NUL comes back in its dump form |
 | `mrb_sym_name_len` | fn | ✅ | ✅ | `Id::name_bytes`, `Symbol::name_bytes` — owned for the same scratch reuse; the length keeps an embedded NUL unescaped |
-| `mrb_sym_str` | fn | ✅ | ✅ | `Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises |
+| `mrb_sym_str` | fn | ✅ | ✅ | `ReprValue::to_r_string` on a `Symbol` — the name as a distinct, unfrozen String (Ruby's `Symbol#to_s`), without dispatching |
 | `mrb_temp_alloc` | fn | ✅ | 🚫 | declined: VM scratch allocator tied to the arena — see `mrb_malloc` |
 | `mrb_to_float` | macro | ❌ | ✅ | defined as `mrb_ensure_float_type` |
 | `mrb_to_int` | macro | ❌ | ✅ | defined as `mrb_ensure_int_type` |
