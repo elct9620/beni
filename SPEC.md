@@ -1029,7 +1029,7 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Mutates a receiver: array append / remove / extend / replace / clear; array indexed write and resize; hash assign / delete / merge / clear; string append and resize; instance-variable assignment and removal; class-variable assignment; constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range (a negative index past the beginning, or one too large); a string resize also when the requested length is negative or overflows | `Result` |
 | Dispatches Ruby: a method call; `==` / `eql?`; a `<=>` comparison; an object `dup`; string coercion; a splat coercion to an array running a non-array's `to_a`; an array join rendering each element via `to_s`; an instance construction running `initialize`; a constant fetch running a `const_missing` hook; a constant assignment running a `const_added` hook; a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`; a hash read running a `default` lookup for an absent key; a range construction comparing its two bounds; a current-fiber read running `Fiber.current` | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared; a current-fiber read also when `Fiber` names no class, or `Fiber.current` answers anything but a Fiber (`TypeError`) | `Result`; a `<=>` comparison yields nothing when the two values are incomparable |
 | Reads a named variable that raises on absence: a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
-| Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read, a Range begin / end read, an array element or hash value read or removed, or a global-variable read, converted to a requested type; an Integer read out as a Rust integer, a `Fixnum` read into `i64` or `i128` aside; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an Integer read out beyond its Rust target's range (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width against an archive other than a bigint archive (`RangeError`) | `Result` |
+| Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read, a Range begin / end read, an array element or hash value read or removed, a global-variable read, or the result of a method call, block call, or fiber resume, converted to a requested type; an Integer read out as a Rust integer, a `Fixnum` read into `i64` or `i128` aside; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an Integer read out beyond its Rust target's range (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width against an archive other than a bigint archive (`RangeError`) | `Result` |
 | Interns a name, creating its symbol: a C-string, byte-slice, String-value, or static-buffer intern; a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (`ArgumentError`) | `Result` |
 | Reads or renders without dispatching but can still raise: a string's NUL-terminated C-string view; a strict parse of a string to an integer in a given radix, or to a float; rendering an integer to a string in a given radix; computing a Range's normalized slice of a collection length; reading an instance-variable holder's singleton class; a symbol or `Id` name read, as a UTF-8 string, as bytes, or in dump form | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; a parsed integer is beyond what the configured integer width or `i64` holds; the bytes are not a valid float; the render radix is outside 2 through 36; a Range slice's present bound is neither an integer nor integer-convertible (`TypeError`); mruby gives the object no singleton class (`TypeError`); a name read as a UTF-8 string: the name is not UTF-8 (`ArgumentError`); any name read: the interpreter holds no name for the id (`RangeError`) | `Result`; a Range slice that does not raise returns its three-way outcome: in-range with begin offset and length, out-of-range, or a non-Range mismatch |
 | Allocates an instance without dispatching: a class's bare allocation | the class is a singleton class, its default allocator is undefined, or its instances are of an immediate or C-pointer type (`TypeError`) | `Result` |
@@ -1184,7 +1184,7 @@ These operations call, render, copy, or freeze a value:
 
 | Operation | Semantics |
 |---|---|
-| dispatch | call a Ruby method by symbol-or-name key with an argument slice, returning its result |
+| dispatch | call a Ruby method by symbol-or-name key with an argument list, returning its result through `TryConvert` into the requested type |
 | inspect | the value's debug string, Ruby's `inspect`; runs a user-defined `inspect` |
 | default render | the default `to_s` form as a new string; total, running no user Ruby |
 | `dup` | copy the object, running its `initialize_copy`; may raise |
@@ -1192,7 +1192,7 @@ These operations call, render, copy, or freeze a value:
 | freeze | freeze the value in place |
 | frozen check | `Err` when the value is frozen, `Ok` otherwise; runs no user Ruby |
 
-Dispatch can also pass an explicit block — a typed `Proc` the method yields to — alongside the argument slice. The plain dispatch is the no-block call; a caller wanting no block uses it rather than passing a nil block.
+Dispatch can also pass an explicit block — a typed `Proc` the method yields to — alongside the argument list. The plain dispatch is the no-block call; a caller wanting no block uses it rather than passing a nil block.
 
 A raise inside `inspect` yields an empty string. Default render gives `#<ClassName>` for an immediate and `#<ClassName:0x...>` for a heap object. It builds from the class name without dispatching the value's own `to_s`.
 
@@ -1621,7 +1621,7 @@ The named keyword read mirrors `magnus`'s `get_kwargs`. It takes a keyword hash 
 
 ##### Instance construction
 
-Constructing an instance of a class handle does what Ruby's built-in `Class#new` does. It allocates as the bare allocation does, then runs `initialize` with an argument slice. A class's own `new`, Ruby-defined or not, is never called. A raising `initialize` or a refused allocation surfaces as a Rust `Err`. This mirrors `magnus`'s `Class::new_instance`.
+Constructing an instance of a class handle does what Ruby's built-in `Class#new` does. It allocates as the bare allocation does, then runs `initialize` with an argument list. A class's own `new`, Ruby-defined or not, is never called. A raising `initialize` or a refused allocation surfaces as a Rust `Err`. This mirrors `magnus`'s `Class::new_instance`.
 
 A module function registers on a module handle in one call and becomes two methods, the way `Math.sqrt` is callable both ways.
 
@@ -1950,7 +1950,7 @@ The embedder invokes each gem's `init` with the live interpreter handle during i
 
 ##### Block calls
 
-A typed `Proc` handle wraps an mruby block. `Proc::call` invokes it with an argument slice under exception protection. A non-local exit surfaces as a Rust `Err` instead of unwinding across FFI.
+A typed `Proc` handle wraps an mruby block. `Proc::call` invokes it with an argument list under exception protection, answering the block's value through `TryConvert` into the requested type. A non-local exit surfaces as a Rust `Err` instead of unwinding across FFI.
 
 | Block exits by | `Proc::call` answers |
 |---|---|
@@ -2003,9 +2003,9 @@ A `Fiber` handle runs a Ruby-defined block as a fiber, mirroring `magnus`'s
 | Operation | Behavior |
 |---|---|
 | create | a fiber from a `Proc` handle, not yet started |
-| resume | starts the fiber with an argument slice as its block's arguments, or continues a suspended one with the slice as the value its pending yield answers; answers the value the fiber next yields, or its block's value once the block finishes |
+| resume | starts the fiber with an argument list as its block's arguments, or continues a suspended one with the list as the value its pending yield answers; answers the value the fiber next yields, or its block's value once the block finishes |
 | alive test | whether the fiber can still be resumed — false once its block has finished |
-| fiber yield | built from an argument slice on the `Mrb` handle and returned from a registered method running inside a resumed fiber; the return suspends the fiber and hands the slice to its resumer |
+| fiber yield | built from an argument list on the `Mrb` handle and returned from a registered method running inside a resumed fiber; the return suspends the fiber and hands the list to its resumer |
 | current | on the `Mrb` handle, the fiber `Fiber.current` answers when dispatched — the running fiber, or the root fiber outside any resumed one |
 
 A slice handed across a switch arrives as one value:
@@ -2548,6 +2548,7 @@ measures complete.
 | Term | Meaning |
 |---|---|
 | symbol-or-name key | a name keying an operation, resolved to the `Id` it names: a string interns to it, and an already-interned `Id` or `Symbol` is reused as-is; a string key is a NUL-terminated C string, keyed on the bytes before its first NUL, or a Rust string, keyed on all of its bytes — beni's mirror of `magnus`'s `IntoId` |
+| argument list | the positional arguments a Ruby call is handed: a slice or fixed-length array of value handles, or a tuple of up to twelve Rust values each through `IntoValue` — beni's mirror of `magnus`'s `ArgList`. It carries no keywords, since mruby's C call passes none, so a trailing hash is a positional argument |
 | toolchain | a vendored build dependency (mruby source, wasi-sdk, prism) |
 | compile context | a filename stamp and top-level local variable scope shared by every load compiled through it; a program compiled under a filename-stamped one raises exceptions carrying a source-line backtrace. A load given no context borrows an unnamed one for its own duration |
 | parse message | the line, column, and message text beni reports one compiler diagnostic in — an error or a warning; a failure the compiler recorded no diagnostic for is reported in the same shape |
