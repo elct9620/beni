@@ -83,7 +83,7 @@ struct WidgetGem;
 
 impl Gem for WidgetGem {
     fn init(mrb: &Mrb) -> Result<(), Error> {
-        let widget = mrb.define_class(c"Widget", mrb.object_class())?;
+        let widget = mrb.define_class(c"Widget", mrb.class_object())?;
         widget.define_method(mrb, c"answer", method!(answer, 0))?;
         Ok(())
     }
