@@ -1043,6 +1043,21 @@ fn a_constant_name_that_is_not_utf8_reads_lossily_as_magnus_reads_it() {
 }
 
 #[test]
+fn a_refused_redefinition_names_a_non_utf8_class_lossily() {
+    let mrb = open_mrb();
+    let object = mrb.class_object();
+    let name = mrb.intern(b"C\xff").expect("the name interns");
+    object
+        .const_set(&mrb, name, 1i32)
+        .expect("a non-ASCII byte is an identifier character");
+
+    let err = mrb
+        .define_class(name, object)
+        .expect_err("a constant bound to an Integer is no class");
+    assert_eq!(err.message(&mrb), "C\u{FFFD} is not a class");
+}
+
+#[test]
 fn exception_class_registers_methods_through_the_module_trait() {
     let mrb = open_mrb();
     let runtime_error = mrb

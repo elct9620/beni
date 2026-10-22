@@ -184,7 +184,8 @@ pub(crate) fn bound_class(
         return None;
     }
     Some(outer.fetch_const(mrb, name).and_then(|bound| {
-        let name = crate::Symbol::from(name).name(mrb).unwrap_or_default();
+        let bytes = name.name_bytes(mrb).unwrap_or_default();
+        let name = String::from_utf8_lossy(&bytes);
         let type_error = |message: String| Err(crate::try_convert::type_error(mrb, &message));
         if bound.tag() != sys::MRB_TT_CLASS {
             return type_error(format!("{name} is not a class"));
