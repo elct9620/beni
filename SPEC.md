@@ -443,8 +443,19 @@ raise nothing and run no Ruby:
 | `T: TypedData` | a data carrier: a new instance of the class its type names for it, as `obj_wrap` does | for every type keeping the `TypedData` contract |
 | `Inline<T>` | the handle's own value, an inline struct | for every type keeping the `InlineStruct` contract |
 | a `T` the `InlineStruct` macros implement | a new instance of its type's class, as `Inline::new` does | for every type keeping the `InlineStruct` contract |
-| `&CStr` | a copy of its bytes before the NUL in a new String | — |
+| `String` / `&str` / `char` | a new String of its UTF-8 bytes | — |
+| `CString` / `&CStr` | a copy of its bytes before the NUL in a new String | — |
+| `PathBuf` / `&Path` | a new String of the path's bytes on a Unix target, of its UTF-8 text with each invalid sequence replaced on any other | — |
 | `Bytes`, with the `bytes` feature | a copy of the bytes in a new String | — |
+| `Option<T>` | `nil` for `None`, `T`'s conversion for `Some` | as `T` |
+| a tuple of 1 to 12 elements | a new Array of each element's conversion | — |
+| `Vec<T>` of a native type | a new Array of each element's conversion | — |
+| `HashMap<K, V>` / `BTreeMap<K, V>` of native types | a new Hash of each pair's conversion; a pair whose key raises while the Hash stores it is left out, as `magnus`'s conversion leaves it | — |
+
+A `Vec` or map converts only native types, the `unsafe` `IntoValueFromNative`
+trait marking them as it does in `magnus`, so no Rust heap structure carries a
+`Value` into the conversion. Each element or pair converts in its own arena
+scope, so the arena grows by the new collection alone, whatever its length.
 
 A Rust number type converts into an Integer or Float `Value` only where every
 value it holds fits the configured integer width or configured float width, or
@@ -2545,6 +2556,7 @@ measures complete.
 | documentation build | a build the documentation host runs, told by that variable alone: nothing else marks a build as one, and nothing else unmarks it. It renders documentation and never links, so declarations are the whole of what it needs from `beni-sys` |
 | documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated from an mruby built with the upstream default configuration, and carrying what the generating host decides alongside it — type widths, the form of `va_list`, the constants its headers define. Never hand-written and never tracked by the repository: the published package carries the copy a release generated, and every other copy is generated where it is read |
 | lazy value | a value a `Lazy` names, which each interpreter computes once and holds for its own lifetime |
+| native type | a Rust type whose values hold no `Value`, so a Rust heap structure of them converts into Ruby: Rust numbers, `bool`, `()`, `String`, `&str`, `CString`, `&CStr`, `char`, `PathBuf`, `&Path`, and an `Option`, `Vec`, map, or tuple of native types; a consumer marks its own type as one only when the type holds no `Value` |
 | owned type | a type whose values hold nothing the collector can free, so a Rust heap structure may store them past the arena: Rust numbers, `bool`, `String`, `CString`, `char`, `PathBuf`, `Bytes`, a non-zero integer, the payload copy a macro-implemented inline struct converts to, the `Qnil` / `Qtrue` / `Qfalse` handles, whose values are immediate under every boxing, the `Symbol` handle, whose symbol lives until the interpreter closes, and an `Option`, `Vec`, map, tuple, or fixed-length array of owned types; a consumer marks its own type as one only when the type holds no collectable `Value` |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
