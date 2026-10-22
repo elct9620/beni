@@ -129,12 +129,12 @@ fn fixed_arity_reads_a_splatted_call_by_its_spread_count() {
         .expect("registering the fixed-arity method must succeed");
 
     let got = mrb
-        .load_string(b"BeniSplatAdder.new.add(*[1, 2])")
+        .eval::<beni::Value>("BeniSplatAdder.new.add(*[1, 2])")
         .expect("a splat spreading two values fills both parameters");
     assert_eq!(i32::from_value(got), Some(3));
 
     let err = mrb
-        .load_string(b"BeniSplatAdder.new.add(*[1, 2, 3])")
+        .eval::<beni::Value>("BeniSplatAdder.new.add(*[1, 2, 3])")
         .expect_err("a splat spreading three values is a wrong count");
     let Error::Exception(exc) = err else {
         panic!("a wrong argument count must raise, got {err}");
@@ -154,12 +154,12 @@ fn fixed_arity_takes_keywords_as_one_trailing_hash() {
         .expect("registering the fixed-arity method must succeed");
 
     let got = mrb
-        .load_string(b"BeniKeywordPass.new.pass(a: 1) == { a: 1 }")
+        .eval::<beni::Value>("BeniKeywordPass.new.pass(a: 1) == { a: 1 }")
         .expect("keywords alone fill the one parameter");
     assert_eq!(bool::from_value(got), Some(true));
 
     let err = mrb
-        .load_string(b"BeniKeywordPass.new.add(1, a: 2)")
+        .eval::<beni::Value>("BeniKeywordPass.new.add(1, a: 2)")
         .expect_err("the keyword hash fills the second parameter, which wants an Integer");
     let Error::Exception(exc) = err else {
         panic!("a failed conversion must raise, got {err}");
@@ -167,7 +167,7 @@ fn fixed_arity_takes_keywords_as_one_trailing_hash() {
     assert_eq!(exc.classname(&mrb), "TypeError");
 
     let err = mrb
-        .load_string(b"BeniKeywordPass.new.pass(1, a: 2)")
+        .eval::<beni::Value>("BeniKeywordPass.new.pass(1, a: 2)")
         .expect_err("a full positional count plus keywords is one argument too many");
     let Error::Exception(exc) = err else {
         panic!("a wrong argument count must raise, got {err}");
@@ -672,14 +672,14 @@ fn optional_arity_reads_a_splat_and_folds_keywords_into_the_next_slot() {
         .expect("registering the typed method must succeed");
 
     let got = mrb
-        .load_string(b"[BeniOptSpread.new.add(*[4]), BeniOptSpread.new.add(*[4, 5])]")
+        .eval::<beni::Value>("[BeniOptSpread.new.add(*[4]), BeniOptSpread.new.add(*[4, 5])]")
         .expect("a splat spreading one or two values fits the range");
     let got = RArray::try_convert(got, &mrb).expect("the script answers an Array");
     assert_eq!(i32::try_convert(got.entry(&mrb, 0), &mrb).ok(), Some(4));
     assert_eq!(i32::try_convert(got.entry(&mrb, 1), &mrb).ok(), Some(9));
 
     let err = mrb
-        .load_string(b"BeniOptSpread.new.add(1, a: 2)")
+        .eval::<beni::Value>("BeniOptSpread.new.add(1, a: 2)")
         .expect_err("the keyword hash fills the optional slot, which wants an Integer");
     let Error::Exception(exc) = err else {
         panic!("a failed conversion must raise, got {err}");
@@ -696,12 +696,12 @@ fn block_accepting_arity_reads_a_splat_and_keywords_with_its_block() {
         .expect("registering the typed method must succeed");
 
     let got = mrb
-        .load_string(b"BeniBlockSpread.new.apply(*[4]) { |a| a * 10 }")
+        .eval::<beni::Value>("BeniBlockSpread.new.apply(*[4]) { |a| a * 10 }")
         .expect("a splat spreading one value fills the parameter beside the block");
     assert_eq!(i32::from_value(got), Some(40));
 
     let err = mrb
-        .load_string(b"BeniBlockSpread.new.apply(a: 2) { |a| a }")
+        .eval::<beni::Value>("BeniBlockSpread.new.apply(a: 2) { |a| a }")
         .expect_err("the keyword hash fills the parameter, which wants an Integer");
     let Error::Exception(exc) = err else {
         panic!("a failed conversion must raise, got {err}");
@@ -814,7 +814,7 @@ fn typed_method_returns_rust_text_and_collections() {
         .expect("registering the typed method must succeed");
 
     let got = mrb
-        .load_string(b"BeniWords.new.words('a bc')")
+        .eval::<beni::Value>("BeniWords.new.words('a bc')")
         .expect("the call must not raise");
     assert_eq!(got.inspect(&mrb), "[\"a\", \"bc\"]");
 }

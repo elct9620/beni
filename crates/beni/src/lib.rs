@@ -47,7 +47,7 @@
 //! ## Cargo features
 //!
 //! `compiler`, on by default, carries what mruby keeps in its compiler
-//! gem: the `Ccontext` compile context and `Mrb::load_string`. Turn
+//! gem: the `Ccontext` compile context and `Mrb::eval`. Turn
 //! default features off to embed mruby without compiling Ruby at run
 //! time — loading precompiled bytecode needs no compiler and stays.
 //!

@@ -479,7 +479,7 @@ fn caller_twice(mrb: &Mrb, _self: Value) -> Result<RArray, Error> {
             )
         };
         let before = place(frames);
-        mrb.load_string(b"def deep(n)\n  n == 0 ? 0 : deep(n - 1)\nend\ndeep(300)\n")?;
+        mrb.eval::<beni::Value>("def deep(n)\n  n == 0 ? 0 : deep(n - 1)\nend\ndeep(300)\n")?;
         let after = place(frames);
         let ary = mrb.ary_new();
         for (line, method) in [before, after] {

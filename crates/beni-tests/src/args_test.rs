@@ -279,7 +279,7 @@ fn the_argument_slice_survives_vm_reentry() {
 }
 
 fn eval(mrb: &Mrb, source: &str) -> Value {
-    mrb.load_string(source.as_bytes())
+    mrb.eval::<beni::Value>(source)
         .unwrap_or_else(|err| panic!("{source} raised: {}", err.message(mrb)))
 }
 
@@ -411,7 +411,7 @@ fn an_any_arity_call_without_keywords_allocates_no_hash() {
         .define_singleton_method(&mrb, "count", beni::method!(arg_count, -1))
         .unwrap();
     let calls = mrb
-        .load_string(b"GC.disable; proc { 1000.times { Object.count(1, 2) } }")
+        .eval::<beni::Value>("GC.disable; proc { 1000.times { Object.count(1, 2) } }")
         .unwrap();
     let calls = beni::Proc::from_value(calls).unwrap();
     let before = hashes_on_the_heap(&mrb);
@@ -443,8 +443,8 @@ fn a_method_reads_the_name_its_call_reached_it_by() {
         .expect("registering second must succeed");
 
     let got = mrb
-        .load_string(
-            b"class BeniCalledAs; alias_method :third, :first; end
+        .eval::<beni::Value>(
+            "class BeniCalledAs; alias_method :third, :first; end
               o = BeniCalledAs.new
               [o.first, o.second, o.third, o.send(:second)] == [:first, :second, :third, :second]",
         )
@@ -461,7 +461,8 @@ fn the_name_read_answers_none_outside_any_method_call() {
         mrb.mid().is_none(),
         "Rust code outside any call has no name"
     );
-    mrb.load_string(b"1 + 1").expect("top-level code runs");
+    mrb.eval::<beni::Value>("1 + 1")
+        .expect("top-level code runs");
     assert!(
         mrb.mid().is_none(),
         "a finished top-level run leaves no name"

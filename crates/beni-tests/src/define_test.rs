@@ -305,8 +305,8 @@ fn assert_type_error(mrb: &Mrb, err: beni::Error) {
 #[test]
 fn define_class_fetches_a_prepended_class_as_itself() {
     let mrb = open_mrb();
-    mrb.load_string(
-        b"module BeniPrepender; end
+    mrb.eval::<beni::Value>(
+        "module BeniPrepender; end
           class BeniPrepended; prepend BeniPrepender; end
           module BeniPrependNs
             class Inner; prepend BeniPrepender; end
@@ -330,7 +330,7 @@ fn define_class_fetches_a_prepended_class_as_itself() {
         .expect("the same superclass must fetch the nested class");
     assert!(inner.as_value().is::<beni::RClass>());
     let unchanged = mrb
-        .load_string(b"BeniPrependNs::Inner.equal?($beni_inner_before)")
+        .eval::<beni::Value>("BeniPrependNs::Inner.equal?($beni_inner_before)")
         .expect("reading the constant back must succeed");
     assert_eq!(
         bool::from_value(unchanged),
@@ -342,8 +342,8 @@ fn define_class_fetches_a_prepended_class_as_itself() {
 #[test]
 fn define_error_on_a_prepended_exception_class_builds_its_exceptions() {
     let mrb = open_mrb();
-    mrb.load_string(
-        b"module BeniErrorPrepender; end
+    mrb.eval::<beni::Value>(
+        "module BeniErrorPrepender; end
           class BeniPrependedError < StandardError; prepend BeniErrorPrepender; end",
     )
     .expect("the prepended exception class must be defined");
@@ -372,8 +372,8 @@ fn define_error_on_a_prepended_exception_class_builds_its_exceptions() {
 #[test]
 fn define_class_refuses_a_name_bound_to_a_singleton_class() {
     let mrb = open_mrb();
-    mrb.load_string(
-        b"BeniBoundSingleton = Object.new.singleton_class
+    mrb.eval::<beni::Value>(
+        "BeniBoundSingleton = Object.new.singleton_class
           BeniBoundErrorSingleton = StandardError.new.singleton_class",
     )
     .expect("binding the singleton classes must succeed");
@@ -458,7 +458,7 @@ fn define_global_const_binds_a_top_level_constant() {
         .expect("binding a top-level constant must succeed");
 
     let got = mrb
-        .load_string(b"BENI_GLOBAL_ANSWER")
+        .eval::<beni::Value>("BENI_GLOBAL_ANSWER")
         .expect("the constant reads back from Ruby");
     assert_eq!(i64::from_value(got), Some(42));
 }
@@ -466,7 +466,7 @@ fn define_global_const_binds_a_top_level_constant() {
 #[test]
 fn define_global_const_surfaces_a_frozen_object_as_err() {
     let mrb = open_mrb();
-    mrb.load_string(b"Object.freeze")
+    mrb.eval::<beni::Value>("Object.freeze")
         .expect("freezing Object must succeed");
     let frozen_error = mrb.exc_get(c"FrozenError").expect("a core exception class");
 
@@ -520,14 +520,14 @@ fn const_set_names_an_anonymous_class_by_its_constant_path() {
 #[test]
 fn define_global_const_runs_the_const_added_hook() {
     let mrb = open_mrb();
-    mrb.load_string(b"class Object; def self.const_added(name) = $beni_added = name; end")
+    mrb.eval::<beni::Value>("class Object; def self.const_added(name) = $beni_added = name; end")
         .expect("defining the hook must succeed");
 
     mrb.define_global_const(c"BeniHooked", 1i32)
         .expect("binding a top-level constant must succeed");
 
     let added = mrb
-        .load_string(b"$beni_added")
+        .eval::<beni::Value>("$beni_added")
         .expect("the hook's record reads back");
     assert_eq!(added.inspect(&mrb), ":BeniHooked");
 }
@@ -568,7 +568,7 @@ fn a_global_function_is_callable_bare_from_any_receiver() {
         .expect("registering the global function must succeed");
 
     let got = mrb
-        .load_string(b"[beni_shout('a'), 1.instance_eval { beni_shout('b') }]")
+        .eval::<beni::Value>("[beni_shout('a'), 1.instance_eval { beni_shout('b') }]")
         .expect("the bare calls must not raise");
     assert_eq!(got.inspect(&mrb), "[\"A\", \"B\"]");
 }

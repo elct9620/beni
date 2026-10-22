@@ -668,7 +668,7 @@ fn foreach_answers_a_closure_panic_as_err() {
 fn aref_runs_the_default_where_lookup2_answers_the_one_given() {
     let mrb = open_mrb();
     let hash = beni::RHash::from_value(
-        mrb.load_string(b"Hash.new('fallback')")
+        mrb.eval::<beni::Value>("Hash.new('fallback')")
             .expect("the hash builds"),
     )
     .expect("a Hash");

@@ -10,7 +10,7 @@ fn load_string_evaluates_a_valid_expression_to_its_value() {
     let mrb = open_mrb();
 
     let got = mrb
-        .load_string(b"1 + 2")
+        .eval::<beni::Value>("1 + 2")
         .expect("a valid expression must come back Ok");
 
     assert_eq!(i32::from_value(got), Some(3));
@@ -25,7 +25,7 @@ fn load_string_surfaces_a_raising_script_as_err() {
     let mrb = open_mrb();
 
     let err = mrb
-        .load_string(b"raise 'kaboom'")
+        .eval::<beni::Value>("raise 'kaboom'")
         .expect_err("a raising script must come back Err");
 
     match err {
@@ -43,7 +43,7 @@ fn load_string_surfaces_a_parse_failure_with_its_location() {
     let mrb = open_mrb();
 
     let err = mrb
-        .load_string(b"a = 1\nb = 2\nend\n")
+        .eval::<beni::Value>("a = 1\nb = 2\nend\n")
         .expect_err("unparseable source must come back Err");
 
     match err {
@@ -68,7 +68,7 @@ fn load_string_stamps_no_filename_so_a_raise_carries_no_backtrace() {
     let mrb = open_mrb();
 
     let err = mrb
-        .load_string(b"def outer\n  raise 'deep'\nend\nouter\n")
+        .eval::<beni::Value>("def outer\n  raise 'deep'\nend\nouter\n")
         .expect_err("a raising script must come back Err");
 
     assert!(
@@ -84,7 +84,7 @@ fn load_string_still_runs_source_the_compiler_warns_about() {
     // The borrowed context captures the warning and is released with
     // it; a caller who wants the warning holds a context of their own.
     let got = mrb
-        .load_string(b"begin\n  1\nelse\n  2\nend\n")
+        .eval::<beni::Value>("begin\n  1\nelse\n  2\nend\n")
         .expect("a warning must not change the load's outcome");
 
     assert_eq!(i32::from_value(got), Some(2));
@@ -155,7 +155,7 @@ fn load_irep_leaves_the_vm_usable_after_a_structural_failure() {
     let _ = structural_failure(&mrb, b"not RITE bytecode");
 
     let alive = mrb
-        .load_string(b"1 + 1")
+        .eval::<beni::Value>("1 + 1")
         .expect("the VM survives a load that never became a program");
     assert_eq!(i32::from_value(alive), Some(2));
 }
@@ -279,7 +279,7 @@ fn caught(outcome: Result<Value, Error>) -> Value {
 }
 
 fn load_string_inside(mrb: &Mrb, _self: Value) -> Value {
-    caught(mrb.load_string(b"raise 'from the nested load'"))
+    caught(mrb.eval::<beni::Value>("raise 'from the nested load'"))
 }
 
 fn load_irep_inside(mrb: &Mrb, _self: Value, blob: RString) -> Value {
@@ -314,9 +314,9 @@ fn load_irep_inside_a_method_of_another_class_runs_at_the_top_level() {
         .funcall(&mrb, c"run", &[mrb.str_new(&bytes).as_value()])
         .expect("the load must come back Ok");
 
-    for name in [&b"TOP_LEVEL_ANSWER"[..], b"top_level_answer"] {
+    for name in ["TOP_LEVEL_ANSWER", "top_level_answer"] {
         let answer = mrb
-            .load_string(name)
+            .eval::<beni::Value>(name)
             .expect("the constant and the method must be defined at the top level");
         assert_eq!(i64::from_value(answer), Some(42));
     }
@@ -357,4 +357,20 @@ fn load_irep_inside_a_registered_method_hands_the_raise_back_as_err() {
     assert!(Error::Exception(exc)
         .message(&mrb)
         .contains("from the nested program"));
+}
+
+#[test]
+fn eval_converts_the_program_result_into_the_type_named() {
+    let mrb = open_mrb();
+
+    assert_eq!(mrb.eval::<i64>("1 + 2").expect("the sum converts"), 3);
+    assert_eq!(
+        mrb.eval::<Vec<String>>("%w[a b]")
+            .expect("the words convert"),
+        ["a", "b"]
+    );
+    assert!(matches!(
+        mrb.eval::<String>("1"),
+        Err(beni::Error::Exception(_))
+    ));
 }

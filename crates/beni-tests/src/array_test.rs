@@ -574,8 +574,8 @@ fn entries_reads_a_slot_changed_mid_walk_as_its_current_value() {
 #[test]
 fn a_borrowed_slice_views_the_elements_in_place() {
     let mrb = open_mrb();
-    let small = mrb.load_string(b"[1, :two, 'three']").unwrap();
-    let large = mrb.load_string(b"(1..20).to_a").unwrap();
+    let small = mrb.eval::<beni::Value>("[1, :two, 'three']").unwrap();
+    let large = mrb.eval::<beni::Value>("(1..20).to_a").unwrap();
     let empty = mrb.ary_new();
     let small = RArray::from_value(small).unwrap();
     let large = RArray::from_value(large).unwrap();

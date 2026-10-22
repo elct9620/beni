@@ -12,7 +12,7 @@
 //! ```
 //!
 //! ```compile_fail
-//! let _ = beni::Mrb::load_string;
+//! let _ = beni::Mrb::eval::<beni::Value>;
 //! ```
 
 use beni::{Error, Gem, Module, Mrb, Value};

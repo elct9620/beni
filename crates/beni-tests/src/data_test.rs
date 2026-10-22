@@ -208,7 +208,7 @@ fn marking_refuses_an_exception_class_so_its_instances_stay_exceptions() {
 #[test]
 fn marking_refuses_every_built_in_layout_so_its_instances_keep_it() {
     let mrb = open_mrb();
-    mrb.load_string(b"class BeniDataRefusedString < String; end")
+    mrb.eval::<beni::Value>("class BeniDataRefusedString < String; end")
         .expect("defining the String subclass must succeed");
 
     for name in [
@@ -240,7 +240,7 @@ fn marking_refuses_every_built_in_layout_so_its_instances_keep_it() {
     );
     assert!(1.5f32.into_value(&mrb).is::<beni::Float>());
     let joined = mrb
-        .load_string(b"BeniDataRefusedString.new('abc') + 'def'")
+        .eval::<beni::Value>("BeniDataRefusedString.new('abc') + 'def'")
         .expect("the subclass still builds strings");
     assert_eq!(String::from_value(joined), Some("abcdef".to_string()));
 }
@@ -282,12 +282,9 @@ fn an_undefined_allocator_refuses_new_and_allocate_but_not_a_wrap_or_copy() {
         .expect("defining the class must succeed");
     Holder::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
 
-    for src in [
-        &b"BeniDataMarkedBase.new"[..],
-        b"BeniDataMarkedBase.allocate",
-    ] {
+    for src in ["BeniDataMarkedBase.new", "BeniDataMarkedBase.allocate"] {
         let err = mrb
-            .load_string(src)
+            .eval::<beni::Value>(src)
             .expect_err("Ruby cannot allocate the class");
         assert_allocator_undefined(&mrb, err, "BeniDataMarkedBase");
     }
@@ -318,11 +315,11 @@ fn only_a_class_defined_after_the_allocator_is_undefined_inherits_it() {
         .expect("defining the later subclass must succeed");
 
     let err = mrb
-        .load_string(b"BeniDataAllocLater.new")
+        .eval::<beni::Value>("BeniDataAllocLater.new")
         .expect_err("a later subclass takes the undefined allocator");
     assert_allocator_undefined(&mrb, err, "BeniDataAllocLater");
     let instance = mrb
-        .load_string(b"BeniDataAllocEarlier.new")
+        .eval::<beni::Value>("BeniDataAllocEarlier.new")
         .expect("an earlier subclass keeps its allocator");
     assert!(instance.is_kind_of(&mrb, earlier));
 }

@@ -377,7 +377,7 @@ fn clone_takes_no_arguments() {
 
     mrb.define_global_const("C", original).unwrap();
     let raised = |source: &str| {
-        mrb.load_string(source.as_bytes())
+        mrb.eval::<beni::Value>(source)
             .map(|value| value.inspect(&mrb))
             .map_err(|err| err.message(&mrb))
     };
@@ -508,7 +508,7 @@ fn initialize_installs_the_payload_into_the_carrier_new_makes() {
     define_seed(&mrb);
 
     let n = mrb
-        .load_string(b"BeniSeed.new(5).n")
+        .eval::<beni::Value>("BeniSeed.new(5).n")
         .expect("initialize completes the carrier new made");
 
     assert_eq!(i32::from_value(n), Some(5));
@@ -526,8 +526,8 @@ fn mrubys_own_copies_keep_subclass_and_frozen_state_through_initialize_copy() {
         .expect("naming the original must succeed");
 
     let got = mrb
-        .load_string(
-            b"t = BENI_TALLY.freeze
+        .eval::<beni::Value>(
+            "t = BENI_TALLY.freeze
               d = t.dup
               c = t.clone
               [d.class == BeniSubTally, d.n, c.frozen?, c.n] == [true, 3, true, 3]",
@@ -542,7 +542,7 @@ fn a_frozen_carrier_holding_no_payload_still_installs() {
     let mrb = open_mrb();
     define_seed(&mrb);
     let carrier = mrb
-        .load_string(b"BeniSeed.allocate.freeze")
+        .eval::<beni::Value>("BeniSeed.allocate.freeze")
         .expect("allocate makes a bare carrier");
     let carrier = RTypedData::try_convert(carrier, &mrb).expect("a bare carrier is a data carrier");
 
@@ -558,7 +558,7 @@ fn a_carrier_holding_a_payload_refuses_and_hands_the_offer_back() {
     let mrb = open_mrb();
     define_seed(&mrb);
     let carrier = mrb
-        .load_string(b"BeniSeed.new(1)")
+        .eval::<beni::Value>("BeniSeed.new(1)")
         .expect("new completes the carrier");
     let carrier = RTypedData::try_convert(carrier, &mrb).expect("the seed is a data carrier");
 

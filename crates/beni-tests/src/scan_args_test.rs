@@ -13,7 +13,7 @@ fn define(mrb: &Mrb, name: &core::ffi::CStr, def: beni::MethodDef) {
 /// Run `source` and read its result as `T`, failing on any raise.
 fn eval<T: FromValue>(mrb: &Mrb, source: &str) -> T {
     let value = mrb
-        .load_string(source.as_bytes())
+        .eval::<beni::Value>(source)
         .unwrap_or_else(|err| panic!("{source} raised: {}", err.message(mrb)));
     T::from_value(value).unwrap_or_else(|| panic!("{source} answered {}", value.inspect(mrb)))
 }
@@ -21,7 +21,7 @@ fn eval<T: FromValue>(mrb: &Mrb, source: &str) -> T {
 /// Run `source`, which must raise, and answer the exception's class name
 /// and message.
 fn raise_of(mrb: &Mrb, source: &str) -> (String, String) {
-    match mrb.load_string(source.as_bytes()) {
+    match mrb.eval::<beni::Value>(source) {
         Err(Error::Exception(exc)) => (exc.classname(mrb), Error::Exception(exc).message(mrb)),
         other => panic!("{source} must raise, got {other:?}"),
     }

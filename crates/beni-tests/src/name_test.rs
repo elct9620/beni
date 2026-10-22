@@ -5,8 +5,11 @@ use beni::{
 };
 
 fn object(mrb: &Mrb) -> RObject {
-    RObject::from_value(mrb.load_string(b"Object.new").expect("Object.new runs"))
-        .expect("Object.new answers an object")
+    RObject::from_value(
+        mrb.eval::<beni::Value>("Object.new")
+            .expect("Object.new runs"),
+    )
+    .expect("Object.new answers an object")
 }
 
 fn id(mrb: &Mrb, name: &str) -> Id {
@@ -89,9 +92,7 @@ fn a_singleton_class_keeps_what_it_is_attached_to() {
     assert!(singleton.cvar_set(&mrb, c"__attached__", 1).is_err());
     mrb.gv_set(c"$holder", holder.as_value())
         .expect("assigning a global succeeds");
-    let missing = mrb.load_string(
-        b"begin; (class << $holder; self; end).class_variable_get(:@@none); rescue NameError; :missing; end",
-    );
+    let missing = mrb.eval::<beni::Value>("begin; (class << $holder; self; end).class_variable_get(:@@none); rescue NameError; :missing; end");
 
     assert!(Symbol::from_value(missing.expect("the lookup runs")).is_some());
 }
@@ -129,7 +130,7 @@ fn a_global_without_dollar_is_the_dollar_global() {
         .expect("assigning a global succeeds");
     mrb.gv_remove(c"_gc_root_");
     let read = mrb
-        .load_string(b"$beni_named")
+        .eval::<beni::Value>("$beni_named")
         .expect("reading a global runs");
 
     assert_eq!(i32::from_value(read), Some(7));

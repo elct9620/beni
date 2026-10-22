@@ -44,15 +44,13 @@ enum Sign {
     Minus,
 }
 
-fn define(mrb: &Mrb, source: &[u8]) {
-    mrb.load_string(source)
+fn define(mrb: &Mrb, source: &str) {
+    mrb.eval::<beni::Value>(source)
         .expect("defining the classes must succeed");
 }
 
 fn class(mrb: &Mrb, path: &str) -> RClass {
-    let value = mrb
-        .load_string(path.as_bytes())
-        .expect("the class is defined");
+    let value = mrb.eval::<beni::Value>(path).expect("the class is defined");
     RClass::try_convert(value, mrb).expect("the constant is a class")
 }
 
@@ -66,7 +64,7 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 #[test]
 fn a_nested_path_names_its_class_and_prepares_it_to_carry_data() {
     let mrb = open_mrb();
-    define(&mrb, b"module BeniWrapOuter; class Inner; end; end");
+    define(&mrb, "module BeniWrapOuter; class Inner; end; end");
     Nested::mark_carriers(&mrb).expect("the path names a class");
 
     let wrapped = mrb.wrap(Nested);
@@ -74,7 +72,7 @@ fn a_nested_path_names_its_class_and_prepares_it_to_carry_data() {
     let inner = class(&mrb, "BeniWrapOuter::Inner");
     assert!(wrapped.as_value().is_kind_of(&mrb, inner));
     let err = mrb
-        .load_string(b"BeniWrapOuter::Inner.new")
+        .eval::<beni::Value>("BeniWrapOuter::Inner.new")
         .expect_err("the named class has its allocator undefined");
     assert_eq!(
         err.message(&mrb),
@@ -85,7 +83,7 @@ fn a_nested_path_names_its_class_and_prepares_it_to_carry_data() {
 #[test]
 fn the_data_type_is_named_after_the_class_unless_named_otherwise() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniWrapDefaultName; end");
+    define(&mrb, "class BeniWrapDefaultName; end");
     CustomName::mark_carriers(&mrb).expect("the path names a class");
     DefaultName::mark_carriers(&mrb).expect("the path names a class");
 
@@ -103,7 +101,7 @@ fn the_data_type_is_named_after_the_class_unless_named_otherwise() {
 #[test]
 fn a_path_naming_no_class_surfaces_an_error() {
     let mrb = open_mrb();
-    define(&mrb, b"BeniWrapMissing = 1");
+    define(&mrb, "BeniWrapMissing = 1");
 
     let err = Missing::mark_carriers(&mrb).expect_err("the path names no class");
 
@@ -118,7 +116,7 @@ fn a_class_refusing_the_mark_surfaces_an_error() {
 
     assert!(err.message(&mrb).contains("carry Rust data"));
     assert!(
-        mrb.load_string(b"String.new").is_ok(),
+        mrb.eval::<beni::Value>("String.new").is_ok(),
         "a refused class keeps its allocator"
     );
 }
@@ -126,7 +124,7 @@ fn a_class_refusing_the_mark_surfaces_an_error() {
 #[test]
 fn each_variant_wraps_as_its_own_class_or_the_types() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniWrapShape; class Circle < self; end; end");
+    define(&mrb, "class BeniWrapShape; class Circle < self; end; end");
     Shape::mark_carriers(&mrb).expect("both paths name classes");
 
     let circle = mrb.wrap(Shape::Circle).as_value();
@@ -141,7 +139,7 @@ fn an_enum_whose_every_variant_names_a_class_wraps_each_as_it() {
     let mrb = open_mrb();
     define(
         &mrb,
-        b"class BeniWrapSign; class Plus < self; end; class Minus < self; end; end",
+        "class BeniWrapSign; class Plus < self; end; class Minus < self; end; end",
     );
     Sign::mark_carriers(&mrb).expect("every path names a class");
 
@@ -157,7 +155,7 @@ fn a_subclass_defined_before_the_class_is_named_cannot_be_wrapped_into() {
     let mrb = open_mrb();
     define(
         &mrb,
-        b"class BeniWrapBase; end; class BeniWrapEarly < BeniWrapBase; end",
+        "class BeniWrapBase; end; class BeniWrapEarly < BeniWrapBase; end",
     );
     let early = class(&mrb, "BeniWrapEarly");
     Based::mark_carriers(&mrb).expect("the path names a class");
@@ -170,9 +168,9 @@ fn a_subclass_defined_before_the_class_is_named_cannot_be_wrapped_into() {
 #[test]
 fn a_subclass_defined_after_the_class_is_named_carries_data() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniWrapBase; end");
+    define(&mrb, "class BeniWrapBase; end");
     Based::mark_carriers(&mrb).expect("the path names a class");
-    define(&mrb, b"class BeniWrapLate < BeniWrapBase; end");
+    define(&mrb, "class BeniWrapLate < BeniWrapBase; end");
     let late = class(&mrb, "BeniWrapLate");
 
     let wrapped = mrb.wrap_as(Based, late);
@@ -184,8 +182,8 @@ fn a_subclass_defined_after_the_class_is_named_carries_data() {
 fn each_interpreter_resolves_its_own_class() {
     let first = open_mrb();
     let second = open_mrb();
-    define(&first, b"module BeniWrapOuter; class Inner; end; end");
-    define(&second, b"module BeniWrapOuter; class Inner; end; end");
+    define(&first, "module BeniWrapOuter; class Inner; end; end");
+    define(&second, "module BeniWrapOuter; class Inner; end; end");
     Nested::mark_carriers(&first).expect("the path names a class");
     Nested::mark_carriers(&second).expect("the path names a class");
 
@@ -203,7 +201,7 @@ fn each_interpreter_resolves_its_own_class() {
 #[test]
 fn naming_a_class_whose_carriers_are_unmarked_panics() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniWrapUnmarked; end");
+    define(&mrb, "class BeniWrapUnmarked; end");
 
     let payload = catch_unwind(AssertUnwindSafe(|| mrb.wrap(Unmarked)))
         .err()
@@ -220,11 +218,11 @@ fn naming_a_class_whose_carriers_are_unmarked_panics() {
 #[test]
 fn a_program_redefining_const_get_names_no_carrier_class() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniWrapDefaultName; end");
+    define(&mrb, "class BeniWrapDefaultName; end");
     DefaultName::mark_carriers(&mrb).expect("the path names a class");
     define(
         &mrb,
-        b"class BeniWrapImpostor; end; def Object.const_get(name); BeniWrapImpostor; end",
+        "class BeniWrapImpostor; end; def Object.const_get(name); BeniWrapImpostor; end",
     );
 
     let wrapped = mrb.wrap(DefaultName);
@@ -235,15 +233,15 @@ fn a_program_redefining_const_get_names_no_carrier_class() {
 #[test]
 fn a_program_binding_over_the_path_names_no_carrier_class() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniWrapDefaultName; end");
+    define(&mrb, "class BeniWrapDefaultName; end");
     DefaultName::mark_carriers(&mrb).expect("the path names a class");
-    define(&mrb, b"Object.const_set(:BeniWrapDefaultName, Class.new)");
+    define(&mrb, "Object.const_set(:BeniWrapDefaultName, Class.new)");
 
     let wrapped = mrb.wrap(DefaultName);
 
     assert_eq!(wrapped.as_value().classname(&mrb), "BeniWrapDefaultName");
     assert!(
-        mrb.load_string(b"BeniWrapDefaultName.new").is_ok(),
+        mrb.eval::<beni::Value>("BeniWrapDefaultName.new").is_ok(),
         "the class the program bound is its own, and keeps its allocator"
     );
 }
@@ -251,16 +249,13 @@ fn a_program_binding_over_the_path_names_no_carrier_class() {
 #[test]
 fn no_named_class_allocates_an_empty_carrier_after_marking() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniWrapShape; class Circle < self; end; end");
+    define(&mrb, "class BeniWrapShape; class Circle < self; end; end");
 
     Shape::mark_carriers(&mrb).expect("both paths name classes");
 
-    for src in [
-        &b"BeniWrapShape.allocate"[..],
-        b"BeniWrapShape::Circle.allocate",
-    ] {
+    for src in ["BeniWrapShape.allocate", "BeniWrapShape::Circle.allocate"] {
         let err = mrb
-            .load_string(src)
+            .eval::<beni::Value>(src)
             .expect_err("no program allocates an empty carrier");
         assert!(err.message(&mrb).starts_with("allocator undefined for"));
     }
@@ -269,9 +264,9 @@ fn no_named_class_allocates_an_empty_carrier_after_marking() {
 #[test]
 fn a_program_binding_a_non_class_over_the_path_still_wraps() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniWrapBase; end");
+    define(&mrb, "class BeniWrapBase; end");
     Based::mark_carriers(&mrb).expect("the path names a class");
-    define(&mrb, b"Object.const_set(:BeniWrapBase, 1)");
+    define(&mrb, "Object.const_set(:BeniWrapBase, 1)");
 
     let wrapped = mrb.wrap(Based);
 

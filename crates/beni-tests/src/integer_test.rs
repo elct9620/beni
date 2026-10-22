@@ -6,7 +6,7 @@ use beni::prelude::*;
 use beni::{Fixnum, Integer, Mrb, TryConvert, Value};
 
 fn eval(mrb: &Mrb, source: &str) -> Value {
-    mrb.load_string(source.as_bytes())
+    mrb.eval::<beni::Value>(source)
         .unwrap_or_else(|err| panic!("{source} raised: {}", err.message(mrb)))
 }
 

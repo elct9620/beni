@@ -27,15 +27,13 @@ fn held(mrb: &Mrb, path: &'static CStr) -> Option<RClass> {
     Lazy::try_get_inner(site(path), mrb)
 }
 
-fn define(mrb: &Mrb, source: &[u8]) {
-    mrb.load_string(source)
+fn define(mrb: &Mrb, source: &str) {
+    mrb.eval::<beni::Value>(source)
         .expect("defining the classes must succeed");
 }
 
 fn class(mrb: &Mrb, path: &str) -> RClass {
-    let value = mrb
-        .load_string(path.as_bytes())
-        .expect("the class is defined");
+    let value = mrb.eval::<beni::Value>(path).expect("the class is defined");
     RClass::try_convert(value, mrb).expect("the constant is a class")
 }
 
@@ -58,14 +56,14 @@ unsafe impl TypedData for HandWritten {
 #[test]
 fn a_marked_path_answers_its_class_and_carries_data() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniCarrierPoint; end");
+    define(&mrb, "class BeniCarrierPoint; end");
 
     let marked = mark(&mrb, c"BeniCarrierPoint").expect("names a class");
 
     assert!(held(&mrb, c"BeniCarrierPoint")
         .is_some_and(|held| held.as_value().is_equal(&mrb, marked.as_value())));
     let err = mrb
-        .load_string(b"BeniCarrierPoint.new")
+        .eval::<beni::Value>("BeniCarrierPoint.new")
         .expect_err("the marked class has its allocator undefined");
     assert_eq!(
         err.message(&mrb),
@@ -76,7 +74,7 @@ fn a_marked_path_answers_its_class_and_carries_data() {
 #[test]
 fn a_nested_path_resolves_one_constant_per_segment() {
     let mrb = open_mrb();
-    define(&mrb, b"module BeniCarrierOuter; class Inner; end; end");
+    define(&mrb, "module BeniCarrierOuter; class Inner; end; end");
 
     let marked = mark(&mrb, c"BeniCarrierOuter::Inner").expect("names a nested class");
 
@@ -88,7 +86,7 @@ fn a_nested_path_resolves_one_constant_per_segment() {
 #[test]
 fn an_unmarked_path_is_held_by_nothing() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniCarrierUnmarked; end");
+    define(&mrb, "class BeniCarrierUnmarked; end");
 
     assert!(held(&mrb, c"BeniCarrierUnmarked").is_none());
 }
@@ -98,19 +96,19 @@ fn reading_an_unmarked_path_runs_no_ruby_a_program_defines() {
     let mrb = open_mrb();
     define(
         &mrb,
-        b"class BeniCarrierHeld; end; class BeniCarrierUnheld; end",
+        "class BeniCarrierHeld; end; class BeniCarrierUnheld; end",
     );
     mark(&mrb, c"BeniCarrierHeld").expect("names a class");
     define(
         &mrb,
-        b"class Hash; def default(*) = $beni_default_ran = true; end",
+        "class Hash; def default(*) = $beni_default_ran = true; end",
     );
 
     let held = held(&mrb, c"BeniCarrierUnheld");
 
     assert!(held.is_none());
     assert!(mrb
-        .load_string(b"$beni_default_ran")
+        .eval::<beni::Value>("$beni_default_ran")
         .expect("reading a global succeeds")
         .is_nil());
 }
@@ -118,7 +116,7 @@ fn reading_an_unmarked_path_runs_no_ruby_a_program_defines() {
 #[test]
 fn a_path_naming_no_class_holds_nothing() {
     let mrb = open_mrb();
-    define(&mrb, b"BeniCarrierNotAClass = 1");
+    define(&mrb, "BeniCarrierNotAClass = 1");
 
     let missing =
         mark(&mrb, c"BeniCarrierMissing").expect_err("no constant is bound under the path");
@@ -136,7 +134,7 @@ fn a_path_naming_no_class_holds_nothing() {
 fn a_path_segment_no_constant_can_be_named_is_refused() {
     let mrb = open_mrb();
     let attached = beni::RObject::from_value(
-        mrb.load_string(b"o = Object.new; o.singleton_class; o")
+        mrb.eval::<beni::Value>("o = Object.new; o.singleton_class; o")
             .expect("an object with a singleton class"),
     )
     .expect("Object.new answers an object");
@@ -144,7 +142,7 @@ fn a_path_segment_no_constant_can_be_named_is_refused() {
         .expect("assigning a global succeeds");
     define(
         &mrb,
-        b"BeniCarrierHolder = $beni_carrier_holder.singleton_class",
+        "BeniCarrierHolder = $beni_carrier_holder.singleton_class",
     );
 
     let refused = mark(&mrb, c"BeniCarrierHolder::__attached__")
@@ -156,11 +154,11 @@ fn a_path_segment_no_constant_can_be_named_is_refused() {
 #[test]
 fn marking_a_held_path_again_replaces_what_it_holds() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniCarrierFirst; end");
+    define(&mrb, "class BeniCarrierFirst; end");
     mark(&mrb, c"BeniCarrierFirst").expect("names a class");
     define(
         &mrb,
-        b"BeniCarrierOther = Class.new; Object.const_set(:BeniCarrierFirst, BeniCarrierOther)",
+        "BeniCarrierOther = Class.new; Object.const_set(:BeniCarrierFirst, BeniCarrierOther)",
     );
 
     let remarked = mark(&mrb, c"BeniCarrierFirst").expect("the path now names the other class");
@@ -173,10 +171,10 @@ fn marking_a_held_path_again_replaces_what_it_holds() {
 #[test]
 fn no_ruby_program_reaches_the_record_through_a_global() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniCarrierGuarded; end");
+    define(&mrb, "class BeniCarrierGuarded; end");
     let marked = mark(&mrb, c"BeniCarrierGuarded").expect("names a class");
 
-    define(&mrb, b"$beni_lazy = nil; beni_lazy = nil");
+    define(&mrb, "$beni_lazy = nil; beni_lazy = nil");
 
     assert!(held(&mrb, c"BeniCarrierGuarded")
         .is_some_and(|held| held.as_value().is_equal(&mrb, marked.as_value())));
@@ -186,8 +184,8 @@ fn no_ruby_program_reaches_the_record_through_a_global() {
 fn each_interpreter_holds_its_own_record() {
     let first = open_mrb();
     let second = open_mrb();
-    define(&first, b"class BeniCarrierPerState; end");
-    define(&second, b"class BeniCarrierPerState; end");
+    define(&first, "class BeniCarrierPerState; end");
+    define(&second, "class BeniCarrierPerState; end");
 
     mark(&first, c"BeniCarrierPerState").expect("names a class");
 
@@ -198,7 +196,7 @@ fn each_interpreter_holds_its_own_record() {
 #[test]
 fn a_hand_written_implementation_marks_the_class_it_names() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniCarrierHandWritten; end");
+    define(&mrb, "class BeniCarrierHandWritten; end");
 
     HandWritten::mark_carriers(&mrb).expect("the class accepts the mark");
 
@@ -207,7 +205,7 @@ fn a_hand_written_implementation_marks_the_class_it_names() {
         .as_value()
         .is_kind_of(&mrb, class(&mrb, "BeniCarrierHandWritten")));
     let err = mrb
-        .load_string(b"BeniCarrierHandWritten.new")
+        .eval::<beni::Value>("BeniCarrierHandWritten.new")
         .expect_err("marking undefines the default allocator");
     assert_eq!(
         err.message(&mrb),
@@ -218,10 +216,10 @@ fn a_hand_written_implementation_marks_the_class_it_names() {
 #[test]
 fn the_record_keeps_its_class_through_a_collection() {
     let mrb = open_mrb();
-    define(&mrb, b"class BeniCarrierHeld; end");
+    define(&mrb, "class BeniCarrierHeld; end");
     let marked = mark(&mrb, c"BeniCarrierHeld").expect("names a class");
 
-    define(&mrb, b"Object.const_set(:BeniCarrierHeld, Class.new)");
+    define(&mrb, "Object.const_set(:BeniCarrierHeld, Class.new)");
     mrb.gc_start();
 
     let held = held(&mrb, c"BeniCarrierHeld")

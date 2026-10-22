@@ -268,8 +268,8 @@ fn a_method_body_hands_an_over_long_intern_to_ruby_as_a_rescuable_argument_error
         .expect("registering the probe method must succeed");
 
     let rescued = mrb
-        .load_string(
-            b"begin
+        .eval::<beni::Value>(
+            "begin
                 BeniLongInternProbe.new.run
                 0
               rescue ArgumentError

@@ -43,12 +43,14 @@ fn an_interpreter_is_carried_between_threads() {
     // here, evaluates on the thread it is handed to, comes back,
     // and the state the far thread wrote is what this one reads.
     let mrb = open_mrb();
-    let here = mrb.load_string(b"1 + 2").expect("evaluates on this thread");
+    let here = mrb
+        .eval::<beni::Value>("1 + 2")
+        .expect("evaluates on this thread");
     assert_eq!(i32::from_value(here), Some(3));
 
     let mrb = std::thread::spawn(move || {
         let there = mrb
-            .load_string(b"$carried = 40 + 2")
+            .eval::<beni::Value>("$carried = 40 + 2")
             .expect("evaluates on the thread it was handed to");
         assert_eq!(i32::from_value(there), Some(42));
         mrb
@@ -56,7 +58,9 @@ fn an_interpreter_is_carried_between_threads() {
     .join()
     .expect("the thread carrying the interpreter ran to completion");
 
-    let back = mrb.load_string(b"$carried").expect("evaluates here again");
+    let back = mrb
+        .eval::<beni::Value>("$carried")
+        .expect("evaluates here again");
     assert_eq!(
         i32::from_value(back),
         Some(42),

@@ -137,7 +137,7 @@ fn ruby_cannot_allocate_an_instance() {
     prepared(&mrb);
 
     let err = mrb
-        .load_string(b"BeniVector2D.new")
+        .eval::<beni::Value>("BeniVector2D.new")
         .expect_err("the default allocator is undefined");
 
     assert_eq!(
@@ -280,7 +280,7 @@ fn a_wrapped_inline_struct_crosses_ruby_by_value() {
     define_point(&mrb);
 
     let sum = mrb
-        .load_string(b"a = BeniPoint2D.create(1.5, 2.0); b = a + a; a.x = 10.0; [a.x, b.x]")
+        .eval::<beni::Value>("a = BeniPoint2D.create(1.5, 2.0); b = a + a; a.x = 10.0; [a.x, b.x]")
         .expect("the program runs");
 
     let got = Vec::<i32>::try_convert(sum, &mrb).expect("an array of integers");
@@ -307,7 +307,7 @@ fn a_frozen_receiver_refuses_a_setter_from_ruby() {
     define_point(&mrb);
 
     let err = mrb
-        .load_string(b"p = BeniPoint2D.create(1.0, 1.0).freeze; p.x = 2.0")
+        .eval::<beni::Value>("p = BeniPoint2D.create(1.0, 1.0).freeze; p.x = 2.0")
         .expect_err("a frozen inline struct refuses a new payload");
 
     assert_eq!(exception(&mrb, err).0, "FrozenError");
@@ -347,7 +347,7 @@ fn naming_an_unmarked_class_panics_naming_mark_carriers() {
 fn a_path_bound_to_another_class_after_marking_reaches_no_wrap() {
     let mrb = open_mrb();
     define_point(&mrb);
-    mrb.load_string(b"Object.send(:remove_const, :BeniPoint2D); class BeniPoint2D; end")
+    mrb.eval::<beni::Value>("Object.send(:remove_const, :BeniPoint2D); class BeniPoint2D; end")
         .expect("rebinding the constant runs");
 
     let value = Point2D { x: 1.0, y: 2.0 }.into_value(&mrb);
@@ -362,7 +362,7 @@ fn a_path_bound_to_another_class_after_marking_reaches_no_wrap() {
 fn marking_again_holds_the_class_the_path_now_names() {
     let mrb = open_mrb();
     define_point(&mrb);
-    mrb.load_string(b"Object.send(:remove_const, :BeniPoint2D); class BeniPoint2D; end")
+    mrb.eval::<beni::Value>("Object.send(:remove_const, :BeniPoint2D); class BeniPoint2D; end")
         .expect("rebinding the constant runs");
     let remarked = mrb
         .class_get(c"BeniPoint2D")

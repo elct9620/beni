@@ -51,14 +51,14 @@ fn a_looked_up_accessor_follows_its_constant() {
     let mrb = open_mrb();
     let original = mrb.exception_key_error().expect("KeyError is a core class");
 
-    mrb.load_string(b"Object.send(:remove_const, :KeyError)")
+    mrb.eval::<beni::Value>("Object.send(:remove_const, :KeyError)")
         .expect("removing the constant succeeds");
     assert!(
         mrb.exception_key_error().is_err(),
         "a removed constant answers the lookup's Err"
     );
 
-    mrb.load_string(b"KeyError = Class.new(StandardError)")
+    mrb.eval::<beni::Value>("KeyError = Class.new(StandardError)")
         .expect("rebinding the constant succeeds");
     let rebound = mrb
         .exception_key_error()
@@ -72,8 +72,8 @@ fn the_interpreter_held_accessors_ignore_their_constants() {
     let exception = mrb.exception_exception();
     let standard_error = mrb.exception_standard_error();
 
-    mrb.load_string(
-        b"Object.send(:remove_const, :Exception); Object.send(:remove_const, :StandardError)",
+    mrb.eval::<beni::Value>(
+        "Object.send(:remove_const, :Exception); Object.send(:remove_const, :StandardError)",
     )
     .expect("removing the constants succeeds");
 
@@ -114,7 +114,7 @@ fn rescued(mrb: &Mrb, source: &str) -> String {
     let rescuing =
         format!("begin; {source}; rescue Exception => e; \"#{{e.class}}: #{{e.message}}\"; end");
     let answered = mrb
-        .load_string(rescuing.as_bytes())
+        .eval::<beni::Value>(&rescuing)
         .unwrap_or_else(|err| panic!("{source} escaped its rescue: {}", err.message(mrb)));
     String::try_convert(answered, mrb).expect("the rescue answers a string")
 }
@@ -122,9 +122,7 @@ fn rescued(mrb: &Mrb, source: &str) -> String {
 #[test]
 fn a_conversion_exception_names_the_class_its_constant_is_rebound_to() {
     let mrb = interpreter_raising_its_own();
-    mrb.load_string(
-        b"class Rebound < StandardError; end; Object.send(:remove_const, :TypeError); TypeError = Rebound",
-    )
+    mrb.eval::<beni::Value>("class Rebound < StandardError; end; Object.send(:remove_const, :TypeError); TypeError = Rebound")
     .expect("rebinding the constant succeeds");
 
     assert_eq!(
@@ -136,7 +134,7 @@ fn a_conversion_exception_names_the_class_its_constant_is_rebound_to() {
 #[test]
 fn a_conversion_exception_whose_constant_is_removed_raises_what_mruby_raises() {
     let mrb = interpreter_raising_its_own();
-    mrb.load_string(b"Object.send(:remove_const, :TypeError)")
+    mrb.eval::<beni::Value>("Object.send(:remove_const, :TypeError)")
         .expect("removing the constant succeeds");
 
     assert_eq!(
@@ -154,7 +152,7 @@ fn a_conversion_exception_whose_constant_is_removed_raises_what_mruby_raises() {
 fn a_conversion_outside_any_call_surfaces_the_lookup_exception_as_err() {
     let mrb = open_mrb();
     let one = mrb
-        .load_string(b"Object.send(:remove_const, :TypeError); 1")
+        .eval::<beni::Value>("Object.send(:remove_const, :TypeError); 1")
         .expect("removing the constant succeeds");
 
     let Err(err) = beni::RArray::try_convert(one, &mrb) else {
@@ -168,8 +166,8 @@ fn a_conversion_outside_any_call_surfaces_the_lookup_exception_as_err() {
 #[test]
 fn naming_a_removed_class_runs_no_const_missing() {
     let mrb = interpreter_raising_its_own();
-    mrb.load_string(
-        b"$missing = nil; def Object.const_missing(name); $missing = name; raise 'hooked'; end; \
+    mrb.eval::<beni::Value>(
+        "$missing = nil; def Object.const_missing(name); $missing = name; raise 'hooked'; end; \
           Object.send(:remove_const, :TypeError)",
     )
     .expect("installing the hook succeeds");
@@ -179,7 +177,7 @@ fn naming_a_removed_class_runs_no_const_missing() {
         "Exception: exception corrupted"
     );
     let missing = mrb
-        .load_string(b"$missing")
+        .eval::<beni::Value>("$missing")
         .expect("reading the global succeeds");
     assert!(
         missing.is_nil(),
@@ -191,7 +189,7 @@ fn naming_a_removed_class_runs_no_const_missing() {
 #[test]
 fn a_panic_whose_runtime_error_is_removed_raises_what_mruby_raises() {
     let mrb = interpreter_raising_its_own();
-    mrb.load_string(b"Object.send(:remove_const, :RuntimeError)")
+    mrb.eval::<beni::Value>("Object.send(:remove_const, :RuntimeError)")
         .expect("removing the constant succeeds");
 
     assert_eq!(rescued(&mrb, "panics"), "Exception: exception corrupted");

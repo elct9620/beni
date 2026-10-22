@@ -149,7 +149,7 @@ fn a_symbol_and_its_id_convert_and_compare_across_the_split() {
     // A symbol value reached from Ruby compares with the id interned
     // from Rust, in either direction, and against another symbol.
     let sym = Symbol::from_value(
-        mrb.load_string(b":beni_split")
+        mrb.eval::<beni::Value>(":beni_split")
             .expect("the literal evaluates"),
     )
     .expect("a symbol literal is a Symbol");

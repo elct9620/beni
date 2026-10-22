@@ -205,9 +205,9 @@ fn compile_inside_a_method_of_another_class_runs_at_the_top_level() {
         .funcall(&mrb, c"run", &[])
         .expect("the program must come back Ok");
 
-    for name in [&b"TOP_LEVEL_COMPILED"[..], b"top_level_compiled"] {
+    for name in ["TOP_LEVEL_COMPILED", "top_level_compiled"] {
         let answer = mrb
-            .load_string(name)
+            .eval::<beni::Value>(name)
             .expect("the constant and the method must be defined at the top level");
         assert_eq!(i64::from_value(answer), Some(42));
     }

@@ -443,8 +443,8 @@ fn a_collection_grows_the_arena_by_itself_alone() {
 #[test]
 fn a_pair_whose_key_raises_while_the_hash_stores_it_is_left_out() {
     let mrb = open_mrb();
-    mrb.load_string(
-        b"class Array; def hash = raise('no hash'); def eql?(o) = raise('no eql'); end",
+    mrb.eval::<beni::Value>(
+        "class Array; def hash = raise('no hash'); def eql?(o) = raise('no eql'); end",
     )
     .expect("redefining Array#hash and #eql? succeeds");
 

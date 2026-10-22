@@ -2220,7 +2220,7 @@ The compiler's diagnostics never reach the process's standard error. The returne
 
 ##### Contextless loads
 
-`Mrb` compiles and runs a slice of Ruby source without being given a compile context. It borrows an unnamed one for the load and releases it when the load returns. A failure surfaces exactly as under a caller's context: a parse failure as a parse message, a codegen failure or a raise as the exception.
+`Mrb` compiles and runs Ruby source text without being given a compile context, converting the program's result through `TryConvert` into the type the caller names, mirroring `magnus`'s `eval`. It borrows an unnamed context for the load and releases it when the load returns. A failure surfaces exactly as under a caller's context: a parse failure as a parse message, a codegen failure or a raise as the exception; a result the target rejects surfaces that conversion's `Err`. Source that is not UTF-8 loads under a caller's context.
 
 | Context | Filename stamp | Captured warnings |
 |---|---|---|

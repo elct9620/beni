@@ -184,7 +184,7 @@ fn a_pending_exception_outlives_its_clearing() {
 /// collect: what the typed surface keeps in Arrays of its own must
 /// survive both.
 fn clear_every_reachable_array(mrb: &Mrb) {
-    mrb.load_string(b"ObjectSpace.each_object(Array) { |a| a.clear unless a.frozen? }")
+    mrb.eval::<beni::Value>("ObjectSpace.each_object(Array) { |a| a.clear unless a.frozen? }")
         .expect("walking the heap's Arrays must succeed");
     mrb.gc_start();
 }

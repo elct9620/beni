@@ -66,7 +66,7 @@ impl<'mrb> Ccontext<'mrb> {
     /// Allocate a context with no filename — everything a context
     /// gives a load except the stamp its backtraces are packed from.
     ///
-    /// `Mrb::load_string` borrows one of these for a single load: a
+    /// `Mrb::eval` borrows one of these for a single load: a
     /// caller who gave no context still gets the compiler's
     /// diagnostics, which only a context can capture.
     pub(crate) fn unnamed(mrb: &'mrb Mrb) -> Option<Self> {

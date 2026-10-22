@@ -51,7 +51,7 @@ precompiled bytecode needs no compiler and stays.
 
 | Feature | Default | Carries |
 |---|---|---|
-| `compiler` | on | `Ccontext`, `Mrb::load_string` |
+| `compiler` | on | `Ccontext`, `Mrb::eval` |
 | `fiber` | on | `Mrb::fiber_new`, `Mrb::fiber_current`, `Mrb::fiber_yield` |
 | `bytes` | off | `bytes::Bytes` to and from String |
 

@@ -152,7 +152,7 @@ fn a_load_error_keeps_its_exception_through_a_collection() {
     let mrb = open_mrb();
 
     let err = mrb
-        .load_string(b"raise 'boom'")
+        .eval::<beni::Value>("raise 'boom'")
         .expect_err("a raising script must come back Err");
 
     assert_exception_survives_a_collection(&mrb, &err);
@@ -226,7 +226,7 @@ fn is_kind_of_walks_the_ancestry_of_the_carried_exception() {
     let class = |name: &core::ffi::CStr| mrb.exc_get(name).expect("a core exception class");
 
     let err = mrb
-        .load_string(b"raise ArgumentError, 'bad'")
+        .eval::<beni::Value>("raise ArgumentError, 'bad'")
         .expect_err("the raise must surface as Err");
 
     assert!(err.is_kind_of(&mrb, class(c"ArgumentError")));
@@ -240,8 +240,8 @@ fn is_kind_of_answers_for_a_module_the_exception_class_includes() {
     let mrb = open_mrb();
 
     let err = mrb
-        .load_string(
-            b"module BeniTag; end; module BeniUnrelated; end
+        .eval::<beni::Value>(
+            "module BeniTag; end; module BeniUnrelated; end
               class BeniTaggedError < StandardError; include BeniTag; end
               raise BeniTaggedError",
         )
@@ -262,7 +262,7 @@ fn is_kind_of_answers_false_for_an_error_carrying_no_exception() {
     let syntax_error = mrb.exc_get(c"SyntaxError").expect("a core exception class");
 
     let syntax = mrb
-        .load_string(b"end")
+        .eval::<beni::Value>("end")
         .expect_err("source that does not parse must surface as Err");
 
     assert!(matches!(syntax, Error::Syntax(_)));

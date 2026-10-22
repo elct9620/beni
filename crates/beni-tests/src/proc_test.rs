@@ -167,7 +167,7 @@ fn run_with(mrb: &Mrb, block: Proc, src: &str) -> String {
     mrb.define_global_const("P", block)
         .expect("binding the proc must succeed");
     let value = mrb
-        .load_string(src.as_bytes())
+        .eval::<beni::Value>(src)
         .expect("the test source must run without raising");
     value.inspect(mrb)
 }
@@ -245,7 +245,7 @@ fn a_rust_defined_proc_called_without_keywords_allocates_no_hash() {
     mrb.define_global_const("P", mrb.proc_new(add))
         .expect("binding the proc must succeed");
     let calls = mrb
-        .load_string(b"GC.disable; proc { 1000.times { P.call(1, 2) } }")
+        .eval::<beni::Value>("GC.disable; proc { 1000.times { P.call(1, 2) } }")
         .unwrap();
     let calls = Proc::from_value(calls).unwrap();
     let before = hashes_on_the_heap(&mrb);
@@ -317,7 +317,7 @@ fn a_closure_called_while_it_runs_raises_runtime_error_to_the_second_caller() {
         }
         // Re-enter through a copy, which shares this closure.
         let inner =
-            mrb.load_string(b"begin; P.dup.call; rescue RuntimeError => e; e.class; end")?;
+            mrb.eval::<beni::Value>("begin; P.dup.call; rescue RuntimeError => e; e.class; end")?;
         Ok(inner)
     });
 
@@ -332,7 +332,7 @@ fn countdown(mrb: &Mrb, args: &[Value], _block: Option<Proc>) -> Result<Value, E
     if n == 0 {
         return Ok(0.into_value(mrb));
     }
-    let below = mrb.load_string(format!("P.call({})", n - 1).as_bytes())?;
+    let below = mrb.eval::<beni::Value>(&format!("P.call({})", n - 1))?;
     Ok((i32::from_value(below).unwrap() + n).into_value(mrb))
 }
 

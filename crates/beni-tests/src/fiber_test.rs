@@ -5,7 +5,7 @@ use crate::support::{open_mrb, same_object};
 
 fn fiber(mrb: &Mrb, source: &str) -> Fiber {
     let value = mrb
-        .load_string(source.as_bytes())
+        .eval::<beni::Value>(source)
         .expect("the fiber source runs");
     Fiber::from_value(value).expect("the source answers a Fiber")
 }
@@ -36,7 +36,7 @@ fn assert_fiber_error(mrb: &Mrb, err: &Error, wording: &str) {
 fn a_fiber_from_a_ruby_block_resumes_until_its_block_finishes() {
     let mrb = open_mrb();
     let block = mrb
-        .load_string(b"proc { |a| b = Fiber.yield(a + 1); b * 2 }")
+        .eval::<beni::Value>("proc { |a| b = Fiber.yield(a + 1); b * 2 }")
         .unwrap();
     let fiber = mrb
         .fiber_new(Proc::from_value(block).unwrap())
@@ -79,7 +79,7 @@ fn a_slice_crossing_a_switch_arrives_as_one_value() {
 #[test]
 fn a_raise_inside_the_fiber_surfaces_and_leaves_the_resumer_current() {
     let mrb = open_mrb();
-    let root = mrb.load_string(b"Fiber.current").unwrap();
+    let root = mrb.eval::<beni::Value>("Fiber.current").unwrap();
     let fiber = fiber(
         &mrb,
         "Fiber.new { raise ArgumentError, 'inside the fiber' }",
@@ -90,7 +90,7 @@ fn a_raise_inside_the_fiber_surfaces_and_leaves_the_resumer_current() {
     let argument_error = mrb.exc_get("ArgumentError").unwrap();
     assert!(err.is_kind_of(&mrb, argument_error));
     assert!(err.message(&mrb).contains("inside the fiber"));
-    let current = mrb.load_string(b"Fiber.current").unwrap();
+    let current = mrb.eval::<beni::Value>("Fiber.current").unwrap();
     assert!(
         same_object(&mrb, root, current),
         "the resumer's fiber is current again"
@@ -179,7 +179,7 @@ fn current(mrb: &Mrb, _self: Value) -> Result<Fiber, Error> {
 #[test]
 fn the_current_fiber_is_the_root_outside_any_resumed_fiber() {
     let mrb = open_mrb();
-    let root = mrb.load_string(b"Fiber.current").unwrap();
+    let root = mrb.eval::<beni::Value>("Fiber.current").unwrap();
 
     let current = mrb.fiber_current().unwrap();
 
@@ -194,7 +194,7 @@ fn the_current_fiber_inside_a_resumed_fiber_is_that_fiber() {
         .unwrap();
 
     let found = mrb
-        .load_string(b"f = Fiber.new { Object.rust_current }; f.resume.equal?(f)")
+        .eval::<beni::Value>("f = Fiber.new { Object.rust_current }; f.resume.equal?(f)")
         .unwrap();
 
     assert!(found.to_bool(), "the read answers the resumed fiber");
@@ -203,7 +203,7 @@ fn the_current_fiber_inside_a_resumed_fiber_is_that_fiber() {
 #[test]
 fn a_redefined_current_fiber_read_surfaces_its_failure() {
     let mrb = open_mrb();
-    mrb.load_string(b"def Fiber.current; :not_a_fiber; end")
+    mrb.eval::<beni::Value>("def Fiber.current; :not_a_fiber; end")
         .unwrap();
 
     let Err(err) = mrb.fiber_current() else {
@@ -217,7 +217,7 @@ fn a_redefined_current_fiber_read_surfaces_its_failure() {
         err.message(&mrb)
     );
 
-    mrb.load_string(b"def Fiber.current; raise ArgumentError, 'no fiber'; end")
+    mrb.eval::<beni::Value>("def Fiber.current; raise ArgumentError, 'no fiber'; end")
         .unwrap();
 
     let Err(err) = mrb.fiber_current() else {
@@ -230,7 +230,7 @@ fn a_redefined_current_fiber_read_surfaces_its_failure() {
 #[test]
 fn a_current_fiber_read_without_a_fiber_class_surfaces_name_error() {
     let mrb = open_mrb();
-    mrb.load_string(b"Object.send(:remove_const, :Fiber)")
+    mrb.eval::<beni::Value>("Object.send(:remove_const, :Fiber)")
         .unwrap();
 
     let Err(err) = mrb.fiber_current() else {
@@ -308,8 +308,8 @@ fn a_fiber_yield_carries_every_argument_however_many() {
     with_pause(&mrb);
 
     let results = mrb
-        .load_string(
-            b"f = Fiber.new { Object.pause; Object.pause(*(1..8)); Object.pause(*(1..9)) }
+        .eval::<beni::Value>(
+            "f = Fiber.new { Object.pause; Object.pause(*(1..8)); Object.pause(*(1..9)) }
               [f.resume, f.resume, f.resume]",
         )
         .unwrap();
@@ -326,8 +326,8 @@ fn a_fiber_yield_suspends_a_fiber_ruby_resumes() {
     with_pause(&mrb);
 
     let results = mrb
-        .load_string(
-            b"f = Fiber.new { a = Object.pause(1); b = Object.pause(a + 1, 3); [a, b] }
+        .eval::<beni::Value>(
+            "f = Fiber.new { a = Object.pause(1); b = Object.pause(a + 1, 3); [a, b] }
               [f.resume, f.resume(10), f.resume(10, 10), f.alive?]",
         )
         .unwrap();
@@ -345,7 +345,7 @@ fn a_fiber_yield_outside_a_resumed_fiber_raises_fiber_error() {
     with_pause(&mrb);
 
     let message = mrb
-        .load_string(b"begin; Object.pause(1); rescue FiberError => e; e.message; end")
+        .eval::<beni::Value>("begin; Object.pause(1); rescue FiberError => e; e.message; end")
         .unwrap();
 
     assert!(

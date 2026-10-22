@@ -474,7 +474,7 @@ fn compiler_surface_is_reachable_from_outside() {
     let _ = Ccontext::load_nstring;
     let _ = Ccontext::compile;
     let _ = Ccontext::warnings;
-    let _ = Mrb::load_string;
+    let _ = Mrb::eval::<Value>;
 }
 
 /// The drift net for the `fiber` capability feature, kept apart from

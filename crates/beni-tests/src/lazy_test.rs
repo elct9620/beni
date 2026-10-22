@@ -61,7 +61,7 @@ fn a_held_value_outlives_the_scope_that_computed_it() {
     let scope = mrb.arena_scope();
     Lazy::force(&PROBE, &mrb);
     drop(scope);
-    mrb.load_string(b"$beni_lazy = nil; beni_lazy = nil")
+    mrb.eval::<beni::Value>("$beni_lazy = nil; beni_lazy = nil")
         .expect("assigning those names succeeds");
     mrb.gc_start();
 
@@ -72,7 +72,7 @@ fn a_held_value_outlives_the_scope_that_computed_it() {
 /// The globals a guest program enumerates.
 fn enumerated_globals(mrb: &beni::Mrb) -> Vec<String> {
     let names = mrb
-        .load_string(b"global_variables.map(&:to_s)")
+        .eval::<beni::Value>("global_variables.map(&:to_s)")
         .expect("enumerating globals succeeds");
     Vec::try_convert(names, mrb).expect("the names are strings")
 }

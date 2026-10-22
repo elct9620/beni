@@ -112,7 +112,7 @@ fn a_registered_method_reads_what_the_owner_installed() {
         .expect("defining the method must succeed");
 
     let got = mrb
-        .load_string(b"realm_name")
+        .eval::<beni::Value>("realm_name")
         .expect("the method must not raise");
 
     assert_eq!(String::from_value(got).as_deref(), Some("game"));

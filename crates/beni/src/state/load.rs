@@ -10,17 +10,17 @@ use crate::{Error, Mrb, Proc, Value};
 use beni_sys as sys;
 
 impl Mrb {
-    /// Compile and run a slice of Ruby `source` without being given a
-    /// compile context, yielding the program's result value.
+    /// Compile and run Ruby `source` without being given a compile
+    /// context, yielding the program's result converted to `T`. Mirrors
+    /// magnus's `Ruby::eval`.
     ///
     /// A failure surfaces exactly as it does under a caller's context:
     /// source that does not parse comes back `Err(Error::Syntax)`
     /// carrying the compiler's diagnostic, and a codegen failure or a
     /// raise comes back `Err(Error::Exception)` with the pending
-    /// exception cleared from the handle.
-    ///
-    /// The source carries its own length, so it needs no terminating
-    /// NUL and the bytes need not be valid UTF-8.
+    /// exception cleared from the handle. A result `T` rejects comes
+    /// back as that conversion's `Err`. Source that is not UTF-8 loads
+    /// through `Ccontext::load_nstring`.
     ///
     /// The load borrows an unnamed `Ccontext` and releases it on the
     /// way out, so it differs from one under a caller's context only
@@ -29,7 +29,7 @@ impl Mrb {
     /// and the warnings the load produced go with the context a caller
     /// never holds. Reach for a `Ccontext` to keep either.
     #[cfg(feature = "compiler")]
-    pub fn load_string(&self, source: &[u8]) -> Result<Value, crate::Error> {
+    pub fn eval<T: crate::TryConvert>(&self, source: &str) -> Result<T, crate::Error> {
         let Some(cxt) = crate::Ccontext::unnamed(self) else {
             // The context allocator answers NULL rather than raising,
             // and a load that never reached the compiler has the same
@@ -37,7 +37,7 @@ impl Mrb {
             // diagnostic.
             return Err(crate::Error::Syntax(crate::ParseMessage::unrecorded()));
         };
-        cxt.load_nstring(source)
+        T::try_convert(cxt.load_nstring(source.as_bytes())?, self)
     }
 
     /// Read a precompiled bytecode blob as a program without running
