@@ -1279,6 +1279,18 @@ Neither the read nor the removal dispatches Ruby or raises.
 
 #### Classes, modules, and methods
 
+##### Core classes
+
+The live `Mrb` handle answers each core class and module mruby keeps on its state, mirroring `magnus`'s accessors of the same names. Each read is total and runs no Ruby.
+
+| Read | Answers |
+|---|---|
+| `class_object` / `class_class` / `class_module` / `class_proc` | `Object` / `Class` / `Module` / `Proc` as an `RClass` |
+| `class_string` / `class_symbol` / `class_array` / `class_hash` / `class_range` | `String` / `Symbol` / `Array` / `Hash` / `Range` as an `RClass` |
+| `class_integer` / `class_float` | `Integer` / `Float` as an `RClass` |
+| `class_true_class` / `class_false_class` / `class_nil_class` | `TrueClass` / `FalseClass` / `NilClass` as an `RClass` |
+| `module_kernel` | `Kernel` as an `RModule` |
+
 ##### Class definition
 
 Class and module definition are methods on the live `Mrb` handle: `define_class(name, superclass)` and `define_module(name)` return typed `RClass` and `RModule` handles. Class definition is top-level on the `Mrb` handle and within a namespace through the `Module` trait. A name the namespace itself already binds (a top-level constant, for top-level definition) resolves as follows.
@@ -1310,6 +1322,8 @@ Methods register on those handles through the `Module` trait, and singleton meth
 | undefine (Ruby's `Module#undef_method`) | marks the name as not defined on the handle, even when an ancestor defines it |
 | singleton undefine (`Object` trait) | undefines a singleton method |
 | remove (Ruby's `Module#remove_method`) | deletes the method's own definition from the handle; the name reverts to any ancestor's method |
+
+A global function registers on the live `Mrb` handle as a module function of `Kernel`, callable bare from any receiver, mirroring `magnus`'s `define_global_function`.
 
 Removal strips the definition rather than masking ancestor lookups, which distinguishes it from undefinition. A definition, registration, alias, module inclusion or prepend, undefinition, or removal mruby rejects surfaces as a Rust `Err`. Rejections include a cyclic include or prepend and undefining a name absent from the handle and its ancestors. They also include removing a name not defined directly on the handle.
 
