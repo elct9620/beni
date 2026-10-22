@@ -61,7 +61,13 @@ fn a_name_that_is_not_utf8_reads_as_an_argument_error_and_its_bytes_read_raw() {
     };
     assert_eq!(exc.classname(&mrb), "ArgumentError");
     assert_eq!(sym.name_bytes(&mrb).as_deref().ok(), Some(&b"\xff"[..]));
-    assert_eq!(sym.dump(&mrb).as_deref().ok(), Some("\"\\xff\""));
+    // mruby picks the hex digits' case per release: 4.0 writes `\xff`, 4.1
+    // `\xFF`.
+    let dump = sym.dump(&mrb).expect("the dump form reads");
+    assert!(
+        dump.eq_ignore_ascii_case("\"\\xff\""),
+        "unexpected dump {dump}"
+    );
 }
 
 #[test]
