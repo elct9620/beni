@@ -278,6 +278,15 @@ The crate publishes whether the archive carries the debug hooks to its direct de
 | the code fetch hook | `true` |
 | no code fetch hook | `false` |
 
+#### Bigint Metadata
+
+The crate publishes whether the archive is a bigint archive to its direct dependents as the bigint metadata. It is read from the bindings the build uses, as the widths are; the documentation bindings, generated from the upstream default configuration, report a bigint archive.
+
+| Bindings declare | Metadata |
+|---|---|
+| the arbitrary-width Integer conversions mruby declares under `MRB_USE_BIGINT` | `true` |
+| none of them | `false` |
+
 #### Layout Check
 
 The `bindgen-layout-tests` cargo feature, disabled by default, turns on the layout check in a build that generates its bindings from the discovered archive. Enabling it adds no surface.
@@ -379,6 +388,8 @@ names and rejects every other value:
 | `Qnil` / `Qtrue` / `Qfalse` | `nil` / `true` / `false` |
 | `Qundef` | the undefined value no Ruby code can name; `value::qundef()` returns it, and it converts back into a value only through an `unsafe` `as_value` whose caller keeps that value from reaching Ruby code, mirroring `magnus` |
 | `Integer` | an Integer, of the fixed-width or the arbitrary-width tag |
+| `Fixnum` | an Integer of the fixed-width tag |
+| `RBignum` | an Integer of the arbitrary-width tag; the handle exists only in a build against a bigint archive |
 | `Float` / `Symbol` | a Float / a Symbol |
 | `RString` / `RArray` / `RHash` | a String / Array / Hash, subclass instances included |
 | `Range` / `Proc` | a Range / a Proc |
@@ -404,12 +415,16 @@ Numeric handles read out as Rust numbers, mirroring `magnus`:
 
 | Handle | Reads out as | Mirrors |
 |---|---|---|
-| `Integer` | `i64` | `Integer::to_i64` |
+| `Integer` / `Fixnum` / `RBignum` | each Rust integer type, through `to_` and the type's name: `to_i8` … `to_i128`, `to_isize`, `to_u8` … `to_u128`, `to_usize` | the same reads on `Integer` / `Fixnum` / `RBignum` |
 | `Float` | `f64` | `Float::to_f64` |
 
-A fixed-width Integer always fits. An arbitrary-width Integer beyond the
-configured integer width surfaces the `RangeError` mruby raises. The `Float`
-read is total.
+An integer read yields the Integer's value wherever the target's range holds it,
+whichever tag carries it, and otherwise surfaces an `Err` carrying the
+`RangeError` the TryConvert numbers rules name for a Rust integer. A `Fixnum` read into `i64` or `i128` is total and returns the
+value itself; every other integer read returns a `Result`, a `Fixnum` read into
+`isize` included, since a 64-bit configured integer width on a 32-bit target
+holds values no `isize` does. An `RBignum` answers its sign, `is_positive` and
+`is_negative`, as magnus's does. The `Float` read is total.
 
 ##### IntoValue rules
 
@@ -430,20 +445,22 @@ raise nothing and run no Ruby:
 | `Bytes`, with the `bytes` feature | a copy of the bytes in a new String | — |
 
 A Rust number type converts into an Integer or Float `Value` only where every
-value it holds fits the configured integer width or configured float width, so
-the conversion stays total:
+value it holds fits the configured integer width or configured float width, or
+where a bigint archive holds it, so the conversion stays total. A Rust integer
+the configured integer width holds boxes into a fixed-width Integer, any other
+into an arbitrary-width one:
 
 | Rust type | Converts under |
 |---|---|
 | `i8` / `i16` / `i32` / `u8` / `u16` | every configured integer width |
-| `u32` / `i64` | a 64-bit configured integer width |
-| `isize` | a configured integer width no narrower than the cargo target's pointer width |
+| `u32` / `i64` | a 64-bit configured integer width, or a bigint archive |
+| `isize` | a configured integer width no narrower than the cargo target's pointer width, or a bigint archive |
+| `u64` / `usize` / `i128` / `u128` | a bigint archive |
 | `f32` | every configured float width |
 | `f64` | a 64-bit configured float width |
 
-Every other integer type — `u64`, `usize`, `i128`, `u128`, and a `u32` / `i64`
-/ `isize` the width does not fit — has no conversion and fails to compile. So
-does an `f64` under a 32-bit width.
+A Rust number type outside its row's condition has no conversion and fails to
+compile.
 
 ##### FromValue rules
 
@@ -455,13 +472,14 @@ does an `f64` under a 32-bit width.
 | a typed handle | what the Type discrimination table names for the handle | rejects |
 | `bool` | Ruby truthiness — `nil` and `false` to `false`, every other value to `true` | total, never rejects |
 | `Option<T>` | `nil` to `None`; any other value by `T`'s rule to `Some` | rejects what `T` rejects |
-| `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64` / `isize` / `usize` | an Integer that fits the configured integer width and lies within the target's own range | rejects |
+| `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64` / `isize` / `usize` | an Integer of the fixed-width tag that lies within the target's own range | rejects |
 | a Rust float | a Float | rejects |
 
-An integer target never takes a Float. `i64` holds every Integer that fits the
-configured integer width, and an unsigned target rejects every negative one. An
-arbitrary-width Integer beyond the configured width rejects. Every integer
-target listed converts under every configured integer width.
+An integer target never takes a Float. `i64` holds every Integer of the
+fixed-width tag, and an unsigned target rejects every negative one. An Integer
+of the arbitrary-width tag rejects whatever its value, as the `Fixnum` downcast
+does; `TryConvert` reads it. Every integer target listed converts under every
+configured integer width.
 
 A float target never takes an Integer. It converts only where it holds every
 value the configured float width does: `f64` under every width, `f32` under a
@@ -506,7 +524,7 @@ tag — `Exception`, `Object`, `Fiber`, `Struct`, `Set`, `Rational`, `Complex`,
 
 ##### TryConvert numbers
 
-Rust integer and float targets convert as mruby's own C-method arguments do; the `Integer` and `Float` handles convert as the paragraph after this table says:
+Rust integer and float targets take the numeric values mruby's own C-method arguments take, and a Rust integer target reads every Integer its own range holds, as the integer reads do; the `Integer` and `Float` handles convert as the paragraph after this table says:
 
 | Target | Converts | *target* |
 |---|---|---|
@@ -514,6 +532,7 @@ Rust integer and float targets convert as mruby's own C-method arguments do; the
 | a non-zero Rust integer, `NonZeroI8` … `NonZeroUsize` | as its integer does | as its integer |
 | `f64` / `f32` | a Float, or an Integer widened | `Float` |
 | `Integer` handle | the downcast, a Float truncated toward zero, an arbitrary-width Integer kept whole | `Integer` |
+| `Fixnum` / `RBignum` handle | what the `Integer` handle converts, carried by the handle's own tag | `Integer` |
 | `Float` handle | the downcast, an Integer widened | `Float` |
 
 The `Integer` and `Float` handles take any non-downcast numeric value as the
@@ -525,8 +544,10 @@ nearest `f32`, and a magnitude beyond `f32` becomes an infinity.
 | Target | Value | Error |
 |---|---|---|
 | Rust integer, `Integer` handle | an infinite or NaN Float | the `RangeError` mruby raises |
-| Rust integer | an arbitrary-width Integer beyond the configured integer width | the `RangeError` mruby raises |
-| Rust integer | an Integer within that width, outside the target's own range | `RangeError` "*value* out of range", *value* its inspected form |
+| Rust integer | an Integer of the fixed-width tag outside the target's own range | `RangeError` "*value* out of range", *value* its inspected form |
+| Rust integer | an Integer of the arbitrary-width tag outside the target's own range | `RangeError` "integer out of range", as mruby raises for it |
+| `Fixnum` handle | an Integer of the arbitrary-width tag | `RangeError` "integer too big for fixnum" |
+| `RBignum` handle | an Integer of the fixed-width tag | `RangeError` "integer too small for bignum" |
 | non-zero Rust integer | zero | `ArgumentError` "value must be non-zero" |
 | `f64` / `f32`, `Float` handle | `nil` | `TypeError` "can't convert nil into Float", as mruby raises |
 
@@ -686,6 +707,17 @@ An `Integer` handle and a `Float` handle convert as follows.
 | `Integer` to a new `RString` in a given radix, as Ruby's `Integer#to_s(base)` | `12345` to `"3039"` in base 16 | radix outside 2 through 36: the `ArgumentError` mruby raises | `mrb_integer_to_str` |
 | `Float` to the `Integer` it truncates toward zero, as Ruby's `Float#to_i` | `3.9` to `3`, `-3.9` to `-3` | infinite or NaN float, which has no integer: a `RangeError` | `mrb_float_to_integer` |
 
+##### Integer Construction
+
+`Mrb` constructs an Integer from a Rust integer, mirroring `magnus`'s `Ruby`
+constructors of the same names. Each construction is total and runs no Ruby:
+
+| Construction | Yields | Exists |
+|---|---|---|
+| `integer_from_i64` / `integer_from_u64` / `integer_from_i128` / `integer_from_u128` | an `Integer` holding the value, of the fixed-width tag where the configured integer width holds it and the arbitrary-width tag otherwise | where `IntoValue` converts the Rust type |
+| `fixnum_from_i64` / `fixnum_from_u64` | the `Fixnum` where the configured integer width holds the value, otherwise an `Err` carrying the `RBignum` | in a build against a bigint archive |
+| `bignum_from_i64` / `bignum_from_u64` | the `RBignum` where the configured integer width does not hold the value, otherwise an `Err` carrying the `Fixnum` | in a build against a bigint archive |
+
 ##### Numeric Arithmetic
 
 Two numeric values add, subtract, or multiply into a new numeric value, the way
@@ -694,9 +726,10 @@ to `5.5`. The result stays in mruby's value domain:
 
 | Operands | Result |
 |---|---|
-| both integers, result fits the configured integer width | an `Integer` |
+| both integers, result fits the configured integer width | an `Integer` of the fixed-width tag |
+| both integers, result beyond the configured integer width, against a bigint archive | an `Integer` of the arbitrary-width tag |
 | either operand a float | a `Float`; the integer operand widens |
-| integer arithmetic exceeding the configured integer width | an `Err` carrying a `RangeError` |
+| integer arithmetic exceeding the configured integer width, against any other archive | an `Err` carrying a `RangeError` |
 | non-numeric left operand | an `Err` carrying a `TypeError` |
 | non-numeric right operand | an `Err` carrying a `TypeError` |
 
@@ -966,7 +999,7 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Mutates a receiver: array append / remove / extend / replace / clear; array indexed write and resize; hash assign / delete / merge / clear; string append and resize; instance-variable assignment and removal; class-variable assignment; constant assignment and removal | the receiver is frozen; an indexed write also when the index is out of range (a negative index past the beginning, or one too large); a string resize also when the requested length is negative or overflows | `Result` |
 | Dispatches Ruby: a method call; `==` / `eql?`; a `<=>` comparison; an object `dup`; string coercion; a splat coercion to an array running a non-array's `to_a`; an array join rendering each element via `to_s`; an instance construction running `initialize`; a constant fetch running a `const_missing` hook; a constant assignment running a `const_added` hook; a hash read / assignment / fetch / key test / deletion / merge running a key's `hash` / `eql?`; a hash read running a `default` lookup for an absent key; a range construction comparing its two bounds; a current-fiber read running `Fiber.current` | the dispatched code raises; a splat coercion also when a `to_a` responder returns a non-array non-`nil` value; a constant fetch also when the name resolves to no constant; a range construction also when its two bounds cannot be compared; a current-fiber read also when `Fiber` names no class, or `Fiber.current` answers anything but a Fiber (`TypeError`) | `Result`; a `<=>` comparison yields nothing when the two values are incomparable |
 | Reads a named variable that raises on absence: a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
-| Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read converted to a requested type; an Integer read out as `i64`; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an arbitrary-width Integer beyond the configured integer width read out (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width (`RangeError`) | `Result` |
+| Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read converted to a requested type; an Integer read out as a Rust integer, a `Fixnum` read into `i64` or `i128` aside; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an Integer read out beyond its Rust target's range (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width against an archive other than a bigint archive (`RangeError`) | `Result` |
 | Interns a name, creating its symbol: a C-string, byte-slice, String-value, or static-buffer intern; a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (`ArgumentError`) | `Result` |
 | Reads or renders without dispatching but can still raise: a string's NUL-terminated C-string view; a strict parse of a string to an integer in a given radix, or to a float; rendering an integer to a string in a given radix; computing a Range's normalized slice of a collection length; reading an instance-variable holder's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36; a Range slice's present bound is neither an integer nor integer-convertible (`TypeError`); mruby gives the object no singleton class (`TypeError`) | `Result`; a Range slice that does not raise returns its three-way outcome: in-range with begin offset and length, out-of-range, or a non-Range mismatch |
 | Allocates an instance without dispatching: a class's bare allocation | the class is a singleton class, its default allocator is undefined, or its instances are of an immediate or C-pointer type (`TypeError`) | `Result` |
@@ -1153,10 +1186,11 @@ Arithmetic adds, subtracts, or multiplies two numeric values into a new numeric 
 
 | Operands | Result |
 |---|---|
-| both integers, result fits the configured integer width | an `Integer` |
+| both integers, result fits the configured integer width | an `Integer` of the fixed-width tag |
+| both integers, result beyond the configured integer width, against a bigint archive | an `Integer` of the arbitrary-width tag |
 | either operand a float | a `Float` |
 | either operand non-numeric | `Err` carrying a `TypeError` |
-| integer arithmetic exceeds the configured integer width | `Err` carrying a `RangeError` |
+| integer arithmetic exceeds the configured integer width, against any other archive | `Err` carrying a `RangeError` |
 
 ##### Splat coercion
 
@@ -2408,7 +2442,7 @@ measures complete.
 | Bindings a `beni-sys` build uses that declare no integer width, no release, no float, or a fixed-size GC arena | `beni-sys` build fails and names the bindings it read |
 | A `beni-sys` build with the layout check on whose bindings lay a type out differently from its headers | `beni-sys` build fails to compile and names the type |
 | A `beni` build that receives no integer-width metadata, no float-width metadata, or no release metadata | `beni` build fails and names the metadata it expected |
-| A `beni` build that receives no debug-hook metadata | the build fails, naming that metadata |
+| A `beni` build that receives no debug-hook metadata or no bigint metadata | the build fails, naming the metadata it expected |
 | `Mrb::open` failing to produce an interpreter | returns an error, never aborts |
 | An exception raised by a raw binding inside a `sys::protect` body | surfaced as a Rust `Err` carrying the exception, the pending exception cleared from the handle; never unwinds past the caller |
 | An allocation the interpreter cannot satisfy, inside a typed operation | mruby's out-of-memory raise, outside every total or never-raising statement. An operation that surfaces `Err` surfaces it as one carrying that exception; inside one that surfaces none — a conversion into a value, a read or render stated to never raise — it reaches the nearest mruby frame that rescues it, and ends the process where none does |
@@ -2494,6 +2528,8 @@ measures complete.
 | configured float width | the bit width of mruby's float the bindings a build uses declare — 32 or 64; mruby settles it from the archive's flags, and the documentation bindings carry the 64-bit width of the upstream default configuration |
 | float-width metadata | the `links` metadata key `defines_mrb_float32` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_DEFINES_MRB_FLOAT32` — `true` for a 32-bit configured float width, `false` for a 64-bit one |
 | debug-hook metadata | `links` key `defines_mrb_debug_hook`, read as `DEP_MRUBY_DEFINES_MRB_DEBUG_HOOK` |
+| bigint archive | an archive built with mruby's `mruby-bigint` gem, so an Integer beyond the configured integer width becomes one of the arbitrary-width tag rather than raising |
+| bigint metadata | `links` key `defines_mrb_bigint`, read as `DEP_MRUBY_DEFINES_MRB_BIGINT` — `true` for a bigint archive |
 | debug hooks | the per-instruction callbacks an archive built with `MRB_USE_DEBUG_HOOK` carries |
 | code fetch hook | the debug hook mruby calls before each instruction it runs |
 | release metadata | the `links` metadata key `release` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_RELEASE` — the major and minor release the bindings declare, written `major.minor`, such as `4.0` |
