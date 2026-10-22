@@ -230,6 +230,70 @@ fn a_frame_running_rust_has_no_place_and_no_locals() {
     );
 }
 
+fn define_yield_to(mrb: &Mrb) {
+    mrb.object_class()
+        .define_method(mrb, c"yield_to", beni::method!(yield_to, 0, &))
+        .expect("registering the method succeeds");
+}
+
+#[test]
+fn a_block_lists_its_own_variables_then_its_enclosing_scopes() {
+    let mut mrb = open_mrb();
+    define_yield_to(&mrb);
+    let (a, b, c) = (id(&mrb, "a"), id(&mrb, "b"), id(&mrb, "c"));
+    let source = "def m(a)\n  b = 2\n  yield_to do\n    c = 3\n    c\n  end\nend\nm(1)\n";
+
+    let frames = frames_at(&mut mrb, source, 5);
+
+    assert_eq!(
+        frames.locals,
+        vec![(c, Some(3)), (a, Some(1)), (b, Some(2))]
+    );
+}
+
+#[test]
+fn an_inner_variable_hides_an_outer_one_of_the_same_name() {
+    let mut mrb = open_mrb();
+    define_yield_to(&mrb);
+    let x = id(&mrb, "x");
+    let source = "def m\n  x = 1\n  yield_to do |x|\n    x\n  end\nend\nm\n";
+
+    let frames = frames_at(&mut mrb, source, 4);
+
+    assert_eq!(
+        frames.locals,
+        vec![(x, None)],
+        "the block's own `x`, given no argument"
+    );
+}
+
+#[test]
+fn the_walk_stops_where_a_scope_starts() {
+    let mut mrb = open_mrb();
+    let q = id(&mrb, "q");
+    let source =
+        "class C\n  o = 1\n  define_method(:h) do\n    q = 6\n    q\n  end\nend\nC.new.h\n";
+
+    let frames = frames_at(&mut mrb, source, 5);
+
+    assert_eq!(
+        frames.locals,
+        vec![(q, Some(6))],
+        "a block a method was defined from starts a scope"
+    );
+}
+
+#[test]
+fn an_anonymous_parameter_names_no_variable() {
+    let mut mrb = open_mrb();
+    let z = id(&mrb, "z");
+    let source = "def f(*, **, &)\n  z = 3\n  z\nend\nf(1, k: 2)\n";
+
+    let frames = frames_at(&mut mrb, source, 3);
+
+    assert_eq!(frames.locals, vec![(z, Some(3))]);
+}
+
 #[test]
 fn an_err_at_the_first_instruction_of_a_rescued_range_is_rescued() {
     let mut mrb = open_mrb();

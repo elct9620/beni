@@ -287,40 +287,79 @@ impl<'a> DebugInspector<'a> {
         Some(class)
     }
 
-    /// Each local variable the indexed frame's code declares, in order,
-    /// with its current value. A frame running Rust or C code, or code
-    /// compiled without its local variable names, declares none.
+    /// Each local variable the indexed frame's code can name, with its
+    /// value: its own scope's, then each enclosing scope's out to the
+    /// nearest scope start, an inner variable hiding an outer one of the
+    /// same name — the set mruby's `local_variables` lists. A frame
+    /// running Rust or C code, or code compiled without its local
+    /// variable names, declares none.
     pub fn frame_local_variables(self, index: usize) -> Option<Vec<(Id, Value)>> {
         let frame = self.frame(index)?;
+        let mut locals: Vec<(Id, Value)> = Vec::new();
         // SAFETY: `frame` lies in the running fiber's frame stack, which
         // stays in place while a read runs no Ruby.
-        let irep = unsafe { sys::mrb_ci_irep_func(frame) };
-        // SAFETY: a non-NULL irep is the frame's live code.
-        let Some(irep) = (unsafe { irep.as_ref() }) else {
-            return Some(Vec::new());
-        };
-        if irep.lv.is_null() {
-            return Some(Vec::new());
+        let mut irep = unsafe { sys::mrb_ci_irep_func(frame) };
+        let mut proc_ = frame.proc_;
+        // The frame's registers hold `self` then each of its own locals.
+        let mut values = frame.stack.cast_const();
+        let mut held = usize::MAX;
+        // SAFETY: a non-NULL irep is the live code of the scope `proc_`
+        // runs, kept by the frame's proc or the procs it encloses.
+        while let Some(code) = unsafe { irep.as_ref() } {
+            if !code.lv.is_null() {
+                let count = usize::from(code.nlocals).saturating_sub(1);
+                // SAFETY: mruby sizes `lv` to one name per local,
+                // `nlocals - 1` of them.
+                let names = unsafe { core::slice::from_raw_parts(code.lv, count) };
+                for (slot, &name) in names.iter().enumerate().take(held) {
+                    if name == 0
+                        || self.is_anonymous(name)
+                        || locals.iter().any(|(seen, _)| seen.to_raw() == name)
+                    {
+                        continue;
+                    }
+                    // SAFETY: `values` holds `held` locals after `self`,
+                    // in the order `lv` names them, and `slot` is below it.
+                    let raw = unsafe { *values.add(slot + 1) };
+                    locals.push((
+                        Id::from_raw_unchecked(name),
+                        self.handed(Value::from_raw_unchecked(raw)),
+                    ));
+                }
+            }
+            let mut env = core::ptr::null_mut();
+            // SAFETY: `proc_` is the live proc running `code`.
+            let upper = unsafe { sys::mrb_proc_enclosing_func(proc_, &mut env) };
+            if upper.is_null() {
+                break;
+            }
+            // SAFETY: a non-NULL environment is the live one `proc_`
+            // captured, its stack holding `self` then the enclosing
+            // scope's locals, as many as its length.
+            (values, held) = match unsafe { env.as_ref() } {
+                Some(env) => (env.stack.cast_const(), unsafe {
+                    sys::mrb_env_len_func(env) as usize
+                }),
+                None => (core::ptr::null(), 0),
+            };
+            proc_ = upper;
+            // SAFETY: `upper` is the live proc of the enclosing scope.
+            irep = unsafe { sys::mrb_proc_irep_func(sys::mrb_obj_value(upper.cast_mut().cast())) };
         }
-        let count = usize::from(irep.nlocals).saturating_sub(1);
-        // SAFETY: mruby sizes `lv` to one name per local, `nlocals - 1`
-        // of them, and the frame's registers hold `self` then each local
-        // in that order.
-        let names = unsafe { core::slice::from_raw_parts(irep.lv, count) };
-        let locals = names
-            .iter()
-            .enumerate()
-            .filter(|(_, &name)| name != 0)
-            .map(|(slot, &name)| {
-                // SAFETY: register `slot + 1` is the local `name` names.
-                let raw = unsafe { *frame.stack.add(slot + 1) };
-                (
-                    Id::from_raw_unchecked(name),
-                    self.handed(Value::from_raw_unchecked(raw)),
-                )
-            })
-            .collect();
         Some(locals)
+    }
+
+    /// Whether `name` is an anonymous parameter's marker (`*`, `**`, `&`),
+    /// which mruby's `local_variables` names no variable
+    /// (`mrb_proc_local_variables` in `vendor/mruby/src/proc.c`).
+    fn is_anonymous(self, name: sys::mrb_sym) -> bool {
+        let mut len = 0;
+        // SAFETY: the call keeps the state live, and `name` was interned
+        // against it.
+        let ptr = unsafe { sys::mrb_sym_name_len(self.mrb, name, &mut len) };
+        // SAFETY: a non-NULL name spans `len` bytes, read here before any
+        // other name read can reuse the buffer a short name unpacks into.
+        !ptr.is_null() && len > 0 && matches!(unsafe { *ptr.cast::<u8>() }, b'*' | b'&')
     }
 
     /// `value`, held in the arena when this inspector holds its reads.
