@@ -83,13 +83,13 @@ fn id_name_bytes_carries_the_full_bytes_past_an_embedded_nul() {
     let mrb = open_mrb();
 
     // Intern a name with an embedded NUL through the bytes path; the
-    // C-string `sym_name` would stop at the NUL, the length-carrying
+    // C-string `Id::name` would stop at the NUL, the length-carrying
     // read keeps the full bytes.
     let sym = mrb
         .intern_str(mrb.str_new(b"a\0b").as_value())
         .expect("the name interns");
 
-    // `sym_name` escapes a NUL-containing name to its dump form; only
+    // `Id::name` escapes a NUL-containing name to its dump form; only
     // the length-carrying read returns the raw bytes.
     assert_eq!(beni::Id::name(sym, &mrb).as_deref(), Some("\"a\\x00b\""));
     assert_eq!(
@@ -173,7 +173,7 @@ fn id_name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
 fn id_name_bytes_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     let mrb = open_mrb();
 
-    // Same aliasing net as `sym_name`: hold the first read's bytes
+    // Same aliasing net as `Id::name`: hold the first read's bytes
     // across a second inline-name read that overwrites the shared
     // scratch buffer; the owned copy must stay intact.
     let first = beni::Id::name_bytes(mrb.intern_cstr(c"aa").expect("the name interns"), &mrb)
@@ -189,7 +189,7 @@ fn id_name_bytes_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
 fn id_dump_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     let mrb = open_mrb();
 
-    // Same aliasing net as `sym_name`: hold the first dump across a
+    // Same aliasing net as `Id::name`: hold the first dump across a
     // second inline-name dump that overwrites the shared scratch
     // buffer; the owned copy must stay intact.
     let first =
