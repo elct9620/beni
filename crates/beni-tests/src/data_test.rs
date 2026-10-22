@@ -326,3 +326,19 @@ fn only_a_class_defined_after_the_allocator_is_undefined_inherits_it() {
         .expect("an earlier subclass keeps its allocator");
     assert!(instance.is_kind_of(&mrb, earlier));
 }
+
+#[test]
+fn a_payload_reads_back_as_a_raw_pointer_through_either_handle() {
+    let mrb = open_mrb();
+    let class = mrb
+        .define_class(c"BeniDataMarkedBase", mrb.object_class())
+        .expect("defining the class must succeed");
+    Holder::mark_carriers(&mrb).expect("marking an ordinary class must succeed");
+
+    let obj = mrb.obj_wrap_as(Holder { tag: 9 }, class);
+    let raw = beni::typed_data::Obj::as_ptr(obj);
+    assert!(core::ptr::eq(raw, &*obj));
+    let untyped = beni::RTypedData::from_value(obj.as_value()).expect("a data carrier");
+    assert_eq!(untyped.as_ptr::<Holder>(&mrb).ok(), Some(raw));
+    assert!(untyped.as_ptr::<DropProbe>(&mrb).is_err());
+}

@@ -111,6 +111,15 @@ impl RTypedData {
         payload(self.0, mrb).map(|ptr| unsafe { &*ptr })
     }
 
+    /// The payload as a raw pointer, with `get`'s `Err` for a carrier
+    /// that holds no `T`. Taking the pointer is safe; dereferencing it
+    /// requires the carrier to stay reachable and the payload to see no
+    /// aliased write. Mirrors magnus's `RTypedData::as_ptr`.
+    #[inline]
+    pub fn as_ptr<T: TypedData>(self, mrb: &Mrb) -> Result<*mut T, Error> {
+        payload(self.0, mrb).map(<*const T>::cast_mut)
+    }
+
     /// Install `data` as the payload of a carrier holding none — what
     /// mruby's `dup` and `clone` make of a carrier, as do `new` and
     /// `allocate` while its class keeps its default allocator — so its
@@ -159,6 +168,21 @@ impl<T: TypedData> Clone for Obj<T> {
     }
 }
 
+impl<T: TypedData> Obj<T> {
+    /// The payload as a raw pointer. Taking the pointer is safe;
+    /// dereferencing it requires the carrier to stay reachable and the
+    /// payload to see no aliased write. Mirrors magnus's `Obj::as_ptr`.
+    #[inline]
+    pub fn as_ptr(obj: Self) -> *mut T {
+        // SAFETY: an `Obj<T>` names a live data carrier; the read leaves
+        // it unchanged.
+        unsafe {
+            let rdata = sys::mrb_obj_ptr_func(obj.inner.0.as_raw()) as *const sys::RData;
+            (*rdata).data.cast()
+        }
+    }
+}
+
 impl<T: TypedData> Deref for Obj<T> {
     type Target = T;
 
@@ -167,10 +191,7 @@ impl<T: TypedData> Deref for Obj<T> {
         // conversion that checked the carrier holds `T`'s data type, and
         // no typed operation replaces a held payload, so the carrier's
         // data slot points at a live `T` while it stays reachable.
-        unsafe {
-            let rdata = sys::mrb_obj_ptr_func(self.inner.0.as_raw()) as *const sys::RData;
-            &*((*rdata).data as *const T)
-        }
+        unsafe { &*Self::as_ptr(*self) }
     }
 }
 
