@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.24.0](https://github.com/elct9620/beni/compare/v0.23.1...v0.24.0) (2026-10-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** an instance-variable key without `@` on a plain object now surfaces a NameError, its presence test answers false, and the iteration no longer visits it. Keep such state in a TypedData payload, or reach it through `beni::sys`.
+* **beni:** a class-variable or constant key Ruby could not write there — no `@@`, a lowercase or `__x__` constant — now surfaces a NameError, and its predicate answers false. A global key without `$` now names the `$`-prefixed global; reach a `$`-less global through
+* **beni:** `Mrb::gc_register_forever(v)` is now
+* **beni:** `Value` and every typed handle are no longer `Send` or `Sync`; a handle held across threads, such as in user data or a `TypedData` payload, is stored as an `Opaque` and unwrapped with
+
+### Features
+
+* **beni-sys:** bind debug.h and publish whether the archive carries the debug hooks ([610384a](https://github.com/elct9620/beni/commit/610384a2c531ba95ff4731ca6c5ca55034295f8a))
+* **beni-sys:** check the bindings' layouts behind bindgen-layout-tests ([a753565](https://github.com/elct9620/beni/commit/a7535658b53228fd0fb781193215a8844e10c847))
+* **beni-sys:** make the all-zero mrb_value nil under either admitted boxing ([843da49](https://github.com/elct9620/beni/commit/843da49009091b92fb9a0e6d0039b400e69fcf8e))
+* **beni-sys:** read the type tag and the integer through boxing-agnostic shims ([125ad6e](https://github.com/elct9620/beni/commit/125ad6e5f949cca76b720fd392878b107fb0f22a))
+* **beni-sys:** refuse an archive boxed other than word or no boxing ([5590d33](https://github.com/elct9620/beni/commit/5590d33a8fc5da5f93c32321b93d6aba7e5ad477))
+* **beni-sys:** step out of a proc's scope and read an environment's length ([4d07150](https://github.com/elct9620/beni/commit/4d07150822f09ed45f982c42e7ba9ae53d3a1e66))
+* **beni:** add debug hooks a debugger drives breakpoints from ([0f05132](https://github.com/elct9620/beni/commit/0f05132d39d79b7038d5737c879e0dbc5cb40bec))
+* **beni:** copy the hook's views and read them by value, as magnus does ([f948a5e](https://github.com/elct9620/beni/commit/f948a5e19082486f33f8691f6da302b8687ac93e))
+* **beni:** keep handles on their thread and carry them in an Opaque ([13b1952](https://github.com/elct9620/beni/commit/13b19525e4d9f9824439127db3f76d7eea4c896f))
+* **beni:** name the never-released root gc_register_mark_object ([7df23d6](https://github.com/elct9620/beni/commit/7df23d6d7d7b9b71f9880f74d848efa24bea7581))
+* **beni:** read a frame's self and defining class, and inspect from Rust ([c9c945e](https://github.com/elct9620/beni/commit/c9c945e0b0d6af1fbbaa42774138a0c0e13803e4))
+* **beni:** read values under no boxing as under word boxing ([38be9e6](https://github.com/elct9620/beni/commit/38be9e6384934c0dea817c8d6bec226fd6d77f57))
+* **beni:** refuse class-variable and constant names Ruby cannot write ([fe8a34e](https://github.com/elct9620/beni/commit/fe8a34ea72927aa8cbac9b3b79f5c7b602986513))
+* **beni:** refuse instance-variable names Ruby cannot write, except on data carriers ([be8c040](https://github.com/elct9620/beni/commit/be8c040234c2156b02425ca91a497a30330856a2))
+* **tasks:** expect archive-gated surface in its own drift net body ([97af298](https://github.com/elct9620/beni/commit/97af298b7f46342484c544a949b73f41693d4ed9))
+
+
+### Bug Fixes
+
+* **beni-macros:** fully qualify the panic a derived carrier read raises ([1355f22](https://github.com/elct9620/beni/commit/1355f228560dc49cf0da14992c5b4bf7cfd15b1e))
+* **beni-macros:** leave the fallback arm out when every variant names a class ([52de4e2](https://github.com/elct9620/beni/commit/52de4e2a6b5b90fd3c53a07f58bda6181aa0e0fd))
+* **beni-sys:** fence a header example past any fence it holds ([5455f52](https://github.com/elct9620/beni/commit/5455f523e7e2ee190f2672d4e8a8fac13b3b3d91))
+* **beni:** bound an enclosing scope's locals by its environment less self ([b7bc20a](https://github.com/elct9620/beni/commit/b7bc20a416de61a858a3f12fab8f6ef76d970e91))
+* **beni:** end arena scopes in any order without re-protecting released slots ([d44b921](https://github.com/elct9620/beni/commit/d44b9216541babb93e2a40776fa419f8a40dd923))
+* **beni:** hand every beni:build to mruby's rake ([06c274f](https://github.com/elct9620/beni/commit/06c274f98c01463e62fe4997e5dabb681965a812))
+* **beni:** hide the typed surface's own arrays from ObjectSpace ([076779f](https://github.com/elct9620/beni/commit/076779fc649d7f1f917c75fb29689e1e3b2b7486))
+* **beni:** hold what an inspector opened from Rust reads ([5afd1e0](https://github.com/elct9620/beni/commit/5afd1e047c25e907a8386c0781936429af4a4f34))
+* **beni:** list a frame's local variables as mruby's local_variables does ([ebb1c26](https://github.com/elct9620/beni/commit/ebb1c26267d77b13ac42ca727c0673d79f1ee43d))
+* **beni:** raise from the code fetch hook through the method bridges' path ([4ec8586](https://github.com/elct9620/beni/commit/4ec8586e39151df778a59c6869c8e6308ef65aa8))
+* **beni:** read the running frame's line at the instruction the hook runs before ([ca20bed](https://github.com/elct9620/beni/commit/ca20bedf5d3047d549ff4758ceb98e7c030da6b3))
+* **beni:** refuse a carrier path segment Ruby could not write as a constant ([df16fa3](https://github.com/elct9620/beni/commit/df16fa3cd0d0d1ead797deb742fcab3f05576c8b))
+* **tasks:** clear a shell's MRUBY_LIB_DIR for the host legs ([89d2958](https://github.com/elct9620/beni/commit/89d2958568f8cf7f8de0eb62613cf8122360c96c))
+* **tasks:** hand the float32 leg its build env as a hash ([50819dd](https://github.com/elct9620/beni/commit/50819ddd6718ec9b05c4f02cbfbe690e93d58089))
+* **tasks:** read every gate axis and leave build-specific net bodies unread ([bfb6d00](https://github.com/elct9620/beni/commit/bfb6d000c27e6a5a574248d6168bb0ec6349c468))
+
+
+### Performance Improvements
+
+* **beni:** end an arena scope in one crossing ([7ace894](https://github.com/elct9620/beni/commit/7ace89469360abac032797f5c70973e922b9bd54))
+* **beni:** read the lazy-value record through the interpreter's slot ([f1135b0](https://github.com/elct9620/beni/commit/f1135b024c79a3e6af9f6172090b2ceafdb239b0))
+
 ## [0.23.1](https://github.com/elct9620/beni/compare/v0.23.0...v0.23.1) (2026-10-13)
 
 
