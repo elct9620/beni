@@ -82,6 +82,14 @@ tagged_handle!(
     |value| unsafe { sys::mrb_false_p_func(value.as_raw()) }
 );
 
+// SAFETY: `nil`, `true`, and `false` are immediate under every boxing
+// mruby builds, so their values hold nothing the collector can free.
+unsafe impl crate::TryConvertOwned for Qnil {}
+// SAFETY: as `Qnil`.
+unsafe impl crate::TryConvertOwned for Qtrue {}
+// SAFETY: as `Qnil`.
+unsafe impl crate::TryConvertOwned for Qfalse {}
+
 tagged_handle!(
     /// An Integer, of the fixed-width or the arbitrary-width tag.
     /// Mirrors magnus's `Integer`.
@@ -90,7 +98,10 @@ tagged_handle!(
 );
 
 tagged_handle!(
-    /// An Integer of the fixed-width tag. Mirrors magnus's `Fixnum`.
+    /// An Integer of the fixed-width tag. Mirrors magnus's `Fixnum`, but
+    /// is no `TryConvertOwned`: word boxing allocates a value beyond the
+    /// inline range as a collectable object of this same tag
+    /// (`mrb_boxing_int_value`, `vendor/mruby/src/etc.c:458`).
     Fixnum,
     |value| value.tag() == sys::MRB_TT_INTEGER
 );

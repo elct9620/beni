@@ -32,8 +32,9 @@ pub trait TryConvert: Sized {
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error>;
 }
 
-/// A `TryConvert` target whose values hold no `Value`, so a Rust heap
-/// structure may store them past the arena. Mirrors magnus's
+/// A `TryConvert` target whose values hold nothing the collector can
+/// free, so a Rust heap structure may store them past the arena. Mirrors
+/// magnus's
 /// `TryConvertOwned`: it bounds the targets a `Vec` or a map converts its
 /// elements to, which keep each element reachable only while it
 /// converts.
@@ -53,10 +54,18 @@ pub trait TryConvert: Sized {
 /// owned::<[beni::RString; 2]>();
 /// ```
 ///
+/// A `Fixnum` is not owned, where magnus's is: word boxing allocates an
+/// integer beyond the inline range as a collectable object.
+///
+/// ```compile_fail
+/// fn owned<T: beni::TryConvertOwned>() {}
+/// owned::<Vec<beni::Fixnum>>();
+/// ```
+///
 /// # Safety
 ///
-/// Implement only for a type whose values hold no `Value`, directly or
-/// through any field.
+/// Implement only for a type whose values hold no collectable `Value`,
+/// directly or through any field.
 pub unsafe trait TryConvertOwned: TryConvert {}
 
 pub(crate) fn type_error(mrb: &Mrb, msg: &str) -> Error {

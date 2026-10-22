@@ -283,6 +283,11 @@ crate::value::value_backed_repr!(Symbol);
 
 crate::try_convert::tagged_conversions!(Symbol, sys::MRB_TT_SYMBOL => "Symbol");
 
+// SAFETY: a symbol value is immediate, and mruby frees no symbol before the
+// interpreter closes (`mrb_free_symtbl`, `vendor/mruby/src/symbol.c:625`),
+// so every symbol carries the guarantee magnus's `StaticSymbol` marks owned.
+unsafe impl crate::TryConvertOwned for Symbol {}
+
 /// An `Id` boxes into the symbol value it names.
 impl IntoValue for crate::Id {
     #[inline]
