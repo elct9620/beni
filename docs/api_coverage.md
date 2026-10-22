@@ -201,9 +201,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_sym2name` | macro | ❌ | ✅ | defined as `mrb_sym_name` |
 | `mrb_sym2name_len` | macro | ❌ | ✅ | defined as `mrb_sym_name_len` |
 | `mrb_sym2str` | macro | ❌ | ✅ | defined as `mrb_sym_str` |
-| `mrb_sym_dump` | fn | ✅ | ✅ | `Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), returned as an owned `String`, not a borrow: it draws on the same shared `mrb->symbuf` scratch an inline name unpacks into and the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). Never raises |
-| `mrb_sym_name` | fn | ✅ | ✅ | `Mrb::sym_name`, `Symbol::name` — returns an owned UTF-8 `String`, not a borrow: mruby unpacks an inline (short) symbol's name into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (unlike CRuby's permanent static symbol names, this cannot wear magnus's `Cow<'static>` shape). Escaped to its quoted dump form when the name carries an embedded NUL |
-| `mrb_sym_name_len` | fn | ✅ | ✅ | `Mrb::sym_name_len`, `Symbol::name_bytes` — returns an owned `Vec<u8>`, not a borrow: an inline (short) symbol's name unpacks into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). The true length carries out of band so an embedded NUL is preserved unescaped |
+| `mrb_sym_dump` | fn | ✅ | ✅ | `Id::dump`, `Symbol::dump` — owned for the same scratch reuse; never raises |
+| `mrb_sym_name` | fn | ✅ | ✅ | `Id::name`, `Symbol::name` — owned, since a short name unpacks into the `mrb->symbuf` scratch the next read overwrites; a name carrying a NUL comes back in its dump form |
+| `mrb_sym_name_len` | fn | ✅ | ✅ | `Id::name_bytes`, `Symbol::name_bytes` — owned for the same scratch reuse; the length keeps an embedded NUL unescaped |
 | `mrb_sym_str` | fn | ✅ | ✅ | `Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises |
 | `mrb_temp_alloc` | fn | ✅ | 🚫 | declined: VM scratch allocator tied to the arena — see `mrb_malloc` |
 | `mrb_to_float` | macro | ❌ | ✅ | defined as `mrb_ensure_float_type` |

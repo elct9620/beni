@@ -322,9 +322,9 @@ typed:
   mrb_str_to_integer: "`RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input"
   mrb_str_to_inum: "`RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError"
   mrb_string_cstr: RString::to_c_string
-  mrb_sym_name: "`Mrb::sym_name`, `Symbol::name` — returns an owned UTF-8 `String`, not a borrow: mruby unpacks an inline (short) symbol's name into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (unlike CRuby's permanent static symbol names, this cannot wear magnus's `Cow<'static>` shape). Escaped to its quoted dump form when the name carries an embedded NUL"
-  mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — returns an owned `Vec<u8>`, not a borrow: an inline (short) symbol's name unpacks into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). The true length carries out of band so an embedded NUL is preserved unescaped"
-  mrb_sym_dump: "`Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), returned as an owned `String`, not a borrow: it draws on the same shared `mrb->symbuf` scratch an inline name unpacks into and the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). Never raises"
+  mrb_sym_name: "`Id::name`, `Symbol::name` — owned, since a short name unpacks into the `mrb->symbuf` scratch the next read overwrites; a name carrying a NUL comes back in its dump form"
+  mrb_sym_name_len: "`Id::name_bytes`, `Symbol::name_bytes` — owned for the same scratch reuse; the length keeps an embedded NUL unescaped"
+  mrb_sym_dump: "`Id::dump`, `Symbol::dump` — owned for the same scratch reuse; never raises"
   mrb_sym_str: "`Symbol::to_str` — the name reified as a distinct, unfrozen mruby String (Ruby's `Symbol#to_s`), never raises"
   mrb_symbol_value: "`Symbol::from` an `Id`, `IntoValue for Id` — boxing the interned id into its symbol value, magnus's `From<Id> for Symbol`"
   mrb_test: ReprValue::to_bool

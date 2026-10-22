@@ -18,7 +18,7 @@ fn intern_cstr_roundtrips_through_sym_name() {
 
     let sym = mrb.intern_cstr(c"beni_sym").expect("the name interns");
 
-    assert_eq!(mrb.sym_name(sym).as_deref(), Some("beni_sym"));
+    assert_eq!(beni::Id::name(sym, &mrb).as_deref(), Some("beni_sym"));
 }
 
 #[test]
@@ -43,7 +43,7 @@ fn intern_interns_a_byte_slice_by_length_creating_the_symbol() {
     // and whose id equals interning the same name through the C-string
     // path — proving it's the same interned symbol.
     let sym = mrb.intern(b"beni_sym").expect("the name interns");
-    assert_eq!(mrb.sym_name(sym).as_deref(), Some("beni_sym"));
+    assert_eq!(beni::Id::name(sym, &mrb).as_deref(), Some("beni_sym"));
     assert_eq!(sym, mrb.intern_cstr(c"beni_sym").expect("the name interns"));
 
     // It's length-based, not NUL-terminated: a slice carrying trailing
@@ -52,13 +52,11 @@ fn intern_interns_a_byte_slice_by_length_creating_the_symbol() {
     let exact = b"abc";
     let padded = b"abc\0xyz";
     assert_eq!(
-        mrb.sym_name_len(mrb.intern(&exact[..]).expect("the name interns"))
-            .as_deref(),
+        beni::Id::name_bytes(mrb.intern(&exact[..]).expect("the name interns"), &mrb).as_deref(),
         Some(&b"abc"[..])
     );
     assert_eq!(
-        mrb.sym_name_len(mrb.intern(&padded[..]).expect("the name interns"))
-            .as_deref(),
+        beni::Id::name_bytes(mrb.intern(&padded[..]).expect("the name interns"), &mrb).as_deref(),
         Some(&b"abc\0xyz"[..])
     );
     assert_ne!(
@@ -76,7 +74,7 @@ fn intern_static_yields_the_same_id_as_the_copying_intern() {
     // copying intern produces, proving it's the same interned symbol.
     let sym = mrb.intern_static(b"beni_sym").expect("the name interns");
 
-    assert_eq!(mrb.sym_name(sym).as_deref(), Some("beni_sym"));
+    assert_eq!(beni::Id::name(sym, &mrb).as_deref(), Some("beni_sym"));
     assert_eq!(sym, mrb.intern_cstr(c"beni_sym").expect("the name interns"));
 }
 
@@ -93,8 +91,11 @@ fn sym_name_len_carries_the_full_bytes_past_an_embedded_nul() {
 
     // `sym_name` escapes a NUL-containing name to its dump form; only
     // the length-carrying read returns the raw bytes.
-    assert_eq!(mrb.sym_name(sym).as_deref(), Some("\"a\\x00b\""));
-    assert_eq!(mrb.sym_name_len(sym).as_deref(), Some(&b"a\0b"[..]));
+    assert_eq!(beni::Id::name(sym, &mrb).as_deref(), Some("\"a\\x00b\""));
+    assert_eq!(
+        beni::Id::name_bytes(sym, &mrb).as_deref(),
+        Some(&b"a\0b"[..])
+    );
 }
 
 #[test]
@@ -136,14 +137,14 @@ fn sym_dump_quotes_a_non_identifier_name() {
 
     // A plain identifier dumps bare; a name needing escaping is quoted.
     assert_eq!(
-        mrb.sym_dump(mrb.intern_cstr(c"fred").expect("the name interns"))
-            .as_deref(),
+        beni::Id::dump(mrb.intern_cstr(c"fred").expect("the name interns"), &mrb).as_deref(),
         Some("fred")
     );
     assert_eq!(
-        mrb.sym_dump(
+        beni::Id::dump(
             mrb.intern_str(mrb.str_new(b"a b").as_value())
-                .expect("the name interns")
+                .expect("the name interns"),
+            &mrb
         )
         .as_deref(),
         Some("\"a b\"")
@@ -159,11 +160,9 @@ fn sym_name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     // overwrites. Read both, holding the first across the second read.
     // A borrowed return would alias the buffer and show the first name
     // mutated to the second; the owned copy must stay intact.
-    let first = mrb
-        .sym_name(mrb.intern_cstr(c"aa").expect("the name interns"))
+    let first = beni::Id::name(mrb.intern_cstr(c"aa").expect("the name interns"), &mrb)
         .expect("aa has a name");
-    let second = mrb
-        .sym_name(mrb.intern_cstr(c"bb").expect("the name interns"))
+    let second = beni::Id::name(mrb.intern_cstr(c"bb").expect("the name interns"), &mrb)
         .expect("bb has a name");
 
     assert_eq!(first, "aa");
@@ -177,11 +176,9 @@ fn sym_name_len_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     // Same aliasing net as `sym_name`: hold the first read's bytes
     // across a second inline-name read that overwrites the shared
     // scratch buffer; the owned copy must stay intact.
-    let first = mrb
-        .sym_name_len(mrb.intern_cstr(c"aa").expect("the name interns"))
+    let first = beni::Id::name_bytes(mrb.intern_cstr(c"aa").expect("the name interns"), &mrb)
         .expect("aa has a name");
-    let second = mrb
-        .sym_name_len(mrb.intern_cstr(c"bb").expect("the name interns"))
+    let second = beni::Id::name_bytes(mrb.intern_cstr(c"bb").expect("the name interns"), &mrb)
         .expect("bb has a name");
 
     assert_eq!(first, b"aa");
@@ -195,12 +192,10 @@ fn sym_dump_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     // Same aliasing net as `sym_name`: hold the first dump across a
     // second inline-name dump that overwrites the shared scratch
     // buffer; the owned copy must stay intact.
-    let first = mrb
-        .sym_dump(mrb.intern_cstr(c"aa").expect("the name interns"))
-        .expect("aa dumps");
-    let second = mrb
-        .sym_dump(mrb.intern_cstr(c"bb").expect("the name interns"))
-        .expect("bb dumps");
+    let first =
+        beni::Id::dump(mrb.intern_cstr(c"aa").expect("the name interns"), &mrb).expect("aa dumps");
+    let second =
+        beni::Id::dump(mrb.intern_cstr(c"bb").expect("the name interns"), &mrb).expect("bb dumps");
 
     assert_eq!(first, "aa");
     assert_eq!(second, "bb");
@@ -250,7 +245,10 @@ fn creating_interns_intern_the_longest_name_a_symbol_holds() {
         .intern(&longest)
         .expect("a name one byte short of the limit interns");
 
-    assert_eq!(mrb.sym_name_len(sym).map(|b| b.len()), Some(TOO_LONG - 1));
+    assert_eq!(
+        beni::Id::name_bytes(sym, &mrb).map(|b| b.len()),
+        Some(TOO_LONG - 1)
+    );
 }
 
 /// A method body that interns a name too long to be a symbol and hands
@@ -317,5 +315,5 @@ fn a_raw_id_crosses_back_into_the_id_it_names() {
     let crossed = unsafe { <Id as beni::sys::FromRawId>::from_raw(raw) };
 
     assert_eq!(crossed, interned);
-    assert_eq!(mrb.sym_name(crossed).as_deref(), Some("beni_seam"));
+    assert_eq!(beni::Id::name(crossed, &mrb).as_deref(), Some("beni_seam"));
 }

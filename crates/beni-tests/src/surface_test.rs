@@ -53,7 +53,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::range_new;
     let _ = Mrb::intern_cstr;
     let _ = Mrb::intern_str;
-    let _ = Mrb::sym_name;
+    let _ = beni::Id::name;
     let _ = Mrb::read_irep;
     let _ = Mrb::load_irep;
     let _ = scan_args::scan_args::<(), (), (), (), (), ()>;
@@ -361,8 +361,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::mark_carrier_site;
     let _ = Mrb::module_new;
     let _ = Mrb::str_new_static;
-    let _ = Mrb::sym_dump;
-    let _ = Mrb::sym_name_len;
+    let _ = beni::Id::dump;
+    let _ = beni::Id::name_bytes;
     let _ = Mrb::set_user_data::<u8>;
     let _ = Mrb::user_data::<u8>;
     let _ = Mrb::take_user_data::<u8>;

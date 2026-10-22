@@ -896,9 +896,10 @@ the other converting operations.
 
 ##### Name Reads
 
-Beyond the id, a symbol reads its name three ways, each copying the name out
-into an owned Rust value. All are non-dispatching reads that never raise, each
-yielding nothing when mruby has no name for the id.
+Beyond the id, a symbol and an `Id` each read the name three ways, each copying
+the name out into an owned Rust value; the `Id` reads carry `magnus`'s `Id::name`
+placement. All are non-dispatching reads that never raise, each yielding nothing
+when mruby has no name for the id.
 
 | Read | Yields |
 |---|---|
