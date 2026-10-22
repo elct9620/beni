@@ -415,7 +415,8 @@ Numeric handles read out as Rust numbers, mirroring `magnus`:
 
 | Handle | Reads out as | Mirrors |
 |---|---|---|
-| `Integer` / `Fixnum` / `RBignum` | each Rust integer type, through `to_` and the type's name: `to_i8` … `to_i128`, `to_isize`, `to_u8` … `to_u128`, `to_usize` | the same reads on `Integer` / `Fixnum` / `RBignum` |
+| `Integer` / `Fixnum` | each Rust integer type, through `to_` and the type's name: `to_i8` … `to_i128`, `to_isize`, `to_u8` … `to_u128`, `to_usize` | the same reads on `Integer` / `Fixnum` |
+| `RBignum` | each Rust integer type of 32 bits or wider: `to_i32` … `to_i128`, `to_isize`, `to_u32` … `to_u128`, `to_usize` | the same reads on `RBignum` |
 | `Float` | `f64` | `Float::to_f64` |
 
 An integer read yields the Integer's value wherever the target's range holds it,
