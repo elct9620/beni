@@ -18,6 +18,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::set_pending_exc;
     let _ = Mrb::clear_exc;
     let _ = Mrb::class_object;
+    let _ = beni::NumericValue::from_value_unchecked;
     let _ = Mrb::class_class;
     let _ = Mrb::class_module;
     let _ = Mrb::class_proc;

@@ -484,3 +484,25 @@ fn a_float_is_a_flonum_exactly_when_the_word_carries_it() {
         assert_eq!(message, expected);
     }
 }
+
+#[test]
+fn a_numeric_value_converts_any_instance_of_a_numeric_class() {
+    let mrb = open_mrb();
+    for source in [
+        "1",
+        "1.5",
+        "class BeniNumber < Numeric; end; BeniNumber.new",
+    ] {
+        assert!(
+            beni::NumericValue::try_convert(eval(&mrb, source), &mrb).is_ok(),
+            "{source}"
+        );
+    }
+    assert_eq!(
+        rejection::<beni::NumericValue>(&mrb, "'1'"),
+        (
+            "TypeError".to_owned(),
+            "String cannot be converted to Numeric".to_owned()
+        )
+    );
+}

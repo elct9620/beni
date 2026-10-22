@@ -440,7 +440,7 @@ raise nothing and run no Ruby:
 | `Value` | passes through unchanged | always |
 | a scalar: `bool`, or a Rust integer or float the width rules admit | boxes into its Ruby value | always |
 | `()` | `nil` | always |
-| a typed handle on a Ruby value: every Type discrimination handle except `Qundef`, and `Obj<T>` | yields that same value | always |
+| a typed handle on a Ruby value: every Type discrimination handle except `Qundef`, `NumericValue`, and `Obj<T>` | yields that same value | always |
 | `Id` | boxes into the symbol value it names | always |
 | `T: TypedData` | a data carrier: a new instance of the class its type names for it, as `obj_wrap` does | for every type keeping the `TypedData` contract |
 | `Inline<T>` | the handle's own value, an inline struct | for every type keeping the `InlineStruct` contract |
@@ -521,6 +521,7 @@ The handle targets below convert what the `FromValue` downcast converts and noth
 |---|---|---|
 | `Value` / `bool` / `Option<T>` | as the `FromValue` rule for each | `Option<T>` answers `T`'s `Err` where `T` rejects |
 | `RString` / `RArray` / `RHash` / `Symbol` / `Range` | downcast only | default `TypeError`; *target* is the handle's Ruby class |
+| `NumericValue` | any value whose class descends from `Numeric`, as `magnus`'s does | default `TypeError`; *target* is `Numeric` |
 | `RClass` / `RModule` / `ExceptionClass` | downcast only | `TypeError` "*value* is not a class", "*value* is not a module", or "*value* is not a class inheriting Exception" |
 | `Proc` | a `Proc` alone | `TypeError` "wrong argument type *class* (expected Proc)" |
 | `Qnil` / `Qtrue` / `Qfalse` / `Exception` / `RObject` / `Fiber` / `RStruct` / `RSet` / `RRational` / `RComplex` / `RInlineStruct` / `RCptr` | downcast only | `TypeError` "wrong argument type *value* (expected *name*)" |
@@ -529,7 +530,8 @@ mruby has no implicit `to_str`, `to_ary`, or `to_hash` conversion. A class,
 module, or exception-class handle's *value* is the inspected form, as mruby
 words a class or module mismatch. `Proc` dispatches no `to_proc`; mruby
 converts to a `Proc` only a block being passed. An `Exception` handle dispatches
-no `exception`. `Qundef` has no `TryConvert`.
+no `exception`. `Qundef` has no `TryConvert`. `NumericValue` has no downcast:
+telling a `Numeric` needs the class the interpreter holds.
 
 In "wrong argument type *value* (expected *name*)", *value* is named as mruby's
 own type check names it. *name* is the name that check gives the handle's type
