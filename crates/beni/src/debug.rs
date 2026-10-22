@@ -274,7 +274,8 @@ impl<'a> DebugInspector<'a> {
     }
 
     /// The class or module defining the indexed frame's method, or nothing
-    /// at the top level.
+    /// at the top level. A `ClassOrModule` where magnus answers an
+    /// `RClass`, as `TraceArg::defined_class` does.
     pub fn frame_class_get(self, index: usize) -> Option<ClassOrModule> {
         let frame = self.frame(index)?;
         if frame.mid == 0 {
