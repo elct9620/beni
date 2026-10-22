@@ -800,3 +800,21 @@ fn an_any_arity_method_converts_its_receiver() {
         .expect_err("nil fails the String conversion");
     assert_eq!(err.message(&mrb), "nil cannot be converted to String");
 }
+
+fn words(_mrb: &Mrb, _self: Value, line: String) -> Vec<String> {
+    line.split(' ').map(str::to_owned).collect()
+}
+
+#[test]
+fn typed_method_returns_rust_text_and_collections() {
+    let mrb = open_mrb();
+    let class = fresh_class(&mrb, c"BeniWords");
+    class
+        .define_method(&mrb, c"words", beni::method!(words, 1))
+        .expect("registering the typed method must succeed");
+
+    let got = mrb
+        .load_string(b"BeniWords.new.words('a bc')")
+        .expect("the call must not raise");
+    assert_eq!(got.inspect(&mrb), "[\"a\", \"bc\"]");
+}

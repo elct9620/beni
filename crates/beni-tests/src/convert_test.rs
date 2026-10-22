@@ -1,7 +1,8 @@
 use crate::support::{open_mrb, same_object, Is, OwnedBytes};
 use beni::prelude::*;
 use beni::{
-    ExceptionClass, FromValue, IntoValue, RArray, RClass, RHash, RModule, RObject, RString, Value,
+    ExceptionClass, FromValue, IntoValue, RArray, RClass, RHash, RModule, RObject, RString,
+    TryConvert, Value,
 };
 
 // Boxes through mruby's generic `mrb_int_value` / `mrb_float_value`
@@ -383,4 +384,75 @@ fn a_class_handle_reads_out_as_its_value_and_crosses_back_through_the_downcast()
 
     assert!(same_object(&mrb, back, object));
     assert!(value.is_equal(&mrb, object.as_value()));
+}
+
+#[test]
+fn text_paths_and_options_convert_into_their_ruby_values() {
+    let mrb = open_mrb();
+
+    let text = |v: Value| String::from_value(v).expect("a String");
+    assert_eq!(text("héllo".into_value(&mrb)), "héllo");
+    assert_eq!(text(String::from("owned").into_value(&mrb)), "owned");
+    assert_eq!(text('é'.into_value(&mrb)), "é");
+    assert_eq!(text(std::ffi::CString::from(c"c").into_value(&mrb)), "c");
+    assert_eq!(
+        text(std::path::PathBuf::from("a/b").into_value(&mrb)),
+        "a/b"
+    );
+    assert!(None::<i32>.into_value(&mrb).is_nil());
+    assert_eq!(i32::from_value(Some(3).into_value(&mrb)), Some(3));
+    assert_eq!(
+        (1, "a", ()).into_value(&mrb).inspect(&mrb),
+        "[1, \"a\", nil]"
+    );
+}
+
+#[test]
+fn collections_of_native_elements_convert_into_arrays_and_hashes() {
+    let mrb = open_mrb();
+
+    let nested = vec![vec!["a".to_owned()], vec![]].into_value(&mrb);
+    assert_eq!(nested.inspect(&mrb), "[[\"a\"], []]");
+    let map = std::collections::BTreeMap::from([("a", 1), ("b", 2)]);
+    let back = std::collections::BTreeMap::<String, i32>::try_convert(map.into_value(&mrb), &mrb)
+        .expect("a Hash of String keys");
+    assert_eq!(
+        back,
+        std::collections::BTreeMap::from([("a".to_owned(), 1), ("b".to_owned(), 2)])
+    );
+    let hash = std::collections::HashMap::from([(1, Some("x"))]).into_value(&mrb);
+    assert_eq!(hash.inspect(&mrb), "{1 => \"x\"}");
+}
+
+#[test]
+fn a_collection_grows_the_arena_by_itself_alone() {
+    let mrb = open_mrb();
+    let strings: Vec<String> = (0..1000).map(|i| i.to_string()).collect();
+
+    // SAFETY: `mrb` is alive; the read only loads the arena index.
+    let before = unsafe { beni::sys::mrb_gc_arena_save_func(mrb.as_ptr()) };
+    let ary = strings.into_value(&mrb);
+    // SAFETY: as above.
+    let after = unsafe { beni::sys::mrb_gc_arena_save_func(mrb.as_ptr()) };
+
+    assert_eq!(after - before, 1);
+    mrb.full_gc();
+    assert_eq!(RArray::from_value(ary).expect("an Array").len(), 1000);
+}
+
+#[test]
+fn a_pair_whose_key_raises_while_the_hash_stores_it_is_left_out() {
+    let mrb = open_mrb();
+    mrb.load_string(
+        b"class Array; def hash = raise('no hash'); def eql?(o) = raise('no eql'); end",
+    )
+    .expect("redefining Array#hash and #eql? succeeds");
+
+    // The first key stores against an empty hash; the second compares
+    // against it and raises.
+    let map = std::collections::BTreeMap::from([(vec![1], 1), (vec![2], 2)]);
+    let hash = RHash::from_value(map.into_value(&mrb)).expect("a Hash");
+
+    assert_eq!(hash.len(), 1);
+    assert!(mrb.pending_exc().is_nil());
 }

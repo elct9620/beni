@@ -9,11 +9,12 @@
 //! unchecked unboxing a conversion runs behind.
 //!
 //! The traits and the conversions of `Value` itself, the Rust scalars,
-//! `String`, byte vectors, and `Option`, which reads `nil` as `None`. A
+//! text, byte vectors, paths, `Option`, which reads `nil` as `None`, and
+//! the Rust collections, which convert native elements only. A
 //! typed handle's conversions sit beside the handle, and every conversion
 //! copies rather than borrowing VM storage.
 
-use crate::{sys, Mrb, RString, ReprValue, Value};
+use crate::{sys, sys::AsRawValue, Mrb, RString, ReprValue, Value};
 
 /// Box a Rust value into an mruby `Value`. Infallible — every
 /// implementor has a total mapping into the value domain. Mirrors
@@ -250,15 +251,245 @@ impl IntoValue for () {
     }
 }
 
-// A handle on a Ruby object converts into the value naming that same
-// object: the `Value`-newtype handles unwrap it, the class handles box
-// their pointer.
+impl IntoValue for &str {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        mrb.str_new(self.as_bytes()).as_value()
+    }
+}
+
+impl IntoValue for String {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        self.as_str().into_value(mrb)
+    }
+}
+
+impl IntoValue for char {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        self.encode_utf8(&mut [0; 4]).into_value(mrb)
+    }
+}
+
 impl IntoValue for &core::ffi::CStr {
     #[inline]
     fn into_value(self, mrb: &Mrb) -> Value {
-        crate::ReprValue::as_value(mrb.str_from_c_str(self))
+        mrb.str_from_c_str(self).as_value()
     }
 }
+
+impl IntoValue for std::ffi::CString {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        self.as_c_str().into_value(mrb)
+    }
+}
+
+impl IntoValue for &std::path::Path {
+    /// The path's bytes on a Unix target. mruby has no encodings, so any
+    /// other target takes the UTF-8 text magnus falls back to where it
+    /// finds no UTF-16 encoding.
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            mrb.str_new(self.as_os_str().as_bytes()).as_value()
+        }
+        #[cfg(not(unix))]
+        {
+            self.to_string_lossy().as_ref().into_value(mrb)
+        }
+    }
+}
+
+impl IntoValue for std::path::PathBuf {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        self.as_path().into_value(mrb)
+    }
+}
+
+impl<T: IntoValue> IntoValue for Option<T> {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        match self {
+            Some(t) => t.into_value(mrb),
+            None => crate::value::qnil().as_value(),
+        }
+    }
+}
+
+/// A Rust type whose values hold no `Value`, so a heap structure of them
+/// converts into Ruby. Mirrors magnus's `IntoValueFromNative`: it bounds
+/// the elements a `Vec` or a map converts, which no Rust heap structure
+/// may carry as `Value`s.
+///
+/// ```compile_fail
+/// fn native<T: beni::IntoValueFromNative>() {}
+/// native::<Vec<beni::Value>>();
+/// ```
+///
+/// # Safety
+///
+/// Implement only for a type whose values hold no `Value`, directly or
+/// through any field.
+pub unsafe trait IntoValueFromNative: IntoValue {}
+
+macro_rules! into_value_from_native {
+    ($($(#[$cfg:meta])* $t:ty),* $(,)?) => {$(
+        $(#[$cfg])*
+        unsafe impl IntoValueFromNative for $t {}
+    )*};
+}
+
+into_value_from_native!(
+    i8,
+    i16,
+    i32,
+    u8,
+    u16,
+    f32,
+    bool,
+    (),
+    &str,
+    String,
+    char,
+    &core::ffi::CStr,
+    std::ffi::CString,
+    &std::path::Path,
+    std::path::PathBuf,
+    #[cfg(any(mrb_int64, mrb_bigint))]
+    i64,
+    #[cfg(any(mrb_int64, mrb_bigint))]
+    u32,
+    #[cfg(any(mrb_int64, mrb_bigint, not(target_pointer_width = "64")))]
+    isize,
+    #[cfg(mrb_bigint)]
+    u64,
+    #[cfg(mrb_bigint)]
+    usize,
+    #[cfg(mrb_bigint)]
+    i128,
+    #[cfg(mrb_bigint)]
+    u128,
+    #[cfg(not(mrb_float32))]
+    f64,
+);
+
+unsafe impl<T: IntoValueFromNative> IntoValueFromNative for Option<T> {}
+
+impl<T: IntoValueFromNative> IntoValue for Vec<T> {
+    fn into_value(self, mrb: &Mrb) -> Value {
+        let ary = mrb.ary_new_capa(self.len());
+        for item in self {
+            // The array holds each element once pushed, so the element's
+            // own arena slots release with its scope.
+            let _scope = mrb.arena_scope();
+            let v = item.into_value(mrb);
+            // SAFETY: `mrb` is alive and `ary` is the unfrozen Array just
+            // built; the push raises nothing but the out-of-memory error
+            // every allocation may.
+            unsafe { sys::mrb_ary_push(mrb.as_ptr(), ary.as_value().as_raw(), v.as_raw()) };
+        }
+        ary.as_value()
+    }
+}
+
+unsafe impl<T: IntoValueFromNative> IntoValueFromNative for Vec<T> {}
+
+/// A new Hash of each pair, a pair whose key raises while the Hash stores
+/// it left out as magnus's conversion leaves it.
+fn hash_from_pairs<K, V>(mrb: &Mrb, len: usize, pairs: impl Iterator<Item = (K, V)>) -> Value
+where
+    K: IntoValueFromNative,
+    V: IntoValueFromNative,
+{
+    let hash = mrb.hash_new_capa(len);
+    for (k, v) in pairs {
+        // The hash holds each pair once stored, so the pair's own arena
+        // slots release with its scope.
+        let _scope = mrb.arena_scope();
+        let key = k.into_value(mrb);
+        let val = v.into_value(mrb);
+        let _ = mrb.protect_unit(|mrb| {
+            // SAFETY: `mrb` is alive inside the protect frame and `hash`
+            // is the unfrozen Hash just built; storing the key may
+            // dispatch its `hash` or `eql?` and raise, caught by `protect`.
+            unsafe {
+                sys::mrb_hash_set(
+                    mrb.as_ptr(),
+                    hash.as_value().as_raw(),
+                    key.as_raw(),
+                    val.as_raw(),
+                )
+            };
+        });
+    }
+    hash.as_value()
+}
+
+impl<K, V> IntoValue for std::collections::HashMap<K, V>
+where
+    K: IntoValueFromNative,
+    V: IntoValueFromNative,
+{
+    fn into_value(self, mrb: &Mrb) -> Value {
+        let len = self.len();
+        hash_from_pairs(mrb, len, self.into_iter())
+    }
+}
+
+unsafe impl<K, V> IntoValueFromNative for std::collections::HashMap<K, V>
+where
+    K: IntoValueFromNative,
+    V: IntoValueFromNative,
+{
+}
+
+impl<K, V> IntoValue for std::collections::BTreeMap<K, V>
+where
+    K: IntoValueFromNative,
+    V: IntoValueFromNative,
+{
+    fn into_value(self, mrb: &Mrb) -> Value {
+        let len = self.len();
+        hash_from_pairs(mrb, len, self.into_iter())
+    }
+}
+
+unsafe impl<K, V> IntoValueFromNative for std::collections::BTreeMap<K, V>
+where
+    K: IntoValueFromNative,
+    V: IntoValueFromNative,
+{
+}
+
+macro_rules! into_value_tuple {
+    ($($t:ident $i:tt),+) => {
+        impl<$($t: IntoValue),+> IntoValue for ($($t,)+) {
+            fn into_value(self, mrb: &Mrb) -> Value {
+                mrb.ary_new_from_values(&[$(self.$i.into_value(mrb)),+]).as_value()
+            }
+        }
+
+        unsafe impl<$($t: IntoValueFromNative),+> IntoValueFromNative for ($($t,)+) {}
+    };
+}
+
+into_value_tuple!(T0 0);
+into_value_tuple!(T0 0, T1 1);
+into_value_tuple!(T0 0, T1 1, T2 2);
+into_value_tuple!(T0 0, T1 1, T2 2, T3 3);
+into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4);
+into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5);
+into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6);
+into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7);
+into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
+into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
+into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10);
+into_value_tuple!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9, T10 10, T11 11);
 
 #[cfg(feature = "bytes")]
 impl IntoValue for bytes::Bytes {
