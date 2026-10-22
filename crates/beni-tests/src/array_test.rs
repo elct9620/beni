@@ -754,7 +754,7 @@ fn elements_go_in_from_rust_values_and_come_out_as_the_type_named() {
     ary.push(&mrb, 1i32).expect("push succeeds");
     ary.push(&mrb, "two").expect("push succeeds");
     ary.unshift(&mrb, 0i32).expect("unshift succeeds");
-    ary.store(&mrb, 3, 3.5f64).expect("store succeeds");
+    ary.store(&mrb, 3, true).expect("store succeeds");
 
     assert_eq!(ary.entry::<i64>(&mrb, 1).expect("an Integer reads"), 1);
     assert_eq!(ary.entry::<String>(&mrb, 2).expect("a String reads"), "two");
@@ -765,7 +765,7 @@ fn elements_go_in_from_rust_values_and_come_out_as_the_type_named() {
         panic!("the mismatch must surface an exception, got {mismatch}");
     };
     assert_eq!(exc.classname(&mrb), "TypeError");
-    assert_eq!(ary.pop::<f64>(&mrb).expect("a Float pops"), 3.5);
+    assert!(ary.pop::<bool>(&mrb).expect("a boolean pops"));
     assert_eq!(ary.shift::<i64>(&mrb).expect("an Integer shifts"), 0);
     assert_eq!(ary.len(), 2);
 }
