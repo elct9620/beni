@@ -81,6 +81,7 @@ mod fiber;
 pub mod gem;
 pub mod hash;
 pub mod inline_struct;
+mod integer;
 pub mod method;
 pub mod module;
 mod object;
@@ -128,9 +129,11 @@ pub use proc::{DumpOptions, Proc};
 pub use range::{Range, RangeBegLen};
 pub use string::RString;
 pub use symbol::{ConstId, CvarId, GvarId, Id, IntoId, IvarId, Symbol};
+#[cfg(mrb_bigint)]
+pub use tagged::RBignum;
 pub use tagged::{
-    Exception, Fiber, Float, Integer, Qfalse, Qnil, Qtrue, Qundef, RComplex, RCptr, RInlineStruct,
-    RObject, RRational, RSet, RStruct,
+    Exception, Fiber, Fixnum, Float, Integer, Qfalse, Qnil, Qtrue, Qundef, RComplex, RCptr,
+    RInlineStruct, RObject, RRational, RSet, RStruct,
 };
 pub use try_convert::{TryConvert, TryConvertOwned};
 pub use typed_data::{RTypedData, TypedData};

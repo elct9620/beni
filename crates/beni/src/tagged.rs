@@ -10,7 +10,7 @@ use crate::{
     sys::AsRawValue,
     try_convert::wrong_argument_type,
     value::{private, ReprValue},
-    Error, Mrb, RString, TryConvert, Value,
+    Error, Mrb, TryConvert, Value,
 };
 use beni_sys as sys;
 
@@ -87,6 +87,20 @@ tagged_handle!(
     /// Mirrors magnus's `Integer`.
     Integer,
     |value| matches!(value.tag(), sys::MRB_TT_INTEGER | sys::MRB_TT_BIGINT)
+);
+
+tagged_handle!(
+    /// An Integer of the fixed-width tag. Mirrors magnus's `Fixnum`.
+    Fixnum,
+    |value| value.tag() == sys::MRB_TT_INTEGER
+);
+
+#[cfg(mrb_bigint)]
+tagged_handle!(
+    /// An Integer of the arbitrary-width tag, which only a bigint archive
+    /// allocates. Mirrors magnus's `RBignum`.
+    RBignum,
+    |value| value.tag() == sys::MRB_TT_BIGINT
 );
 
 tagged_handle!(
@@ -185,22 +199,6 @@ impl FromValue for Qundef {
     }
 }
 
-impl TryConvert for Integer {
-    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
-        if let Some(int) = Self::from_value(val) {
-            return Ok(int);
-        }
-        mrb.protect(|mrb| {
-            // SAFETY: `mrb` is alive inside the protect frame; the coercion
-            // raises the mismatch's `TypeError` or `RangeError`, caught by
-            // `protect`, and otherwise answers an Integer.
-            Integer(Value::from_raw_unchecked(unsafe {
-                sys::mrb_ensure_integer_type(mrb.as_ptr(), val.as_raw())
-            }))
-        })
-    }
-}
-
 impl TryConvert for Float {
     fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
         if let Some(float) = Self::from_value(val) {
@@ -213,46 +211,6 @@ impl TryConvert for Float {
             Float(Value::from_raw_unchecked(unsafe {
                 sys::mrb_ensure_float_type(mrb.as_ptr(), val.as_raw())
             }))
-        })
-    }
-}
-
-impl Integer {
-    /// The integer as an `i64`. Surfaces an `Err` carrying the
-    /// `RangeError` mruby raises for an arbitrary-width Integer beyond the
-    /// configured integer width. Mirrors magnus's `Integer::to_i64`.
-    pub fn to_i64(self, mrb: &Mrb) -> Result<i64, Error> {
-        let fixed = if self.0.tag() == sys::MRB_TT_INTEGER {
-            self.0
-        } else {
-            mrb.protect(|mrb| {
-                // SAFETY: `mrb` is alive inside the protect frame; narrowing
-                // raises the `RangeError` for an Integer beyond the
-                // configured width, caught by `protect`, and otherwise
-                // answers a fixed-width Integer.
-                Value::from_raw_unchecked(unsafe {
-                    sys::mrb_ensure_int_type(mrb.as_ptr(), self.0.as_raw())
-                })
-            })?
-        };
-        // SAFETY: `fixed` carries the fixed-width Integer tag.
-        Ok(unsafe { fixed.unbox_integer() })
-    }
-
-    /// Render to a new `RString` in `base`, the way Ruby's
-    /// `Integer#to_s(base)` does — `12345` to `"3039"` in base 16. Surfaces
-    /// an `Err` carrying an `ArgumentError` for a `base` outside 2 through
-    /// 36. Mirrors mruby's `mrb_integer_to_str`.
-    pub fn to_r_string_radix(self, mrb: &Mrb, base: i32) -> Result<RString, Error> {
-        mrb.protect(|mrb| {
-            // SAFETY: `self` is Integer-tagged by construction and `mrb` is
-            // alive inside the protect frame; an invalid `base` raises the
-            // `ArgumentError`, caught by `protect`.
-            let v = Value::from_raw_unchecked(unsafe {
-                sys::mrb_integer_to_str(mrb.as_ptr(), self.0.as_raw(), base as sys::mrb_int)
-            });
-            // SAFETY: a successful render answers a String.
-            unsafe { RString::from_value_unchecked(v) }
         })
     }
 }

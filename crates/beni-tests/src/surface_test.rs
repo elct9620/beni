@@ -476,6 +476,15 @@ fn debug_hook_surface_is_reachable_from_outside() {
     let _ = Mrb::debug_inspector_open::<fn(debug::DebugInspector<'_>) -> i32, i32>;
 }
 
+/// The arbitrary-width Integer surface, gated on the bigint archive that
+/// allocates it.
+#[cfg(mrb_bigint)]
+#[test]
+fn bigint_surface_is_reachable_from_outside() {
+    let _ = beni::RBignum::is_positive;
+    let _ = beni::RBignum::is_negative;
+}
+
 /// The `bytes` dependency feature's inherent surface, gated as the
 /// feature gates it.
 #[cfg(feature = "bytes")]
