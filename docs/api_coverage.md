@@ -188,8 +188,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_stack_extend` | fn | ✅ | ❌ |  |
 | `mrb_state_atexit` | fn | ✅ | ❌ |  |
 | `mrb_str_new` | fn | ✅ | ✅ | `Mrb::str_new` |
-| `mrb_str_new_cstr` | fn | ✅ | ✅ | `Mrb::str_new_cstr` |
-| `mrb_str_new_cstr_frozen` | macro | ❌ | ✅ | subsumed: `Mrb::str_new_cstr`, `ReprValue::freeze` — the cstr form of `mrb_str_new_frozen` (`vendor/mruby/include/mruby.h:1237`), see it |
+| `mrb_str_new_cstr` | fn | ✅ | ✅ | `Mrb::str_from_c_str` |
+| `mrb_str_new_cstr_frozen` | macro | ❌ | ✅ | subsumed: `Mrb::str_from_c_str`, `ReprValue::freeze` — the cstr form of `mrb_str_new_frozen` (`vendor/mruby/include/mruby.h:1237`), see it |
 | `mrb_str_new_frozen` | macro | ❌ | ✅ | subsumed: `Mrb::str_new`, `ReprValue::freeze` — the macro is `mrb_obj_freeze(mrb, mrb_str_new(mrb, p, len))` (`vendor/mruby/include/mruby.h:1236`), so the two typed calls in that order are its whole body; like `mrb_exc_new_lit` it makes two calls, so the derived alias tier does not reach it |
 | `mrb_str_new_lit` | macro | ❌ | ✅ | `Mrb::str_new_static` — the literal macro `mrb_str_new_lit(mrb, lit)` is `mrb_str_new_static` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_str_new_lit_frozen` | macro | ❌ | ✅ | subsumed: `Mrb::str_new_static`, `ReprValue::freeze` — the literal form of `mrb_str_new_frozen` over `mrb_str_new_lit` (`vendor/mruby/include/mruby.h:1239`), whose static byte literal `mrb_str_new_lit` records as `Mrb::str_new_static`; see `mrb_str_new_frozen` |
@@ -456,7 +456,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_str_buf_new` | macro | ❌ | ✅ | defined as `mrb_str_new_capa` |
 | `mrb_str_cat` | fn | ✅ | ✅ | `RString::cat` |
 | `mrb_str_cat2` | macro | ❌ | ✅ | defined as `mrb_str_cat_cstr` |
-| `mrb_str_cat_cstr` | fn | ✅ | ✅ | `RString::cat_cstr` |
+| `mrb_str_cat_cstr` | fn | ✅ | ✅ | `RString::cat` over `CStr::to_bytes`, as magnus folds `rb_str_cat_cstr` into `cat` |
 | `mrb_str_cat_lit` | macro | ❌ | ✅ | `RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b"..."` static byte literal IS a `&'static [u8]`, so no separate item is needed |
 | `mrb_str_cat_str` | fn | ✅ | ✅ | `RString::cat_str` |
 | `mrb_str_cmp` | fn | ✅ | ✅ | `RString::cmp` |
@@ -474,11 +474,11 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_str_resize` | fn | ✅ | ✅ | `RString::resize` |
 | `mrb_str_strlen` | macro | ❌ | ❌ |  |
 | `mrb_str_substr` | fn | ✅ | ✅ | `RString::substr` |
-| `mrb_str_to_cstr` | fn | ✅ | ✅ | `RString::to_cstr` — like `mrb_string_cstr` it raises ArgumentError on an embedded NUL, differing only in which buffer the returned C pointer addresses (`mrb_str_to_cstr` copies into a fresh RString and leaves the receiver untouched; `mrb_string_cstr` NUL-terminates the receiver in place). `to_cstr` returns an owned `CString` rebuilt from the receiver's NUL-free bytes and never exposes that pointer, so the buffer-ownership distinction collapses to an identical owned result; no separate item is needed |
+| `mrb_str_to_cstr` | fn | ✅ | ✅ | `RString::to_c_string` — raises on an embedded NUL as `mrb_string_cstr` does; the owned `CString` hides which buffer the C pointer addressed, the one difference between the two |
 | `mrb_str_to_dbl` | fn | ✅ | ✅ | `RString::to_f` — strict float parse (badcheck on); raises ArgumentError on non-float input |
 | `mrb_str_to_integer` | fn | ✅ | ✅ | `RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input |
 | `mrb_str_to_inum` | macro | ❌ | ✅ | `RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError |
-| `mrb_string_cstr` | fn | ✅ | ✅ | `RString::to_cstr` |
+| `mrb_string_cstr` | fn | ✅ | ✅ | `RString::to_c_string` |
 | `mrb_string_value_cstr` | fn | ✅ | ❌ |  |
 | `mrb_string_value_len` | macro | ❌ | ✅ | defined as `RSTRING_LEN` |
 | `mrb_string_value_ptr` | macro | ❌ | ✅ | defined as `RSTRING_PTR` |
@@ -575,7 +575,7 @@ covered (✅); the Via column names the surface that covers each one.
 | `A` | ✅ | scan_args + TryConvert<RArray> |
 | `H` | ✅ | scan_args + TryConvert<RHash> |
 | `s` | ✅ | scan_args + FromValue<Vec<u8>> — a copy of the String argument's bytes |
-| `z` | ✅ | scan_args + RString::to_cstr |
+| `z` | ✅ | scan_args + RString::to_c_string |
 | `a` | ✅ | scan_args + RArray::entries |
 | `c` | ✅ | scan_args + FromValue<RClass> / FromValue<RModule> |
 | `f` | ✅ | scan_args + TryConvert<f64> / TryConvert<Float> |

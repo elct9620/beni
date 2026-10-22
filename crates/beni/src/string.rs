@@ -8,7 +8,7 @@
 //! tag obligation `Value` could not discharge.
 //!
 //! Mirrors magnus's `src/r_string.rs`: string factories live on `Mrb`
-//! (`str_new`, `str_new_cstr`), per-string ops (`cat`, `as_bytes`,
+//! (`str_new`, `str_from_c_str`), per-string ops (`cat`, `as_bytes`,
 //! `to_string`, and `to_bytes` with the `bytes` feature) live here.
 
 use crate::{sys::AsRawValue, value::private::ReprValue as _, Error, Mrb, ReprValue, Value};
@@ -17,7 +17,7 @@ use beni_sys as sys;
 /// Typed handle on an mruby `String`. `#[repr(transparent)]` over
 /// `Value` so the C ABI is preserved.
 ///
-/// Construct via `Mrb::str_new` / `Mrb::str_new_cstr` (fresh string),
+/// Construct via `Mrb::str_new` / `Mrb::str_from_c_str` (fresh string),
 /// the checked `FromValue` downcast (`RString::from_value`,
 /// tag-discriminated), or `RString::from_value_unchecked` (assert that
 /// a `Value` you already hold is String-tagged). Round-trip back to a
@@ -87,29 +87,6 @@ impl RString {
             // `protect` into `Err`.
             unsafe {
                 sys::mrb_str_cat_str(mrb.as_ptr(), self.0.as_raw(), other.0.as_raw());
-            }
-        })
-    }
-
-    /// `mrb_str_cat_cstr(mrb, self, ptr)` — append a NUL-terminated C
-    /// string's bytes to this string in place, its content up to the
-    /// terminating NUL, the C-boundary counterpart of `cat`, the way
-    /// Ruby's `String#<<` extends its receiver. The backing buffer may
-    /// reallocate, but `self` keeps naming the same `RString`. Appending
-    /// to a frozen string raises `FrozenError`; the call runs under
-    /// exception protection, so that surfaces as `Err` rather than long-jumping.
-    #[inline]
-    pub fn cat_cstr(self, mrb: &Mrb, s: &core::ffi::CStr) -> Result<(), Error> {
-        mrb.protect_unit(|mrb| {
-            // SAFETY: `self` is String-tagged by the newtype contract;
-            // `mrb` is alive inside the protect frame; `s` is a
-            // NUL-terminated buffer read up to its terminator and
-            // copied into the string before the call returns.
-            // `mrb_str_cat_cstr` calls `mrb_str_modify`, which raises
-            // `FrozenError` on a frozen receiver — caught by `protect`
-            // into `Err`.
-            unsafe {
-                sys::mrb_str_cat_cstr(mrb.as_ptr(), self.0.as_raw(), s.as_ptr());
             }
         })
     }
@@ -429,10 +406,9 @@ impl RString {
     /// `CString` for a C boundary. A C string cannot carry an embedded NUL,
     /// so this read is fallible: an embedded NUL raises `ArgumentError`, and
     /// the call runs under exception protection so that surfaces as `Err` rather
-    /// than long-jumping. magnus has no direct C-string accessor, so this
-    /// anchors on mruby's own `mrb_string_cstr`.
+    /// than long-jumping. Mirrors magnus's `RString::to_c_string`.
     #[inline]
-    pub fn to_cstr(self, mrb: &Mrb) -> Result<std::ffi::CString, Error> {
+    pub fn to_c_string(self, mrb: &Mrb) -> Result<std::ffi::CString, Error> {
         mrb.protect_unit(|mrb| {
             // SAFETY: `self` is String-tagged by the newtype contract;
             // `mrb` is alive inside the protect frame. `mrb_string_cstr`

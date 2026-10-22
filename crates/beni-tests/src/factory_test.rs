@@ -11,7 +11,7 @@ fn str_factories_roundtrip_their_bytes() {
         "from bytes"
     );
     assert_eq!(
-        mrb.str_new_cstr(c"from cstr").as_value().to_string(&mrb),
+        mrb.str_from_c_str(c"from cstr").as_value().to_string(&mrb),
         "from cstr"
     );
 }

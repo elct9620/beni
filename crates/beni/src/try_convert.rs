@@ -257,6 +257,15 @@ impl TryConvert for String {
 
 unsafe impl TryConvertOwned for String {}
 
+impl TryConvert for std::ffi::CString {
+    #[inline]
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        RString::try_convert(val, mrb)?.to_c_string(mrb)
+    }
+}
+
+unsafe impl TryConvertOwned for std::ffi::CString {}
+
 #[cfg(feature = "bytes")]
 impl TryConvert for bytes::Bytes {
     #[inline]

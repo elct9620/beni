@@ -69,36 +69,6 @@ fn cat_str_surfaces_frozen_receiver_as_err() {
 }
 
 #[test]
-fn cat_cstr_appends_a_c_string_in_place() {
-    let mrb = open_mrb();
-
-    let s = mrb.str_new(b"foo");
-    s.cat_cstr(&mrb, c"bar")
-        .expect("appending a C string to a mutable string succeeds");
-    // The same handle now names the grown string — the bytes up to the
-    // terminating NUL were appended in place.
-    assert_eq!(s.owned_bytes(), b"foobar".to_vec());
-
-    // Appending an empty C string leaves the receiver unchanged.
-    s.cat_cstr(&mrb, c"").expect("appending nothing succeeds");
-    assert_eq!(s.owned_bytes(), b"foobar".to_vec());
-}
-
-#[test]
-fn cat_cstr_surfaces_frozen_receiver_as_err() {
-    let mrb = open_mrb();
-    let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
-
-    let frozen = RString::from_value(
-        cxt.load_nstring(b"'fixed'.freeze")
-            .expect("the test source must compile and run"),
-    )
-    .expect("a frozen String literal is String-tagged");
-    let result = frozen.cat_cstr(&mrb, c"more");
-    assert!(matches!(result, Err(Error::Exception(_))));
-}
-
-#[test]
 fn cat_surfaces_frozen_receiver_as_err() {
     let mrb = open_mrb();
     let cxt = Ccontext::new(&mrb, c"frozen_test.rb").expect("allocating the context must succeed");
@@ -337,24 +307,35 @@ fn resize_past_the_integer_range_surfaces_mrubys_argument_error() {
 }
 
 #[test]
-fn to_cstr_yields_a_nul_terminated_view() {
+fn to_c_string_yields_a_nul_terminated_view() {
     let mrb = open_mrb();
 
     let s = mrb.str_new(b"hello");
-    let cstr = s.to_cstr(&mrb).expect("a NUL-free string yields a CString");
+    let cstr = s
+        .to_c_string(&mrb)
+        .expect("a NUL-free string yields a CString");
     assert_eq!(cstr.to_bytes(), b"hello");
     // The view carries the terminating NUL the C boundary expects.
     assert_eq!(cstr.to_bytes_with_nul(), b"hello\0");
 }
 
 #[test]
-fn to_cstr_surfaces_an_embedded_nul_as_err() {
+fn a_c_string_converts_into_a_string_of_its_bytes_before_the_nul() {
+    let mrb = open_mrb();
+
+    let s =
+        RString::from_value(c"from cstr".into_value(&mrb)).expect("a C string boxes as a String");
+    assert_eq!(s.owned_bytes(), b"from cstr".to_vec());
+}
+
+#[test]
+fn to_c_string_surfaces_an_embedded_nul_as_err() {
     let mrb = open_mrb();
 
     // A C string cannot carry an embedded NUL, so the read raises
     // ArgumentError, which protect catches into Err.
     let s = mrb.str_new(b"a\0b");
-    assert!(matches!(s.to_cstr(&mrb), Err(Error::Exception(_))));
+    assert!(matches!(s.to_c_string(&mrb), Err(Error::Exception(_))));
 }
 
 #[test]

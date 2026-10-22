@@ -299,7 +299,7 @@ typed:
   mrb_singleton_class: "`Object::singleton_class` — the value's per-instance eigenclass (Ruby's `singleton_class`), returning a typed `RClass`; nil/true/false yield their predefined classes and every other immediate raises a TypeError"
   mrb_str_cat: RString::cat
   mrb_str_cat_lit: "`RString::cat` — the literal macro `mrb_str_cat_lit(mrb, str, lit)` is `mrb_str_cat` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
-  mrb_str_cat_cstr: RString::cat_cstr
+  mrb_str_cat_cstr: "`RString::cat` over `CStr::to_bytes`, as magnus folds `rb_str_cat_cstr` into `cat`"
   mrb_str_cat_str: RString::cat_str
   mrb_str_append: "`RString::cat_str` — `mrb_str_append(mrb, str1, str2)` is `mrb_ensure_string_type` then `mrb_str_cat_str`; on the typed surface `str2` is already an `RString` (String-tagged), so the ensure-check never fires and the observable behavior is `cat_str`'s in-place append. The strict-vs-coercing distinction from `mrb_str_concat` exists only for a generic value argument, which `RString::concat` already covers; no separate item is needed"
   mrb_str_cmp: RString::cmp
@@ -311,17 +311,17 @@ typed:
   mrb_str_intern: "`RString::intern` — the typed Symbol naming the receiver's own bytes (Ruby's String#intern); interns them as `Mrb::intern_str` does, surfacing an `Err` for bytes too long to be a symbol. Distinct from `mrb_obj_to_sym` → `ReprValue::to_sym`, which coerces an arbitrary value, and from `Symbol::new`, which interns Rust bytes"
   mrb_str_new: Mrb::str_new
   mrb_str_new_capa: Mrb::str_new_capa
-  mrb_str_new_cstr: Mrb::str_new_cstr
+  mrb_str_new_cstr: Mrb::str_from_c_str
   mrb_str_new_static: Mrb::str_new_static
   mrb_str_new_lit: "`Mrb::str_new_static` — the literal macro `mrb_str_new_lit(mrb, lit)` is `mrb_str_new_static` over a string literal; in Rust a `b\"...\"` static byte literal IS a `&'static [u8]`, so no separate item is needed"
   mrb_str_plus: RString::plus
   mrb_str_resize: RString::resize
   mrb_str_substr: RString::substr
-  mrb_str_to_cstr: "`RString::to_cstr` — like `mrb_string_cstr` it raises ArgumentError on an embedded NUL, differing only in which buffer the returned C pointer addresses (`mrb_str_to_cstr` copies into a fresh RString and leaves the receiver untouched; `mrb_string_cstr` NUL-terminates the receiver in place). `to_cstr` returns an owned `CString` rebuilt from the receiver's NUL-free bytes and never exposes that pointer, so the buffer-ownership distinction collapses to an identical owned result; no separate item is needed"
+  mrb_str_to_cstr: "`RString::to_c_string` — raises on an embedded NUL as `mrb_string_cstr` does; the owned `CString` hides which buffer the C pointer addressed, the one difference between the two"
   mrb_str_to_dbl: "`RString::to_f` — strict float parse (badcheck on); raises ArgumentError on non-float input"
   mrb_str_to_integer: "`RString::to_i` — strict radix parse (badcheck on); raises ArgumentError on non-integer input"
   mrb_str_to_inum: "`RString::to_inum` — lenient radix parse (badcheck off); the macro `mrb_str_to_inum(mrb, str, base, badcheck)` is a `#define` alias of `mrb_str_to_integer`, reached here with badcheck off so malformed content reads the leading integer or 0 without raising; only an illegal radix raises ArgumentError"
-  mrb_string_cstr: RString::to_cstr
+  mrb_string_cstr: RString::to_c_string
   mrb_sym_name: "`Mrb::sym_name`, `Symbol::name` — returns an owned UTF-8 `String`, not a borrow: mruby unpacks an inline (short) symbol's name into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (unlike CRuby's permanent static symbol names, this cannot wear magnus's `Cow<'static>` shape). Escaped to its quoted dump form when the name carries an embedded NUL"
   mrb_sym_name_len: "`Mrb::sym_name_len`, `Symbol::name_bytes` — returns an owned `Vec<u8>`, not a borrow: an inline (short) symbol's name unpacks into the shared `mrb->symbuf` scratch the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). The true length carries out of band so an embedded NUL is preserved unescaped"
   mrb_sym_dump: "`Mrb::sym_dump`, `Symbol::dump` — the dump/inspect form (quoted-escaped when not a plain identifier), returned as an owned `String`, not a borrow: it draws on the same shared `mrb->symbuf` scratch an inline name unpacks into and the next read overwrites, so no borrow is sound (no CRuby-style permanent static name to lend, hence not magnus's `Cow<'static>`). Never raises"
@@ -489,7 +489,7 @@ get_args_formats:
   A: { status: covered, via: "scan_args + TryConvert<RArray>" }
   H: { status: covered, via: "scan_args + TryConvert<RHash>" }
   s: { status: covered, via: "scan_args + FromValue<Vec<u8>> — a copy of the String argument's bytes" }
-  z: { status: covered, via: "scan_args + RString::to_cstr" }
+  z: { status: covered, via: "scan_args + RString::to_c_string" }
   a: { status: covered, via: "scan_args + RArray::entries" }
   c: { status: covered, via: "scan_args + FromValue<RClass> / FromValue<RModule>" }
   f: { status: covered, via: "scan_args + TryConvert<f64> / TryConvert<Float>" }
@@ -529,7 +529,7 @@ subsumed:
   mrb_exc_new_lit: "`Error::new` — the macro is `mrb_exc_new_str(mrb, c, mrb_str_new_lit(mrb, lit))` (`vendor/mruby/include/mruby/error.h:37`), and a Rust string slice carries the literal together with the length `mrb_str_new_lit` computes. Its body makes two calls, so the derived alias tier does not reach it"
   mrb_exc_get: "`Mrb::exc_get` — the macro is `mrb_exc_get_id(mrb, mrb_intern_cstr(mrb, name))` (`vendor/mruby/include/mruby.h:750`), and the symbol-or-name key carries the intern it spells out; like `mrb_exc_new_lit` its body makes two calls, so the derived alias tier does not reach it"
   mrb_str_new_frozen: "`Mrb::str_new`, `ReprValue::freeze` — the macro is `mrb_obj_freeze(mrb, mrb_str_new(mrb, p, len))` (`vendor/mruby/include/mruby.h:1236`), so the two typed calls in that order are its whole body; like `mrb_exc_new_lit` it makes two calls, so the derived alias tier does not reach it"
-  mrb_str_new_cstr_frozen: "`Mrb::str_new_cstr`, `ReprValue::freeze` — the cstr form of `mrb_str_new_frozen` (`vendor/mruby/include/mruby.h:1237`), see it"
+  mrb_str_new_cstr_frozen: "`Mrb::str_from_c_str`, `ReprValue::freeze` — the cstr form of `mrb_str_new_frozen` (`vendor/mruby/include/mruby.h:1237`), see it"
   mrb_str_new_static_frozen: "`Mrb::str_new_static`, `ReprValue::freeze` — the static form of `mrb_str_new_frozen` (`vendor/mruby/include/mruby.h:1238`), see it"
   mrb_str_new_lit_frozen: "`Mrb::str_new_static`, `ReprValue::freeze` — the literal form of `mrb_str_new_frozen` over `mrb_str_new_lit` (`vendor/mruby/include/mruby.h:1239`), whose static byte literal `mrb_str_new_lit` records as `Mrb::str_new_static`; see `mrb_str_new_frozen`"
   mrb_clear_error: "`Mrb::clear_exc` — the inner call of `mrb_check_error`, whose body is `if (mrb->exc) { mrb_clear_error(mrb); return TRUE; }` (`vendor/mruby/src/error.c:876-891`); the bool the C form returns is what the Rust shape drops, and clearing the pending exception is the whole of what remains"

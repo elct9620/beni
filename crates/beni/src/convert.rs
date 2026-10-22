@@ -253,6 +253,13 @@ impl IntoValue for () {
 // A handle on a Ruby object converts into the value naming that same
 // object: the `Value`-newtype handles unwrap it, the class handles box
 // their pointer.
+impl IntoValue for &core::ffi::CStr {
+    #[inline]
+    fn into_value(self, mrb: &Mrb) -> Value {
+        crate::ReprValue::as_value(mrb.str_from_c_str(self))
+    }
+}
+
 #[cfg(feature = "bytes")]
 impl IntoValue for bytes::Bytes {
     #[inline]

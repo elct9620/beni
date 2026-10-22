@@ -31,7 +31,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::arena_scope;
     let _ = ArenaScope::keep;
     let _ = Mrb::str_new;
-    let _ = Mrb::str_new_cstr;
+    let _ = Mrb::str_from_c_str;
     let _ = Mrb::str_new_capa;
     let _ = Mrb::ary_new;
     let _ = Mrb::hash_new;
@@ -349,7 +349,6 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::set_user_data::<u8>;
     let _ = Mrb::user_data::<u8>;
     let _ = Mrb::take_user_data::<u8>;
-    let _ = RString::cat_cstr;
     let _ = RString::cmp;
     let _ = RString::concat;
     let _ = RString::dup;
@@ -360,7 +359,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RString::plus;
     let _ = RString::resize;
     let _ = RString::substr;
-    let _ = RString::to_cstr;
+    let _ = RString::to_c_string;
     let _ = RString::to_f;
     let _ = RString::to_i;
     let _ = RString::to_inum;

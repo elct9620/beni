@@ -10,6 +10,7 @@ use beni::{
 };
 use core::num::{NonZeroI32, NonZeroU8};
 use std::collections::{BTreeMap, HashMap};
+use std::ffi::CString;
 use std::path::PathBuf;
 
 fn eval(mrb: &Mrb, source: &str) -> Value {
@@ -190,6 +191,23 @@ fn a_text_target_reads_a_string_and_requires_utf8() {
     );
     assert_eq!(
         rejection::<PathBuf>(&mrb, "1"),
+        pair("TypeError", "Integer cannot be converted to String")
+    );
+}
+
+#[test]
+fn a_c_string_target_reads_any_bytes_but_an_embedded_nul() {
+    let mrb = open_mrb();
+    assert_eq!(
+        convert::<CString>(&mrb, "\"caf\\xE9\"").as_bytes(),
+        b"caf\xE9"
+    );
+    assert_eq!(
+        rejection::<CString>(&mrb, "\"a\\0b\""),
+        pair("ArgumentError", "string contains null byte")
+    );
+    assert_eq!(
+        rejection::<CString>(&mrb, "1"),
         pair("TypeError", "Integer cannot be converted to String")
     );
 }

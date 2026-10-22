@@ -1,6 +1,6 @@
 //! String / Array / Hash / Range factories on `Mrb`.
 //!
-//! `str_new` / `str_new_cstr` construct mruby Strings from Rust byte
+//! `str_new` / `str_from_c_str` construct mruby Strings from Rust byte
 //! slices or a NUL-terminated `&CStr`; `str_new_static` aliases a
 //! `'static` buffer without copying. `ary_new` / `hash_new` return
 //! typed `RArray` / `RHash` newtypes, and `range_new` returns a typed
@@ -37,9 +37,9 @@ impl Mrb {
 
     /// `mrb_str_new_cstr(mrb, s)` — construct an mruby `String` from
     /// a NUL-terminated C string. The `&CStr` borrow guarantees the
-    /// terminator.
+    /// terminator. Mirrors magnus's `Ruby::str_from_c_str`.
     #[inline]
-    pub fn str_new_cstr(&self, s: &core::ffi::CStr) -> RString {
+    pub fn str_from_c_str(&self, s: &core::ffi::CStr) -> RString {
         // SAFETY: `self` is alive; `s.as_ptr()` is NUL-terminated by
         // the `&CStr` contract. `mrb_str_new_cstr` always returns a
         // String-tagged value, so the unchecked wrap is sound.
