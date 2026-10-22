@@ -108,7 +108,8 @@ typed:
   mrb_exception_p: "`Exception::from_value`, the downcast reading the value tag"
   mrb_float_p: "`Float::from_value`, the downcast reading the value tag"
   mrb_hash_p: "`RHash::from_value`, the downcast reading the value tag"
-  mrb_integer_p: "`Integer::from_value` — accepts the fixed-width tag `mrb_integer_p` tests and the arbitrary-width tag beside it, as magnus's `Integer` takes a Fixnum or a Bignum"
+  mrb_integer_p: "`Fixnum::from_value` — the fixed-width tag, magnus's `Fixnum`"
+  mrb_bigint_p: "`RBignum::from_value` — the arbitrary-width tag, magnus's `RBignum`"
   mrb_module_p: "`RModule::from_value`, the downcast reading the value tag"
   mrb_proc_p: "`Proc::from_value`, the downcast reading the value tag"
   mrb_proc_new_cfunc_with_env: "`Mrb::proc_new`, `Mrb::proc_from_fn` — the Rust body rides in a data carrier held in the proc's one environment slot, which the proc and its copies share (`vendor/mruby/src/proc.c:166-190`, `:288`), so the collector drops the body with the last of them"
@@ -582,7 +583,6 @@ declined:
   mrb_cptr_value: "boxes a bare `void*` into a value — the graduation rule: a raw pointer crossing into the typed domain, and reading it back answers the same untyped pointer, so no typed shape carries more than the raw call. mruby uses it as the context an `mrb_ensure` callback reads (`vendor/mruby/mrbgems/mruby-socket/src/socket.c:222`), which a Rust closure carries; Rust data an object owns crosses through `TypedData`"
   mrb_obj_itself: "answers its receiver (`vendor/mruby/src/object.c:879-882`), which a typed caller already holds"
 conditional:
-  mrb_bigint_p: "`MRB_USE_BIGINT` — without it `vendor/mruby/include/mruby/value.h:322` expands the macro to `FALSE`; beni's pinned ABI sets only `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`"
   mrb_locale_from_utf8: "`_WIN32` — `vendor/mruby/include/mruby.h:1248` makes it an identity macro off Windows, where there is no encoding to convert"
   mrb_locale_free: "`_WIN32` — see `mrb_locale_from_utf8`"
   mrb_utf8_from_locale: "`_WIN32` — see `mrb_locale_from_utf8`"
