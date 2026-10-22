@@ -506,3 +506,34 @@ fn a_numeric_value_converts_any_instance_of_a_numeric_class() {
         )
     );
 }
+
+/// Whether converting `source`'s value into `T` succeeds, or the
+/// mismatch `TypeError` naming `class` when it does not.
+fn bundled<T: TryConvert>(mrb: &Mrb, source: &str, class: &str, defined: bool) {
+    if defined {
+        assert!(T::try_convert(eval(mrb, source), mrb).is_ok(), "{source}");
+    }
+    assert_eq!(
+        rejection::<T>(mrb, "1"),
+        (
+            "TypeError".to_owned(),
+            format!("Integer cannot be converted to {class}")
+        )
+    );
+}
+
+#[test]
+fn a_bundled_gem_handle_converts_an_instance_of_its_class_where_the_gem_defines_it() {
+    let mrb = open_mrb();
+    eval(
+        &mrb,
+        "$missed = []; def Object.const_missing(name) = ($missed << name; nil)",
+    );
+    let defined = |name: &str| eval(&mrb, &format!("Object.const_defined?(:{name})")).to_bool();
+
+    bundled::<beni::Time>(&mrb, "Time.now", "Time", defined("Time"));
+    bundled::<beni::RFile>(&mrb, "STDOUT", "IO", defined("IO"));
+    bundled::<beni::Enumerator>(&mrb, "[1].each", "Enumerator", defined("Enumerator"));
+    // The class lookup reads the constant table and runs no const_missing.
+    assert_eq!(eval(&mrb, "$missed").inspect(&mrb), "[]");
+}

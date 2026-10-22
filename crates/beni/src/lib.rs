@@ -68,6 +68,7 @@
 #![allow(non_camel_case_types)]
 
 pub mod array;
+mod bundled;
 #[cfg(feature = "compiler")]
 pub mod ccontext;
 pub mod class;
@@ -115,6 +116,7 @@ pub use ccontext::Ccontext;
 pub use fiber::FiberYield;
 
 pub use array::RArray;
+pub use bundled::{Enumerator, RFile, Time};
 pub use class::{Class, ClassOrModule, ExceptionClass, RClass, RModule};
 pub use convert::{FromValue, IntoValue, IntoValueFromNative};
 pub use data::DataType;
