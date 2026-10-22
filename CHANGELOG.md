@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.25.0](https://github.com/elct9620/beni/compare/v0.24.0...v0.25.0) (2026-10-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** Symbol::to_str is removed; call to_r_string, which answers a Result.
+* **beni:** the calls take an ArgList and name their result type. &[] becomes (), &[a, b] becomes [a, b] or (a, b), &vec becomes vec.as_slice(), and funcall::<_, _, Value> keeps the untyped result.
+* **beni:** RArray::entry / pop / shift, RHash::delete, and Mrb::gv_get name their result type (entry::<Value> to keep the untyped read; entry and gv_get now return Result); Symbol::new takes AsRef<str> instead of &CStr.
+* **beni:** Id::name / name_bytes / dump and Symbol::name / name_bytes / dump return Result instead of Option.
+* **beni:** Mrb::load_string(bytes) is now Mrb::eval::<T>(str); name Value as T to keep the untyped result.
+* **beni:** Mrb::sym_name(id), sym_name_len(id), and sym_dump(id) are now id.name(mrb), id.name_bytes(mrb), and id.dump(mrb).
+* **beni:** Range::begin is now beg and Range::is_exclusive is now excl; beg and end take a TryConvert target and return a Result.
+* **beni:** RString::cat_str is now RString::buf_append.
+* **beni:** Module::alias_method is now Module::define_alias.
+* **beni:** Mrb::str_new_capa is now Mrb::str_buf_new.
+* **beni:** Mrb::full_gc is now Mrb::gc_start.
+* **beni:** RHash::set, get, and fetch are now aset, aref, and lookup2; aref and lookup2 name their result type.
+* **beni:** Mrb::object_class is now Mrb::class_object.
+
+### Features
+
+* **beni-sys:** publish whether the archive is a bigint archive ([661f79f](https://github.com/elct9620/beni/commit/661f79f819b00a6bbc8f7bab3c4148194578cf88))
+* **beni:** alias a method through magnus's define_alias ([2d1711a](https://github.com/elct9620/beni/commit/2d1711ab5464b00e321990613f4041228216e752))
+* **beni:** answer a typed payload as a raw pointer through as_ptr ([d79dc03](https://github.com/elct9620/beni/commit/d79dc03d5d1bbde8ca28d912c42a4423271beebf))
+* **beni:** append one string to another through magnus's buf_append ([3cb74d0](https://github.com/elct9620/beni/commit/3cb74d078518bc8e689350f350bfdb82ab804082))
+* **beni:** build a string with capacity through magnus's str_buf_new ([b2010ec](https://github.com/elct9620/beni/commit/b2010ecab203698dbd89ee40c12a2567b3fbac19))
+* **beni:** build an Integer from every Rust integer a bigint archive holds ([9d99fee](https://github.com/elct9620/beni/commit/9d99fee2478daf754b4879e83788d2f9207b158a))
+* **beni:** convert any Numeric through magnus's NumericValue ([de4d310](https://github.com/elct9620/beni/commit/de4d310ba51a9b565789ad27a7a665622a3df599))
+* **beni:** convert nil, true, false, and Symbol handles into heap collections ([6b7cdd9](https://github.com/elct9620/beni/commit/6b7cdd9268711fae3368e2ffbc28907f3b891a68))
+* **beni:** convert Rust text, paths, and collections into Ruby values ([de4a50c](https://github.com/elct9620/beni/commit/de4a50c29e925f4e9349144af007c1e951264a8b))
+* **beni:** convert Time, IO, and Enumerator instances as magnus does ([550a918](https://github.com/elct9620/beni/commit/550a918592923a877255fd80a1c48de442dd23a2))
+* **beni:** evaluate Ruby source through magnus's eval ([7b3c1ad](https://github.com/elct9620/beni/commit/7b3c1ad85e08abcb74f08f600c95c67733984946))
+* **beni:** pass call arguments through magnus's ArgList ([cad0366](https://github.com/elct9620/beni/commit/cad0366b7655347b8bc50d22e571bede07467de1))
+* **beni:** read a range's bounds through magnus's beg, end, and excl ([3a9d0d5](https://github.com/elct9620/beni/commit/3a9d0d5ed3fc738e178066127bfa5caa9c0ce53f))
+* **beni:** read an id's name on the Id, as magnus places it ([17f02ce](https://github.com/elct9620/beni/commit/17f02cec134acf5faacd9e6f921fc763634cf626))
+* **beni:** read an Integer into every Rust integer its range holds ([500aad5](https://github.com/elct9620/beni/commit/500aad51f09b4d31d05818bd49f996551b00819b))
+* **beni:** read and assign hash entries through magnus's names ([f10988a](https://github.com/elct9620/beni/commit/f10988a24182b1dd750fb21b55d250ee4f35636f))
+* **beni:** read symbol names fallibly, as magnus's Id::name does ([d518990](https://github.com/elct9620/beni/commit/d51899043bd09a42037579aef69345ca9054a7d2))
+* **beni:** read the core classes and define global functions as magnus does ([ba02a08](https://github.com/elct9620/beni/commit/ba02a08391035f411ede26f65de0a006ed3790e5))
+* **beni:** render a symbol's name through ReprValue::to_r_string ([657aa6e](https://github.com/elct9620/beni/commit/657aa6ec61de77a57de13344c757ed6c1bd55a68))
+* **beni:** run a full collection through magnus's gc_start ([5fc51c9](https://github.com/elct9620/beni/commit/5fc51c9cc7d26a3c9ecdd1e650472a70d0aa6675))
+* **beni:** tell a Fixnum from an RBignum, as magnus does ([ec6c247](https://github.com/elct9620/beni/commit/ec6c247bf1ac133e49bd7a9c6d81711e5a52e2d9))
+* **beni:** tell a word-carried Float from an allocated one, as magnus does ([0008c9a](https://github.com/elct9620/beni/commit/0008c9a27b0d2adb9a389d14c9965c0c0b551cc2))
+* **beni:** type container and global access through magnus's signatures ([c2f62fd](https://github.com/elct9620/beni/commit/c2f62fd9073720f546df0207780e8e3bec40a3e1))
+
+
+### Bug Fixes
+
+* **beni:** name a non-UTF-8 class lossily when refusing its redefinition ([534368e](https://github.com/elct9620/beni/commit/534368ee0fa4137f528fc05b2a9e154da4aa5ef7))
+* **beni:** read a parsed integer through its tag ([320ee04](https://github.com/elct9620/beni/commit/320ee0443bf27dd0889e9b2b8042df7744b7d087))
+* **beni:** read class names and renders lossily, as magnus does ([b73b4d5](https://github.com/elct9620/beni/commit/b73b4d50dd98fb4ef615a40df795636a3191cdd4))
+
 ## [0.24.0](https://github.com/elct9620/beni/compare/v0.23.1...v0.24.0) (2026-10-22)
 
 
