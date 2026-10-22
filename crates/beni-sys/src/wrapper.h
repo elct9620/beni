@@ -275,8 +275,8 @@ mrb_proc_enclosing_func(const struct RProc *p, struct REnv **env)
   return p->upper;
 }
 
-/* How many variables an environment holds. Counterpart to the
- * `MRB_ENV_LEN(e)` macro, which reads the flags bitfield. */
+/* How many values an environment holds, `self` among them. Counterpart
+ * to the `MRB_ENV_LEN(e)` macro, which reads the flags bitfield. */
 static inline mrb_int
 mrb_env_len_func(const struct REnv *e)
 {

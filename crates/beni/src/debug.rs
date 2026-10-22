@@ -318,8 +318,8 @@ impl<'a> DebugInspector<'a> {
                     {
                         continue;
                     }
-                    // SAFETY: `values` holds `held` locals after `self`,
-                    // in the order `lv` names them, and `slot` is below it.
+                    // SAFETY: `values` holds `self` then `held` locals, in
+                    // the order `lv` names them, and `slot` is below `held`.
                     let raw = unsafe { *values.add(slot + 1) };
                     locals.push((
                         Id::from_raw_unchecked(name),
@@ -335,10 +335,10 @@ impl<'a> DebugInspector<'a> {
             }
             // SAFETY: a non-NULL environment is the live one `proc_`
             // captured, its stack holding `self` then the enclosing
-            // scope's locals, as many as its length.
+            // scope's locals, as many values as its length counts.
             (values, held) = match unsafe { env.as_ref() } {
                 Some(env) => (env.stack.cast_const(), unsafe {
-                    sys::mrb_env_len_func(env) as usize
+                    (sys::mrb_env_len_func(env) as usize).saturating_sub(1)
                 }),
                 None => (core::ptr::null(), 0),
             };
