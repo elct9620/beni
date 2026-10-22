@@ -2012,9 +2012,22 @@ A `DebugInspector` reads the frames of the running fiber, mirroring `magnus`'s `
 | `frame_method_id` | the name of its method, as `method_id` does |
 | `frame_self_get` | its `self` |
 | `frame_class_get` | the class or module defining its method, as `defined_class` does |
-| `frame_local_variables` | each local variable its code declares, in order, with its current value |
+| `frame_local_variables` | each local variable its code can name, with its value |
 
 A frame running Rust or C code has no file name, no line, and no local variables. Code compiled without its local variable names declares none. A `DebugInspector` writes nothing.
+
+###### Local variables
+
+A frame's local variables are those mruby's `local_variables` lists for its code, valued as mruby's own debugger reads them.
+
+| Scope | Variables | Value read from |
+|---|---|---|
+| the frame's own | each its code declares | the frame's registers |
+| each enclosing one | each its captured environment holds | that environment |
+
+The walk outward stops at the nearest scope start. A scope starts with a method body, a block a method was defined from, a class or module body, or the top level. Scopes are listed innermost first, each in declaration order. An inner variable hides an outer one of the same name. An anonymous parameter's marker (`*`, `**`, `&`) names no variable.
+
+Before a method's entry instruction runs, only its call's arguments are in place. Its other variables' registers hold what they held before the call.
 
 ##### Inspection outside a hook
 
