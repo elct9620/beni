@@ -511,6 +511,34 @@ fn to_i_surfaces_invalid_input_as_err() {
 }
 
 #[test]
+fn an_integer_parse_past_i64_surfaces_an_err() {
+    let mrb = open_mrb();
+    let past = mrb.str_new(b"99999999999999999999");
+
+    assert!(past.to_i(&mrb, 10).is_err());
+    match past.to_inum(&mrb, 10) {
+        Ok(n) => panic!("{n} must not parse"),
+        Err(Error::Exception(exc)) => assert_eq!(exc.classname(&mrb), "RangeError"),
+        Err(other) => panic!("a parse must surface an exception, got {other:?}"),
+    }
+}
+
+#[cfg(any(mrb_int64, mrb_bigint))]
+#[test]
+fn a_lenient_integer_parse_reads_every_i64() {
+    let mrb = open_mrb();
+    let parse = |bytes: &[u8]| {
+        mrb.str_new(bytes)
+            .to_inum(&mrb, 10)
+            .unwrap_or_else(|err| panic!("must parse: {}", err.message(&mrb)))
+    };
+
+    assert_eq!(parse(b"-9223372036854775808"), i64::MIN);
+    assert_eq!(parse(b"9223372036854775807"), i64::MAX);
+    assert_eq!(parse(b"3000000000"), 3_000_000_000);
+}
+
+#[test]
 fn to_i_aliases_a_negative_base_to_its_radix_without_raising() {
     let mrb = open_mrb();
 

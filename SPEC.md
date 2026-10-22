@@ -678,12 +678,13 @@ read anchors on mruby's own `mrb_string_cstr`.
 ##### Numeric Parses
 
 Rust also parses a string's bytes to a number. Each `Err` carries the
-`ArgumentError` mruby raises.
+exception mruby raises for the bytes, or a `RangeError` for an integer mruby
+parses beyond `i64`.
 
 | Parse | Yields | `Err` when | Anchor |
 |---|---|---|---|
-| strict integer | the integer in a given radix | bytes not a valid integer in that radix; invalid radix | `mrb_str_to_integer` |
-| lenient integer | the leading integer, ignoring trailing characters; `0` when no integer begins the bytes | invalid radix only | `mrb_str_to_inum` |
+| strict integer | the integer in a given radix, as an `i64` | bytes not a valid integer in that radix; invalid radix; an integer beyond what the configured integer width or `i64` holds | `mrb_str_to_integer` |
+| lenient integer | the leading integer, ignoring trailing characters, as an `i64`; `0` when no integer begins the bytes | invalid radix; a leading integer beyond what the configured integer width or `i64` holds | `mrb_str_to_inum` |
 | strict float | the float | bytes not a valid float | `mrb_str_to_dbl` |
 
 The radix is one of 2 through 36, or 0 to auto-detect a leading base prefix
@@ -1002,7 +1003,7 @@ Every mutating or dispatching operation across the typed surface follows one rai
 | Reads a named variable that raises on absence: a class-variable read, walking the ancestry | the name resolves to no class variable | `Result` |
 | Converts or computes without dispatching: a `TryConvert` conversion; an instance-variable read converted to a requested type; an Integer read out as a Rust integer, a `Fixnum` read into `i64` or `i128` aside; a Float to the Integer it truncates; an arithmetic (add / subtract / multiply) of two numeric values | a `TryConvert` mismatch, as its rule names; an Integer read out beyond its Rust target's range (`RangeError`); either arithmetic operand is non-numeric (`TypeError`); an infinite / NaN float converts to integer (`RangeError`); an integer arithmetic exceeds the configured integer width against an archive other than a bigint archive (`RangeError`) | `Result` |
 | Interns a name, creating its symbol: a C-string, byte-slice, String-value, or static-buffer intern; a string interning its own bytes | the name is `UINT16_MAX` bytes or longer (`ArgumentError`) | `Result` |
-| Reads or renders without dispatching but can still raise: a string's NUL-terminated C-string view; a strict parse of a string to an integer in a given radix, or to a float; rendering an integer to a string in a given radix; computing a Range's normalized slice of a collection length; reading an instance-variable holder's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; the bytes are not a valid float; the render radix is outside 2 through 36; a Range slice's present bound is neither an integer nor integer-convertible (`TypeError`); mruby gives the object no singleton class (`TypeError`) | `Result`; a Range slice that does not raise returns its three-way outcome: in-range with begin offset and length, out-of-range, or a non-Range mismatch |
+| Reads or renders without dispatching but can still raise: a string's NUL-terminated C-string view; a strict parse of a string to an integer in a given radix, or to a float; rendering an integer to a string in a given radix; computing a Range's normalized slice of a collection length; reading an instance-variable holder's singleton class | the bytes contain an embedded NUL; the bytes are not a valid integer in the radix; a parsed integer is beyond what the configured integer width or `i64` holds; the bytes are not a valid float; the render radix is outside 2 through 36; a Range slice's present bound is neither an integer nor integer-convertible (`TypeError`); mruby gives the object no singleton class (`TypeError`) | `Result`; a Range slice that does not raise returns its three-way outcome: in-range with begin offset and length, out-of-range, or a non-Range mismatch |
 | Allocates an instance without dispatching: a class's bare allocation | the class is a singleton class, its default allocator is undefined, or its instances are of an immediate or C-pointer type (`TypeError`) | `Result` |
 | Marks a class so its instances carry Rust data; prepares a `TypedData` type's carrier classes in an interpreter | the class's instances are neither plain objects nor data carriers: a singleton class, or a class whose instances have a built-in layout such as an exception, a string, or a number (`TypeError`); preparing also when a class path resolves to no class, or to a value that is not a class | `Result` |
 | Reads a data carrier's payload through an `RTypedData` handle; copies a carrier through `typed_data::Dup`'s `clone` | the carrier holds no payload, or one of another data type (`TypeError`); `clone` also when it is passed an argument (`ArgumentError`), the copy's `initialize_copy` raises, or that `initialize_copy` installs a payload of another data type (`TypeError`) | `Result` |

@@ -11,7 +11,7 @@
 //! (`str_new`, `str_new_cstr`), per-string ops (`cat`, `as_bytes`,
 //! `to_string`, and `to_bytes` with the `bytes` feature) live here.
 
-use crate::{sys::AsRawValue, Error, Mrb, ReprValue, Value};
+use crate::{sys::AsRawValue, value::private::ReprValue as _, Error, Mrb, ReprValue, Value};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `String`. `#[repr(transparent)]` over
@@ -457,7 +457,8 @@ impl RString {
     /// that is not a clean integer in the base — trailing junk, an empty
     /// string, or a positive `base` outside 2 through 36 — raises
     /// `ArgumentError`; the call runs under exception protection, so that surfaces
-    /// as `Err` rather than long-jumping. A negative `base` is not an error:
+    /// as `Err` rather than long-jumping, as does an integer beyond the
+    /// configured integer width or `i64`. A negative `base` is not an error:
     /// `-n` aliases the radix `n` with prefix detection disabled.
     #[inline]
     pub fn to_i(self, mrb: &Mrb, base: i32) -> Result<i64, Error> {
@@ -471,9 +472,10 @@ impl RString {
                 sys::mrb_str_to_integer(mrb.as_ptr(), self.0.as_raw(), base as sys::mrb_int, true)
             })
         })
-        // SAFETY: a successful `mrb_str_to_integer` returns an
-        // Integer-tagged value, so the unbox accepts it.
-        .map(|v| unsafe { v.unbox_integer() })
+        // SAFETY: a successful `mrb_str_to_integer` returns an Integer, of
+        // the arbitrary-width tag past the configured width of a bigint
+        // archive.
+        .and_then(|v| unsafe { crate::Integer::from_value_unchecked(v) }.to_i64(mrb))
     }
 
     /// `mrb_str_to_inum(mrb, self, base, FALSE)` — parse the bytes to an
@@ -486,8 +488,10 @@ impl RString {
     /// / `0b` / `0o` prefix; a positive `base` outside 2 through 36 is the one
     /// input the lenient parse cannot interpret and raises `ArgumentError`,
     /// which the surrounding exception protection surfaces as `Err` rather than
-    /// long-jumping. A negative `base` is not an error: `-n` aliases the radix
-    /// `n` with prefix detection disabled.
+    /// long-jumping. A leading integer beyond the configured integer width or
+    /// `i64` surfaces an `Err` carrying a `RangeError`. A negative `base` is
+    /// not an error: `-n` aliases the radix `n` with prefix detection
+    /// disabled.
     #[inline]
     pub fn to_inum(self, mrb: &Mrb, base: i32) -> Result<i64, Error> {
         mrb.protect(|mrb| {
@@ -501,9 +505,10 @@ impl RString {
                 sys::mrb_str_to_integer(mrb.as_ptr(), self.0.as_raw(), base as sys::mrb_int, false)
             })
         })
-        // SAFETY: a successful `mrb_str_to_integer` returns an
-        // Integer-tagged value, so the unbox accepts it.
-        .map(|v| unsafe { v.unbox_integer() })
+        // SAFETY: a successful `mrb_str_to_integer` returns an Integer, of
+        // the arbitrary-width tag past the configured width of a bigint
+        // archive.
+        .and_then(|v| unsafe { crate::Integer::from_value_unchecked(v) }.to_i64(mrb))
     }
 
     /// `mrb_str_to_dbl(mrb, self, TRUE)` — parse the bytes to a float, the
