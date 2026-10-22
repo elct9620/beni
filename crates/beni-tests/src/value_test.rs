@@ -1558,7 +1558,7 @@ fn ivar_foreach_keeps_snapshot_values_alive_across_removal_and_gc() {
             first = false;
             obj.ivar_remove(&mrb, a).expect("removal does not raise");
             obj.ivar_remove(&mrb, b).expect("removal does not raise");
-            mrb.full_gc();
+            mrb.gc_start();
         }
         let s = RString::from_value(val).expect("the seeded values are strings");
         seen.push(String::from_utf8(s.owned_bytes()).expect("the seeded bytes are UTF-8"));
@@ -1630,7 +1630,7 @@ fn classname_survives_a_gc_cycle() {
     // GC-managed temporary, so a name held across a collection must
     // keep reading correctly rather than dangle into freed storage.
     let name = mrb.str_new(b"hello").as_value().classname(&mrb);
-    mrb.full_gc();
+    mrb.gc_start();
     assert_eq!(name, "String");
 }
 

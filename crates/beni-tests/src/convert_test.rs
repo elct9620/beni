@@ -436,7 +436,7 @@ fn a_collection_grows_the_arena_by_itself_alone() {
     let after = unsafe { beni::sys::mrb_gc_arena_save_func(mrb.as_ptr()) };
 
     assert_eq!(after - before, 1);
-    mrb.full_gc();
+    mrb.gc_start();
     assert_eq!(RArray::from_value(ary).expect("an Array").len(), 1000);
 }
 

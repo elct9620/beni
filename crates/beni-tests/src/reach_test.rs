@@ -54,7 +54,7 @@ fn an_array_entry_outlives_the_array_clearing() {
     let read = ary.entry(&mrb, 0);
     ary.clear(&mrb)
         .expect("clearing an unfrozen array must succeed");
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_held(&DROPS, "an array entry");
     assert!(!read.is_nil());
@@ -86,7 +86,7 @@ fn an_instance_variable_outlives_its_overwrite() {
     holder
         .ivar_set(&mrb, "@probe", beni::value::qnil().as_value())
         .expect("ivar_set must succeed");
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_held(&DROPS, "an instance variable's value");
     assert!(!read.is_nil());
@@ -102,7 +102,7 @@ fn a_global_outlives_its_removal() {
 
     let read = mrb.gv_get("$beni_reach");
     mrb.gv_remove("$beni_reach");
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_held(&DROPS, "a global's value");
     assert!(!read.is_nil());
@@ -129,7 +129,7 @@ fn a_walked_hash_value_outlives_the_hash_clearing() {
     .expect("walking an unmodified hash must succeed");
     hash.clear(&mrb)
         .expect("clearing an unfrozen hash must succeed");
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_held(&DROPS, "a walked hash value");
     assert!(!read.is_nil());
@@ -151,7 +151,7 @@ fn a_walk_err_exception_outlives_the_walk() {
             Err(beni::Error::Exception(mrb.wrap(Probe(&DROPS)).as_value()))
         })
         .expect_err("the closure's Err surfaces");
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_held(&DROPS, "a walk's Err exception");
     assert!(matches!(err, beni::Error::Exception(_)));
@@ -174,7 +174,7 @@ fn a_pending_exception_outlives_its_clearing() {
 
     let read = mrb.pending_exc();
     mrb.clear_exc();
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_held(&DROPS, "a pending exception");
     assert!(!read.is_nil());
@@ -186,7 +186,7 @@ fn a_pending_exception_outlives_its_clearing() {
 fn clear_every_reachable_array(mrb: &Mrb) {
     mrb.load_string(b"ObjectSpace.each_object(Array) { |a| a.clear unless a.frozen? }")
         .expect("walking the heap's Arrays must succeed");
-    mrb.full_gc();
+    mrb.gc_start();
 }
 
 #[test]

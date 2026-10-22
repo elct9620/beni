@@ -91,7 +91,7 @@ fn a_dumped_program_loads_back_as_bytecode() {
     // The result is the program's own value, and it is the caller's to
     // scope: a collection with the load's frame still live must not
     // reclaim it.
-    mrb.full_gc();
+    mrb.gc_start();
     assert_eq!(
         String::from_value(got).as_deref(),
         Some("answer"),
@@ -368,11 +368,11 @@ fn the_closure_is_dropped_once_the_proc_and_its_copies_are_reclaimed() {
         mrb.define_global_const("COPY", block.as_value().funcall(&mrb, "dup", &[]).unwrap())
             .unwrap();
     }
-    mrb.full_gc();
+    mrb.gc_start();
     let kept = CLOSURE_DROPS.load(Ordering::SeqCst);
 
     mrb.class_object().const_remove(&mrb, "COPY").unwrap();
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_eq!(kept, 0, "a live copy keeps the closure");
     assert_eq!(

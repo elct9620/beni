@@ -271,8 +271,9 @@ impl Mrb {
     /// Run one complete GC cycle, reclaiming every object unreachable
     /// from the live roots and the GC arena. Total: it returns nothing,
     /// never raises, and is safe whenever the VM is alive — a disabled or
-    /// mid-collection collector ignores the request.
-    pub fn full_gc(&self) {
+    /// mid-collection collector ignores the request. Mirrors magnus's
+    /// `Ruby::gc_start`.
+    pub fn gc_start(&self) {
         // SAFETY: `self.state` is alive by the `&self` borrow;
         // `mrb_full_gc` only triggers collection on it.
         unsafe { sys::mrb_full_gc(self.as_ptr()) };

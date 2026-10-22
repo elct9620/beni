@@ -140,7 +140,7 @@ fn assert_exception_survives_a_collection(mrb: &Mrb, err: &Error) {
     let Error::Exception(exc) = err else {
         panic!("the error must carry an exception, got {err:?}")
     };
-    mrb.full_gc();
+    mrb.gc_start();
     assert!(
         exc.is::<beni::Exception>(),
         "the collection reclaimed the exception"

@@ -47,7 +47,7 @@ impl Mrb {
     ///
     /// ```compile_fail
     /// fn capture_a_handle(mrb: &mut beni::Mrb, other: &'static beni::Mrb) {
-    ///     mrb.set_code_fetch_hook(move |_| other.full_gc());
+    ///     mrb.set_code_fetch_hook(move |_| other.gc_start());
     /// }
     /// ```
     pub fn set_code_fetch_hook<F, R>(&mut self, mut hook: F)

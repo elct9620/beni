@@ -530,7 +530,7 @@ fn local_survives_its_reassignment(
             .find(|&(name, _)| name == x)
             .expect("the caller declares `x`");
         block.expect("the test passes a block").call(mrb, &[])?;
-        mrb.full_gc();
+        mrb.gc_start();
         Ok::<_, Error>(RString::from_value(local).is_some())
     })
 }

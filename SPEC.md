@@ -1819,7 +1819,7 @@ Arenas and roots govern which values stay reachable. Collection timing governs w
 | Arena scope | `Mrb::arena_scope` |
 | Root | `Mrb::gc_register_mark_object`, `Mrb::gc_root` |
 | Lazy value | `Lazy`, `Mrb::get_inner` |
-| Collection timing | `Mrb::full_gc`, `Mrb::incremental_gc` |
+| Collection timing | `Mrb::gc_start`, `Mrb::incremental_gc` |
 | Heap region | `Mrb::gc_add_region` |
 
 ##### Arena scopes
@@ -1898,11 +1898,11 @@ Each interpreter holds its own value for each `Lazy`, kept reachable for as long
 
 ##### Collection timing
 
-`Mrb::full_gc` and `Mrb::incremental_gc` drive collection directly.
+`Mrb::gc_start` and `Mrb::incremental_gc` drive collection directly, the first under `magnus`'s name.
 
 | Method | Effect |
 |---|---|
-| `full_gc` | one complete collection cycle |
+| `gc_start` | one complete collection cycle |
 | `incremental_gc` | advances the collector a single step |
 
 Both are total: they return nothing, never raise, and are safe to call whenever the VM is alive. A disabled or mid-collection collector ignores the request. Both graduate because correct use needs no reasoning about VM internals.

@@ -150,7 +150,7 @@ fn the_lazy_record_survives_its_name_given_to_a_global_operation() {
     mrb.gv_set(c"beni_lazy", 1i32.into_value(&mrb))
         .expect("assigning a global succeeds");
     mrb.gv_remove(c"beni_lazy");
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_eq!(
         beni::RString::from_value(root.value())

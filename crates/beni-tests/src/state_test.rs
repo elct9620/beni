@@ -79,7 +79,7 @@ fn gc_triggers_keep_a_reachable_value_valid() {
     }
 
     // Both triggers run without raising; the VM survives.
-    mrb.full_gc();
+    mrb.gc_start();
     mrb.incremental_gc();
 
     // The reachable survivor is still a valid String afterwards.
@@ -106,7 +106,7 @@ fn a_generous_region_yields_pages_the_vm_then_allocates_into() {
     for _ in 0..2048 {
         let _ = mrb.str_new(b"allocated after the region was added");
     }
-    mrb.full_gc();
+    mrb.gc_start();
     drop(mrb);
 }
 

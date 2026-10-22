@@ -897,7 +897,7 @@ fn name_survives_a_gc_cycle() {
         RClass::new(&mrb, object).expect("creating an anonymous class under Object must succeed");
     let synthesized = anonymous.name(&mrb);
 
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_eq!(named, "Object");
     assert!(

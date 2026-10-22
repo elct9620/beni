@@ -75,7 +75,7 @@ fn a_registered_value_survives_collection() {
         let _ = mrb.str_new(b"garbage");
     }
 
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_eq!(
         ROOTED_DROPS.load(Ordering::SeqCst),
@@ -99,7 +99,7 @@ fn an_unregistered_value_is_reclaimed_by_the_same_collection() {
         drop(scope);
     }
 
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_eq!(
         LOOSE_DROPS.load(Ordering::SeqCst),
@@ -122,7 +122,7 @@ fn a_guard_holds_its_value_until_it_is_dropped() {
         root
     };
 
-    mrb.full_gc();
+    mrb.gc_start();
     assert_eq!(
         GUARDED_DROPS.load(Ordering::SeqCst),
         0,
@@ -136,7 +136,7 @@ fn a_guard_holds_its_value_until_it_is_dropped() {
     );
 
     drop(root);
-    mrb.full_gc();
+    mrb.gc_start();
     assert_eq!(
         GUARDED_DROPS.load(Ordering::SeqCst),
         1,
@@ -162,7 +162,7 @@ fn roots_over_one_value_release_independently() {
         second
     };
 
-    mrb.full_gc();
+    mrb.gc_start();
     assert_eq!(
         SHARED_DROPS.load(Ordering::SeqCst),
         0,
@@ -170,7 +170,7 @@ fn roots_over_one_value_release_independently() {
     );
 
     drop(survivor);
-    mrb.full_gc();
+    mrb.gc_start();
     assert_eq!(
         SHARED_DROPS.load(Ordering::SeqCst),
         1,
@@ -208,7 +208,7 @@ fn a_hidden_instance_variable_holds_its_value_until_overwritten() {
         drop(scope);
     }
 
-    mrb.full_gc();
+    mrb.gc_start();
     assert_eq!(
         HIDDEN_DROPS.load(Ordering::SeqCst),
         0,
@@ -218,7 +218,7 @@ fn a_hidden_instance_variable_holds_its_value_until_overwritten() {
     holder
         .ivar_set(&mrb, "held", beni::value::qnil().as_value())
         .expect("overwriting the hidden instance variable must succeed");
-    mrb.full_gc();
+    mrb.gc_start();
     assert_eq!(
         HIDDEN_DROPS.load(Ordering::SeqCst),
         1,

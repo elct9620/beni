@@ -349,7 +349,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::exception_sys_stack_error;
     let _ = Mrb::exception_type_error;
     let _ = Mrb::exception_zero_div_error;
-    let _ = Mrb::full_gc;
+    let _ = Mrb::gc_start;
     let _ = Mrb::gc_add_region;
     let _ = Mrb::gc_register_mark_object::<Value>;
     let _ = Mrb::gc_root;

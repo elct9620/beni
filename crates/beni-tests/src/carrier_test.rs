@@ -222,7 +222,7 @@ fn the_record_keeps_its_class_through_a_collection() {
     let marked = mark(&mrb, c"BeniCarrierHeld").expect("names a class");
 
     define(&mrb, b"Object.const_set(:BeniCarrierHeld, Class.new)");
-    mrb.full_gc();
+    mrb.gc_start();
 
     let held = held(&mrb, c"BeniCarrierHeld")
         .expect("the record still holds the class the constant let go of");

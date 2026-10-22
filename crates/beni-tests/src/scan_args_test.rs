@@ -152,7 +152,7 @@ fn an_array_splat_and_an_optional_block_fit_every_call() {
 // Holds the splat across a full collection and a dispatch before reading it.
 fn splat_across_reentry(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> {
     let splat = scan_args::<(), (), RArray, (), (), ()>(mrb)?.splat;
-    mrb.full_gc();
+    mrb.gc_start();
     splat.as_value().funcall(mrb, "inspect", &[])?;
     Ok(splat.as_value())
 }

@@ -79,7 +79,7 @@ fn the_payload_lives_inside_the_object_across_a_collection() {
         .gc_root(inline.as_value())
         .expect("rooting must succeed");
 
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_eq!(inline.get(), Vector2D { x: 3.0, y: 4.0 });
 }

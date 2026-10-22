@@ -245,7 +245,7 @@ fn args_survive_reentry(mrb: &Mrb, _self: Value, args: &[Value]) -> Result<Value
         b"def __probe_deep(n); return 0 if n <= 0; Array.new(16){ 'y' * 40 }; __probe_deep(n - 1); end; __probe_deep(400)",
     )
     .expect("the test source must compile and run");
-    mrb.full_gc();
+    mrb.gc_start();
     let mut joined = String::new();
     for v in args {
         joined.push_str(&v.to_string(mrb));

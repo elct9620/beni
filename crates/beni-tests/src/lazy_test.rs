@@ -63,7 +63,7 @@ fn a_held_value_outlives_the_scope_that_computed_it() {
     drop(scope);
     mrb.load_string(b"$beni_lazy = nil; beni_lazy = nil")
         .expect("assigning those names succeeds");
-    mrb.full_gc();
+    mrb.gc_start();
 
     assert_eq!(DROPS.load(Ordering::SeqCst), 0, "the interpreter holds it");
     assert!(Lazy::try_get_inner(&PROBE, &mrb).is_some());

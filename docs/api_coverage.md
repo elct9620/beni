@@ -107,13 +107,13 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_format` | fn | ✅ | ❌ |  |
 | `mrb_free` | fn | ✅ | 🚫 | declined: VM allocator — see `mrb_malloc` |
 | `mrb_frozen_error` | fn | ✅ | 🚫 | declined: raises what `mrb_check_frozen` checks for, taking the object as `void*` the same way (`vendor/mruby/include/mruby.h:1446`) — see `mrb_check_frozen`; the pointer form cannot express the immediate mruby raises the same `FrozenError` for, which the `mrb_value` form tests before raising (`vendor/mruby/src/error.c:693-699`) |
-| `mrb_full_gc` | fn | ✅ | ✅ | `Mrb::full_gc` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive) |
+| `mrb_full_gc` | fn | ✅ | ✅ | `Mrb::gc_start` — run one complete GC cycle; total (returns nothing, never raises, safe whenever the VM is alive) |
 | `mrb_func_basic_p` | fn | ✅ | ❌ |  |
 | `mrb_funcall` | fn | ✅ | ✅ | subsumed: `ReprValue::funcall` — the varargs form, which a Rust caller cannot write at all; the argument slice carries the count `argc` spells out, and `mrb_funcall_argv` is the same dispatch |
 | `mrb_funcall_argv` | fn | ✅ | ✅ | `ReprValue::funcall` — the symbol-or-name key reaches this dispatch whether the caller holds a name or an already-interned `Id` or `Symbol` |
 | `mrb_funcall_id` | fn | ✅ | ✅ | subsumed: `ReprValue::funcall` — the varargs form taking a pre-interned `mrb_sym`; the symbol-or-name key already reaches it, and the argument slice carries `argc` |
 | `mrb_funcall_with_block` | fn | ✅ | ✅ | `ReprValue::funcall_with_block` — dispatch passing an explicit typed `Proc` block |
-| `mrb_garbage_collect` | fn | ✅ | ✅ | subsumed: `Mrb::full_gc` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection |
+| `mrb_garbage_collect` | fn | ✅ | ✅ | subsumed: `Mrb::gc_start` — the body is `mrb_full_gc(mrb);` and nothing else (`vendor/mruby/src/gc.c:1390-1393`), so the two calls are one collection |
 | `mrb_gc_arena_restore` | macro | ✅ | ✅ | `ArenaScope::keep`/`drop` (see ArenaScope extension) |
 | `mrb_gc_arena_save` | macro | ✅ | ✅ | `Mrb::arena_scope` (see ArenaScope extension) |
 | `mrb_gc_mark` | fn | ✅ | 🚫 | declined: marks one object during the collector's mark phase — mruby's `mrb_data_type` carries only `struct_name` and `dfree` (`vendor/mruby/include/mruby/data.h:22-28`), so an embedder has no mark hook to write and no typed caller reaches it (contrast magnus's `gc::Marker`, which exists because CRuby's `rb_data_type_t` has `dmark`) |
