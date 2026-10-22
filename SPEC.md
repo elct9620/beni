@@ -391,6 +391,8 @@ names and rejects every other value:
 | `Fixnum` | an Integer of the fixed-width tag |
 | `RBignum` | an Integer of the arbitrary-width tag; the handle exists only in a build against a bigint archive |
 | `Float` / `Symbol` | a Float / a Symbol |
+| `Flonum` | a Float the value word carries itself: some floats under word boxing with inline floats, every float without boxing, none under word boxing without inline floats |
+| `RFloat` | a Float the collector allocates: every Float `Flonum` does not take |
 | `RString` / `RArray` / `RHash` | a String / Array / Hash, subclass instances included |
 | `Range` / `Proc` | a Range / a Proc |
 | `RClass` | a class or a singleton class |
@@ -547,6 +549,7 @@ Rust integer and float targets take the numeric values mruby's own C-method argu
 | `Integer` handle | the downcast, a Float truncated toward zero, an arbitrary-width Integer kept whole | `Integer` |
 | `Fixnum` / `RBignum` handle | what the `Integer` handle converts, carried by the handle's own tag | `Integer` |
 | `Float` handle | the downcast, an Integer widened | `Float` |
+| `Flonum` / `RFloat` handle | what the `Float` handle converts, carried by the handle's own form | `Float` |
 
 The `Integer` and `Float` handles take any non-downcast numeric value as the
 number mruby's own numeric coercion yields. This mirrors `magnus`'s conversions
@@ -561,6 +564,8 @@ nearest `f32`, and a magnitude beyond `f32` becomes an infinity.
 | Rust integer | an Integer of the arbitrary-width tag outside the target's own range | `RangeError` "integer out of range", as mruby raises for it |
 | `Fixnum` handle | an Integer of the arbitrary-width tag | `RangeError` "integer too big for fixnum" |
 | `RBignum` handle | an Integer of the fixed-width tag | `RangeError` "integer too small for bignum" |
+| `Flonum` handle | a Float the collector allocates | `RangeError` "float out of range for flonum" |
+| `RFloat` handle | a Float the value word carries | `RangeError` "float in range for flonum" |
 | non-zero Rust integer | zero | `ArgumentError` "value must be non-zero" |
 | `f64` / `f32`, `Float` handle | `nil` | `TypeError` "can't convert nil into Float", as mruby raises |
 
@@ -2572,7 +2577,7 @@ measures complete.
 | documentation bindings | `bindings_docs.rs`, the bindings a documentation build reads in place of a discovered archive's. Generated from an mruby built with the upstream default configuration, and carrying what the generating host decides alongside it — type widths, the form of `va_list`, the constants its headers define. Never hand-written and never tracked by the repository: the published package carries the copy a release generated, and every other copy is generated where it is read |
 | lazy value | a value a `Lazy` names, which each interpreter computes once and holds for its own lifetime |
 | native type | a Rust type whose values hold no `Value`, so a Rust heap structure of them converts into Ruby: Rust numbers, `bool`, `()`, `String`, `&str`, `CString`, `&CStr`, `char`, `PathBuf`, `&Path`, and an `Option`, `Vec`, map, or tuple of native types; a consumer marks its own type as one only when the type holds no `Value` |
-| owned type | a type whose values hold nothing the collector can free, so a Rust heap structure may store them past the arena: Rust numbers, `bool`, `String`, `CString`, `char`, `PathBuf`, `Bytes`, a non-zero integer, the payload copy a macro-implemented inline struct converts to, the `Qnil` / `Qtrue` / `Qfalse` handles, whose values are immediate under every boxing, the `Symbol` handle, whose symbol lives until the interpreter closes, and an `Option`, `Vec`, map, tuple, or fixed-length array of owned types; a consumer marks its own type as one only when the type holds no collectable `Value` |
+| owned type | a type whose values hold nothing the collector can free, so a Rust heap structure may store them past the arena: Rust numbers, `bool`, `String`, `CString`, `char`, `PathBuf`, `Bytes`, a non-zero integer, the payload copy a macro-implemented inline struct converts to, the `Qnil` / `Qtrue` / `Qfalse` handles, whose values are immediate under every boxing, the `Flonum` handle, the `Symbol` handle, whose symbol lives until the interpreter closes, and an `Option`, `Vec`, map, tuple, or fixed-length array of owned types; a consumer marks its own type as one only when the type holds no collectable `Value` |
 | root | a hold that keeps a value reachable for the collector independently of the arena and of any Ruby reference to it — released when its holder is dropped, or never when registered for the interpreter's lifetime |
 | heap region | a caller-owned byte buffer handed to the collector to carve into heap pages, owned by the caller for the process's lifetime and never freed by mruby |
 | capability feature | a cargo feature on the `beni` crate carrying a capability mruby keeps in a gem rather than its core — declared by the consumer rather than probed from the archive, enabled by default, and additive, so enabling one only adds surface |

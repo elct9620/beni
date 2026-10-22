@@ -450,3 +450,37 @@ fn a_float_reads_out_as_an_f64() {
     assert_eq!(float(&mrb, 2.5).to_f64(), 2.5);
     assert!(float(&mrb, f32::NAN).to_f64().is_nan());
 }
+
+#[test]
+fn a_float_is_a_flonum_exactly_when_the_word_carries_it() {
+    let mrb = open_mrb();
+    for source in ["1.5", "0.0", "1e300", "-2.0e-300"] {
+        let value = mrb.eval::<Value>(source).expect("the float evaluates");
+        // SAFETY: the predicate reads only the value word.
+        let immediate =
+            unsafe { beni::sys::mrb_immediate_p_func(beni::sys::AsRawValue::as_raw(value)) };
+        assert_eq!(
+            beni::Flonum::from_value(value).is_some(),
+            immediate,
+            "{source}"
+        );
+        assert_eq!(
+            beni::RFloat::from_value(value).is_some(),
+            !immediate,
+            "{source}"
+        );
+
+        let (class, message) = if immediate {
+            rejection::<beni::RFloat>(&mrb, source)
+        } else {
+            rejection::<beni::Flonum>(&mrb, source)
+        };
+        assert_eq!(class, "RangeError");
+        let expected = if immediate {
+            "float in range for flonum"
+        } else {
+            "float out of range for flonum"
+        };
+        assert_eq!(message, expected);
+    }
+}

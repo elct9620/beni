@@ -121,6 +121,27 @@ tagged_handle!(
 );
 
 tagged_handle!(
+    /// A Float the value word carries itself. Mirrors magnus's `Flonum`:
+    /// mruby's word boxing with inline floats carries most floats in the
+    /// word and allocates the rest, as CRuby's flonums do, while
+    /// no-boxing carries every float and word boxing without inline
+    /// floats none (`vendor/mruby/include/mruby/boxing_word.h`).
+    Flonum,
+    // SAFETY: mrb_immediate_p is a pure read of the value word.
+    |value| value.tag() == sys::MRB_TT_FLOAT && unsafe { sys::mrb_immediate_p_func(value.as_raw()) }
+);
+
+// SAFETY: a `Flonum` is immediate, holding nothing the collector can free.
+unsafe impl crate::TryConvertOwned for Flonum {}
+
+tagged_handle!(
+    /// A Float the collector allocates. Mirrors magnus's `RFloat`.
+    RFloat,
+    // SAFETY: mrb_immediate_p is a pure read of the value word.
+    |value| value.tag() == sys::MRB_TT_FLOAT && !unsafe { sys::mrb_immediate_p_func(value.as_raw()) }
+);
+
+tagged_handle!(
     /// An exception object. Mirrors magnus's `Exception`.
     Exception => "Exception",
     |value| value.tag() == sys::MRB_TT_EXCEPTION
@@ -222,6 +243,28 @@ impl TryConvert for Float {
             Float(Value::from_raw_unchecked(unsafe {
                 sys::mrb_ensure_float_type(mrb.as_ptr(), val.as_raw())
             }))
+        })
+    }
+}
+
+impl TryConvert for Flonum {
+    /// Converts what `Float` converts, rejecting a Float the collector
+    /// allocates with magnus's `RangeError`.
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        let float = Float::try_convert(val, mrb)?;
+        Self::from_value(float.as_value()).ok_or_else(|| {
+            crate::error::core_error(mrb, c"RangeError", "float out of range for flonum")
+        })
+    }
+}
+
+impl TryConvert for RFloat {
+    /// Converts what `Float` converts, rejecting a Float the value word
+    /// carries with magnus's `RangeError`.
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        let float = Float::try_convert(val, mrb)?;
+        Self::from_value(float.as_value()).ok_or_else(|| {
+            crate::error::core_error(mrb, c"RangeError", "float in range for flonum")
         })
     }
 }

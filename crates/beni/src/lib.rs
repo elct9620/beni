@@ -132,8 +132,8 @@ pub use symbol::{ConstId, CvarId, GvarId, Id, IntoId, IvarId, Symbol};
 #[cfg(mrb_bigint)]
 pub use tagged::RBignum;
 pub use tagged::{
-    Exception, Fiber, Fixnum, Float, Integer, Qfalse, Qnil, Qtrue, Qundef, RComplex, RCptr,
-    RInlineStruct, RObject, RRational, RSet, RStruct,
+    Exception, Fiber, Fixnum, Float, Flonum, Integer, Qfalse, Qnil, Qtrue, Qundef, RComplex, RCptr,
+    RFloat, RInlineStruct, RObject, RRational, RSet, RStruct,
 };
 pub use try_convert::{TryConvert, TryConvertOwned};
 pub use typed_data::{RTypedData, TypedData};
