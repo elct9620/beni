@@ -1316,7 +1316,7 @@ Methods register on those handles through the `Module` trait, and singleton meth
 
 | Operation | Effect |
 |---|---|
-| alias | aliases an existing method |
+| alias (`define_alias`) | aliases an existing method |
 | include (Ruby's `Module#include`) | mixes another module in after the receiver in the ancestry; the receiver's own methods win |
 | prepend (Ruby's `Module#prepend`) | mixes it in ahead of the receiver; the module's methods override the receiver's own |
 | undefine (Ruby's `Module#undef_method`) | marks the name as not defined on the handle, even when an ancestor defines it |

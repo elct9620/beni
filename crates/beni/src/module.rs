@@ -192,7 +192,8 @@ pub trait Module: Object + private::ClassLike {
     /// aliasing a method that does not exist surfaces as
     /// `Err(Error::Exception)` (mruby's `NameError`) rather than
     /// long-jumping — the same contract as the definition methods above.
-    fn alias_method<N: IntoId, O: IntoId>(self, mrb: &Mrb, new: N, old: O) -> Result<(), Error> {
+    /// Mirrors magnus's `Module::define_alias`.
+    fn define_alias<N: IntoId, O: IntoId>(self, mrb: &Mrb, new: N, old: O) -> Result<(), Error> {
         let new = new.into_id(mrb)?.to_raw();
         let old = old.into_id(mrb)?.to_raw();
         mrb.protect_unit(|mrb| {

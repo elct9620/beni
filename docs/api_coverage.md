@@ -63,8 +63,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_cmp` | fn | ✅ | ✅ | `ReprValue::cmp` — Ruby's `<=>` three-way comparison, ranking the values or yielding nothing when incomparable |
 | `mrb_context_run` | macro | ❌ | ❌ |  |
 | `mrb_convert_type` | macro | ❌ | ❌ |  |
-| `mrb_define_alias` | fn | ✅ | ✅ | `Module::alias_method` with name keys — interns and routes through `mrb_define_alias_id` |
-| `mrb_define_alias_id` | fn | ✅ | ✅ | `Module::alias_method` with `Id` keys (the symbol-or-name key, both names keyed independently) |
+| `mrb_define_alias` | fn | ✅ | ✅ | `Module::define_alias` with name keys — interns and routes through `mrb_define_alias_id` |
+| `mrb_define_alias_id` | fn | ✅ | ✅ | `Module::define_alias` with `Id` keys (the symbol-or-name key, both names keyed independently) |
 | `mrb_define_class` | fn | ✅ | ✅ | `Mrb::define_class` with a name key — interns and routes through `mrb_define_class_id` |
 | `mrb_define_class_id` | fn | ✅ | ✅ | `Mrb::define_class` with an `Id` key (the symbol-or-name key, magnus `IntoId`) — the create path; a name already bound is fetched as the bound class itself, as the `class` keyword fetches it, since this call answers a prepended class with its origin include class |
 | `mrb_define_class_method` | fn | ✅ | ✅ | `Object::define_singleton_method` on a class — a class's singleton method is its class method (magnus alignment) |
@@ -265,7 +265,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 |--------|------|:---:|:-----:|------|
 | `MRB_SET_INSTANCE_TT` | macro | ✅ | ✅ | `RClass::set_instance_data_tt` |
 | `MRB_UNDEF_ALLOCATOR` | macro | ✅ | ✅ | `Class::undef_default_alloc_func` |
-| `mrb_alias_method` | fn | ✅ | ✅ | `Module::alias_method` — `mrb_define_alias_id` is a forwarding wrapper whose body is `mrb_alias_method(mrb, klass, a, b)` (`vendor/mruby/src/class.c:3374-3377`), taking the same arguments |
+| `mrb_alias_method` | fn | ✅ | ✅ | `Module::define_alias` — `mrb_define_alias_id` is a forwarding wrapper whose body is `mrb_alias_method(mrb, klass, a, b)` (`vendor/mruby/src/class.c:3374-3377`), taking the same arguments |
 | `mrb_class` | fn | ✅ | ❌ |  |
 | `mrb_class_outer` | fn | ✅ | ❌ |  |
 | `mrb_class_ptr` | macro | ✅ | ✅ | `RClass::from_value`, `RModule::from_value`, `ExceptionClass::from_value` — the checked downcast is the typed unbox of a class value; the pointer itself stays the raw binding's to read, as magnus leaves the class struct |

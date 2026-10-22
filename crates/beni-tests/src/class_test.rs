@@ -388,7 +388,7 @@ fn private_method_rejects_public_dispatch_but_is_attached() {
 }
 
 #[test]
-fn alias_method_keys_both_names_as_symbol_or_name() {
+fn define_alias_keys_both_names_as_symbol_or_name() {
     let mrb = open_mrb();
     let object = mrb.class_object();
 
@@ -403,14 +403,14 @@ fn alias_method_keys_both_names_as_symbol_or_name() {
     // with a Symbol new-name against a name old-name, and once with both
     // as name keys. Each alias must reach the same body as the original.
     class
-        .alias_method(
+        .define_alias(
             &mrb,
             beni::Symbol::new(&mrb, c"by_sym").expect("the name interns"),
             c"answer",
         )
         .expect("aliasing under a Symbol new-name key must succeed");
     class
-        .alias_method(&mrb, c"by_name", c"answer")
+        .define_alias(&mrb, c"by_name", c"answer")
         .expect("aliasing under a name key must succeed");
 
     let receiver = class
@@ -580,7 +580,7 @@ fn const_set_binds_a_constant_readable_from_ruby() {
 }
 
 #[test]
-fn alias_method_binds_a_second_name_for_an_existing_method() {
+fn define_alias_binds_a_second_name_for_an_existing_method() {
     let mrb = open_mrb();
     let object = mrb.class_object();
 
@@ -592,7 +592,7 @@ fn alias_method_binds_a_second_name_for_an_existing_method() {
         .expect("registering the original method must succeed");
 
     class
-        .alias_method(&mrb, c"original_answer", c"answer")
+        .define_alias(&mrb, c"original_answer", c"answer")
         .expect("aliasing an existing method must succeed");
 
     // The alias resolves to the same body as the original — the
@@ -686,7 +686,7 @@ fn prepend_module_overrides_the_receiver_and_rejects_a_cyclic_prepend() {
 }
 
 #[test]
-fn alias_method_surfaces_name_error_for_missing_original() {
+fn define_alias_surfaces_name_error_for_missing_original() {
     let mrb = open_mrb();
     let object = mrb.class_object();
 
@@ -698,7 +698,7 @@ fn alias_method_surfaces_name_error_for_missing_original() {
     // (vendored src/class.c mrb_method_search) — it must surface as
     // Err, not a longjmp.
     let err = class
-        .alias_method(&mrb, c"shadow", c"no_such_method")
+        .define_alias(&mrb, c"shadow", c"no_such_method")
         .expect_err("aliasing a missing method must surface as Err");
     assert!(matches!(err, Error::Exception(_)));
     assert!(
