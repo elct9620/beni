@@ -94,8 +94,8 @@ jobs:
               a_filename_too_long_to_be_a_symbol
               warnings_answer_empty_before_a_load_and_after_a_clean_one
               warnings_carry_the_compiler_diagnostics_a_load_produced
-              load_string_stamps_no_filename_so_a_raise_carries_no_backtrace
-              load_string_still_runs_source_the_compiler_warns_about
+              eval_stamps_no_filename_so_a_raise_carries_no_backtrace
+              eval_still_runs_source_the_compiler_warns_about
     env:
       BENI_MRUBY_VERSION: ${{ matrix.mruby }}
       BENI_TEST_SKIP: ${{ matrix.test_skip }}
