@@ -517,7 +517,11 @@ fn the_running_frames_line_is_the_instructions() {
         sink.lock().unwrap().push(running == arg.lineno());
     });
 
-    run(&mrb, "a = 1\nb = [a, 2].map { |n| n * 2 }\nc = b.sum\n").expect("the source runs");
+    // A loop opens with a one-byte instruction on the loop's own line,
+    // which the next line's instruction follows directly.
+    let source = "a = 1\nb = [a, 2].map { |n| n * 2 }\nc = b.sum\n\
+                  while a < 3\n  a += 1\nend\nwhile true\n  break\nend\n";
+    run(&mrb, source).expect("the source runs");
     mrb.remove_code_fetch_hook();
 
     let agree = agree.lock().unwrap();

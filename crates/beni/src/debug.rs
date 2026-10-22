@@ -365,17 +365,16 @@ impl<'a> DebugInspector<'a> {
         let frame = self.frame(index)?;
         // SAFETY: as `frame_local_variables`.
         let irep = unsafe { sys::mrb_ci_irep_func(frame) };
-        if irep.is_null() || frame.pc.is_null() {
+        // SAFETY: a non-NULL irep is the frame's live code.
+        if irep.is_null() || frame.pc.is_null() || frame.pc <= unsafe { (*irep).iseq } {
             return None;
         }
-        // SAFETY: a frame that called another has advanced its pc past
-        // that call, so one instruction back is the call itself.
-        let pc = if index == 0 {
-            frame.pc
-        } else {
-            unsafe { frame.pc.sub(1) }
-        };
-        Some((irep, pc))
+        // SAFETY: every frame a read reaches stands past the start of its
+        // instruction — a caller has advanced past the call it waits on,
+        // and the code fetch hook steps the running frame one byte into
+        // the instruction about to run — so one byte back lies within it,
+        // and within the code.
+        Some((irep, unsafe { frame.pc.sub(1) }))
     }
 }
 
