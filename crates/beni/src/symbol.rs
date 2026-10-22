@@ -211,12 +211,12 @@ impl Symbol {
         Self(v)
     }
 
-    /// Intern `name` and symbolize it. Counterpart to magnus's
-    /// `Symbol::new`; the C-string intern `Mrb::intern_cstr` under
-    /// another name, so a name too long to be a symbol surfaces as `Err`.
+    /// Intern `name` and symbolize it. Mirrors magnus's `Symbol::new`,
+    /// surfacing the intern's `Err` for a name too long to be a symbol,
+    /// a limit CRuby does not have.
     #[inline]
-    pub fn new(mrb: &Mrb, name: &core::ffi::CStr) -> Result<Self, Error> {
-        mrb.intern_cstr(name).map(Self::from)
+    pub fn new<T: AsRef<str>>(mrb: &Mrb, name: T) -> Result<Self, Error> {
+        mrb.intern(name.as_ref().as_bytes()).map(Self::from)
     }
 
     /// The symbol's name as an owned `String`, via `Id::name`, and with its

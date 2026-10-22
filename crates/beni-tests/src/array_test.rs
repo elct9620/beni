@@ -13,8 +13,18 @@ fn push_and_entry_roundtrip_through_a_live_array() {
     ary.push(&mrb, mrb.str_new(b"second").as_value())
         .expect("push to a fresh array succeeds");
 
-    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "first");
-    assert_eq!(ary.entry(&mrb, -1).to_string(&mrb), "second");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "first"
+    );
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, -1)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "second"
+    );
 }
 
 #[test]
@@ -24,7 +34,9 @@ fn entry_reads_nil_past_the_configured_width() {
     ary.push(&mrb, 1i32.into_value(&mrb))
         .expect("push to a fresh array succeeds");
 
-    let past = ary.entry(&mrb, isize::MAX);
+    let past = ary
+        .entry::<beni::Value>(&mrb, isize::MAX)
+        .expect("the element reads");
 
     assert!(past.is_nil());
 }
@@ -37,12 +49,24 @@ fn entry_is_nil_out_of_range_in_both_directions() {
     ary.push(&mrb, mrb.str_new(b"only").as_value())
         .expect("push to a fresh array succeeds");
 
-    assert!(ary.entry(&mrb, 1).is_nil());
-    assert!(ary.entry(&mrb, -2).is_nil());
+    assert!(ary
+        .entry::<beni::Value>(&mrb, 1)
+        .expect("the element reads")
+        .is_nil());
+    assert!(ary
+        .entry::<beni::Value>(&mrb, -2)
+        .expect("the element reads")
+        .is_nil());
     // An index beyond the archive's `mrb_int` width is out of
     // range by definition — same nil contract, no truncation.
-    assert!(ary.entry(&mrb, isize::MAX).is_nil());
-    assert!(ary.entry(&mrb, isize::MIN).is_nil());
+    assert!(ary
+        .entry::<beni::Value>(&mrb, isize::MAX)
+        .expect("the element reads")
+        .is_nil());
+    assert!(ary
+        .entry::<beni::Value>(&mrb, isize::MIN)
+        .expect("the element reads")
+        .is_nil());
 }
 
 #[test]
@@ -54,14 +78,30 @@ fn store_writes_grows_and_counts_from_the_tail() {
     ary.store(&mrb, 2, mrb.str_new(b"two").as_value())
         .expect("an in-range store succeeds");
     assert_eq!(ary.len(), 3);
-    assert!(ary.entry(&mrb, 0).is_nil());
-    assert!(ary.entry(&mrb, 1).is_nil());
-    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "two");
+    assert!(ary
+        .entry::<beni::Value>(&mrb, 0)
+        .expect("the element reads")
+        .is_nil());
+    assert!(ary
+        .entry::<beni::Value>(&mrb, 1)
+        .expect("the element reads")
+        .is_nil());
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 2)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "two"
+    );
 
     // A negative index counts from the tail.
     ary.store(&mrb, -1, mrb.str_new(b"last").as_value())
         .expect("a negative in-range store succeeds");
-    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "last");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 2)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "last"
+    );
 }
 
 #[test]
@@ -136,14 +176,27 @@ fn pop_and_shift_remove_from_each_end() {
     ary.push(&mrb, mrb.str_new(b"b").as_value())
         .expect("push succeeds");
 
-    assert_eq!(ary.pop(&mrb).expect("pop succeeds").to_string(&mrb), "b");
     assert_eq!(
-        ary.shift(&mrb).expect("shift succeeds").to_string(&mrb),
+        ary.pop::<beni::Value>(&mrb)
+            .expect("pop succeeds")
+            .to_string(&mrb),
+        "b"
+    );
+    assert_eq!(
+        ary.shift::<beni::Value>(&mrb)
+            .expect("shift succeeds")
+            .to_string(&mrb),
         "a"
     );
     // Draining past empty yields nil, not an error.
-    assert!(ary.pop(&mrb).expect("pop on empty succeeds").is_nil());
-    assert!(ary.shift(&mrb).expect("shift on empty succeeds").is_nil());
+    assert!(ary
+        .pop::<beni::Value>(&mrb)
+        .expect("pop on empty succeeds")
+        .is_nil());
+    assert!(ary
+        .shift::<beni::Value>(&mrb)
+        .expect("shift on empty succeeds")
+        .is_nil());
 }
 
 #[test]
@@ -160,9 +213,24 @@ fn unshift_prepends_and_concat_extends() {
         .expect("push succeeds");
     ary.concat(&mrb, tail).expect("concat succeeds");
 
-    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "head");
-    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "mid");
-    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "tail");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "head"
+    );
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 1)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "mid"
+    );
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 2)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "tail"
+    );
 }
 
 #[test]
@@ -178,7 +246,12 @@ fn clear_empties_and_dup_copies_independently() {
     // clear emptied the original; dup is an independent array.
     assert!(ary.is_empty());
     assert_eq!(copy.len(), 1);
-    assert_eq!(copy.entry(&mrb, 0).to_string(&mrb), "x");
+    assert_eq!(
+        copy.entry::<beni::Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "x"
+    );
 }
 
 #[test]
@@ -201,9 +274,24 @@ fn replace_swaps_the_whole_contents_in_place() {
 
     // The receiver now holds a copy of other's elements, in place.
     assert_eq!(ary.len(), 3);
-    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "3");
-    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "4");
-    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "5");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "3"
+    );
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 1)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "4"
+    );
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 2)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "5"
+    );
 }
 
 #[test]
@@ -216,14 +304,30 @@ fn resize_grows_with_nil_and_truncates() {
     // Growing past the current length fills the new slots with nil.
     ary.resize(&mrb, 3).expect("grow succeeds");
     assert_eq!(ary.len(), 3);
-    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "a");
-    assert!(ary.entry(&mrb, 1).is_nil());
-    assert!(ary.entry(&mrb, 2).is_nil());
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "a"
+    );
+    assert!(ary
+        .entry::<beni::Value>(&mrb, 1)
+        .expect("the element reads")
+        .is_nil());
+    assert!(ary
+        .entry::<beni::Value>(&mrb, 2)
+        .expect("the element reads")
+        .is_nil());
 
     // Truncating drops the tail.
     ary.resize(&mrb, 1).expect("truncate succeeds");
     assert_eq!(ary.len(), 1);
-    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "a");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "a"
+    );
 }
 
 #[test]
@@ -245,15 +349,30 @@ fn splice_inserts_replaces_and_deletes_in_place() {
     ary.splice(&mrb, 1, 0, ins.as_value())
         .expect("a zero-length splice succeeds");
     assert_eq!(ary.len(), 5);
-    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "10");
-    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "11");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 1)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "10"
+    );
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 2)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "11"
+    );
 
     // A non-array replacement is inserted as the single element it is,
     // replacing the run in place: [1,10,11,2,3] -> [1,10,99,2,3].
     ary.splice(&mrb, 2, 1, 99i32.into_value(&mrb))
         .expect("an in-place single-element replace succeeds");
     assert_eq!(ary.len(), 5);
-    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "99");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 2)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "99"
+    );
 
     // Replacing with fewer elements than removed shrinks the array;
     // an empty replacement deletes outright: removing the two slots at
@@ -261,15 +380,35 @@ fn splice_inserts_replaces_and_deletes_in_place() {
     ary.splice(&mrb, 2, 2, mrb.ary_new().as_value())
         .expect("a shrinking delete-and-replace succeeds");
     assert_eq!(ary.len(), 3);
-    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "1");
-    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "10");
-    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "3");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "1"
+    );
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 1)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "10"
+    );
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 2)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "3"
+    );
 
     // A len overshooting the tail removes only the run that exists.
     ary.splice(&mrb, 2, 100, mrb.ary_new().as_value())
         .expect("an over-long len truncates to the tail");
     assert_eq!(ary.len(), 2);
-    assert_eq!(ary.entry(&mrb, 1).to_string(&mrb), "10");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 1)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "10"
+    );
 
     // The return value is the receiver itself.
     let returned = ary
@@ -399,7 +538,10 @@ fn pop_surfaces_frozen_receiver_as_err() {
             .expect("the test source must compile and run"),
     )
     .expect("a frozen Array literal is Array-tagged");
-    assert!(matches!(frozen.pop(&mrb), Err(Error::Exception(_))));
+    assert!(matches!(
+        frozen.pop::<beni::Value>(&mrb),
+        Err(Error::Exception(_))
+    ));
 }
 
 #[test]
@@ -432,7 +574,10 @@ fn remaining_mutators_surface_frozen_receiver_as_err() {
         frozen.replace(&mrb, other),
         Err(Error::Exception(_))
     ));
-    assert!(matches!(frozen.shift(&mrb), Err(Error::Exception(_))));
+    assert!(matches!(
+        frozen.shift::<beni::Value>(&mrb),
+        Err(Error::Exception(_))
+    ));
     assert!(matches!(frozen.clear(&mrb), Err(Error::Exception(_))));
     assert!(matches!(frozen.resize(&mrb, 5), Err(Error::Exception(_))));
     // An in-range indexed write reaches the frozen check too, not just
@@ -490,8 +635,8 @@ fn entries_snapshots_the_length_so_a_shrink_reads_nil_past_the_new_end() {
         "1"
     );
 
-    ary.pop(&mrb).expect("pop succeeds");
-    ary.pop(&mrb).expect("pop succeeds");
+    ary.pop::<beni::Value>(&mrb).expect("pop succeeds");
+    ary.pop::<beni::Value>(&mrb).expect("pop succeeds");
     assert_eq!(ary.len(), 1);
 
     assert!(walk
@@ -599,4 +744,28 @@ fn a_borrowed_slice_views_the_elements_in_place() {
         210
     );
     assert_eq!(empty_view, 0);
+}
+
+#[test]
+fn elements_go_in_from_rust_values_and_come_out_as_the_type_named() {
+    let mrb = open_mrb();
+    let ary = mrb.ary_new();
+
+    ary.push(&mrb, 1i32).expect("push succeeds");
+    ary.push(&mrb, "two").expect("push succeeds");
+    ary.unshift(&mrb, 0i32).expect("unshift succeeds");
+    ary.store(&mrb, 3, 3.5f64).expect("store succeeds");
+
+    assert_eq!(ary.entry::<i64>(&mrb, 1).expect("an Integer reads"), 1);
+    assert_eq!(ary.entry::<String>(&mrb, 2).expect("a String reads"), "two");
+    let mismatch = ary
+        .entry::<i64>(&mrb, 2)
+        .expect_err("a String is no Integer");
+    let Error::Exception(exc) = mismatch else {
+        panic!("the mismatch must surface an exception, got {mismatch}");
+    };
+    assert_eq!(exc.classname(&mrb), "TypeError");
+    assert_eq!(ary.pop::<f64>(&mrb).expect("a Float pops"), 3.5);
+    assert_eq!(ary.shift::<i64>(&mrb).expect("an Integer shifts"), 0);
+    assert_eq!(ary.len(), 2);
 }

@@ -6,7 +6,7 @@ use beni::{FromValue, Id, IntoValue, Symbol};
 #[test]
 fn name_sym_and_rebuild_roundtrip() {
     let mrb = open_mrb();
-    let sym = Symbol::new(&mrb, c"flags").expect("the name interns");
+    let sym = Symbol::new(&mrb, "flags").expect("the name interns");
 
     assert_eq!(sym.name(&mrb).as_deref().ok(), Some("flags"));
     // It must equal interning the same name — a wrong boxing shift in
@@ -23,7 +23,7 @@ fn name_bytes_and_dump_read_the_symbol_name() {
     let mrb = open_mrb();
 
     // A plain identifier: bytes equal the name, dump is bare.
-    let plain = Symbol::new(&mrb, c"fred").expect("the name interns");
+    let plain = Symbol::new(&mrb, "fred").expect("the name interns");
     assert_eq!(plain.name_bytes(&mrb).as_deref().ok(), Some(&b"fred"[..]));
     assert_eq!(plain.dump(&mrb).as_deref().ok(), Some("fred"));
 
@@ -98,11 +98,11 @@ fn name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
     // overwrites. Read both, holding the first across the second read.
     // A borrowed return would alias the buffer and show the first name
     // mutated to the second; the owned copy must stay intact.
-    let first = Symbol::new(&mrb, c"aa")
+    let first = Symbol::new(&mrb, "aa")
         .expect("the name interns")
         .name(&mrb)
         .expect("aa has a name");
-    let second = Symbol::new(&mrb, c"bb")
+    let second = Symbol::new(&mrb, "bb")
         .expect("the name interns")
         .name(&mrb)
         .expect("bb has a name");
@@ -114,7 +114,7 @@ fn name_copies_short_inline_names_out_of_the_shared_scratch_buffer() {
 #[test]
 fn to_str_reifies_the_name_as_a_mutable_string() {
     let mrb = open_mrb();
-    let sym = Symbol::new(&mrb, c"flags").expect("the name interns");
+    let sym = Symbol::new(&mrb, "flags").expect("the name interns");
 
     // The reified String carries the symbol's name bytes verbatim.
     let str = sym.to_str(&mrb);
@@ -134,7 +134,7 @@ fn to_sym_coerces_symbol_string_and_rejects_others() {
     let mrb = open_mrb();
 
     // A symbol value coerces to the same symbol.
-    let sym = Symbol::new(&mrb, c"key").expect("the name interns");
+    let sym = Symbol::new(&mrb, "key").expect("the name interns");
     let from_sym = sym.as_value().to_sym(&mrb).expect("a symbol value coerces");
     assert_eq!(from_sym, sym);
 
@@ -154,7 +154,7 @@ fn to_sym_coerces_symbol_string_and_rejects_others() {
 #[test]
 fn from_value_discriminates_the_symbol_tag() {
     let mrb = open_mrb();
-    let sym_val = Symbol::new(&mrb, c"k")
+    let sym_val = Symbol::new(&mrb, "k")
         .expect("the name interns")
         .into_value(&mrb);
 
@@ -171,7 +171,7 @@ fn a_name_too_long_to_be_a_symbol_surfaces_as_argument_error() {
         .exc_get(c"ArgumentError")
         .expect("ArgumentError is built in");
     let bytes = vec![b'a'; u16::MAX as usize];
-    let name = std::ffi::CString::new(bytes.clone()).expect("the name holds no NUL");
+    let name = "a".repeat(bytes.len());
 
     let Err(via_new) = Symbol::new(&mrb, &name) else {
         panic!("interning the name must refuse it");

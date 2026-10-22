@@ -79,7 +79,7 @@ impl RootTable {
                 Ok(self.0.len() - 1)
             }
             head => {
-                let next = self.0.entry(mrb, head as isize);
+                let next = self.0.entry_value(mrb, head as isize);
                 self.0.store(mrb, 0, next)?;
                 self.0.store(mrb, head as isize, v)?;
                 Ok(head)
@@ -89,7 +89,7 @@ impl RootTable {
 
     /// Clear `slot` and thread it onto the front of the free list.
     fn release(&self, mrb: &Mrb, slot: usize) -> Result<(), Error> {
-        let head = self.0.entry(mrb, 0);
+        let head = self.0.entry_value(mrb, 0);
         self.0.store(mrb, slot as isize, head)?;
         self.0
             .store(mrb, 0, Value::from_int(mrb, slot as sys::mrb_int))
@@ -100,7 +100,7 @@ impl RootTable {
     /// answer one means the table is unusable — reported as "no free
     /// slot", which grows the table instead of reusing a wrong one.
     fn free_head(&self, mrb: &Mrb) -> usize {
-        i64::from_value(self.0.entry(mrb, 0))
+        i64::from_value(self.0.entry_value(mrb, 0))
             .and_then(|head| usize::try_from(head).ok())
             .unwrap_or(0)
     }

@@ -23,28 +23,28 @@ fn symbol_key_reaches_the_same_definition_as_the_name() {
     // definition path as a name key: the class is then fetchable by
     // its plain name, and a method registered under a Symbol key is
     // callable.
-    let name = beni::Symbol::new(&mrb, c"BeniSymKeyed").expect("the name interns");
+    let name = beni::Symbol::new(&mrb, "BeniSymKeyed").expect("the name interns");
     let class = mrb
         .define_class(name, object)
         .expect("defining the class under a Symbol key must succeed");
     class
         .define_method(
             &mrb,
-            beni::Symbol::new(&mrb, c"answer").expect("the name interns"),
+            beni::Symbol::new(&mrb, "answer").expect("the name interns"),
             beni::method!(answer_seven, 0),
         )
         .expect("registering a method under a Symbol key must succeed");
     class
         .const_set(
             &mrb,
-            beni::Symbol::new(&mrb, c"ANSWER").expect("the name interns"),
+            beni::Symbol::new(&mrb, "ANSWER").expect("the name interns"),
             7i32.into_value(&mrb),
         )
         .expect("binding a constant under a Symbol key must succeed");
 
     // Fetch by Symbol key resolves to the class defined above.
     let fetched = mrb
-        .class_get(beni::Symbol::new(&mrb, c"BeniSymKeyed").expect("the name interns"))
+        .class_get(beni::Symbol::new(&mrb, "BeniSymKeyed").expect("the name interns"))
         .expect("fetching by a Symbol key must reach the defined class");
     assert_eq!(fetched.name(&mrb), "BeniSymKeyed");
 
@@ -75,7 +75,7 @@ fn symbol_key_and_name_key_are_interchangeable_for_lookup() {
     mrb.define_class(c"BeniByName", object)
         .expect("defining by name must succeed");
     let by_sym = mrb
-        .class_get(beni::Symbol::new(&mrb, c"BeniByName").expect("the name interns"))
+        .class_get(beni::Symbol::new(&mrb, "BeniByName").expect("the name interns"))
         .expect("a name-defined class is fetchable by Symbol key");
     assert_eq!(by_sym.name(&mrb), "BeniByName");
 }
@@ -94,14 +94,14 @@ fn symbol_key_registers_private_singleton_and_module_function() {
     class
         .define_private_method(
             &mrb,
-            beni::Symbol::new(&mrb, c"secret").expect("the name interns"),
+            beni::Symbol::new(&mrb, "secret").expect("the name interns"),
             beni::method!(answer_seven, 0),
         )
         .expect("registering the private method under a Symbol key must succeed");
     class
         .define_singleton_method(
             &mrb,
-            beni::Symbol::new(&mrb, c"klass_answer").expect("the name interns"),
+            beni::Symbol::new(&mrb, "klass_answer").expect("the name interns"),
             beni::method!(answer_nine, 0),
         )
         .expect("registering the singleton method under a Symbol key must succeed");
@@ -126,7 +126,7 @@ fn symbol_key_registers_private_singleton_and_module_function() {
     module
         .define_module_function(
             &mrb,
-            beni::Symbol::new(&mrb, c"mod_seven").expect("the name interns"),
+            beni::Symbol::new(&mrb, "mod_seven").expect("the name interns"),
             beni::method!(answer_seven, 0),
         )
         .expect("registering the module function under a Symbol key must succeed");
@@ -154,12 +154,12 @@ fn nested_definition_accepts_a_symbol_key() {
 
     // The namespaced Module-trait define/get also accept a Symbol key.
     let outer = mrb
-        .define_module(beni::Symbol::new(&mrb, c"BeniSymNs").expect("the name interns"))
+        .define_module(beni::Symbol::new(&mrb, "BeniSymNs").expect("the name interns"))
         .expect("defining the module under a Symbol key must succeed");
     let nested = outer
         .define_class(
             &mrb,
-            beni::Symbol::new(&mrb, c"Inner").expect("the name interns"),
+            beni::Symbol::new(&mrb, "Inner").expect("the name interns"),
             object,
         )
         .expect("defining the nested class under a Symbol key must succeed");
@@ -168,7 +168,7 @@ fn nested_definition_accepts_a_symbol_key() {
     let fetched = outer
         .class_get(
             &mrb,
-            beni::Symbol::new(&mrb, c"Inner").expect("the name interns"),
+            beni::Symbol::new(&mrb, "Inner").expect("the name interns"),
         )
         .expect("fetching the nested class under a Symbol key must succeed");
     assert_eq!(fetched.name(&mrb), "BeniSymNs::Inner");
@@ -237,7 +237,7 @@ fn module_get_fetches_a_nested_module_by_either_key() {
     let by_sym = outer
         .module_get(
             &mrb,
-            beni::Symbol::new(&mrb, c"Inner").expect("the name interns"),
+            beni::Symbol::new(&mrb, "Inner").expect("the name interns"),
         )
         .expect("fetching the nested module by Symbol key must succeed");
     assert_eq!(by_name.path(&mrb).as_deref(), Some("BeniModNs::Inner"));
@@ -288,7 +288,7 @@ fn class_defined_answers_a_total_bool_within_a_namespace() {
     assert!(outer.class_defined(&mrb, c"Inner"));
     assert!(outer.class_defined(
         &mrb,
-        beni::Symbol::new(&mrb, c"Inner").expect("the name interns")
+        beni::Symbol::new(&mrb, "Inner").expect("the name interns")
     ));
 
     // An undefined nested name reads `false` instead of raising — the
@@ -405,7 +405,7 @@ fn define_alias_keys_both_names_as_symbol_or_name() {
     class
         .define_alias(
             &mrb,
-            beni::Symbol::new(&mrb, c"by_sym").expect("the name interns"),
+            beni::Symbol::new(&mrb, "by_sym").expect("the name interns"),
             c"answer",
         )
         .expect("aliasing under a Symbol new-name key must succeed");
@@ -1311,8 +1311,14 @@ fn a_rust_string_key_names_its_bytes_past_an_embedded_nul() {
 
     let whole = mrb.intern(b"$beni\0tail").expect("the whole name interns");
     let prefix = mrb.intern(b"$beni").expect("the prefix interns");
-    assert_eq!(i32::from_value(mrb.gv_get(whole)), Some(1));
-    assert!(mrb.gv_get(prefix).is_nil());
+    assert_eq!(
+        i32::from_value(mrb.gv_get::<_, Value>(whole).expect("the global reads")),
+        Some(1)
+    );
+    assert!(mrb
+        .gv_get::<_, Value>(prefix)
+        .expect("the global reads")
+        .is_nil());
 }
 
 /// The class a Ruby expression evaluates to.

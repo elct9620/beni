@@ -26,11 +26,12 @@
 //! trait, whose nested-namespace counterparts (`define_class` /
 //! `define_module` / `class_get` on a handle) live on
 //! `crate::RClass` / `crate::RModule`. Global variable access is a
-//! plain table operation that cannot raise.
+//! plain table operation that raises nothing; only converting the value
+//! read can fail.
 
 use crate::{
-    sys::AsRawValue, Class, Error, ExceptionClass, IntoId, Module, Mrb, RClass, RModule, ReprValue,
-    Value,
+    sys::AsRawValue, Class, Error, ExceptionClass, IntoId, IntoValue, Module, Mrb, RClass, RModule,
+    ReprValue, TryConvert, Value,
 };
 use beni_sys as sys;
 
@@ -198,8 +199,9 @@ impl Mrb {
     /// one, as CRuby's `rb_gv_set`. The assignment itself never fails;
     /// the `Err` it carries is the key's own.
     #[inline]
-    pub fn gv_set<K: IntoId>(&self, name: K, val: Value) -> Result<(), Error> {
+    pub fn gv_set<K: IntoId, T: IntoValue>(&self, name: K, val: T) -> Result<(), Error> {
         let sym = crate::symbol::key(self, crate::symbol::Namespace::Gvar, name)?.to_raw();
+        let val = val.into_value(self);
         // SAFETY: `self` is alive; `val` originates from the same VM.
         unsafe { sys::mrb_gv_set(self.as_ptr(), sym, val.as_raw()) };
         Ok(())
@@ -209,18 +211,18 @@ impl Mrb {
     /// symbol-or-name key (`IntoId`), `$` prefixed when it lacks one, as
     /// CRuby's `rb_gv_get`; an unset global reads as nil, as
     /// does a key too long to name a symbol. The read happens at call
-    /// time, so a reassigned global yields its current value.
+    /// time, so a reassigned global yields its current value. The value
+    /// converts to `T`, a value `T` rejects surfacing as `Err`.
     #[inline]
-    pub fn gv_get<K: IntoId>(&self, name: K) -> Value {
-        let Ok(sym) =
-            crate::symbol::key(self, crate::symbol::Namespace::Gvar, name).map(crate::Id::to_raw)
-        else {
-            return crate::value::qnil().as_value();
+    pub fn gv_get<K: IntoId, T: TryConvert>(&self, name: K) -> Result<T, Error> {
+        let v = match crate::symbol::key(self, crate::symbol::Namespace::Gvar, name) {
+            // SAFETY: `self` is alive; the id was interned against it.
+            Ok(id) => self.hold(Value::from_raw_unchecked(unsafe {
+                sys::mrb_gv_get(self.as_ptr(), id.to_raw())
+            })),
+            Err(_) => crate::value::qnil().as_value(),
         };
-        // SAFETY: `self` is alive; `sym` was interned against it.
-        self.hold(Value::from_raw_unchecked(unsafe {
-            sys::mrb_gv_get(self.as_ptr(), sym)
-        }))
+        T::try_convert(v, self)
     }
 
     /// `mrb_gv_remove(mrb, sym)` — remove the global variable named by a

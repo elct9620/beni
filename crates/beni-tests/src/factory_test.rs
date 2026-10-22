@@ -101,8 +101,18 @@ fn ary_new_from_values_copies_the_slice_in_order() {
     let ary = mrb.ary_new_from_values(&values);
 
     assert_eq!(ary.len(), 3);
-    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "a");
-    assert_eq!(ary.entry(&mrb, 2).to_string(&mrb), "c");
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "a"
+    );
+    assert_eq!(
+        ary.entry::<beni::Value>(&mrb, 2)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "c"
+    );
 }
 
 #[test]
@@ -115,6 +125,38 @@ fn assoc_new_pairs_the_two_values_in_order() {
     );
 
     assert_eq!(pair.len(), 2);
-    assert_eq!(pair.entry(&mrb, 0).to_string(&mrb), "car");
-    assert_eq!(pair.entry(&mrb, 1).to_string(&mrb), "cdr");
+    assert_eq!(
+        pair.entry::<beni::Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "car"
+    );
+    assert_eq!(
+        pair.entry::<beni::Value>(&mrb, 1)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "cdr"
+    );
+}
+
+#[test]
+fn factories_take_rust_values_and_typed_handles() {
+    let mrb = open_mrb();
+
+    let range = mrb
+        .range_new(1i32, 5i32, true)
+        .expect("an Integer pair compares");
+    assert_eq!(range.beg::<i64>(&mrb).expect("the begin reads"), 1);
+    assert_eq!(range.end::<i64>(&mrb).expect("the end reads"), 5);
+    assert!(range.excl(&mrb));
+
+    let pair = mrb.assoc_new(1i32, "one");
+    assert_eq!(pair.entry::<String>(&mrb, 1).expect("the cdr reads"), "one");
+
+    let strings = [mrb.str_new(b"a"), mrb.str_new(b"b")];
+    let ary = mrb.ary_new_from_values(&strings);
+    assert_eq!(
+        ary.to_vec::<String>(&mrb).expect("the strings read"),
+        ["a", "b"]
+    );
 }

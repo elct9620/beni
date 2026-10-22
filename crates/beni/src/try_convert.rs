@@ -330,7 +330,7 @@ macro_rules! try_convert_tuple {
                 if ary.len() != $len {
                     return Err(length_error(mrb, $len));
                 }
-                Ok(($($t::try_convert(ary.entry(mrb, $i), mrb)?,)+))
+                Ok(($(ary.entry::<$t>(mrb, $i)?,)+))
             }
         }
 

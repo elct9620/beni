@@ -10,7 +10,9 @@
 //! `mrb.ary_push(arr, x)`). `range_new` is the one factory that can
 //! raise — comparing incomparable bounds — so it returns a `Result`.
 
-use crate::{sys::AsRawValue, Error, Mrb, RArray, RHash, RString, Range, Value};
+use crate::{
+    sys::AsRawValue, Error, IntoValue, Mrb, RArray, RHash, RString, Range, ReprValue, Value,
+};
 use beni_sys as sys;
 
 impl Mrb {
@@ -139,21 +141,18 @@ impl Mrb {
         ary
     }
 
-    /// `mrb_ary_new_from_values(mrb, len, vals)` — construct an mruby
-    /// `Array` holding a copy of `values`, in order. `values.len()`
-    /// saturates to the archive's `mrb_int` width.
+    /// Construct an mruby `Array` holding `values`, in order. Mirrors
+    /// magnus's `Ruby::ary_new_from_values`.
     #[inline]
-    pub fn ary_new_from_values(&self, values: &[Value]) -> RArray {
-        let (len, vals) = crate::state::args::argv_from_slice(values);
-        // SAFETY: `self` is alive; `vals` is a valid `*const mrb_value`
-        // for `len` elements, which the call copies before returning.
-        unsafe {
-            RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_ary_new_from_values(
-                self.as_ptr(),
-                len,
-                vals,
-            )))
+    pub fn ary_new_from_values<T: ReprValue>(&self, values: &[T]) -> RArray {
+        let ary = self.ary_new_capa(values.len());
+        for v in values {
+            // SAFETY: `self` is alive and `ary` is the unfrozen Array just
+            // built, its capacity reserved; the push raises nothing but the
+            // out-of-memory error every allocation may.
+            unsafe { sys::mrb_ary_push(self.as_ptr(), ary.as_raw(), v.as_value().as_raw()) };
         }
+        ary
     }
 
     /// `mrb_hash_new(mrb)` — construct a fresh empty mruby `Hash` as
@@ -189,7 +188,9 @@ impl Mrb {
     /// `Array` `[car, cdr]`. A pure allocation that copies the two values
     /// into a fresh array, so it never raises.
     #[inline]
-    pub fn assoc_new(&self, car: Value, cdr: Value) -> RArray {
+    pub fn assoc_new<T: IntoValue, U: IntoValue>(&self, car: T, cdr: U) -> RArray {
+        let car = car.into_value(self);
+        let cdr = cdr.into_value(self);
         // SAFETY: `self` is alive; `car` and `cdr` share the VM by the
         // interpreter pairing. `mrb_assoc_new` always returns an
         // Array-tagged value, so the unchecked wrap is sound.
@@ -208,9 +209,17 @@ impl Mrb {
     /// the two bounds and raises `ArgumentError` ("bad value for range")
     /// when they cannot be compared; the call runs under exception protection,
     /// so that surfaces as `Err` rather than long-jumping. `nil` bounds
-    /// and a numeric pair always succeed.
+    /// and a numeric pair always succeed. Mirrors magnus's
+    /// `Ruby::range_new`.
     #[inline]
-    pub fn range_new(&self, begin: Value, end: Value, exclusive: bool) -> Result<Range, Error> {
+    pub fn range_new<T: IntoValue, U: IntoValue>(
+        &self,
+        begin: T,
+        end: U,
+        exclusive: bool,
+    ) -> Result<Range, Error> {
+        let begin = begin.into_value(self);
+        let end = end.into_value(self);
         self.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `begin`
             // and `end` share the VM by the interpreter pairing.

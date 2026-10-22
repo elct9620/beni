@@ -98,7 +98,10 @@ fn a_dumped_program_loads_back_as_bytecode() {
         "the load yields the program's result, live after a collection"
     );
     assert_eq!(
-        i32::from_value(mrb.gv_get(c"$dumped")),
+        i32::from_value(
+            mrb.gv_get::<_, Value>(c"$dumped")
+                .expect("the global reads")
+        ),
         Some(42),
         "the loaded bytecode runs the program that was compiled"
     );

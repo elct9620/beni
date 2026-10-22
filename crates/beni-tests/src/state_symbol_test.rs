@@ -264,7 +264,7 @@ fn creating_interns_intern_the_longest_name_a_symbol_holds() {
 /// A method body that interns a name too long to be a symbol and hands
 /// the refusal back with `?`.
 fn intern_a_name_too_long(mrb: &Mrb, _self: Value) -> Result<Value, Error> {
-    Ok(Symbol::new(mrb, &too_long_cstr())?.as_value())
+    Ok(Symbol::new(mrb, "a".repeat(TOO_LONG))?.as_value())
 }
 
 #[test]

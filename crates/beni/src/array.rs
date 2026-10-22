@@ -12,7 +12,9 @@
 //! the type itself stay there too (`Symbol::new`).
 
 use crate::try_convert::length_error;
-use crate::{sys::AsRawValue, Error, Mrb, RString, ReprValue, TryConvert, TryConvertOwned, Value};
+use crate::{
+    sys::AsRawValue, Error, IntoValue, Mrb, RString, ReprValue, TryConvert, TryConvertOwned, Value,
+};
 use beni_sys as sys;
 
 /// Typed handle on an mruby `Array`. `#[repr(transparent)]` over
@@ -65,9 +67,11 @@ impl RArray {
     /// `mrb_ary_push(mrb, self, val)` — append `val`, the way Ruby's
     /// `Array#push` extends its receiver. Appending to a frozen array
     /// raises `FrozenError`; the call runs under exception protection, so that
-    /// surfaces as `Err` rather than long-jumping.
+    /// surfaces as `Err` rather than long-jumping. Mirrors magnus's
+    /// `RArray::push`.
     #[inline]
-    pub fn push(self, mrb: &Mrb, val: Value) -> Result<(), Error> {
+    pub fn push<T: IntoValue>(self, mrb: &Mrb, val: T) -> Result<(), Error> {
+        let val = val.into_value(mrb);
         mrb.protect_unit(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract;
@@ -83,10 +87,17 @@ impl RArray {
     /// when `idx` is out of range — mruby's own bounds-tolerant
     /// behaviour; an `idx` beyond the archive's `mrb_int` width
     /// cannot address an element, so it is out of range by
-    /// definition. The type guarantee from the constructor makes
-    /// this safe for any `idx`.
+    /// definition. The element converts to `T`, a value `T` rejects
+    /// surfacing as `Err`. Mirrors magnus's `RArray::entry`.
     #[inline]
-    pub fn entry(self, mrb: &Mrb, idx: isize) -> Value {
+    pub fn entry<T: TryConvert>(self, mrb: &Mrb, idx: isize) -> Result<T, Error> {
+        T::try_convert(self.entry_value(mrb, idx), mrb)
+    }
+
+    /// The element at `idx` as `entry` reads it, held in the arena and
+    /// left unconverted.
+    #[inline]
+    pub(crate) fn entry_value(self, mrb: &Mrb, idx: isize) -> Value {
         let Ok(idx) = sys::mrb_int::try_from(idx) else {
             return crate::value::qnil().as_value();
         };
@@ -119,9 +130,11 @@ impl RArray {
     /// following Ruby's `ary[idx] = val`: a positive index past the end
     /// grows the array with `nil`, and a negative index counts from the
     /// tail. An index that reaches past the beginning, or one too large,
-    /// raises `IndexError`, surfaced here as `Err`.
+    /// raises `IndexError`, surfaced here as `Err`. Mirrors magnus's
+    /// `RArray::store`.
     #[inline]
-    pub fn store(self, mrb: &Mrb, idx: isize, val: Value) -> Result<(), Error> {
+    pub fn store<T: IntoValue>(self, mrb: &Mrb, idx: isize, val: T) -> Result<(), Error> {
+        let val = val.into_value(mrb);
         // An index outside the archive's `mrb_int` width names no
         // slot; saturate it to the nearest bound so mruby's own
         // range check raises the matching `IndexError` (too large,
@@ -158,35 +171,40 @@ impl RArray {
 
     /// `mrb_ary_pop(mrb, self)` — remove and return the last element,
     /// Ruby's `Array#pop`, or `nil` when the array is empty. Popping a
-    /// frozen array raises `FrozenError`, surfaced here as `Err`.
+    /// frozen array raises `FrozenError`, surfaced here as `Err`, as is an
+    /// element `T` rejects. Mirrors magnus's `RArray::pop`.
     #[inline]
-    pub fn pop(self, mrb: &Mrb) -> Result<Value, Error> {
-        mrb.protect(|mrb| {
+    pub fn pop<T: TryConvert>(self, mrb: &Mrb) -> Result<T, Error> {
+        let v = mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract.
             // `mrb_ary_pop` checks frozen state and may raise
             // `FrozenError` — caught by `protect`.
             Value::from_raw_unchecked(unsafe { sys::mrb_ary_pop(mrb.as_ptr(), self.0.as_raw()) })
-        })
+        })?;
+        T::try_convert(v, mrb)
     }
 
     /// `mrb_ary_shift(mrb, self)` — remove and return the first element,
     /// Ruby's `Array#shift`, or `nil` when the array is empty. Shifting a
-    /// frozen array raises `FrozenError`, surfaced as `Err`.
+    /// frozen array raises `FrozenError`, surfaced as `Err`, as is an
+    /// element `T` rejects. Mirrors magnus's `RArray::shift`.
     #[inline]
-    pub fn shift(self, mrb: &Mrb) -> Result<Value, Error> {
-        mrb.protect(|mrb| {
+    pub fn shift<T: TryConvert>(self, mrb: &Mrb) -> Result<T, Error> {
+        let v = mrb.protect(|mrb| {
             // SAFETY: as `pop`; `mrb_ary_shift` checks frozen state and
             // may raise `FrozenError` — caught by `protect`.
             Value::from_raw_unchecked(unsafe { sys::mrb_ary_shift(mrb.as_ptr(), self.0.as_raw()) })
-        })
+        })?;
+        T::try_convert(v, mrb)
     }
 
     /// `mrb_ary_unshift(mrb, self, val)` — prepend `val`, Ruby's
     /// `Array#unshift`. Prepending to a frozen array raises `FrozenError`,
-    /// surfaced as `Err`.
+    /// surfaced as `Err`. Mirrors magnus's `RArray::unshift`.
     #[inline]
-    pub fn unshift(self, mrb: &Mrb, val: Value) -> Result<(), Error> {
+    pub fn unshift<T: IntoValue>(self, mrb: &Mrb, val: T) -> Result<(), Error> {
+        let val = val.into_value(mrb);
         mrb.protect_unit(|mrb| {
             // SAFETY: as `push`; `mrb_ary_unshift` modifies and may
             // raise `FrozenError` — caught by `protect`.
@@ -374,7 +392,7 @@ impl RArray {
         let mut values = Vec::with_capacity(len);
         for idx in 0..len {
             let _held_while_converting = mrb.arena_scope();
-            values.push(T::try_convert(self.entry(mrb, idx as isize), mrb)?);
+            values.push(self.entry(mrb, idx as isize)?);
         }
         Ok(values)
     }
@@ -414,7 +432,7 @@ impl Iterator for Entries<'_> {
         if self.idx >= self.len {
             return None;
         }
-        let v = self.ary.entry(self.mrb, self.idx as isize);
+        let v = self.ary.entry_value(self.mrb, self.idx as isize);
         self.idx += 1;
         Some(v)
     }

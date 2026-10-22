@@ -141,7 +141,8 @@ impl RHash {
     /// may raise; the call runs under exception protection, so that surfaces as
     /// `Err`.
     #[inline]
-    pub fn contains_key(self, mrb: &Mrb, key: Value) -> Result<bool, Error> {
+    pub fn contains_key<K: IntoValue>(self, mrb: &Mrb, key: K) -> Result<bool, Error> {
+        let key = key.into_value(mrb);
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive in the protect frame; `self` is
             // Hash-tagged and `key` shares the VM. `mrb_hash_key_p`
@@ -187,17 +188,20 @@ impl RHash {
     /// `mrb_hash_delete_key(mrb, self, key)` — remove `key` and return
     /// its former value, or `nil` when absent, Ruby's `Hash#delete`.
     /// Deletion mutates the hash and runs the key's `hash`/`eql?`; a
-    /// frozen receiver or a raising key surfaces as `Err`.
+    /// frozen receiver or a raising key surfaces as `Err`, as does a
+    /// former value `U` rejects. Mirrors magnus's `RHash::delete`.
     #[inline]
-    pub fn delete(self, mrb: &Mrb, key: Value) -> Result<Value, Error> {
-        mrb.protect(|mrb| {
+    pub fn delete<K: IntoValue, U: TryConvert>(self, mrb: &Mrb, key: K) -> Result<U, Error> {
+        let key = key.into_value(mrb);
+        let v = mrb.protect(|mrb| {
             // SAFETY: as `aset`; `mrb_hash_delete_key` modifies the hash
             // (raises `FrozenError` when frozen) and runs the key's
             // `hash`/`eql?` — caught by `protect`.
             Value::from_raw_unchecked(unsafe {
                 sys::mrb_hash_delete_key(mrb.as_ptr(), self.0.as_raw(), key.as_raw())
             })
-        })
+        })?;
+        U::try_convert(v, mrb)
     }
 
     /// `mrb_hash_merge(mrb, self, other)` — fold `other`'s entries into

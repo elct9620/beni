@@ -126,7 +126,7 @@ fn module_get_fetches_a_defined_module() {
         .expect("fetching by name must reach the defined module");
     assert_eq!(by_name.path(&mrb).as_deref(), Some("BeniModGet"));
     let by_sym = mrb
-        .module_get(beni::Symbol::new(&mrb, c"BeniModGet").expect("the name interns"))
+        .module_get(beni::Symbol::new(&mrb, "BeniModGet").expect("the name interns"))
         .expect("fetching by Symbol key must reach the defined module");
     assert_eq!(by_sym.path(&mrb).as_deref(), Some("BeniModGet"));
 }
@@ -157,7 +157,7 @@ fn class_defined_answers_a_total_bool_for_top_level_names() {
     mrb.define_class(c"BeniDefined", mrb.class_object())
         .expect("defining the class must succeed");
     assert!(mrb.class_defined(c"BeniDefined"));
-    assert!(mrb.class_defined(beni::Symbol::new(&mrb, c"BeniDefined").expect("the name interns")));
+    assert!(mrb.class_defined(beni::Symbol::new(&mrb, "BeniDefined").expect("the name interns")));
 
     // An undefined name reads `false` instead of raising — the
     // predicate is total.
@@ -176,7 +176,7 @@ fn exc_get_fetches_a_builtin_exception_class() {
         .expect("RuntimeError must resolve to its exception class");
     assert_eq!(by_name.name(&mrb), "RuntimeError");
     let by_sym = mrb
-        .exc_get(beni::Symbol::new(&mrb, c"ArgumentError").expect("the name interns"))
+        .exc_get(beni::Symbol::new(&mrb, "ArgumentError").expect("the name interns"))
         .expect("a Symbol key must reach the exception class");
     assert_eq!(by_sym.name(&mrb), "ArgumentError");
 }
@@ -413,7 +413,10 @@ fn define_class_refuses_a_superclass_mismatch_as_a_type_error() {
 fn gv_get_reads_nil_for_unset_global() {
     let mrb = open_mrb();
 
-    assert!(mrb.gv_get(c"$beni_gv_unset").is_nil());
+    assert!(mrb
+        .gv_get::<_, Value>(c"$beni_gv_unset")
+        .expect("the global reads")
+        .is_nil());
 }
 
 #[test]
@@ -425,11 +428,23 @@ fn gv_get_observes_reassignment() {
     // consumers (`$stdout = $stderr`) rely on.
     mrb.gv_set(c"$beni_gv", 1i32.into_value(&mrb))
         .expect("the name interns");
-    assert_eq!(i32::from_value(mrb.gv_get(c"$beni_gv")), Some(1));
+    assert_eq!(
+        i32::from_value(
+            mrb.gv_get::<_, Value>(c"$beni_gv")
+                .expect("the global reads")
+        ),
+        Some(1)
+    );
 
     mrb.gv_set(c"$beni_gv", 2i32.into_value(&mrb))
         .expect("the name interns");
-    assert_eq!(i32::from_value(mrb.gv_get(c"$beni_gv")), Some(2));
+    assert_eq!(
+        i32::from_value(
+            mrb.gv_get::<_, Value>(c"$beni_gv")
+                .expect("the global reads")
+        ),
+        Some(2)
+    );
 }
 
 #[test]
@@ -440,14 +455,26 @@ fn gv_remove_clears_a_global_back_to_nil() {
     // the same as one never set.
     mrb.gv_set(c"$beni_gv_removed", 7i32.into_value(&mrb))
         .expect("the name interns");
-    assert_eq!(i32::from_value(mrb.gv_get(c"$beni_gv_removed")), Some(7));
+    assert_eq!(
+        i32::from_value(
+            mrb.gv_get::<_, Value>(c"$beni_gv_removed")
+                .expect("the global reads")
+        ),
+        Some(7)
+    );
 
     mrb.gv_remove(c"$beni_gv_removed");
-    assert!(mrb.gv_get(c"$beni_gv_removed").is_nil());
+    assert!(mrb
+        .gv_get::<_, Value>(c"$beni_gv_removed")
+        .expect("the global reads")
+        .is_nil());
 
     // Removing an unset global is a no-op, not a raise.
     mrb.gv_remove(c"$beni_gv_removed");
-    assert!(mrb.gv_get(c"$beni_gv_removed").is_nil());
+    assert!(mrb
+        .gv_get::<_, Value>(c"$beni_gv_removed")
+        .expect("the global reads")
+        .is_nil());
 }
 
 #[test]
@@ -490,7 +517,10 @@ fn a_global_answers_its_absent_value_for_a_key_too_long_to_intern() {
     // The key names no symbol, so the read answers nil and the removal
     // does nothing, while the assignment — which has an `Err` to carry
     // it in — surfaces the intern's own.
-    assert!(mrb.gv_get(name.as_c_str()).is_nil());
+    assert!(mrb
+        .gv_get::<_, Value>(name.as_c_str())
+        .expect("the global reads")
+        .is_nil());
     mrb.gv_remove(name.as_c_str());
     let err = mrb
         .gv_set(name.as_c_str(), beni::value::qnil().as_value())
@@ -571,4 +601,23 @@ fn a_global_function_is_callable_bare_from_any_receiver() {
         .eval::<beni::Value>("[beni_shout('a'), 1.instance_eval { beni_shout('b') }]")
         .expect("the bare calls must not raise");
     assert_eq!(got.inspect(&mrb), "[\"A\", \"B\"]");
+}
+
+#[test]
+fn a_global_assigns_from_a_rust_value_and_reads_as_the_type_named() {
+    let mrb = open_mrb();
+
+    mrb.gv_set(c"$beni_typed_global", 7i32)
+        .expect("the key names a global");
+    assert_eq!(
+        mrb.gv_get::<_, i64>(c"$beni_typed_global")
+            .expect("an Integer reads"),
+        7
+    );
+    assert!(mrb.gv_get::<_, String>(c"$beni_typed_global").is_err());
+    assert_eq!(
+        mrb.gv_get::<_, Option<i64>>(c"$beni_unset_global")
+            .expect("nil reads"),
+        None
+    );
 }

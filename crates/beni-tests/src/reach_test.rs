@@ -51,7 +51,7 @@ fn an_array_entry_outlives_the_array_clearing() {
         ary.push(&mrb, obj).expect("push must succeed")
     });
 
-    let read = ary.entry(&mrb, 0);
+    let read = ary.entry::<Value>(&mrb, 0).expect("the element reads");
     ary.clear(&mrb)
         .expect("clearing an unfrozen array must succeed");
     mrb.gc_start();
@@ -100,7 +100,9 @@ fn a_global_outlives_its_removal() {
         mrb.gv_set("$beni_reach", obj).expect("gv_set must succeed")
     });
 
-    let read = mrb.gv_get("$beni_reach");
+    let read = mrb
+        .gv_get::<_, Value>("$beni_reach")
+        .expect("the global reads");
     mrb.gv_remove("$beni_reach");
     mrb.gc_start();
 

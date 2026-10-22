@@ -167,7 +167,9 @@ fn compile_yields_a_program_that_has_not_run_yet() {
 
     let ran = mrb.intern_cstr(c"$ran").expect("the name interns");
     assert!(
-        mrb.gv_get(ran).is_nil(),
+        mrb.gv_get::<_, Value>(ran)
+            .expect("the global reads")
+            .is_nil(),
         "compiling must not run what it compiled"
     );
     let got = program
@@ -175,7 +177,9 @@ fn compile_yields_a_program_that_has_not_run_yet() {
         .unwrap_or_else(|_| panic!("the program must run when called"));
     assert_eq!(i32::from_value(got), Some(7));
     assert!(
-        mrb.gv_get(ran).is::<beni::Qtrue>(),
+        mrb.gv_get::<_, Value>(ran)
+            .expect("the global reads")
+            .is::<beni::Qtrue>(),
         "calling runs the program"
     );
 }
@@ -245,7 +249,7 @@ fn compile_leaves_the_context_running_its_next_load() {
 
     assert_eq!(i32::from_value(got), Some(3));
     assert_eq!(
-        i32::from_value(mrb.gv_get(c"$after")),
+        i32::from_value(mrb.gv_get::<_, Value>(c"$after").expect("the global reads")),
         Some(3),
         "stopping before the run is settled per call, never kept on the context"
     );

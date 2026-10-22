@@ -134,7 +134,12 @@ fn container_downcast_includes_subclass_instances() {
     let ary = RArray::from_value(sub).expect("subclass instance carries MRB_TT_ARRAY");
     ary.push(&mrb, mrb.str_new(b"x").as_value())
         .expect("push to a fresh array succeeds");
-    assert_eq!(ary.entry(&mrb, 0).to_string(&mrb), "x");
+    assert_eq!(
+        ary.entry::<Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "x"
+    );
 }
 
 #[test]

@@ -675,8 +675,22 @@ fn optional_arity_reads_a_splat_and_folds_keywords_into_the_next_slot() {
         .eval::<beni::Value>("[BeniOptSpread.new.add(*[4]), BeniOptSpread.new.add(*[4, 5])]")
         .expect("a splat spreading one or two values fits the range");
     let got = RArray::try_convert(got, &mrb).expect("the script answers an Array");
-    assert_eq!(i32::try_convert(got.entry(&mrb, 0), &mrb).ok(), Some(4));
-    assert_eq!(i32::try_convert(got.entry(&mrb, 1), &mrb).ok(), Some(9));
+    assert_eq!(
+        i32::try_convert(
+            got.entry::<Value>(&mrb, 0).expect("the element reads"),
+            &mrb
+        )
+        .ok(),
+        Some(4)
+    );
+    assert_eq!(
+        i32::try_convert(
+            got.entry::<Value>(&mrb, 1).expect("the element reads"),
+            &mrb
+        )
+        .ok(),
+        Some(9)
+    );
 
     let err = mrb
         .eval::<beni::Value>("BeniOptSpread.new.add(1, a: 2)")

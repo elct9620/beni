@@ -87,7 +87,9 @@ fn gc_triggers_keep_a_reachable_value_valid() {
     mrb.incremental_gc();
 
     // The reachable survivor is still a valid String afterwards.
-    let kept = mrb.gv_get(c"$survivor");
+    let kept = mrb
+        .gv_get::<_, beni::Value>(c"$survivor")
+        .expect("the global reads");
     let kept = RString::from_value(kept).expect("the survivor is String-tagged");
     assert_eq!(kept.owned_bytes(), b"survivor");
 }

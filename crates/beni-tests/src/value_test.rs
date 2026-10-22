@@ -92,7 +92,7 @@ fn funcall_accepts_a_symbol_key_identical_to_the_name() {
     let by_sym = recv
         .funcall(
             &mrb,
-            Symbol::new(&mrb, c"to_s").expect("the name interns"),
+            Symbol::new(&mrb, "to_s").expect("the name interns"),
             &[],
         )
         .expect("the symbol key must dispatch");
@@ -669,7 +669,10 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
     let wrapped =
         RArray::to_ary(7i32.into_value(&mrb), &mrb).expect("a scalar wraps without raising");
     assert_eq!(wrapped.len(), 1);
-    assert_eq!(i32::from_value(wrapped.entry(&mrb, 0)), Some(7));
+    assert_eq!(
+        i32::from_value(wrapped.entry::<Value>(&mrb, 0).expect("the element reads")),
+        Some(7)
+    );
 
     // `nil` answers `to_a` with an empty array here (mruby-object-ext
     // defines `NilClass#to_a`), so it spreads to `[]` — the responder
@@ -700,7 +703,12 @@ fn to_ary_spreads_or_wraps_each_value_kind() {
     let nil_returned =
         RArray::to_ary(nil_obj, &mrb).expect("a nil-returning to_a wraps without raising");
     assert_eq!(nil_returned.len(), 1);
-    assert!(nil_obj.is_equal(&mrb, nil_returned.entry(&mrb, 0)));
+    assert!(nil_obj.is_equal(
+        &mrb,
+        nil_returned
+            .entry::<Value>(&mrb, 0)
+            .expect("the element reads")
+    ));
 
     // A `to_a` that returns a non-array non-`nil` value raises a
     // genuine `TypeError`, caught into the `Err` rather than wrapping.

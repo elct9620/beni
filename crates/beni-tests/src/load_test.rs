@@ -202,7 +202,9 @@ fn read_irep_yields_a_program_that_runs_only_when_called() {
     // SAFETY: the blob is this interpreter's own dump.
     let program = unsafe { mrb.read_irep(&bytes) }.expect("the dump must read back");
     assert!(
-        mrb.gv_get(runs).is_nil(),
+        mrb.gv_get::<_, Value>(runs)
+            .expect("the global reads")
+            .is_nil(),
         "reading must not run the program"
     );
 
@@ -210,7 +212,10 @@ fn read_irep_yields_a_program_that_runs_only_when_called() {
         .call(&mrb, &[])
         .unwrap_or_else(|_| panic!("the program must run when called"));
     assert_eq!(i64::from_value(got), Some(42));
-    assert_eq!(i64::from_value(mrb.gv_get(runs)), Some(1));
+    assert_eq!(
+        i64::from_value(mrb.gv_get::<_, Value>(runs).expect("the global reads")),
+        Some(1)
+    );
 }
 
 #[test]

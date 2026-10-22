@@ -39,8 +39,16 @@ fn keys_returns_the_typed_key_array() {
     .expect("assigning into a fresh hash succeeds");
     let keys = hash.keys(&mrb);
 
-    assert_eq!(keys.entry(&mrb, 0).to_string(&mrb), "k");
-    assert!(keys.entry(&mrb, 1).is_nil());
+    assert_eq!(
+        keys.entry::<Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "k"
+    );
+    assert!(keys
+        .entry::<Value>(&mrb, 1)
+        .expect("the element reads")
+        .is_nil());
 }
 
 #[test]
@@ -109,7 +117,10 @@ fn keyed_operations_surface_a_raising_key_as_err() {
         hash.lookup2::<_, _, Value>(&mrb, key, beni::value::qnil().as_value()),
         Err(Error::Exception(_))
     ));
-    assert!(matches!(hash.delete(&mrb, key), Err(Error::Exception(_))));
+    assert!(matches!(
+        hash.delete::<_, Value>(&mrb, key),
+        Err(Error::Exception(_))
+    ));
 }
 
 #[test]
@@ -155,7 +166,13 @@ fn values_size_and_emptiness_read_the_structure() {
 
     assert_eq!(hash.len(), 1);
     assert!(!hash.is_empty());
-    assert_eq!(hash.values(&mrb).entry(&mrb, 0).to_string(&mrb), "v");
+    assert_eq!(
+        hash.values(&mrb)
+            .entry::<Value>(&mrb, 0)
+            .expect("the element reads")
+            .to_string(&mrb),
+        "v"
+    );
 }
 
 #[test]
@@ -199,7 +216,7 @@ fn delete_removes_and_update_merges() {
         .expect("set succeeds");
 
     assert_eq!(
-        hash.delete(&mrb, k)
+        hash.delete::<_, Value>(&mrb, k)
             .expect("delete succeeds")
             .to_string(&mrb),
         "v"
@@ -268,7 +285,7 @@ fn dup_copies_independently() {
     .expect("set succeeds");
 
     let copy = hash.dup(&mrb);
-    hash.delete(&mrb, mrb.str_new(b"k").as_value())
+    hash.delete::<_, Value>(&mrb, mrb.str_new(b"k").as_value())
         .expect("delete succeeds");
 
     // Mutating the original leaves the dup untouched.
@@ -296,7 +313,7 @@ fn delete_surfaces_frozen_receiver_as_err() {
     )
     .expect("a frozen Hash literal is Hash-tagged");
     assert!(matches!(
-        frozen.delete(&mrb, mrb.str_new(b"a").as_value()),
+        frozen.delete::<_, Value>(&mrb, mrb.str_new(b"a").as_value()),
         Err(Error::Exception(_))
     ));
 }
@@ -430,7 +447,7 @@ fn foreach_ends_when_a_visit_deletes_a_pair_ahead_of_it() {
     let err = hash
         .foreach(&mrb, |_: Value, _: Value| {
             visited += 1;
-            hash.delete(&mrb, mrb.str_new(b"c").as_value())
+            hash.delete::<_, Value>(&mrb, mrb.str_new(b"c").as_value())
                 .expect("the in-walk delete itself does not raise");
             Ok(ForEach::Continue)
         })
@@ -525,7 +542,7 @@ fn a_pair_count_change_ends_the_walk_even_when_the_visit_stops_it() {
 
     let err = hash
         .foreach(&mrb, |_: Value, _: Value| {
-            hash.delete(&mrb, mrb.str_new(b"c").as_value())
+            hash.delete::<_, Value>(&mrb, mrb.str_new(b"c").as_value())
                 .expect("the in-walk delete itself does not raise");
             Ok(ForEach::Stop)
         })
@@ -542,7 +559,7 @@ fn the_closures_own_err_or_panic_outranks_a_pair_count_change() {
     let hash = abc_hash(&mrb);
     let err = hash
         .foreach(&mrb, |_: Value, _: Value| -> Result<ForEach, Error> {
-            hash.delete(&mrb, mrb.str_new(b"c").as_value())
+            hash.delete::<_, Value>(&mrb, mrb.str_new(b"c").as_value())
                 .expect("the in-walk delete itself does not raise");
             Err(Error::Panic("the closure's own".to_owned()))
         })
@@ -552,7 +569,7 @@ fn the_closures_own_err_or_panic_outranks_a_pair_count_change() {
     let hash = abc_hash(&mrb);
     let err = hash
         .foreach(&mrb, |_: Value, _: Value| -> Result<ForEach, Error> {
-            hash.delete(&mrb, mrb.str_new(b"c").as_value())
+            hash.delete::<_, Value>(&mrb, mrb.str_new(b"c").as_value())
                 .expect("the in-walk delete itself does not raise");
             panic!("boom after deleting");
         })
@@ -573,7 +590,7 @@ fn a_visit_swapping_pairs_hands_over_only_pairs_the_hash_held() {
         hash.aset(&mrb, key.into_value(&mrb), key.into_value(&mrb))
             .expect("set succeeds");
     }
-    hash.delete(&mrb, 1i32.into_value(&mrb))
+    hash.delete::<_, Value>(&mrb, 1i32.into_value(&mrb))
         .expect("delete succeeds");
 
     let held = [0, 2, 3, 100];
@@ -581,7 +598,7 @@ fn a_visit_swapping_pairs_hands_over_only_pairs_the_hash_held() {
     let walked = hash.foreach(&mrb, |key: i32, _: Value| {
         seen.push(key);
         if seen.len() == 2 {
-            hash.delete(&mrb, 3i32.into_value(&mrb))
+            hash.delete::<_, Value>(&mrb, 3i32.into_value(&mrb))
                 .expect("the in-walk delete itself does not raise");
             hash.aset(&mrb, 100i32.into_value(&mrb), 0i32.into_value(&mrb))
                 .expect("the in-walk set itself does not raise");
@@ -685,4 +702,22 @@ fn aref_runs_the_default_where_lookup2_answers_the_one_given() {
         0
     );
     assert!(hash.aref::<_, i32>(&mrb, "absent").is_err());
+}
+
+#[test]
+fn delete_and_key_test_take_rust_keys_and_answer_the_type_named() {
+    let mrb = open_mrb();
+    let hash = mrb.hash_new();
+    hash.aset(&mrb, "k", 42i32).expect("assign succeeds");
+
+    assert!(hash.contains_key(&mrb, "k").expect("the key test runs"));
+    assert_eq!(
+        hash.delete::<_, i64>(&mrb, "k").expect("the value reads"),
+        42
+    );
+    assert!(!hash.contains_key(&mrb, "k").expect("the key test runs"));
+    assert_eq!(
+        hash.delete::<_, Option<i64>>(&mrb, "k").expect("nil reads"),
+        None
+    );
 }

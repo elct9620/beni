@@ -134,7 +134,13 @@ fn a_global_without_dollar_is_the_dollar_global() {
         .expect("reading a global runs");
 
     assert_eq!(i32::from_value(read), Some(7));
-    assert_eq!(i32::from_value(mrb.gv_get(id(&mrb, "beni_named"))), Some(7));
+    assert_eq!(
+        i32::from_value(
+            mrb.gv_get::<_, Value>(id(&mrb, "beni_named"))
+                .expect("the global reads")
+        ),
+        Some(7)
+    );
 }
 
 #[test]

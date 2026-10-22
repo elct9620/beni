@@ -324,7 +324,7 @@ where
         *slot = take(name)?.1;
     }
     if !Splat::REQ && !rest.is_empty() {
-        let key = rest.keys(mrb).entry(mrb, 0).to_string(mrb);
+        let key = rest.keys(mrb).entry_value(mrb, 0).to_string(mrb);
         return Err(argument_error(mrb, &format!("unknown keyword: {key}")));
     }
 
