@@ -31,8 +31,10 @@
 //      declare as `links` metadata, so a direct dependent offers only
 //      the numeric conversions those widths can hold, whether they
 //      carry the debug hooks, so it offers the hooks only where the
-//      archive has them, and the release they declare, so it follows
-//      that release. A documentation
+//      archive has them, whether they come from a bigint archive, so
+//      it offers the arbitrary-width Integers only where the archive
+//      holds them, and the release they declare, so it follows that
+//      release. A documentation
 //      build checks and publishes the documentation bindings it stages
 //      instead.
 //
@@ -108,6 +110,7 @@ use std::path::{Path, PathBuf};
 
 include!("build/abi.rs");
 include!("build/arena.rs");
+include!("build/bigint.rs");
 include!("build/bindings.rs");
 include!("build/boxing.rs");
 include!("build/comments.rs");
@@ -227,6 +230,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build/abi.rs");
     println!("cargo:rerun-if-changed=build/arena.rs");
+    println!("cargo:rerun-if-changed=build/bigint.rs");
     println!("cargo:rerun-if-changed=build/bindings.rs");
     println!("cargo:rerun-if-changed=build/boxing.rs");
     println!("cargo:rerun-if-changed=build/comments.rs");
@@ -323,7 +327,8 @@ fn main() {
 }
 
 /// Refuse bindings the crates above do not support, then publish the
-/// widths, debug hooks, and release they declare as `links` metadata.
+/// widths, debug hooks, bigint support, and release they declare as
+/// `links` metadata.
 fn check_and_publish_bindings(bindings_rs: &Path) {
     let bindings = Bindings::read(bindings_rs);
     refuse_fixed_arena(&bindings);
@@ -331,6 +336,7 @@ fn check_and_publish_bindings(bindings_rs: &Path) {
     println!("{}", integer_width_directive(&bindings));
     println!("{}", float_width_directive(&bindings));
     println!("{}", debug_hook_directive(&bindings));
+    println!("{}", bigint_directive(&bindings));
     println!("{}", release_directive(&bindings));
 }
 

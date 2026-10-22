@@ -378,6 +378,14 @@ mod debug_hook {
     include!("../build/debug_hook.rs");
 }
 
+/// The build script's bigint read, reachable here for the same reason as
+/// the width read above.
+#[cfg(test)]
+mod bigint {
+    include!("../build/metadata.rs");
+    include!("../build/bigint.rs");
+}
+
 /// The build script's release read, reachable here for the same reason
 /// as the width read above.
 #[cfg(test)]

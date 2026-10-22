@@ -291,6 +291,24 @@ mrb_env_len_func(const struct REnv *e)
  * `vendor/mruby/include/mruby/internal.h:41`. */
 int mrb_dump_irep(mrb_state *mrb, const mrb_irep *irep, uint8_t flags, uint8_t **bin, size_t *bin_size);
 
+/* The arbitrary-width Integer conversions between a Bignum and a 64-bit
+ * Rust integer, admitted from <mruby/internal.h> one at a time as
+ * `mrb_dump_irep` is, for the `beni` crate's Integer reads and
+ * constructions. mruby compiles them only into a bigint archive, so
+ * they are declared under the same flag; under `MRB_INT64` the signed
+ * pair are macros over the `mrb_int` forms, which the `beni` crate
+ * reaches through the published API instead. Signatures copied from
+ * `vendor/mruby/include/mruby/internal.h:221-271`. */
+#ifdef MRB_USE_BIGINT
+#ifndef MRB_INT64
+mrb_value mrb_bint_new_int64(mrb_state *mrb, int64_t x);
+int64_t mrb_bint_as_int64(mrb_state *mrb, mrb_value x);
+#endif
+mrb_value mrb_bint_new_uint64(mrb_state *mrb, uint64_t x);
+uint64_t mrb_bint_as_uint64(mrb_state *mrb, mrb_value x);
+mrb_int mrb_bint_sign(mrb_state *mrb, mrb_value bint);
+#endif
+
 /* `mrb_nil_p(v)` expands differently across boxing configs
  * (word-box / NaN-box / no-box); reaching it from Rust must go
  * through the C compiler so we always read the layout libmruby.a

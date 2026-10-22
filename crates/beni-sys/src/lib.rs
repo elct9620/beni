@@ -266,6 +266,14 @@ mod debug_hook {
     include!("../build/debug_hook.rs");
 }
 
+/// The build script's bigint read, reachable here for the same reason as
+/// the sidecar parse above.
+#[cfg(test)]
+mod bigint {
+    use super::declared::{bindings, Bindings};
+    include!("../build/bigint.rs");
+}
+
 /// The build script's GC arena check, reachable here for the same reason
 /// as the sidecar parse above.
 #[cfg(test)]
