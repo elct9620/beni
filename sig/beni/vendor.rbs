@@ -8,6 +8,7 @@ module Beni
     OS_ALIASES: Hash[Regexp, String]
     BUILD_PLATFORM: String
     TOOLCHAIN_FACTORIES: Hash[String, Symbol]
+    STAGED_DIRS: Hash[String, String]
     SELECTED_BY_DEFINITION: Array[String]
 
     def self.build_platform: (?String platform) -> String
@@ -23,6 +24,8 @@ module Beni
     def self?.prism: (vendor_dir: String, version: String, sha256: String) -> Toolchain
 
     def self?.base_url_for: (String default) -> String
+
+    def self?.staged_dir: (String name) -> String
 
     def self?.built_in_sha256: (String name, String version, ?String platform) -> (String | UnvendoredChecksum)?
 

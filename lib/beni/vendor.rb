@@ -91,6 +91,12 @@ module Beni
       "prism" => :prism
     }.freeze
 
+    # Where a toolchain staging somewhere other than its own name under
+    # the vendor tree unpacks; every other one unpacks at its name.
+    STAGED_DIRS = {
+      "prism" => File.join("mruby", "mrbgems", "mruby-compiler", "lib", "prism")
+    }.freeze
+
     module_function
 
     def wasi_sdk(vendor_dir:, version: nil, sha256: nil)
@@ -133,7 +139,7 @@ module Beni
         tarball_name: "#{version}.tar.gz",
         top_level_dir: "prism-#{version}",
         vendor_dir: vendor_dir,
-        staged_dir: File.join("mruby", "mrbgems", "mruby-compiler", "lib", "prism"),
+        staged_dir: staged_dir("prism"),
         expected_sha256: sha256
       )
     end
@@ -146,6 +152,11 @@ module Beni
       return default if override.nil? || override.empty?
 
       override.chomp("/")
+    end
+
+    # Where +name+ unpacks, relative to the vendor tree.
+    def staged_dir(name)
+      STAGED_DIRS.fetch(name, name)
     end
 
     # The built-in checksum for +name+ at +version+: the build platform's

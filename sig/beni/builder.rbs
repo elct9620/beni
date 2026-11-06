@@ -3,6 +3,7 @@ module Beni
     DEFAULT_TARGETS: Array[String]
     ARCHIVE_PATH_KEY: String
     FLAGS_MAK: String
+    CLONED_GEMS_DIR: String
 
     attr_reader vendor_dir: String
     attr_reader build_config: String?

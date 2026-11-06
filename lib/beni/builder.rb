@@ -25,6 +25,10 @@ module Beni
     # The sidecar mruby writes beside every archive it builds.
     FLAGS_MAK = "libmruby.flags.mak"
 
+    # Where mruby clones the gem sources a build config fetches, under
+    # its build directory.
+    CLONED_GEMS_DIR = "repos"
+
     attr_reader :vendor_dir, :build_config, :targets
 
     def initialize(vendor_dir:, build_config: nil, targets: DEFAULT_TARGETS)
@@ -88,10 +92,15 @@ module Beni
       verify_artifacts!
     end
 
-    # Remove each target's build tree (keeps the vendored mruby source).
+    # Remove every build tree, declared or not, keeping the vendored
+    # mruby source and the gem sources mruby clones into +build/repos+,
+    # which mruby's own +clean+ keeps too.
     def clean
-      targets.each do |target|
-        dir = File.join(mruby_dir, "build", target)
+      build_dir = File.join(mruby_dir, "build")
+      return unless Dir.exist?(build_dir)
+
+      (Dir.children(build_dir) - [CLONED_GEMS_DIR]).each do |entry|
+        dir = File.join(build_dir, entry)
         FileUtils.rm_rf(dir)
         puts "[beni] removed #{dir}"
       end

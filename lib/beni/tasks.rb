@@ -103,7 +103,9 @@ module Beni
     def define_vendor_clean_tasks
       desc "Remove unpacked vendor toolchains (keeps cached tarballs)"
       task :clean do
-        vendor_toolchains.each { |toolchain| FileUtils.rm_rf(toolchain.final_dir) }
+        Vendor::TOOLCHAIN_FACTORIES.each_key do |name|
+          FileUtils.rm_rf(File.join(configuration.vendor_dir, Vendor.staged_dir(name)))
+        end
       end
 
       desc "Remove #{configuration.vendor_dir} entirely (unpacked trees and cached tarballs)"

@@ -41,6 +41,31 @@ module Beni
       end
     end
 
+    def test_vendor_clean_removes_a_toolchain_no_longer_selected
+      with_vendor_fixture do |dir, _unpacked, _cache|
+        staged_before = File.join(dir, "wasi-sdk")
+        FileUtils.mkdir_p(staged_before)
+
+        Rake::Task["beni:vendor:clean"].invoke
+
+        refute_path_exists staged_before
+      end
+    end
+
+    def test_clean_removes_undeclared_build_trees_and_keeps_cloned_gems
+      with_vendor_fixture do |dir, _unpacked, _cache|
+        build = File.join(dir, "mruby", "build")
+        undeclared = File.join(build, "wasi")
+        cloned = File.join(build, "repos", "host")
+        FileUtils.mkdir_p([undeclared, cloned])
+
+        capture_io { Rake::Task["beni:clean"].invoke }
+
+        refute_path_exists undeclared
+        assert_path_exists cloned
+      end
+    end
+
     private
 
     # Builds a disposable vendor tree (one unpacked toolchain dir plus
