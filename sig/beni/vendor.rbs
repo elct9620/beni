@@ -4,18 +4,9 @@ module Beni
 
     BUILT_IN_PAIRS: Hash[String, built_in_pair]
     DEPENDENCIES: Hash[String, Array[String]]
-    ARCH_ALIASES: Hash[String, String]
-    OS_ALIASES: Hash[Regexp, String]
-    BUILD_PLATFORM: String
     TOOLCHAIN_FACTORIES: Hash[String, Symbol]
     STAGED_DIRS: Hash[String, String]
     SELECTED_BY_DEFINITION: Array[String]
-
-    def self.build_platform: (?String platform) -> String
-
-    def self.platform_arch: (String platform) -> String
-
-    def self.platform_os: (String platform) -> String
 
     def self?.wasi_sdk: (vendor_dir: String, ?version: String?, ?sha256: (String | UnvendoredChecksum)?) -> Toolchain
 
@@ -24,6 +15,8 @@ module Beni
     def self?.prism: (vendor_dir: String, version: String, sha256: String) -> Toolchain
 
     def self?.base_url_for: (String default) -> String
+
+    def self?.built_in_version: (String name) -> String
 
     def self?.staged_dir: (String name) -> String
 

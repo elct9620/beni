@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "vendor/platform"
 require_relative "vendor/downloader"
 require_relative "vendor/checksum"
 require_relative "vendor/unvendored_checksum"
@@ -54,35 +55,6 @@ module Beni
     # mruby source rather than serving a target, and has no built-in pair.
     SELECTED_BY_DEFINITION = %w[prism].freeze
 
-    # +RUBY_PLATFORM+ spells the same architecture and operating system
-    # differently across hosts; toolchains key their per-platform tarballs
-    # by one spelling each.
-    ARCH_ALIASES = { "x64" => "x86_64", "amd64" => "x86_64", "aarch64" => "arm64" }.freeze
-    OS_ALIASES = { /darwin/ => "macos", /linux/ => "linux", /mingw|mswin/ => "windows" }.freeze
-
-    # The build platform: the architecture and operating system the Rake
-    # tasks run on, spelled the way toolchains key their tarballs. Derived
-    # from the host rather than matched against a covered set, so a host no
-    # toolchain vendors a tarball for still has a name to be named in.
-    def self.build_platform(platform = RUBY_PLATFORM)
-      "#{platform_arch(platform)}-#{platform_os(platform)}"
-    end
-
-    def self.platform_arch(platform)
-      arch = platform.split("-").first.to_s
-      ARCH_ALIASES.fetch(arch, arch)
-    end
-
-    def self.platform_os(platform)
-      OS_ALIASES.find { |pattern, _| pattern.match?(platform) }&.last ||
-        platform.split("-")[1].to_s
-    end
-
-    private_class_method :platform_arch, :platform_os
-
-    # The build platform, resolved once at load.
-    BUILD_PLATFORM = build_platform
-
     # Known toolchain names mapped to their factory methods — the name
     # domain the DSL validates against and +Beni::Tasks+ dispatches on.
     TOOLCHAIN_FACTORIES = {
@@ -100,7 +72,7 @@ module Beni
     module_function
 
     def wasi_sdk(vendor_dir:, version: nil, sha256: nil)
-      version ||= BUILT_IN_PAIRS.fetch("wasi-sdk").fetch(:version)
+      version ||= built_in_version("wasi-sdk")
       # The release tag carries the major version only; tarballs carry the
       # full version plus the platform.
       Toolchain.new(
@@ -115,7 +87,7 @@ module Beni
     end
 
     def mruby(vendor_dir:, version: nil, sha256: nil)
-      version ||= BUILT_IN_PAIRS.fetch("mruby").fetch(:version)
+      version ||= built_in_version("mruby")
       Toolchain.new(
         name: "mruby",
         version_label: version,
@@ -154,6 +126,12 @@ module Beni
       override.chomp("/")
     end
 
+    # The version +name+'s built-in pair vendors.
+    def built_in_version(name)
+      BUILT_IN_PAIRS.fetch(name).fetch(:version)
+    end
+    private_class_method :built_in_version
+
     # Where +name+ unpacks, relative to the vendor tree.
     def staged_dir(name)
       STAGED_DIRS.fetch(name, name)
@@ -168,7 +146,7 @@ module Beni
     # stand in.
     def built_in_sha256(name, version, platform = BUILD_PLATFORM)
       pair = BUILT_IN_PAIRS.fetch(name)
-      return nil unless version == pair.fetch(:version)
+      return nil unless version == built_in_version(name)
 
       checksum = pair.fetch(:sha256)
       return checksum unless checksum.is_a?(Hash)

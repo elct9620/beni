@@ -1,0 +1,13 @@
+module Beni
+  module Vendor
+    ARCH_ALIASES: Hash[String, String]
+    OS_ALIASES: Hash[Regexp, String]
+    BUILD_PLATFORM: String
+
+    def self.build_platform: (?String platform) -> String
+
+    def self.platform_arch: (String platform) -> String
+
+    def self.platform_os: (String platform) -> String
+  end
+end
