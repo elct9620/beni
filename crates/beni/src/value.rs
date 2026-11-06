@@ -296,10 +296,11 @@ pub trait ReprValue: private::ReprValue {
     /// as an owned `String`, or `""` when mruby returns NULL. A byte
     /// sequence that is not UTF-8, which a constant name may hold, reads
     /// as U+FFFD, as magnus's `classname` reads it. Safe and owned where
-    /// magnus answers an `unsafe` borrowed `Cow`: CRuby hands out the
-    /// path its class keeps, while mruby builds a new String on every
-    /// call (`mrb_class_path`, `vendor/mruby/src/class.c`) that nothing
-    /// roots past it, so the bytes are copied out at once.
+    /// magnus answers an `unsafe` borrowed `Cow`: magnus borrows the
+    /// class path CRuby caches on a named class, while mruby builds a new
+    /// String on every call (`mrb_class_path`, `vendor/mruby/src/class.c`),
+    /// so there is no lasting storage to borrow and the copy is the one
+    /// magnus's `into_owned` makes.
     #[inline]
     fn classname(self, mrb: &Mrb) -> String {
         // SAFETY: `mrb` is alive by the borrow; `self` originates
