@@ -330,6 +330,15 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = Mrb::check_id;
     let _ = Mrb::check_symbol;
     let _ = Mrb::class_defined::<&core::ffi::CStr>;
+    let _ = debug::DebugInspector::frame_depth;
+    let _ = debug::DebugInspector::frame_path;
+    let _ = debug::DebugInspector::frame_lineno;
+    let _ = debug::DebugInspector::frame_method_id;
+    let _ = debug::DebugInspector::frame_local_variables;
+    let _ = debug::DebugInspector::frame_self_get;
+    let _ = debug::DebugInspector::frame_class_get;
+    let _ = Mrb::debug_inspector_current_depth;
+    let _ = Mrb::debug_inspector_open::<fn(debug::DebugInspector<'_>) -> i32, i32>;
     let _ = Mrb::exc_get::<&core::ffi::CStr>;
     let _ = Mrb::exception_exception;
     let _ = Mrb::exception_standard_error;
@@ -507,19 +516,6 @@ fn debug_hook_surface_is_reachable_from_outside() {
     let _ = debug::TraceArg::debug_inspector;
     let _ = debug::TraceArg::tracearg_self;
     let _ = debug::TraceArg::defined_class;
-}
-
-#[test]
-fn frame_inspection_surface_is_reachable_from_outside() {
-    let _ = debug::DebugInspector::frame_depth;
-    let _ = debug::DebugInspector::frame_path;
-    let _ = debug::DebugInspector::frame_lineno;
-    let _ = debug::DebugInspector::frame_method_id;
-    let _ = debug::DebugInspector::frame_local_variables;
-    let _ = debug::DebugInspector::frame_self_get;
-    let _ = debug::DebugInspector::frame_class_get;
-    let _ = Mrb::debug_inspector_current_depth;
-    let _ = Mrb::debug_inspector_open::<fn(debug::DebugInspector<'_>) -> i32, i32>;
 }
 
 /// The arbitrary-width Integer surface, gated on the bigint archive that
