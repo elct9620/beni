@@ -111,6 +111,8 @@ Relative `vendor_dir` and `build_config` paths resolve against the Rakefile's wo
 
 Target names match the `MRuby::Build.new(<name>)` names in the config; mruby names a build defined without a name `host`. Any target declaration replaces the `host` default; the declared set is the whole set.
 
+`BENI_VENDOR_BASE_URL`, set to a non-empty URL, moves every toolchain download to a mirror: each tarball is fetched from that URL joined with the tarball's own file name. The selected checksum verifies a mirrored tarball as it verifies any other.
+
 #### Task Outcomes
 
 Each task leaves this state.
