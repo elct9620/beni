@@ -60,7 +60,7 @@ Names follow magnus's C function index (`src/lib.rs`), and a function it leaves 
 
 ### Proven Divergence
 
-`beni` departs from magnus only on an mruby ↔ CRuby difference proven in source. It reaches only as far as magnus's path stops working; a path that still works with one more step is a cost, not a divergence.
+`beni` departs from magnus only on an mruby ↔ CRuby difference proven in source. A narrower mruby reaches only as far as magnus's path stops working; a path that still works with one more step is a cost, not a divergence.
 
 | mruby against CRuby | `beni`'s shape | Instance |
 |---|---|---|
