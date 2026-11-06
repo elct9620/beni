@@ -156,3 +156,23 @@ fn a_file_name_read_stays_as_read_after_the_next() {
     let paths: Vec<String> = paths.to_vec(&mrb).expect("both paths are Strings");
     assert_eq!(paths, ["ab", "cd"]);
 }
+
+#[test]
+fn no_frames_are_found_with_no_ruby_call_running() {
+    let mrb = open_mrb();
+    run(&mrb, "def finished\n  1\nend\nfinished\n").expect("the source runs");
+
+    assert_eq!(mrb.debug_inspector_current_depth(), 0);
+    let read = mrb
+        .debug_inspector_open(|frames| {
+            (0..2).all(|index| {
+                frames.frame_depth(index).is_none()
+                    && frames.frame_path(index).is_none()
+                    && frames.frame_lineno(index).is_none()
+                    && frames.frame_self_get(index).is_none()
+                    && frames.frame_local_variables(index).is_none()
+            })
+        })
+        .expect("the closure answers");
+    assert_eq!(bool::from_value(read), Some(true));
+}

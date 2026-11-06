@@ -84,30 +84,25 @@ impl Mrb {
 impl Mrb {
     /// Run `func` with a `DebugInspector` over the running fiber's frames,
     /// index `0` being the frame running the Rust code that calls this,
-    /// and answer what it returns. Mirrors magnus's
+    /// and answer what it returns; with no Ruby call running, the
+    /// inspector finds no frames. Mirrors magnus's
     /// `Ruby::debug_inspector_open`.
     pub fn debug_inspector_open<F, R>(&self, func: F) -> Result<Value, Error>
     where
         F: FnOnce(DebugInspector<'_>) -> R,
         R: BlockReturn,
     {
-        let inspector = DebugInspector {
-            mrb: self.as_ptr(),
-            holds: true,
-            _call: PhantomData,
-        };
+        let inspector = DebugInspector::opened(self, true);
         crate::method::private::BlockReturn::into_block_return(func(inspector), self)
     }
 
-    /// How many frames the running fiber holds, its outermost included.
-    /// Mirrors magnus's `Ruby::debug_inspector_current_depth`.
+    /// How many frames the running fiber holds, its outermost included,
+    /// or `0` with no Ruby call running. Mirrors magnus's
+    /// `Ruby::debug_inspector_current_depth`.
     pub fn debug_inspector_current_depth(&self) -> usize {
-        let inspector = DebugInspector {
-            mrb: self.as_ptr(),
-            holds: false,
-            _call: PhantomData,
-        };
-        inspector.running_depth() + 1
+        DebugInspector::opened(self, false)
+            .frame_depth(0)
+            .map_or(0, |depth| depth + 1)
     }
 }
 
@@ -224,6 +219,7 @@ impl<'a> TraceArg<'a> {
         DebugInspector {
             mrb: self.mrb,
             holds: false,
+            idle: false,
             _call: PhantomData,
         }
     }
@@ -245,6 +241,9 @@ pub struct DebugInspector<'a> {
     /// Rust code, the closure may call Ruby before it uses a value, and
     /// a hook runs none.
     holds: bool,
+    /// Whether it was opened from Rust code no Ruby call reached, where
+    /// the fiber's base frame still names the code of the last run.
+    idle: bool,
     _call: PhantomData<&'a ()>,
 }
 
@@ -252,6 +251,9 @@ impl<'a> DebugInspector<'a> {
     /// How many frames lie beneath the indexed one, `0` for the
     /// outermost.
     pub fn frame_depth(self, index: usize) -> Option<usize> {
+        if self.idle {
+            return None;
+        }
         self.running_depth().checked_sub(index)
     }
 
@@ -385,6 +387,20 @@ impl<'a> DebugInspector<'a> {
             unsafe { sys::mrb_gc_protect(self.mrb, value.as_raw()) };
         }
         value
+    }
+
+    /// An inspector opened from Rust code, over no frames when no Ruby
+    /// call is running: every call into Rust pushes a frame above the
+    /// fiber's base.
+    fn opened(mrb: &'a Mrb, holds: bool) -> Self {
+        let mut inspector = DebugInspector {
+            mrb: mrb.as_ptr(),
+            holds,
+            idle: false,
+            _call: PhantomData,
+        };
+        inspector.idle = inspector.running_depth() == 0;
+        inspector
     }
 
     /// The running fiber's frame stack: its base and its running frame.
