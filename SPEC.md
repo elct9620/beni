@@ -2118,12 +2118,12 @@ Before a method's entry instruction runs, only its call's arguments are in place
 
 ##### Opening an inspector
 
-In a build carrying the debug hooks, a hook opens one through `TraceArg::debug_inspector`, at the frame running the instruction about to run. Rust code a Ruby call reached opens one at the frame running that code, or counts the frames without opening one, mirroring `magnus`'s `Ruby::debug_inspector_open` and `Ruby::debug_inspector_current_depth`.
+In a build carrying the debug hooks, a hook opens one through `TraceArg::debug_inspector`, at the frame running the instruction about to run. Rust code a Ruby call reached opens one at the frame running that code, or counts the frames without opening one, mirroring `magnus`'s `Ruby::debug_inspector_open` and `Ruby::debug_inspector_current_depth`. Rust code no Ruby call reached, such as the interpreter's owner between runs, finds no frames: every index answers nothing, and the count is `0`.
 
 | Operation | Outcome |
 |---|---|
-| `Mrb::debug_inspector_open` | runs a closure with a `DebugInspector` whose index `0` is the frame running the Rust code; answers the closure's return as a value, or the `Err` it returns |
-| `Mrb::debug_inspector_current_depth` | how many frames the running fiber holds, its outermost included |
+| `Mrb::debug_inspector_open` | runs a closure with a `DebugInspector` whose index `0` is the frame running the Rust code, or over no frames when no Ruby call is running; answers the closure's return as a value, or the `Err` it returns |
+| `Mrb::debug_inspector_current_depth` | how many frames the running fiber holds, its outermost included; `0` when no Ruby call is running |
 
 The inspector is valid for the closure's call. Each read answers for the frames as they stand when it is made, so a closure that calls Ruby between reads sees the frames that remain.
 
