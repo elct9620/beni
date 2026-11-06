@@ -229,7 +229,7 @@ impl Mrb {
             let v = Value::from_raw_unchecked(unsafe {
                 sys::mrb_range_new(mrb.as_ptr(), begin.as_raw(), end.as_raw(), exclusive)
             });
-            // SAFETY: `mrb_range_new` returns a Range-tagged value when it
+            // SAFETY: `mrb_range_new` returns an initialized Range when it
             // does not raise.
             unsafe { Range::from_value_unchecked(v) }
         })

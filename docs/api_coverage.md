@@ -10,8 +10,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | Category | Measured | sys | typed |
 |----------|---------:|----:|------:|
 | function | 320 | 319 (100%) | 254 (79%) |
-| macro | 107 | 30 (28%) | 87 (81%) |
-| total | 427 | 349 (82%) | 341 (80%) |
+| macro | 107 | 31 (29%) | 87 (81%) |
+| total | 427 | 350 (82%) | 341 (80%) |
 
 ## mruby.h
 
@@ -436,7 +436,7 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `mrb_range_excl_p` | macro | ✅ | ✅ | `Range::excl` |
 | `mrb_range_new` | fn | ✅ | ✅ | `Mrb::range_new` |
 | `mrb_range_ptr` | fn | ✅ | 🚫 | declined: unchecked cast to `struct RRange*` — see `mrb_str_ptr` |
-| `mrb_range_raw_ptr` | macro | ❌ | ❌ |  |
+| `mrb_range_raw_ptr` | macro | ✅ | ❌ |  |
 | `mrb_range_value` | macro | ❌ | ✅ | defined as `mrb_obj_value` |
 ## mruby/string.h
 

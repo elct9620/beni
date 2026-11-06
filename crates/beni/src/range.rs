@@ -39,9 +39,10 @@ pub enum RangeBegLen {
 /// `Value` so the C ABI is preserved.
 ///
 /// Construct via `Mrb::range_new` (fresh range), the checked
-/// `FromValue` downcast (`Range::from_value`, tag-discriminated), or
+/// `FromValue` downcast (`Range::from_value`, an initialized Range
+/// only, so the bound reads never raise), or
 /// `Range::from_value_unchecked` (assert that a `Value` you already
-/// hold is Range-tagged). Round-trip back to a generic `Value` via
+/// hold is an initialized Range). Round-trip back to a generic `Value` via
 /// `ReprValue::as_value` for APIs that take any value.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -54,9 +55,9 @@ impl Range {
     ///
     /// # Safety
     ///
-    /// `v` must be Range-tagged. Operating on a non-Range value
-    /// through this newtype is undefined per mruby's macro contract
-    /// (the underlying `mrb_range_*` reads assume `RRange` layout).
+    /// `v` must be an initialized Range. Operating on any other value
+    /// through this newtype is undefined: the `mrb_range_*` reads assume
+    /// `RRange` layout and raise on a Range `initialize` never set up.
     #[inline]
     pub unsafe fn from_value_unchecked(v: Value) -> Self {
         Self(v)
@@ -171,4 +172,27 @@ impl Range {
 
 crate::value::value_backed_repr!(Range);
 
-crate::try_convert::tagged_conversions!(Range, sys::MRB_TT_RANGE => "Range");
+impl crate::FromValue for Range {
+    // Narrower than its tag: mruby can hold a Range `initialize` never
+    // set up, whose every read raises (`mrb_range_ptr`,
+    // `vendor/mruby/src/range.c`); CRuby has no such Range.
+    #[inline]
+    fn from_value(value: Value) -> Option<Self> {
+        // SAFETY: the flag read follows the Range tag check.
+        (value.tag() == sys::MRB_TT_RANGE
+            && unsafe { sys::mrb_range_initialized_p_func(value.as_raw()) })
+        .then_some(Self(value))
+    }
+}
+
+impl TryConvert for Range {
+    #[inline]
+    fn try_convert(val: Value, mrb: &Mrb) -> Result<Self, Error> {
+        if val.tag() == sys::MRB_TT_RANGE {
+            return crate::FromValue::from_value(val).ok_or_else(|| {
+                crate::error::core_error(mrb, c"ArgumentError", "uninitialized range")
+            });
+        }
+        Err(crate::try_convert::not_convertible(val, mrb, "Range"))
+    }
+}

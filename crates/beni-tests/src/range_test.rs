@@ -185,3 +185,27 @@ fn beg_len_rejects_a_non_range_as_mismatch() {
         RangeBegLen::TypeMismatch
     );
 }
+
+#[test]
+fn a_range_nothing_initialized_is_no_range_handle() {
+    let mrb = open_mrb();
+    let bare = mrb
+        .eval::<beni::Value>("Range.allocate")
+        .expect("allocating a Range runs");
+
+    assert!(Range::from_value(bare).is_none());
+    match <Range as beni::TryConvert>::try_convert(bare, &mrb) {
+        Err(Error::Exception(exc)) => {
+            assert_eq!(exc.classname(&mrb), "ArgumentError");
+            assert_eq!(Error::Exception(exc).message(&mrb), "uninitialized range");
+        }
+        Err(other) => panic!("surfaced a non-exception error: {other:?}"),
+        Ok(_) => panic!("an uninitialized Range must not convert"),
+    }
+
+    let set_up = mrb
+        .eval::<beni::Value>("r = Range.allocate; r.__send__(:initialize, 1, 2); r")
+        .expect("initializing an allocated Range runs");
+    let range = Range::from_value(set_up).expect("an initialized Range downcasts");
+    assert_eq!(range.end::<i32>(&mrb).ok(), Some(2));
+}

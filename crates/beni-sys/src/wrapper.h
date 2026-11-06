@@ -560,6 +560,20 @@ mrb_as_float_func(mrb_state *mrb, mrb_value val)
   return mrb_as_float(mrb, val);
 }
 
+/* Whether a Range-tagged mrb_value has been initialized: `Range.allocate`
+ * hands out a Range before `initialize` sets its ends, and every
+ * `mrb_range_ptr` read of one raises. Newer headers publish the flag
+ * test; a release that keeps it in src/range.c tests the same bit. */
+static inline mrb_bool
+mrb_range_initialized_p_func(mrb_value range)
+{
+#ifdef RANGE_INITIALIZED_P
+  return RANGE_INITIALIZED_P(mrb_range_raw_ptr(range)) != 0;
+#else
+  return (mrb_range_raw_ptr(range)->flags & 1) != 0;
+#endif
+}
+
 /* Begin value of a Range-tagged mrb_value. Counterpart to the
  * `mrb_range_beg(mrb, r)` macro in <mruby/range.h>, which reads
  * `RANGE_BEG` off the `struct RRange` the macro resolves via
