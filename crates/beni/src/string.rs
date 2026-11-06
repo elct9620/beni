@@ -229,13 +229,30 @@ impl RString {
     /// the string's backing buffer before consuming the slice.
     #[inline]
     pub unsafe fn as_bytes(self, _mrb: &Mrb) -> &[u8] {
-        // SAFETY: `self` is String-tagged by the newtype contract;
-        // the wrapper-h inline helpers expand the RSTRING_PTR /
-        // RSTRING_LEN macros against mruby's own headers.
+        // SAFETY: forwarded from the caller; the borrowed `&Mrb` bounds
+        // the slice.
+        unsafe { self.bytes_unbounded() }
+    }
+
+    /// This string's bytes, the slice's lifetime chosen by the caller. A
+    /// String allocated without content (`String.allocate`) holds no
+    /// buffer and reads as no bytes.
+    ///
+    /// # Safety
+    ///
+    /// The slice is used only while no mruby call can free or move the
+    /// string's buffer.
+    unsafe fn bytes_unbounded<'a>(self) -> &'a [u8] {
+        // SAFETY: `self` is String-tagged by the newtype contract; the
+        // wrapper-h helpers expand RSTRING_PTR / RSTRING_LEN against
+        // mruby's own headers.
         let ptr = unsafe { sys::mrb_rstring_ptr_func(self.0.as_raw()) } as *const u8;
         let len = unsafe { sys::mrb_rstring_len_func(self.0.as_raw()) } as usize;
-        // SAFETY: ptr / len pair describes a buffer owned by mruby
-        // and alive while the borrowed `&Mrb` outlives this slice.
+        if ptr.is_null() {
+            return &[];
+        }
+        // SAFETY: a non-NULL ptr / len pair describes the buffer mruby
+        // owns, live for as long as the caller's obligation holds.
         unsafe { core::slice::from_raw_parts(ptr, len) }
     }
 
@@ -255,17 +272,8 @@ impl RString {
     /// calls; every owned read of a string's bytes is built on it.
     #[inline]
     pub(crate) fn copy_bytes(self) -> Vec<u8> {
-        // SAFETY: `self` is String-tagged by the newtype contract;
-        // `mrb_rstring_ptr_func` / `mrb_rstring_len_func` read the RString
-        // header without touching `mrb_state`, and the slice is
-        // copied immediately, so no borrow escapes the VM-alive
-        // window every `Value` already assumes.
-        let bytes = unsafe {
-            let ptr = sys::mrb_rstring_ptr_func(self.0.as_raw()) as *const u8;
-            let len = sys::mrb_rstring_len_func(self.0.as_raw()) as usize;
-            core::slice::from_raw_parts(ptr, len)
-        };
-        bytes.to_vec()
+        // SAFETY: the slice is copied before any further mruby call.
+        unsafe { self.bytes_unbounded() }.to_vec()
     }
 
     /// The bytes as an owned `String`, or the `Err` carrying the

@@ -663,3 +663,16 @@ fn a_frozen_copy_of_a_frozen_string_is_that_string() {
 
     assert!(same_object(&mrb, frozen, original));
 }
+
+#[test]
+fn a_string_allocated_without_content_reads_as_no_bytes() {
+    let mrb = open_mrb();
+    let bare = mrb
+        .eval::<beni::Value>("String.allocate")
+        .expect("allocating a String runs");
+
+    let s = RString::from_value(bare).expect("an allocated String downcasts");
+    assert_eq!(unsafe { s.as_bytes(&mrb) }, b"");
+    assert_eq!(String::from_value(bare).as_deref(), Some(""));
+    assert_eq!(Vec::<u8>::from_value(bare), Some(Vec::new()));
+}
