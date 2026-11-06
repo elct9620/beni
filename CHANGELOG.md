@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.26.0](https://github.com/elct9620/beni/compare/v0.25.0...v0.26.0) (2026-11-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* **beni:** `RString::as_bytes` is renamed `as_slice`; `ReprValue::freeze` returns `()` instead of the receiver; `RArray::join` takes an `IntoRString` separator, so `Some(sep)` becomes `sep` and `None` becomes `""`.
+
+### Features
+
+* **beni:** read frames in every build, as magnus's DebugInspector does ([7a3b01d](https://github.com/elct9620/beni/commit/7a3b01d6b44ee3cf861d3282f5c2aad1097b9c77))
+* **beni:** take a join separator through IntoRString and read string bytes as as_slice ([0c2f6bd](https://github.com/elct9620/beni/commit/0c2f6bd540d1782af15e0e8a906401acb450b685))
+
+
+### Bug Fixes
+
+* **beni:** accept only an initialized Range into the Range handle ([85a3005](https://github.com/elct9620/beni/commit/85a3005107f8a0fd9a53401afdd36ddde5dc2445))
+* **beni:** copy a file name out before the next name read rewrites it ([aadf0b0](https://github.com/elct9620/beni/commit/aadf0b01a3d7ae8a9d54051885fe6fd4363b854e))
+* **beni:** find no frames when the inspector opens with no Ruby call running ([11b6f87](https://github.com/elct9620/beni/commit/11b6f8708b0007cc64c7faf5a3a6a26ca0113f65))
+* **beni:** read a String allocated without content as no bytes ([822a9f1](https://github.com/elct9620/beni/commit/822a9f17423e1cb340cd8ed090c6e12394f037b5))
+* **gemspec:** leave the cloud bootstrap and the steep patch out of the package ([c6b5a12](https://github.com/elct9620/beni/commit/c6b5a12d2d40a050831d3cdd0a5d6edc10a4836d))
+* **tasks:** clean every build tree and staged toolchain, not only the declared ones ([ca0b8d6](https://github.com/elct9620/beni/commit/ca0b8d62ec86caf19d4ed9234a9eb2cc56956894))
+* **tasks:** stage and read the archive from one vendor tree ([5346e9c](https://github.com/elct9620/beni/commit/5346e9cfec90405f1391a9ac2ca44a03f2c91b49))
+* **vendor:** leave no partial download behind when a fetch fails ([4bf2af3](https://github.com/elct9620/beni/commit/4bf2af3cdcb85b798d23dfa1e5e50613d8e9dc39))
+* **vendor:** refuse a missing platform checksum at setup and drop a tarball that fails verification ([e3ca724](https://github.com/elct9620/beni/commit/e3ca724128f172ab607e0f9b3d5ffb95f45c6c22))
+
 ## [0.25.0](https://github.com/elct9620/beni/compare/v0.24.0...v0.25.0) (2026-10-22)
 
 
