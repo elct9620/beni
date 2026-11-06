@@ -32,14 +32,18 @@ module Beni
       end
 
       # Fetch +url+ into +dest+ atomically via a +.part+ sidecar, retrying
-      # transient failures with exponential backoff. Permanent failures
-      # (4xx, DNS resolution failure on non-network condition) surface
+      # transient failures with exponential backoff. A 4xx surfaces
       # immediately. Raises whatever the underlying +URI#open+ raises after
-      # the retry budget is exhausted.
+      # the retry budget is exhausted, leaving no +.part+ behind.
       def download
         FileUtils.mkdir_p(File.dirname(@dest))
         tmp = "#{@dest}.part"
-        with_retry { fetch(tmp) }
+        begin
+          with_retry { fetch(tmp) }
+        rescue StandardError
+          FileUtils.rm_f(tmp)
+          raise
+        end
         File.rename(tmp, @dest)
       end
 

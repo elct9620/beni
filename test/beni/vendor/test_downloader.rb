@@ -29,7 +29,9 @@ module Beni
           @attempts += 1
           raise outcome if outcome.is_a?(Exception)
 
-          File.write(tmp, outcome)
+          bytes, error = outcome
+          File.write(tmp, bytes)
+          raise error if error
         end
 
         def warn_and_sleep(_error, _attempt); end
@@ -66,6 +68,15 @@ module Beni
         assert_raises(OpenURI::HTTPError) { scripted.download }
 
         assert_equal Downloader::MAX_RETRIES + 1, scripted.attempts
+        refute_path_exists @dest
+      end
+
+      def test_a_download_failing_mid_stream_leaves_no_part_sidecar
+        scripted = downloader([["partial", http_error("404 Not Found")]])
+
+        assert_raises(OpenURI::HTTPError) { scripted.download }
+
+        refute_path_exists "#{@dest}.part"
         refute_path_exists @dest
       end
 
