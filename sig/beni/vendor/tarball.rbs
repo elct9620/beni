@@ -3,6 +3,8 @@ module Beni
     class Tarball
       VERSION_MARKER: String
 
+      def self.staged_version: (String dir) -> String?
+
       @tarball: String
       @top_level_dir: String
       @final_dir: String

@@ -30,16 +30,11 @@ module Beni
     # wrong release.
     def staged_default_config(mruby_dir, version)
       source = File.join(mruby_dir, "build_config", "default.rb")
-      return source if staged_version(mruby_dir) == version && File.exist?(source)
+      return source if Vendor::Tarball.staged_version(mruby_dir) == version && File.exist?(source)
 
       raise Error,
             "[beni] mruby #{version}'s source is not staged at #{mruby_dir} — " \
             "run `rake beni:vendor:setup` first"
-    end
-
-    def staged_version(mruby_dir)
-      marker = File.join(mruby_dir, Vendor::Tarball::VERSION_MARKER)
-      File.read(marker).strip if File.exist?(marker)
     end
   end
 end

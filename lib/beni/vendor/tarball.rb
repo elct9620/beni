@@ -18,6 +18,13 @@ module Beni
       # value short-circuits +#prepare+, a mismatch forces re-extract.
       VERSION_MARKER = ".beni-version"
 
+      # Version the last successful unpack into +dir+ recorded, or +nil+
+      # when the tree is absent or predates version stamping.
+      def self.staged_version(dir)
+        marker = File.join(dir, VERSION_MARKER)
+        File.read(marker).strip if File.exist?(marker)
+      end
+
       def initialize(tarball:, top_level_dir:, final_dir:, version:)
         @tarball = tarball
         @top_level_dir = top_level_dir
@@ -44,11 +51,10 @@ module Beni
 
       private
 
-      # Version recorded by the last successful unpack, or +nil+ when the tree
-      # is absent or predates version stamping (forcing a re-extract).
+      # Version recorded by the last successful unpack; +nil+ forces a
+      # re-extract.
       def installed_version
-        marker = File.join(@final_dir, VERSION_MARKER)
-        File.read(marker).strip if File.exist?(marker)
+        self.class.staged_version(@final_dir)
       end
 
       def extract_to_staging(staging)
