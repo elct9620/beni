@@ -68,7 +68,7 @@ One repository; the gem and the three published crates release in lockstep under
 | `beni-macros` crate | crates.io | the `beni` crate's attribute and derive macros, reached through the `beni` crate's re-exports as `magnus`'s are through `magnus` |
 | `beni-tests` crate | not published | the `beni` crate's behavior suite, held outside the crate so each test reaches it through public paths alone |
 
-Responsibility boundary: the gem stages toolchains and archives; `beni-sys` binds them. The `beni` crate is the only package consumers write Rust against. `beni-macros` is reached through it: its macros are named through `beni` and expand to code against it.
+Responsibility boundary: the gem stages toolchains and archives; `beni-sys` binds them. The `beni` crate is the only package consumers write Rust against. `beni-macros` is reached through it: its macros are named through `beni` and expand to code against it. A consumer whose own build gates on the archive depends on `beni-sys` directly as well, its build script reading the width, release, debug-hook, and bigint metadata it publishes, as a `magnus` consumer reads `rb-sys`'s.
 
 `beni-tests` ships to no one; it holds the `beni` crate's behavior from where a consumer stands. What no consumer can observe — an invariant internal to the crate — stays tested inside it.
 
