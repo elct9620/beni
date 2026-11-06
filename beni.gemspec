@@ -35,7 +35,7 @@ Gem::Specification.new do |spec|
                           crates/ Cargo.toml Cargo.lock rust-toolchain.toml
                           tasks/ build_config/ .claude/ CLAUDE.md SPEC.md
                           Steepfile rbs_collection Rakefile .api_coverage.yml
-                          docs/api_coverage.md
+                          docs/api_coverage.md scripts/ sig/patches/
                           release-please-config.json .release-please-manifest.json])
     end
   end
