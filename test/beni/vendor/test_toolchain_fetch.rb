@@ -13,11 +13,17 @@ module Beni
       # Stands in for the network at the downloader seam: "downloads"
       # by writing fixed bytes into the cache.
       class FixedBytesDownloader
+        # The destinations downloaded into, across instances.
+        def self.downloads
+          @downloads ||= []
+        end
+
         def initialize(dest)
           @dest = dest
         end
 
         def download
+          self.class.downloads << @dest
           FileUtils.mkdir_p(File.dirname(@dest))
           File.write(@dest, "tarball-bytes")
         end
@@ -34,6 +40,7 @@ module Beni
       def setup
         @dir = Dir.mktmpdir("beni-toolchain-fetch")
         @vendor_dir = File.join(@dir, "vendor")
+        FixedBytesDownloader.downloads.clear
       end
 
       def teardown
@@ -56,7 +63,29 @@ module Beni
 
         assert_match(/checksum mismatch/, error.message)
         refute_path_exists toolchain.final_dir
-        assert_path_exists toolchain.tarball_path
+        refute_path_exists toolchain.tarball_path
+      end
+
+      def test_install_drops_a_cached_tarball_that_fails_verification
+        toolchain = build_toolchain(expected_sha256: "0" * 64)
+        FileUtils.mkdir_p(File.dirname(toolchain.tarball_path))
+        File.write(toolchain.tarball_path, "stale-bytes")
+
+        assert_raises(Beni::Error) { capture_io { toolchain.install } }
+
+        refute_path_exists toolchain.final_dir
+        refute_path_exists toolchain.tarball_path
+      end
+
+      def test_fetch_refuses_a_missing_platform_checksum_before_downloading
+        missing = UnvendoredChecksum.new(name: "demo-kit", version: "1.0", platform: "x86_64-windows")
+        toolchain = build_toolchain(expected_sha256: missing)
+
+        error = assert_raises(Beni::Error) { capture_io { toolchain.fetch } }
+
+        assert_includes error.message, "demo-kit"
+        assert_includes error.message, "x86_64-windows"
+        assert_empty FixedBytesDownloader.downloads
       end
 
       private

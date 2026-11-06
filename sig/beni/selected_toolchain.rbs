@@ -2,8 +2,8 @@ module Beni
   class SelectedToolchain
     attr_reader name: String
     attr_reader version: String
-    attr_reader sha256: String?
+    attr_reader sha256: (String | Vendor::UnvendoredChecksum)?
 
-    def initialize: (name: String, version: String, sha256: String?) -> void
+    def initialize: (name: String, version: String, sha256: (String | Vendor::UnvendoredChecksum)?) -> void
   end
 end

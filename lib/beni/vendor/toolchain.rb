@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "fileutils"
+
 module Beni
   module Vendor
     # Declarative value object describing a tarball-style vendored
@@ -37,7 +39,8 @@ module Beni
     #   * +expected_sha256+ — the toolchain's selected checksum (resolved
     #                       by +Beni::Vendor+ from the built-in pair or a
     #                       consumer override); +nil+ falls to TOFU
-    #                       sidecar pinning in +Checksum#verify_or_pin+.
+    #                       sidecar pinning in +Checksum#verify_or_pin+,
+    #                       and an +UnvendoredChecksum+ refuses setup.
     class Toolchain <
       Data.define(:name, :version_label, :base_url, :tarball_name, :top_level_dir, :vendor_dir, :staged_dir,
                   :expected_sha256)
@@ -73,10 +76,10 @@ module Beni
       # Download the tarball into +tarball_path+ and verify its SHA256.
       # Intended as the body of the +file tarball_path+ rake task; the
       # task's mtime-based caching avoids re-downloading on a cache hit.
-      # A tarball failing verification deliberately stays cached: a
-      # checksum mismatch is an abort condition, never a re-download
-      # trigger, and the cache-hit path re-fails it the same way.
+      # A toolchain with no checksum for the build platform is refused
+      # before anything downloads.
       def fetch
+        expected_checksum
         puts "[beni] downloading #{name} #{version_label} from #{url}"
         downloader.download
         verify
@@ -85,9 +88,13 @@ module Beni
       # Recompute the cached tarball's SHA256 and check it against
       # +expected_sha256+ (or pin via TOFU sidecar). Idempotent — safe
       # to call from both +file+ and +setup+ task bodies when the latter
-      # depends on the former.
+      # depends on the former. A tarball failing verification leaves the
+      # cache, so the next setup downloads it again.
       def verify
-        Checksum.new(tarball_path, expected_sha256).verify_or_pin
+        Checksum.new(tarball_path, expected_checksum).verify_or_pin
+      rescue Error
+        FileUtils.rm_f(tarball_path)
+        raise
       end
 
       # Verify the cached tarball, then unpack it into +final_dir+ via
@@ -105,6 +112,15 @@ module Beni
       end
 
       private
+
+      # The checksum verification compares against, +nil+ for a TOFU pin;
+      # raises for a built-in pair lacking the build platform's checksum.
+      def expected_checksum
+        checksum = expected_sha256
+        raise Error, checksum.message if checksum.is_a?(UnvendoredChecksum)
+
+        checksum
+      end
 
       # The network boundary — tests override this to script the
       # download without opening a connection.

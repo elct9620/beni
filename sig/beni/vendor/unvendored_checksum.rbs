@@ -1,0 +1,13 @@
+module Beni
+  module Vendor
+    class UnvendoredChecksum
+      attr_reader name: String
+      attr_reader version: String
+      attr_reader platform: String
+
+      def initialize: (name: String, version: String, platform: String) -> void
+
+      def message: () -> String
+    end
+  end
+end

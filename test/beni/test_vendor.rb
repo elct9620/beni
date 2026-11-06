@@ -58,12 +58,11 @@ module Beni
     def test_a_platform_keyed_pair_without_this_platform_names_it_rather_than_substituting
       version = Vendor::BUILT_IN_PAIRS.fetch("wasi-sdk").fetch(:version)
 
-      error = assert_raises(Error) do
-        Vendor.built_in_sha256("wasi-sdk", version, "x86_64-windows")
-      end
+      checksum = Vendor.built_in_sha256("wasi-sdk", version, "x86_64-windows")
 
-      assert_includes error.message, "wasi-sdk"
-      assert_includes error.message, "x86_64-windows"
+      assert_equal Vendor::UnvendoredChecksum.new(name: "wasi-sdk", version:, platform: "x86_64-windows"), checksum
+      assert_includes checksum.message, "wasi-sdk"
+      assert_includes checksum.message, "x86_64-windows"
     end
 
     def test_dependencies_registry_implies_mruby_for_wasi_sdk

@@ -2,6 +2,7 @@
 
 require_relative "vendor/downloader"
 require_relative "vendor/checksum"
+require_relative "vendor/unvendored_checksum"
 require_relative "vendor/tarball"
 require_relative "vendor/toolchain"
 
@@ -152,8 +153,9 @@ module Beni
     # entry when the toolchain's checksums are platform-keyed, +nil+ for
     # any version other than the vendored one — mruby's TOFU pinning path.
     # A platform-keyed pair carrying no entry for +platform+ vendors no
-    # tarball there, and says so rather than letting another platform's
-    # checksum stand in.
+    # tarball there: the lookup answers an +UnvendoredChecksum+, which
+    # setup refuses, rather than letting another platform's checksum
+    # stand in.
     def built_in_sha256(name, version, platform = BUILD_PLATFORM)
       pair = BUILT_IN_PAIRS.fetch(name)
       return nil unless version == pair.fetch(:version)
@@ -161,11 +163,7 @@ module Beni
       checksum = pair.fetch(:sha256)
       return checksum unless checksum.is_a?(Hash)
 
-      checksum.fetch(platform) do
-        raise Error, "[beni] #{name} #{version} vendors no tarball for build platform " \
-                     "#{platform}; declare the toolchain with a version and sha256 " \
-                     "for this platform"
-      end
+      checksum.fetch(platform) { UnvendoredChecksum.new(name:, version:, platform:) }
     end
 
     # Write the gem-shipped wasi toolchain file into the staged mruby

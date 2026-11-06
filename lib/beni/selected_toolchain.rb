@@ -5,7 +5,9 @@ module Beni
   # +sha256+ is concrete at resolution time — a definition's declared
   # value or the built-in checksum +Beni::Vendor+ resolves. +nil+ has
   # exactly one reachable meaning: mruby at a non-default version, where
-  # verification falls to the TOFU sidecar path.
+  # verification falls to the TOFU sidecar path. A
+  # +Vendor::UnvendoredChecksum+ stands for a built-in pair lacking the
+  # build platform's checksum, which setup refuses.
   class SelectedToolchain < Data.define(:name, :version, :sha256)
   end
 end
