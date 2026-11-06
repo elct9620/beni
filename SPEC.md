@@ -2492,7 +2492,7 @@ measures complete.
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails |
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root |
 | The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has |
-| Bindings a `beni-sys` build uses that declare no integer width, no release, no float, or a fixed-size GC arena | `beni-sys` build fails and names the bindings it read |
+| Bindings a `beni-sys` build uses that declare no integer width, no release, no float, a fixed-size GC arena, or NaN boxing | `beni-sys` build fails and names the bindings it read |
 | A `beni-sys` build with the layout check on whose bindings lay a type out differently from its headers | `beni-sys` build fails to compile and names the type |
 | A `beni` build that receives no integer-width metadata, no float-width metadata, or no release metadata | `beni` build fails and names the metadata it expected |
 | A `beni` build that receives no debug-hook metadata or no bigint metadata | the build fails, naming the metadata it expected |
