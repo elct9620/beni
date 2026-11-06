@@ -119,3 +119,40 @@ fn a_local_read_from_rust_stays_reachable_after_its_frame_lets_it_go() {
 
     assert_eq!(bool::from_value(survived), Some(true));
 }
+
+/// The file names of the two frames beneath this method's, the first
+/// read held across the second.
+fn caller_paths(mrb: &Mrb, _self: Value) -> Result<RArray, Error> {
+    let read = mrb.debug_inspector_open(|frames| {
+        let first = frames.frame_path(1);
+        let second = frames.frame_path(2);
+        let ary = mrb.ary_new();
+        for path in [first, second] {
+            ary.push(mrb, path.as_deref().unwrap_or("").into_value(mrb))?;
+        }
+        Ok::<_, Error>(ary)
+    })?;
+    Ok(RArray::from_value(read).expect("the closure answers an Array"))
+}
+
+#[test]
+fn a_file_name_read_stays_as_read_after_the_next() {
+    let mrb = open_mrb();
+    mrb.class_object()
+        .define_method(&mrb, c"caller_paths", beni::method!(caller_paths, 0))
+        .expect("registering the method succeeds");
+    // Names of up to four letters or digits pack into the symbol itself,
+    // the case a name read unpacks into a shared buffer.
+    Ccontext::new(&mrb, c"ab")
+        .expect("allocating the compile context must succeed")
+        .load_nstring(b"def first_file\n  caller_paths\nend\n")
+        .expect("the definition runs");
+    let read = Ccontext::new(&mrb, c"cd")
+        .expect("allocating the compile context must succeed")
+        .load_nstring(b"first_file\n")
+        .expect("the call runs");
+
+    let paths = RArray::from_value(read).expect("the method answers an Array");
+    let paths: Vec<String> = paths.to_vec(&mrb).expect("both paths are Strings");
+    assert_eq!(paths, ["ab", "cd"]);
+}

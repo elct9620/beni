@@ -184,7 +184,7 @@ impl<'a> TraceArg<'a> {
     }
 
     /// The file name of the instruction's code, or nothing for code that
-    /// carries no line numbers. A string slice where magnus answers an
+    /// carries no line numbers. A Rust string where magnus answers an
     /// `RString`: mruby's debug info keeps the name as a C string
     /// (`mrb_debug_get_filename`), and the hook holds no interpreter to
     /// make a String with.
@@ -468,11 +468,14 @@ unsafe fn line_at(
     NonZero::new(usize::try_from(line).ok()?)
 }
 
-/// The file name of `pc` in `irep`, or nothing when it carries none.
+/// The file name of `pc` in `irep`, or nothing when it carries none,
+/// copied out: a short name unpacks into a per-read scratch buffer the
+/// next name read overwrites (`mrb_sym_name_len`,
+/// `vendor/mruby/src/symbol.c`).
 ///
 /// # Safety
 ///
-/// As `line_at`; the name lives as long as `irep`.
+/// As `line_at`.
 unsafe fn path_at<'a>(
     mrb: *mut sys::mrb_state,
     irep: *const sys::mrb_irep,
@@ -480,9 +483,15 @@ unsafe fn path_at<'a>(
 ) -> Option<Cow<'a, str>> {
     // SAFETY: forwarded from the caller.
     let name = unsafe { sys::mrb_debug_get_filename(mrb, irep, offset(irep, pc)) };
-    // SAFETY: a non-NULL name is a NUL-terminated string the irep's
-    // debug info owns.
-    (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.to_string_lossy())
+    // SAFETY: a non-NULL name is a NUL-terminated string, read here
+    // before any other name read can reuse its buffer.
+    (!name.is_null()).then(|| {
+        Cow::Owned(
+            unsafe { CStr::from_ptr(name) }
+                .to_string_lossy()
+                .into_owned(),
+        )
+    })
 }
 
 /// The index of `pc` in `irep`'s instructions, the form mruby's debug
