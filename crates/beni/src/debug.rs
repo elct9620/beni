@@ -1,11 +1,16 @@
-//! Debug hooks — mirrors `magnus::debug`.
+//! Frame inspection and debug hooks — mirrors `magnus::debug`.
 //!
-//! An archive built with `MRB_USE_DEBUG_HOOK` calls a code fetch hook
-//! before each instruction it runs; mruby's own debugger stops at
+//! A `DebugInspector` reads the frames of the running fiber in every
+//! build, opened from Rust code through `Mrb::debug_inspector_open`.
+//!
+//! An archive built with `MRB_USE_DEBUG_HOOK` also calls a code fetch
+//! hook before each instruction it runs; mruby's own debugger stops at
 //! breakpoints from it. The owner installs a closure as the hook
 //! through `Mrb::set_code_fetch_hook`, and each call hands it a
 //! `TraceArg` reading the instruction about to run and, through a
-//! `DebugInspector`, the frames of the fiber running it.
+//! `DebugInspector`, the frames of the fiber running it. A dependent
+//! gates its own use of the hook on the debug-hook metadata `beni-sys`
+//! publishes, `DEP_MRUBY_DEFINES_MRB_DEBUG_HOOK`.
 //!
 //! Neither view offers an interpreter handle, so a hook runs no Ruby.
 //! The VM calls the hook holding a pointer into its frame stack, and a
@@ -13,7 +18,9 @@
 //! run on from freed memory once the hook returns (`vendor/mruby/src/vm.c`,
 //! `CALL_CODE_HOOKS` beside `cipush`).
 
-use crate::method::{BlockReturn, InitReturn};
+use crate::method::BlockReturn;
+#[cfg(mrb_debug_hook)]
+use crate::method::InitReturn;
 use crate::sys::AsRawValue;
 use crate::value::ReprValue;
 use crate::{sys, ClassOrModule, Error, FromValue, Id, Mrb, Value};
@@ -23,8 +30,10 @@ use std::borrow::Cow;
 use std::ffi::CStr;
 
 /// The closure a code fetch hook runs, with its return projected.
+#[cfg(mrb_debug_hook)]
 pub(crate) type Hook = Box<dyn FnMut(TraceArg<'_>) -> Result<(), Error> + Send>;
 
+#[cfg(mrb_debug_hook)]
 impl Mrb {
     /// Install `hook` as this interpreter's code fetch hook, dropping
     /// any hook installed before it. The interpreter calls it before
@@ -70,7 +79,9 @@ impl Mrb {
         unsafe { (*self.as_ptr()).code_fetch_hook = None };
         *self.slot_mut().hook.get_mut() = None;
     }
+}
 
+impl Mrb {
     /// Run `func` with a `DebugInspector` over the running fiber's frames,
     /// index `0` being the frame running the Rust code that calls this,
     /// and answer what it returns. Mirrors magnus's
@@ -103,6 +114,7 @@ impl Mrb {
 /// What mruby calls before each instruction: runs the installed closure
 /// under the panic boundary, raising what it answers in place of the
 /// instruction.
+#[cfg(mrb_debug_hook)]
 unsafe extern "C" fn code_fetch_hook(
     mrb: *mut sys::mrb_state,
     irep: *const sys::mrb_irep,
@@ -152,6 +164,7 @@ unsafe extern "C" fn code_fetch_hook(
 
 /// The instruction a code fetch hook was called before — magnus's
 /// `TraceArg`. Valid only for that call.
+#[cfg(mrb_debug_hook)]
 #[derive(Clone, Copy)]
 pub struct TraceArg<'a> {
     mrb: *mut sys::mrb_state,
@@ -160,6 +173,7 @@ pub struct TraceArg<'a> {
     _call: PhantomData<&'a ()>,
 }
 
+#[cfg(mrb_debug_hook)]
 impl<'a> TraceArg<'a> {
     /// The line of the instruction, or nothing for code that carries no
     /// line numbers.
@@ -215,10 +229,10 @@ impl<'a> TraceArg<'a> {
     }
 }
 
-/// The frames of the fiber a code fetch hook was called in — magnus's
-/// `DebugInspector`. Index `0` is the frame running the instruction and
-/// each next index the frame that called it; an index past the fiber's
-/// outermost frame answers nothing. Reads only.
+/// The frames of the running fiber — magnus's `DebugInspector`. Index
+/// `0` is the frame the inspector opened at and each next index the
+/// frame that called it; an index past the fiber's outermost frame
+/// answers nothing. Reads only.
 ///
 /// magnus answers each read as a `Result`, for CRuby's inspector raises
 /// on an index it has no frame for. mruby has no inspector API; the reads

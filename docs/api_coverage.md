@@ -322,9 +322,9 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 
 | Symbol | Kind | sys | typed | Note |
 |--------|------|:---:|:-----:|------|
-| `mrb_debug_get_filename` | fn | ✅ | ✅ | `TraceArg::path` |
-| `mrb_debug_get_line` | fn | ✅ | ✅ | `TraceArg::lineno` |
-| `mrb_debug_get_position` | fn | ✅ | ✅ | subsumed: `TraceArg::lineno` with `TraceArg::path` — both reads in one call |
+| `mrb_debug_get_filename` | fn | ✅ | ✅ | `DebugInspector::frame_path` |
+| `mrb_debug_get_line` | fn | ✅ | ✅ | `DebugInspector::frame_lineno` |
+| `mrb_debug_get_position` | fn | ✅ | ✅ | subsumed: `DebugInspector::frame_lineno` with `DebugInspector::frame_path` — both reads in one call |
 | `mrb_debug_info_alloc` | fn | ✅ | 🚫 | declined: the compiler's line-table writer (`mrbgems/mruby-compiler/core/codegen.c`); an embedder only reads the table |
 | `mrb_debug_info_append_file` | fn | ✅ | 🚫 | declined: the compiler's line-table writer — see `mrb_debug_info_alloc` |
 | `mrb_debug_info_free` | fn | ✅ | 🚫 | declined: the compiler's line-table writer — see `mrb_debug_info_alloc` |

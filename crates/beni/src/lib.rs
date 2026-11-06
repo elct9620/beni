@@ -16,8 +16,8 @@
 //!                      scan_args      (magnus-shaped frame reads)
 //!                      method         (method! bridges + MethodN crossing)
 //!                      gem            (Gem trait + Mrb::init_gem)
-//!                      debug          (code fetch hook + TraceArg /
-//!                                      DebugInspector, where the archive
+//!                      debug          (DebugInspector; code fetch hook
+//!                                      + TraceArg where the archive
 //!                                      carries the debug hooks)
 //!                      wrap / TypedData derive (beni-macros,
 //!                                      re-exported at the root)
@@ -74,7 +74,6 @@ pub mod ccontext;
 pub mod class;
 pub mod convert;
 pub mod data;
-#[cfg(mrb_debug_hook)]
 pub mod debug;
 pub mod error;
 #[cfg(feature = "fiber")]
