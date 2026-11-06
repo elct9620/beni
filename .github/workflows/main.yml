@@ -11,8 +11,9 @@ permissions:
   contents: read
 
 jobs:
-  # Fast lane: fixture-based unit tests + RuboCop + Steep. No network,
-  # no Rust — the gem's pure-Ruby surface across supported Rubies.
+  # Fast lane: fixture-based unit tests + RuboCop + Steep + the surface
+  # and format drift checks. No network, no Rust — the gem's pure-Ruby
+  # surface across supported Rubies.
   test:
     runs-on: ubuntu-latest
     name: Ruby ${{ matrix.ruby }}

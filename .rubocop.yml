@@ -32,7 +32,7 @@ Layout/LineLength:
     - "*.gemspec"
 
 # `namespace :rust` in tasks/rust.rake declares the verification legs
-# (host check / test, wasm check, default-ABI test, verify) as one
+# (host, feature-off, wasm32, documentation, per-ABI, and verify) as one
 # desc/task pair each, with the bodies delegating to
 # tasks/support/beni_rust.rb; the block exceeds the default 25-line
 # budget through task count alone. Other .rake files are expected to

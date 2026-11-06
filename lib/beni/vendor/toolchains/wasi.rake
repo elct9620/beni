@@ -10,8 +10,9 @@ MRuby::Toolchain.new(:wasi) do |conf, _params|
   wasi_sdk = ENV["WASI_SDK_PATH"] || File.join(File.expand_path("..", MRUBY_ROOT), "wasi-sdk")
   bin = File.join(wasi_sdk, "bin")
   target_flags = ["--target=wasm32-wasip1", "--sysroot=#{File.join(wasi_sdk, "share", "wasi-sysroot")}"]
-  # setjmp/longjmp via the wasm exception-handling mechanism: all
-  # three flags must be present at both compile and link stages.
+  # setjmp/longjmp via the wasm exception-handling mechanism: these
+  # flags go to every compile and the link, and the link adds the
+  # setjmp library.
   sjlj_flags = ["-mllvm", "-wasm-enable-sjlj", "-mllvm", "-wasm-use-legacy-eh=false"]
 
   conf.toolchain :clang

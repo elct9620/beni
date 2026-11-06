@@ -3,10 +3,10 @@
 # Rust workspace support module
 # =============================
 #
-# Pure-Ruby helpers backing +tasks/rust.rake+. Owns cargo availability
-# and wasm32-wasip1 target detection. The .rake wrapper is the rake DSL
-# surface that glues these helpers to +rake rust:check+ /
-# +rake rust:test+ / +rake rust:check:wasm+.
+# Pure-Ruby helpers backing +tasks/rust.rake+. Owns cargo and
+# wasm32-wasip1 target detection, the environment each leg runs cargo
+# under, and the documentation build. The .rake wrapper is the rake DSL
+# surface that glues these helpers to the +rust:*+ tasks.
 
 require "fileutils"
 require "open3"
