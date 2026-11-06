@@ -16,8 +16,7 @@ module Beni
   # tarball extraction in +Vendor::Tarball+, and the per-toolchain
   # pipeline composition in +Vendor::Toolchain+.
   #
-  # Honors +BENI_VENDOR_BASE_URL+ to point downloads at a local fixture
-  # during tests.
+  # Honors +BENI_VENDOR_BASE_URL+ to move every download to a mirror.
   module Vendor
     # ---- Built-in pairs ----------------------------------------------------
     # The version and checksum pair this release vendors per toolchain.
@@ -140,8 +139,8 @@ module Beni
     end
 
     # When BENI_VENDOR_BASE_URL is set, all tarballs are fetched from that
-    # base URL (test fixture). The base URL must serve files named exactly
-    # +tarball_name+ for each toolchain.
+    # mirror, which serves each toolchain's tarball under its exact
+    # +tarball_name+.
     def base_url_for(default)
       override = ENV.fetch("BENI_VENDOR_BASE_URL", nil)
       return default if override.nil? || override.empty?

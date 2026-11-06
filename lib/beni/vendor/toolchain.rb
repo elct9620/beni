@@ -23,8 +23,8 @@ module Beni
     #                       stamped into +final_dir+ as the idempotency key
     #                       that detects a bump and forces a re-extract.
     #   * +base_url+      — remote URL prefix; resolved through
-    #                       +Beni::Vendor.base_url_for+ so test fixtures
-    #                       can override via +BENI_VENDOR_BASE_URL+.
+    #                       +Beni::Vendor.base_url_for+, which a
+    #                       +BENI_VENDOR_BASE_URL+ mirror replaces.
     #   * +tarball_name+  — filename joined to both +base_url+ (download)
     #                       and the +.cache+ directory (cache location).
     #   * +top_level_dir+ — the single top-level directory produced when
@@ -55,9 +55,8 @@ module Beni
         name.tr("-", "_").to_sym
       end
 
-      # Resolved download URL. Honours the +BENI_VENDOR_BASE_URL+ test
-      # fixture override at call time (not at construction time), so a
-      # test can flip the env var after the Toolchain is built.
+      # Resolved download URL. Reads the +BENI_VENDOR_BASE_URL+ mirror at
+      # call time, not at construction time.
       def url
         "#{Vendor.base_url_for(base_url)}/#{tarball_name}"
       end
