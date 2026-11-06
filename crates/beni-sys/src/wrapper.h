@@ -2,10 +2,9 @@
  * wrapper.h — bindgen entry point for the beni-sys crate.
  *
  * Pulled in by `build.rs::run_bindgen` to expose the mruby C API
- * surface the `beni` wrapper builds on. No hand-written C translation
- * units live in the crate any more: the static inline wrappers
- * below are the entire C surface, and bindgen's `wrap_static_fns`
- * emits a single trampoline file from them.
+ * surface the `beni` wrapper builds on. The static inline wrappers
+ * below are the crate's entire C surface, and bindgen's
+ * `wrap_static_fns` emits a single trampoline file from them.
  *
  * The `<stdbool.h>` and `<sys/select.h>` pre-includes are not used
  * by the mruby surface itself — they cover bindgen's `wrap_static_fns`

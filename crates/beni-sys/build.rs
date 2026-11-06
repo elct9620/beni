@@ -16,9 +16,8 @@
 //   2. Compiles the bindgen-emitted trampoline file against mruby's
 //      headers so the trampoline symbols (`mrb_obj_value__extern`,
 //      `mrb_rstring_ptr_func__extern`, etc.) resolve into the rlib's
-//      object set. No hand-written C shims remain — the
-//      single-translation-unit file produced by bindgen is the
-//      entire C surface.
+//      object set. The single-translation-unit file produced by
+//      bindgen is the entire C surface.
 //   3. Emits the link directives that drag the archive and everything
 //      it needs beside it into the consumer's link graph — search
 //      paths for the discovered lib dir and, on a cross build, the

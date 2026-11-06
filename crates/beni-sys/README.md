@@ -27,7 +27,7 @@ is the sole ABI alignment channel.
 | `BENI_VENDOR_DIR` | the beni gem's `beni:build` vendor tree; host builds |
 | `WASI_SDK_PATH` | wasi-sdk for `wasm32-wasip1`; default `/opt/wasi-sdk` |
 
-A build that finds no archive fails naming these variables.
+A build that finds no archive fails naming the discovery variable it read, or both when neither is set.
 
 ## Build Metadata
 

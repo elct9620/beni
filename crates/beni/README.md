@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Linking mruby
 
 `beni-sys` finds a prebuilt archive through one of two variables, and
-fails naming both when neither leads to one.
+fails naming the one it read, or both when neither is set.
 
 | Variable | Points at |
 |---|---|

@@ -86,7 +86,11 @@ impl Mrb {
     /// index `0` being the frame running the Rust code that calls this,
     /// and answer what it returns; with no Ruby call running, the
     /// inspector finds no frames. Mirrors magnus's
-    /// `Ruby::debug_inspector_open`.
+    /// `Ruby::debug_inspector_open`, except that a panic in `func`
+    /// unwinds to the caller where magnus's surfaces as an `Err`: magnus
+    /// runs the closure inside CRuby's `rb_debug_inspector_open` callback,
+    /// a C frame no panic may cross, and mruby has no inspector API, so
+    /// the closure runs on the caller's own frame.
     pub fn debug_inspector_open<F, R>(&self, func: F) -> Result<Value, Error>
     where
         F: FnOnce(DebugInspector<'_>) -> R,

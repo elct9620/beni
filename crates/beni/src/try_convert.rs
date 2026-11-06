@@ -219,6 +219,8 @@ impl TryConvert for f32 {
     }
 }
 
+unsafe impl TryConvertOwned for f32 {}
+
 /// The `FromValue` and `TryConvert` of a handle that converts on its tag
 /// alone: `$tag` is the tag it accepts, and `$target` the name mruby's
 /// conversion `TypeError` gives it.
@@ -245,8 +247,6 @@ macro_rules! tagged_conversions {
     };
 }
 pub(crate) use tagged_conversions;
-
-unsafe impl TryConvertOwned for f32 {}
 
 impl TryConvert for String {
     #[inline]

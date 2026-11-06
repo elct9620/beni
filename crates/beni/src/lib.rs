@@ -34,6 +34,12 @@
 //!                      symbol / proc  (Id, Symbol / Proc handles)
 //!                      tagged         (handles a value converts into
 //!                                      by its type tag alone)
+//!                      integer / numeric (Integer / Fixnum / RBignum
+//!                                      handles + NumericValue)
+//!                      bundled        (Time / RFile / Enumerator, the
+//!                                      bundled gems' classes)
+//!                      fiber          (fiber creation, resume, yield;
+//!                                      `fiber` feature)
 //!                      data           (DataType<T>, a carrier's data type)
 //!                      typed_data     (TypedData + RTypedData / Obj<T>)
 //!                      inline_struct  (InlineStruct + Inline<T>)

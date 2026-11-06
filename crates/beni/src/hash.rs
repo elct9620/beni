@@ -7,7 +7,7 @@
 //! `Value`; element operations cluster on the resulting newtype.
 //!
 //! Mirrors magnus's `src/r_hash.rs`: factories live on `Ruby` /
-//! `Mrb`, per-hash ops (`aset`, `aref`, `keys`) live here.
+//! `Mrb`, per-hash ops (`aset`, `aref`, `foreach`) live here.
 
 use crate::{
     sys::AsRawValue, Error, IntoValue, Mrb, RArray, ReprValue, TryConvert, TryConvertOwned, Value,
@@ -95,8 +95,10 @@ impl RHash {
     /// typed `RArray`.
     #[inline]
     pub fn keys(self, mrb: &Mrb) -> RArray {
-        // SAFETY: as `aset`; `mrb_hash_keys` always returns an
-        // Array-tagged value, so the unchecked wrap is sound.
+        // SAFETY: `mrb` is alive by the borrow and `self` is Hash-tagged
+        // by the newtype contract; `mrb_hash_keys` dispatches nothing and
+        // always returns an Array-tagged value, so the unchecked wrap is
+        // sound.
         unsafe {
             RArray::from_value_unchecked(Value::from_raw_unchecked(sys::mrb_hash_keys(
                 mrb.as_ptr(),

@@ -4,7 +4,8 @@
 # mruby C API surface its consumers call (the `mrb_open` /
 # `mrb_load_nstring` / `mrb_define_class_under` / … family plus the
 # `mrb_value` and `mrb_state` ABI types). Bindings are produced at
-# build time from `src/wrapper.h` against `vendor/mruby/include/`.
+# build time from `src/wrapper.h` against the headers staged beside the
+# discovered archive.
 #
 # `wrapper.h` also carries `static inline` wrappers around mruby
 # macros and unexported helpers that bindgen cannot reach directly
@@ -12,25 +13,25 @@
 # / `_restore`, `mrb_proc_new`). bindgen's `wrap_static_fns` emits
 # trampolines for each into the single `mruby_static_wrappers.c`
 # file in OUT_DIR — that file is the entire C translation unit the
-# crate compiles. No hand-written `.c` shims remain.
+# crate compiles.
 #
 # Build-time inputs (consumed via env, populated by the beni gem's
 # build chain):
 #
-#   * `MRUBY_LIB_DIR` — absolute path to the directory containing the
-#     pre-built `libmruby.a`. Drives `cargo:rustc-link-*`. Highest
-#     precedence.
+#   * `MRUBY_LIB_DIR` — absolute path to the directory holding the
+#     pre-built archive and its sidecar. Drives `cargo:rustc-link-*`.
+#     Highest precedence.
 #   * `BENI_VENDOR_DIR` — the vendor tree `rake beni:build` populated;
 #     host cargo targets read its staged `mruby/build/host/lib/`.
 #   * `WASI_SDK_PATH` — absolute path to the unpacked wasi-sdk. Drives
-#     both the bindgen clang invocation (`--sysroot`, `--target`) and
-#     the setjmp library link directive (required for mruby's
-#     WebAssembly exception handling).
+#     the bindgen clang invocation (`--sysroot`, `--target`) and the
+#     sysroot library search path the sidecar's link libraries resolve
+#     against.
 #
 # What this crate is NOT
 # ----------------------
 #   * Not a magnus-style typed value wrapper. The safe `Mrb` /
-#     `Ccontext` / `Value` / `RClass` / `RModule` / `Array` / `Hash`
+#     `Ccontext` / `Value` / `RClass` / `RModule` / `RArray` / `RHash`
 #     ergonomics, the `IntoValue` / `FromValue` / `TryConvert`
 #     conversion seam, the `scan_args` frame reads, and the typed
 #     `mrb_func_t` alias all live in the sibling `beni` crate. This

@@ -4,7 +4,7 @@
 # `beni-sys` owns the bindgen-generated `extern "C"` surface and the
 # layout-safe C shims; this crate owns every Rust-level abstraction
 # above it (the `Mrb` / `Ccontext` RAII types, the `Value` / `RClass` /
-# `RModule` / `Array` / `Hash` handles, the `IntoValue` / `FromValue` /
+# `RModule` / `RArray` / `RHash` handles, the `IntoValue` / `FromValue` /
 # `TryConvert` conversion seam, the magnus-shaped `scan_args` frame
 # reads, and the `protect` closure wrapper). Consumers `use beni::Mrb`
 # for typed access and fall through to `beni::sys::mrb_*` only at the

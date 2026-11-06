@@ -5,7 +5,7 @@
 //! build time:
 //!
 //!   * `src/wrapper.h` is the bindgen entry header. It includes the
-//!     mruby header subset the guest calls and adds a small set of
+//!     mruby header subset the typed wrapper calls and adds a small set of
 //!     `static inline` wrappers around mruby's function-like macros
 //!     (`RSTRING_PTR` / `RSTRING_LEN`, `mrb_obj_ptr`,
 //!     `mrb_gc_arena_save` / `_restore`) and unexported helpers
@@ -13,13 +13,11 @@
 //!   * `build.rs::run_bindgen` emits the Rust bindings into
 //!     `$OUT_DIR/bindings.rs` and the static-fn trampolines into
 //!     `$OUT_DIR/mruby_static_wrappers.c`. The trampoline file is
-//!     the single C translation unit the crate compiles — no
-//!     hand-written `.c` shims live in `src/` any more.
+//!     the single C translation unit the crate compiles.
 //!
-//! See `build.rs::run_bindgen` for the three documented
-//! workarounds (`-fvisibility=default` for rust-bindgen #751,
-//! `opaque_type("mrb_gc")` for the bitfield mis-pack, file-level
-//! allowlist over name-regex).
+//! See `build.rs::run_bindgen` for the two documented workarounds
+//! (`-fvisibility=default` for rust-bindgen #751, file-level
+//! allowlist over name-regex) and for why `mrb_gc` stays opaque.
 //!
 //! ## Why bindgen runs from inside this crate
 //!
@@ -120,9 +118,9 @@ impl mrb_value {
 // struct accessor. Pin the field's offset so a future bindgen run or
 // mruby vendor bump that shifts it fails at compile time rather than
 // silently reading the wrong slot. The field sits after `jmp` / `c` /
-// `root_c` / `globals` (four pointer-sized fields); `mrb_gc` (which
-// carries the bitfield workaround) lives further down the struct, so
-// the bitfield mis-pack does not affect this offset.
+// `root_c` / `globals` (four pointer-sized fields); the opaque `mrb_gc`
+// lives further down the struct, so its layout does not reach this
+// offset.
 const _: () = assert!(
     core::mem::offset_of!(mrb_state, exc) == 4 * core::mem::size_of::<*const core::ffi::c_void>(),
     "mrb_state.exc offset diverged from the vendored mruby layout — \

@@ -171,8 +171,9 @@ pub trait ReprValue: private::ReprValue {
     /// configured integer width, a Float when either operand is a float, the
     /// mixed case widening the integer operand. `mrb_num_add` dispatches its
     /// receiver on the numeric tag, so a non-numeric operand raises `TypeError`
-    /// and an integer result past the configured width raises `RangeError`;
-    /// both run under exception protection, surfacing as `Err` rather than
+    /// and an integer result past the configured width raises `RangeError` —
+    /// against a bigint archive it is an arbitrary-width Integer instead;
+    /// both raises run under exception protection, surfacing as `Err` rather than
     /// long-jumping. magnus's `coerce_bin` routes through the full Ruby
     /// coercion protocol, which mruby has no counterpart to, so this anchors on
     /// mruby's own `mrb_num_add` (the obsolete macro `mrb_num_plus` aliases it).
@@ -194,8 +195,9 @@ pub trait ReprValue: private::ReprValue {
     /// result type and raises mirror `ReprValue::add`: an Integer when both
     /// operands are integers and the result fits the configured width, a Float
     /// when either is a float; a non-numeric operand raises `TypeError` and an
-    /// integer result past the configured width raises `RangeError`, both
-    /// caught by exception protection. Anchors on mruby's own `mrb_num_sub` (the
+    /// integer result past the configured width raises `RangeError` (an
+    /// arbitrary-width Integer against a bigint archive), both caught by
+    /// exception protection. Anchors on mruby's own `mrb_num_sub` (the
     /// obsolete macro `mrb_num_minus` aliases it).
     #[inline]
     fn sub(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
@@ -213,8 +215,9 @@ pub trait ReprValue: private::ReprValue {
     /// result type and raises mirror `ReprValue::add`: an Integer when both
     /// operands are integers and the result fits the configured width, a Float
     /// when either is a float; a non-numeric operand raises `TypeError` and an
-    /// integer result past the configured width raises `RangeError`, both
-    /// caught by exception protection. Anchors on mruby's own `mrb_num_mul`.
+    /// integer result past the configured width raises `RangeError` (an
+    /// arbitrary-width Integer against a bigint archive), both caught by
+    /// exception protection. Anchors on mruby's own `mrb_num_mul`.
     #[inline]
     fn mul(self, mrb: &Mrb, other: Value) -> Result<Value, Error> {
         mrb.protect(|mrb| {
@@ -318,13 +321,9 @@ pub trait ReprValue: private::ReprValue {
     /// Strings, so the redundant call is cheap and keeps a single
     /// conversion entry point.
     ///
-    /// Bytes are read through `RString::as_slice` (RSTRING_PTR / RSTRING_LEN),
-    /// not as a C string: an embedded NUL is a valid UTF-8 codepoint
-    /// and must survive, yet `mrb_str_to_cstr` truncates at and raises
-    /// on a NUL — and on the outcome-encode path (a `#eval` / `#run`
-    /// result, a Panic message) that raise has no protect frame and
-    /// aborts the guest. Each byte sequence that is not UTF-8 reads as
-    /// U+FFFD, as magnus's `Display` renders it.
+    /// Bytes are read by length, so an embedded NUL survives. Each byte
+    /// sequence that is not UTF-8 reads as U+FFFD, as magnus's `Display`
+    /// renders it.
     ///
     /// ## Exception handling
     ///
@@ -353,8 +352,8 @@ pub trait ReprValue: private::ReprValue {
     /// `inspect` that raises is **swallowed**: an empty `String` is
     /// returned. The dispatch runs under exception protection, whose frame
     /// catches the raise into `Err` and leaves no pending `mrb->exc` to
-    /// corrupt later mruby calls in the same C bridge. Bytes that are not
-    /// valid UTF-8 likewise collapse to an empty `String`.
+    /// corrupt later mruby calls in the same C bridge. Each byte sequence
+    /// that is not UTF-8 reads as U+FFFD.
     #[inline]
     fn inspect(self, mrb: &Mrb) -> String {
         let Ok(s_val) = mrb.protect(|mrb| {
@@ -814,10 +813,10 @@ impl Value {
         })
     }
 
-    /// Read a String-tagged value into an owned UTF-8 `String`,
-    /// collapsing a non-String tag or non-UTF-8 bytes to an empty
-    /// string — the shared render tail of `to_string`, `inspect`, and
-    /// `Error::backtrace`.
+    /// Read a String-tagged value into an owned UTF-8 `String`, a
+    /// non-String tag as an empty string and each byte sequence that is
+    /// not UTF-8 as U+FFFD — the shared render tail of `to_string`,
+    /// `inspect`, and `Error::backtrace`.
     /// The String tag, not the classname, decides: a String subclass
     /// instance reads its bytes the same way a plain String does, the
     /// rule the `FromValue` downcasts follow.
