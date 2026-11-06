@@ -19,7 +19,7 @@ require "beni/tasks"
 
 CONFIG = File.expand_path("build_config/mruby.rb", __dir__)
 
-Beni::Tasks.new do
+TASKS = Beni::Tasks.new do
   build_config CONFIG
 
   target :host
@@ -36,7 +36,7 @@ namespace :scenario do
   task :verify do
     abort "[scenario] cargo not on PATH" if system("cargo", "--version", %i[out err] => File::NULL).nil?
 
-    sh({ "BENI_VENDOR_DIR" => File.expand_path("vendor", __dir__) },
+    sh({ "BENI_VENDOR_DIR" => TASKS.configuration.vendor_dir },
        "cargo", "test", "--manifest-path", File.expand_path("Cargo.toml", __dir__))
 
     puts "[scenario] embedded_no_compiler linked and ran with no compiler in the archive"

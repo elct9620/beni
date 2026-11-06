@@ -20,7 +20,6 @@ require "beni/tasks"
 
 CONFIG = File.expand_path("build_config/mruby.rb", __dir__)
 MANIFEST = File.expand_path("Cargo.toml", __dir__)
-VENDOR = File.expand_path("vendor", __dir__)
 UNIVERSAL_DYLIB = File.expand_path("target/libmacos_universal.dylib", __dir__)
 
 # The Mach-O architecture each Rust triple is built for.
@@ -30,12 +29,13 @@ ARCHES = { "aarch64-apple-darwin" => "arm64", "x86_64-apple-darwin" => "x86_64" 
 # it; its `cross` target serves the other.
 NATIVE_TRIPLE = RbConfig::CONFIG["host_cpu"] == "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin"
 
-Beni::Tasks.new do
+TASKS = Beni::Tasks.new do
   build_config CONFIG
 
   target :host
   target :cross
 end
+VENDOR = TASKS.configuration.vendor_dir
 
 def mruby_target(triple)
   triple == NATIVE_TRIPLE ? "host" : "cross"

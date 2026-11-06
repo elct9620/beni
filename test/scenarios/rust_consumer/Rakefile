@@ -15,7 +15,7 @@ $LOAD_PATH.unshift File.expand_path("../../../lib", __dir__)
 
 require "beni/tasks"
 
-Beni::Tasks.new
+TASKS = Beni::Tasks.new
 
 namespace :scenario do
   # Part of the harness contract every scenario implements
@@ -30,7 +30,7 @@ namespace :scenario do
     # hosts and is not on Windows.
     abort "[scenario] cargo not on PATH" if system("cargo", "--version", %i[out err] => File::NULL).nil?
 
-    vendor = File.expand_path("vendor", __dir__)
+    vendor = TASKS.configuration.vendor_dir
     env = { "BENI_VENDOR_DIR" => vendor }
     manifest = File.expand_path("Cargo.toml", __dir__)
     sh(env, "cargo", "test", "--manifest-path", manifest)

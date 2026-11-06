@@ -39,6 +39,9 @@ PRISM_SOURCES = {
 }.freeze
 
 Beni::Tasks.new do
+  # The Rust legs read this tree, so it stays put whatever
+  # BENI_VENDOR_DIR a shell exports.
+  vendor_dir "vendor"
   build_config "build_config/mruby.rb"
   if MRUBY_VERSION
     version MRUBY_VERSION
