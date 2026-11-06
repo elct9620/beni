@@ -2084,9 +2084,9 @@ A `TraceArg` reads the instruction about to run.
 
 A class or module a read answers is a `ClassOrModule`, holding either a class handle or a module handle. It is the class or module the method was defined in, never an include class: a method of a class with prepended modules answers that class.
 
-##### Frame inspection
+#### Frame inspection
 
-A `DebugInspector` reads the frames of the running fiber, mirroring `magnus`'s `DebugInspector`. Each read takes a frame index. Index `0` is the frame running the instruction, and each next index the frame that called it. An index past the fiber's outermost frame answers nothing.
+A `DebugInspector` reads the frames of the running fiber, mirroring `magnus`'s `DebugInspector`. It exists in every build, whether or not the archive carries the debug hooks. Each read takes a frame index. Index `0` is the frame the inspector opened at, and each next index the frame that called it. An index past the fiber's outermost frame answers nothing.
 
 | Read | Answers for the indexed frame |
 |---|---|
@@ -2100,7 +2100,7 @@ A `DebugInspector` reads the frames of the running fiber, mirroring `magnus`'s `
 
 A frame running Rust or C code has no file name, no line, and no local variables. Code compiled without its local variable names declares none. A `DebugInspector` writes nothing.
 
-###### Local variables
+##### Local variables
 
 A frame's local variables are those mruby's `local_variables` lists for its code, valued as mruby's own debugger reads them.
 
@@ -2113,9 +2113,9 @@ The walk outward stops at the nearest scope start. A scope starts with a method 
 
 Before a method's entry instruction runs, only its call's arguments are in place. Its other variables' registers hold what they held before the call.
 
-##### Inspection outside a hook
+##### Opening an inspector
 
-Rust code a Ruby call reached inspects the frames that led to it, mirroring `magnus`'s `Ruby::debug_inspector_open` and `Ruby::debug_inspector_current_depth`.
+In a build carrying the debug hooks, a hook opens one through `TraceArg::debug_inspector`, at the frame running the instruction about to run. Rust code a Ruby call reached opens one at the frame running that code, or counts the frames without opening one, mirroring `magnus`'s `Ruby::debug_inspector_open` and `Ruby::debug_inspector_current_depth`.
 
 | Operation | Outcome |
 |---|---|
