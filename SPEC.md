@@ -394,10 +394,11 @@ names and rejects every other value:
 | `Flonum` | a Float the value word carries itself: some floats under word boxing with inline floats, every float without boxing, none under word boxing without inline floats |
 | `RFloat` | a Float the collector allocates: every Float `Flonum` does not take |
 | `RString` / `RArray` / `RHash` | a String / Array / Hash, subclass instances included |
-| `Range` / `Proc` | a Range / a Proc |
+| `Range` | a Range its `initialize` has set up — narrower than its tag |
+| `Proc` | a Proc |
 | `RClass` | a class or a singleton class |
 | `RModule` | a module |
-| `ExceptionClass` | a class descending from `Exception` — the one handle narrower than its tag |
+| `ExceptionClass` | a class descending from `Exception` — narrower than its tag |
 | `Exception` | an exception object |
 | `RObject` | an ordinary object — what `Object.new` allocates, and `new` on any class whose instances no other row names |
 | `Fiber` / `RStruct` / `RSet` / `RComplex` / `RRational` | a Fiber / Struct / Set / Complex / Rational, from the gem defining each |
@@ -520,7 +521,8 @@ The handle targets below convert what the `FromValue` downcast converts and noth
 | Target | Converts | Error for any other value |
 |---|---|---|
 | `Value` / `bool` / `Option<T>` | as the `FromValue` rule for each | `Option<T>` answers `T`'s `Err` where `T` rejects |
-| `RString` / `RArray` / `RHash` / `Symbol` / `Range` | downcast only | default `TypeError`; *target* is the handle's Ruby class |
+| `RString` / `RArray` / `RHash` / `Symbol` | downcast only | default `TypeError`; *target* is the handle's Ruby class |
+| `Range` | downcast only | a Range nothing initialized: the `ArgumentError` "uninitialized range" mruby raises reading one; any other value: default `TypeError`, *target* `Range` |
 | `NumericValue` | any value whose class descends from `Numeric`, as `magnus`'s does | default `TypeError`; *target* is `Numeric` |
 | `Time` / `RFile` / `Enumerator` | an instance of the class the time, io, or enumerator gem binds to `Time` / `IO` / `Enumerator`, as `magnus`'s handles do; nothing in an interpreter without that gem | default `TypeError`; *target* is `Time` / `IO` / `Enumerator` |
 | `RClass` / `RModule` / `ExceptionClass` | downcast only | `TypeError` "*value* is not a class", "*value* is not a module", or "*value* is not a class inheriting Exception" |
@@ -677,7 +679,7 @@ string literal.
 
 ##### Byte Reads
 
-Rust reads an mruby string's bytes these ways. The reads below never raise.
+Rust reads an mruby string's bytes these ways. The reads below never raise. A String allocated without content, as `String.allocate` makes one, reads as zero bytes.
 
 | Read | Yields | Rejects |
 |---|---|---|
@@ -2076,7 +2078,7 @@ A `TraceArg` reads the instruction about to run.
 | Read | Answers |
 |---|---|
 | `lineno` | its line, or nothing for code that carries no line numbers |
-| `path` | its file name, or nothing for code that carries no line numbers |
+| `path` | its file name as an owned copy no later read changes, or nothing for code that carries no line numbers |
 | `method_id` | the name of the method running it, or nothing at the top level |
 | `tracearg_self` | the `self` of the code running it |
 | `defined_class` | the class or module defining the method running it, or nothing at the top level |
