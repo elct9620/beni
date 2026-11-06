@@ -2470,8 +2470,8 @@ measures complete.
 | More than one `target` declaration naming the same target | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | More than one declaration of the same setting (`version`, `build_config`, or `vendor_dir`) | `Beni::Tasks.new` fails, no task defined, nothing downloaded |
 | Toolchain download fails (network failure, HTTP 4xx/5xx, disk write error) | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
-| A downloaded or cached tarball fails checksum verification | `beni:vendor:setup` aborts, no partial unpack, the vendor tree is left in its pre-setup state |
-| A selected toolchain whose built-in pair carries no checksum for the build platform | `beni:vendor:setup` aborts and names the toolchain and the build platform, nothing downloaded |
+| A downloaded or cached tarball fails checksum verification | `beni:vendor:setup` aborts and removes that tarball from the tarball cache, nothing unpacked; the next setup downloads it again |
+| A selected toolchain whose built-in pair carries no checksum for the build platform | `beni:vendor:setup` aborts and names the toolchain and the build platform, nothing downloaded; `Beni::Tasks.new` and every task that sets up no toolchain still run |
 | `build_config` naming a path that does not exist | `beni:build` aborts and names the missing config path, no archive built |
 | `beni:build` with a `target` declaration naming a target the build config does not define | verification fails, each missing archive reported |
 | A build config including a compiler gem that parses with Prism, with no prism tree staged | `beni:build` aborts, mruby's own build failing to fetch the submodule |
