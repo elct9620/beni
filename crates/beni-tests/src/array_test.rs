@@ -496,14 +496,15 @@ fn join_renders_elements_with_a_separator() {
     // Each element's to_s runs and the separator sits between adjacent
     // renderings.
     let joined = ary
-        .join(&mrb, Some(mrb.str_new(b",")))
+        .join(&mrb, mrb.str_new(b","))
         .expect("join with a separator succeeds");
     assert_eq!(joined.owned_bytes(), b"1,2,3".to_vec());
 
-    // A None separator concatenates the renderings with nothing between.
+    // A Rust string separator converts into a String; an empty one
+    // concatenates the renderings with nothing between.
     let glued = ary
-        .join(&mrb, None)
-        .expect("join without a separator succeeds");
+        .join(&mrb, "")
+        .expect("join with an empty separator succeeds");
     assert_eq!(glued.owned_bytes(), b"123".to_vec());
 }
 
@@ -521,7 +522,7 @@ fn join_surfaces_a_raising_element_to_s_as_err() {
             .expect("the test source must compile and run"),
     )
     .expect("an Array literal is Array-tagged");
-    assert!(matches!(ary.join(&mrb, None), Err(Error::Exception(_))));
+    assert!(matches!(ary.join(&mrb, ""), Err(Error::Exception(_))));
 }
 
 #[test]
@@ -768,4 +769,22 @@ fn elements_go_in_from_rust_values_and_come_out_as_the_type_named() {
     assert!(ary.pop::<bool>(&mrb).expect("a boolean pops"));
     assert_eq!(ary.shift::<i64>(&mrb).expect("an Integer shifts"), 0);
     assert_eq!(ary.len(), 2);
+}
+
+#[test]
+fn join_takes_any_string_separator() {
+    let mrb = open_mrb();
+    let ary = RArray::from_value(mrb.eval::<beni::Value>("[1, 2]").expect("the literal runs"))
+        .expect("an Array literal is Array-tagged");
+    for joined in [
+        ary.join(&mrb, String::from("-")),
+        ary.join(&mrb, c"-"),
+        ary.join(&mrb, std::ffi::CString::new("-").expect("no NUL")),
+        ary.join(&mrb, std::path::Path::new("-")),
+    ] {
+        assert_eq!(
+            joined.expect("join succeeds").owned_bytes(),
+            b"1-2".to_vec()
+        );
+    }
 }

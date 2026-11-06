@@ -11,6 +11,7 @@
 //! `entry`) live here. Named-value constructors that magnus places on
 //! the type itself stay there too (`Symbol::new`).
 
+use crate::string::IntoRString;
 use crate::try_convert::length_error;
 use crate::{
     sys::AsRawValue, Error, IntoValue, Mrb, RString, ReprValue, TryConvert, TryConvertOwned, Value,
@@ -284,17 +285,17 @@ impl RArray {
     }
 
     /// `mrb_ary_join(mrb, self, sep)` — render the elements into one
-    /// string with `sep` between them, Ruby's `Array#join`. Each element's
-    /// `to_s` runs, so a raise inside it surfaces as `Err`; the call runs
-    /// under exception protection. A `None` separator joins with nothing between,
-    /// the way Ruby's `join` treats a `nil` argument.
+    /// string with `sep` between them, Ruby's `Array#join`, mirroring
+    /// magnus's `RArray::join`. Each element's `to_s` runs, so a raise
+    /// inside it surfaces as `Err`; the call runs under exception
+    /// protection.
     #[inline]
-    pub fn join(self, mrb: &Mrb, sep: Option<RString>) -> Result<RString, Error> {
-        let sep = sep.map_or_else(|| crate::value::qnil().as_value(), RString::as_value);
+    pub fn join<T: IntoRString>(self, mrb: &Mrb, sep: T) -> Result<RString, Error> {
+        let sep = sep.into_r_string(mrb);
         mrb.protect(|mrb| {
             // SAFETY: `mrb` is alive inside the protect frame; `self`
             // is Array-tagged by the `from_value_unchecked` contract;
-            // `sep` is nil or a String-tagged value from the same VM.
+            // `sep` is a String-tagged value from the same VM.
             // `mrb_ary_join` dispatches each element's `to_s`, which may
             // raise — caught by `protect` into `Err`.
             let v = Value::from_raw_unchecked(unsafe {

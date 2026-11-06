@@ -71,8 +71,8 @@ typed:
   MRB_UNDEF_ALLOCATOR: Class::undef_default_alloc_func
   RARRAY_LEN: RArray::len
   RARRAY_PTR: RArray::as_slice
-  RSTRING_LEN: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len`"
-  RSTRING_PTR: "`RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature)"
+  RSTRING_LEN: "`RString::as_slice`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len`"
+  RSTRING_PTR: "`RString::as_slice`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature)"
   mrb_argnum_error: Error::argnum
   mrb_ary_clear: RArray::clear
   mrb_ary_concat: RArray::concat

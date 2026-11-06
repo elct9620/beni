@@ -4,11 +4,11 @@
 //! `#[repr(transparent)]` over `mrb_value`). The two share their
 //! in-memory layout — `RString` is exactly an `mrb_value` known to
 //! carry an mruby `String`. The String tag the newtype guarantees is
-//! what lets `cat` and the owned reads be safe and frees `as_bytes` of the
+//! what lets `cat` and the owned reads be safe and frees `as_slice` of the
 //! tag obligation `Value` could not discharge.
 //!
 //! Mirrors magnus's `src/r_string.rs`: string factories live on `Mrb`
-//! (`str_new`, `str_from_c_str`), per-string ops (`cat`, `as_bytes`,
+//! (`str_new`, `str_from_c_str`), per-string ops (`cat`, `as_slice`,
 //! `to_string`, and `to_bytes` with the `bytes` feature) live here.
 
 use crate::{sys::AsRawValue, value::private::ReprValue as _, Error, Mrb, ReprValue, Value};
@@ -212,7 +212,8 @@ impl RString {
         }
     }
 
-    /// Borrow the raw bytes of this string. Routes through the
+    /// Borrow the raw bytes of this string, mirroring magnus's
+    /// `RString::as_slice`. Routes through the
     /// `mrb_rstring_ptr_func` / `mrb_rstring_len_func` static-inline wrappers in
     /// `wrapper.h`, which expand the `RSTRING_PTR(s)` / `RSTRING_LEN(s)`
     /// macros inside the C compiler so the embed-vs-heap branch comes
@@ -228,7 +229,7 @@ impl RString {
     /// Caller must not invoke another mruby API that could free or move
     /// the string's backing buffer before consuming the slice.
     #[inline]
-    pub unsafe fn as_bytes(self, _mrb: &Mrb) -> &[u8] {
+    pub unsafe fn as_slice(self, _mrb: &Mrb) -> &[u8] {
         // SAFETY: forwarded from the caller; the borrowed `&Mrb` bounds
         // the slice.
         unsafe { self.bytes_unbounded() }
@@ -257,7 +258,7 @@ impl RString {
     }
 
     /// This string's bytes as an owned `bytes::Bytes`. The bytes are
-    /// copied out before returning, so — unlike `as_bytes` — the result
+    /// copied out before returning, so — unlike `as_slice` — the result
     /// needs no `&Mrb` lifetime anchor and outlives later mruby calls.
     /// Mirrors magnus's `RString::to_bytes`; an owned `Vec<u8>` comes from
     /// the `FromValue` conversion.
@@ -528,3 +529,54 @@ impl RString {
 crate::value::value_backed_repr!(RString);
 
 crate::try_convert::tagged_conversions!(RString, sys::MRB_TT_STRING => "String");
+
+/// A Rust value that converts into a string handle, for an argument only
+/// a string fills. Mirrors magnus's `IntoRString`.
+pub trait IntoRString: Sized {
+    /// `self` as a string handle, a new string unless it already is one.
+    fn into_r_string(self, mrb: &Mrb) -> RString;
+}
+
+impl IntoRString for RString {
+    #[inline]
+    fn into_r_string(self, _mrb: &Mrb) -> RString {
+        self
+    }
+}
+
+impl IntoRString for &str {
+    #[inline]
+    fn into_r_string(self, mrb: &Mrb) -> RString {
+        mrb.str_new(self.as_bytes())
+    }
+}
+
+impl IntoRString for String {
+    #[inline]
+    fn into_r_string(self, mrb: &Mrb) -> RString {
+        self.as_str().into_r_string(mrb)
+    }
+}
+
+impl IntoRString for &core::ffi::CStr {
+    #[inline]
+    fn into_r_string(self, mrb: &Mrb) -> RString {
+        mrb.str_from_c_str(self)
+    }
+}
+
+impl IntoRString for std::ffi::CString {
+    #[inline]
+    fn into_r_string(self, mrb: &Mrb) -> RString {
+        self.as_c_str().into_r_string(mrb)
+    }
+}
+
+impl IntoRString for &std::path::Path {
+    /// The path as its `IntoValue` conversion renders it.
+    #[inline]
+    fn into_r_string(self, mrb: &Mrb) -> RString {
+        // SAFETY: a path converts into a new String.
+        unsafe { RString::from_value_unchecked(crate::IntoValue::into_value(self, mrb)) }
+    }
+}

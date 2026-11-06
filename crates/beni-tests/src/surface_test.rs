@@ -211,7 +211,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RString::from_value_unchecked;
     let _ = RString::cat;
     let _ = RString::buf_append;
-    let _ = RString::as_bytes;
+    let _ = RString::as_slice;
     let _ = RString::to_char;
     let _ = RString::to_string;
     let _ = RString::len;
@@ -286,6 +286,8 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = <Symbol as FromValue>::from_value;
     let _ = <Symbol as IntoValue>::into_value;
     let _ = <RString as IntoValue>::into_value;
+    let _ = <&str as beni::string::IntoRString>::into_r_string;
+    let _ = <RString as beni::string::IntoRString>::into_r_string;
     let _ = <RArray as IntoValue>::into_value;
     let _ = <RHash as IntoValue>::into_value;
     let _ = <Proc as IntoValue>::into_value;
@@ -296,7 +298,7 @@ fn full_api_surface_is_reachable_from_outside() {
     let _ = RArray::clear;
     let _ = RArray::concat;
     let _ = RArray::dup;
-    let _ = RArray::join;
+    let _ = RArray::join::<&str>;
     let _ = RArray::pop::<Value>;
     let _ = RArray::replace;
     let _ = RArray::resize;

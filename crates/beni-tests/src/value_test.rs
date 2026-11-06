@@ -487,8 +487,8 @@ fn check_frozen_guards_frozen_and_immediate_receivers() {
     // Freezing it flips the guard to a `FrozenError`, surfaced as Err
     // rather than unwinding across the call. The protect frame leaves
     // no pending exception behind.
-    let frozen = mutable.freeze(&mrb);
-    let err = frozen
+    mutable.freeze(&mrb);
+    let err = mutable
         .check_frozen(&mrb)
         .expect_err("a frozen receiver must surface as Err");
     match err {
@@ -1272,8 +1272,8 @@ fn freeze_marks_the_value_frozen() {
         .expect("frozen? does not raise")
         .to_bool());
 
-    let frozen = s.freeze(&mrb);
-    assert!(frozen
+    s.freeze(&mrb);
+    assert!(s
         .funcall::<_, _, beni::Value>(&mrb, c"frozen?", ())
         .expect("frozen? does not raise")
         .to_bool());

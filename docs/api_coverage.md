@@ -446,8 +446,8 @@ Legend: ✅ covered · ❌ missing · 🚫 outside the measure
 | `RSTRING_CSTR` | macro | ❌ | ✅ | defined as `mrb_string_cstr` |
 | `RSTRING_EMBED_LEN` | macro | ❌ | ❌ |  |
 | `RSTRING_END` | macro | ❌ | ❌ |  |
-| `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len` |
-| `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_bytes`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature) |
+| `RSTRING_LEN` | macro | ✅ | ✅ | `RString::as_slice`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature), `RString::len` |
+| `RSTRING_PTR` | macro | ✅ | ✅ | `RString::as_slice`, the owned reads (`FromValue` into `Vec<u8>` / `String`, `RString::to_bytes` with the `bytes` feature) |
 | `mrb_obj_as_string` | fn | ✅ | ✅ | `ReprValue::to_r_string` |
 | `mrb_ptr_to_str` | fn | ✅ | ❌ |  |
 | `mrb_str_append` | fn | ✅ | ✅ | `RString::buf_append` — `mrb_ensure_string_type` then `mrb_str_cat_str`, and an `RString` argument always passes the ensure |

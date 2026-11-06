@@ -292,9 +292,11 @@ pub trait ReprValue: private::ReprValue {
     /// `mrb_obj_classname(mrb, self)` — the Ruby class name of `self`
     /// as an owned `String`, or `""` when mruby returns NULL. A byte
     /// sequence that is not UTF-8, which a constant name may hold, reads
-    /// as U+FFFD, as magnus's `classname` reads it. mruby builds the name
-    /// into a GC-managed temporary, so the bytes are copied out at once
-    /// rather than borrowed.
+    /// as U+FFFD, as magnus's `classname` reads it. Safe and owned where
+    /// magnus answers an `unsafe` borrowed `Cow`: CRuby hands out the
+    /// path its class keeps, while mruby builds a new String on every
+    /// call (`mrb_class_path`, `vendor/mruby/src/class.c`) that nothing
+    /// roots past it, so the bytes are copied out at once.
     #[inline]
     fn classname(self, mrb: &Mrb) -> String {
         // SAFETY: `mrb` is alive by the borrow; `self` originates
@@ -316,7 +318,7 @@ pub trait ReprValue: private::ReprValue {
     /// Strings, so the redundant call is cheap and keeps a single
     /// conversion entry point.
     ///
-    /// Bytes are read through `RString::as_bytes` (RSTRING_PTR / RSTRING_LEN),
+    /// Bytes are read through `RString::as_slice` (RSTRING_PTR / RSTRING_LEN),
     /// not as a C string: an embedded NUL is a valid UTF-8 codepoint
     /// and must survive, yet `mrb_str_to_cstr` truncates at and raises
     /// on a NUL — and on the outcome-encode path (a `#eval` / `#run`
@@ -496,13 +498,18 @@ pub trait ReprValue: private::ReprValue {
     }
 
     /// `mrb_respond_to(mrb, self, mid)` — TRUE when `self` answers to
-    /// the method named by `mid`.
+    /// the method named by `mid`, private methods included. Takes no
+    /// `include_private` and answers no `Result`, where magnus does both:
+    /// mruby's lookup ignores visibility and dispatches no
+    /// `respond_to_missing?` (`mrb_obj_respond_to`,
+    /// `vendor/mruby/src/class.c`).
     #[inline]
     fn respond_to<K: crate::IntoId>(self, mrb: &Mrb, name: K) -> bool {
         let Ok(mid) = name.into_id(mrb).map(crate::Id::to_raw) else {
             return false;
         };
-        // SAFETY: as `ivar_set`.
+        // SAFETY: `mrb` is alive by the borrow and `self` shares its VM;
+        // the lookup reads method tables and raises nothing.
         unsafe { sys::mrb_respond_to(mrb.as_ptr(), self.as_value().0, mid) }
     }
 
@@ -539,14 +546,14 @@ pub trait ReprValue: private::ReprValue {
         unsafe { sys::mrb_obj_is_instance_of(mrb.as_ptr(), self.as_value().0, class.raw()) }
     }
 
-    /// `mrb_obj_freeze(mrb, self)` — freeze `self` in place and return
-    /// it, Ruby's `Object#freeze`. Freezing is idempotent and never
-    /// raises.
+    /// `mrb_obj_freeze(mrb, self)` — freeze `self` in place, Ruby's
+    /// `Object#freeze`, mirroring magnus's `ReprValue::freeze`. Freezing
+    /// is idempotent and never raises.
     #[inline]
-    fn freeze(self, mrb: &Mrb) -> Value {
+    fn freeze(self, mrb: &Mrb) {
         // SAFETY: `mrb` is alive; `self` shares the VM. `mrb_obj_freeze`
-        // sets the frozen flag and returns the receiver.
-        Value::from_raw_unchecked(unsafe { sys::mrb_obj_freeze(mrb.as_ptr(), self.as_value().0) })
+        // sets the frozen flag.
+        unsafe { sys::mrb_obj_freeze(mrb.as_ptr(), self.as_value().0) };
     }
 
     /// `mrb_check_frozen_value(mrb, self)` — a precondition guard that
@@ -821,7 +828,7 @@ impl Value {
         };
         // SAFETY: `from_value` confirmed the String tag; the bytes are
         // copied before any further mruby call.
-        let bytes = unsafe { s.as_bytes(mrb) };
+        let bytes = unsafe { s.as_slice(mrb) };
         String::from_utf8_lossy(bytes).into_owned()
     }
 

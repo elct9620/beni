@@ -672,7 +672,7 @@ fn a_string_allocated_without_content_reads_as_no_bytes() {
         .expect("allocating a String runs");
 
     let s = RString::from_value(bare).expect("an allocated String downcasts");
-    assert_eq!(unsafe { s.as_bytes(&mrb) }, b"");
+    assert_eq!(unsafe { s.as_slice(&mrb) }, b"");
     assert_eq!(String::from_value(bare).as_deref(), Some(""));
     assert_eq!(Vec::<u8>::from_value(bare), Some(Vec::new()));
 }
