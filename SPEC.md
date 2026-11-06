@@ -120,10 +120,10 @@ Each task leaves this state.
 | Task | Outcome |
 |---|---|
 | `beni:build` | toolchains staged, the archive built per target |
-| `beni:clean` | mruby build trees removed, vendored source kept |
+| `beni:clean` | every mruby build tree removed, declared or not, the vendored source and mruby's cloned gem sources kept |
 | `beni:config` | self-contained, editable build config generated at the `build_config` path |
 | `beni:vendor:setup` | selected toolchains downloaded and unpacked; the wasi toolchain file staged when `wasi-sdk` is selected |
-| `beni:vendor:clean` | unpacked toolchains removed, tarball cache kept |
+| `beni:vendor:clean` | every toolchain beni stages removed, selected or not, the tarball cache kept |
 | `beni:vendor:clobber` | vendor tree removed entirely, tarball cache included |
 
 #### Behaviors
