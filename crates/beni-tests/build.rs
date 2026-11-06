@@ -2,7 +2,8 @@
 // so a test compiles exactly where `beni` carries what it reaches: the
 // `mrb_debug_hook` cfg gates the hook tests, `mrb_bigint` the
 // arbitrary-width cases, and `mrb_int64` the cases a 32-bit `mrb_int`
-// alone can reach.
+// alone can reach. The float width gates no test; it is read so the
+// suite stops where the crate stops without it.
 
 include!("../beni/build/bigint.rs");
 include!("../beni/build/debug_hook.rs");
@@ -22,7 +23,6 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(mrb_debug_hook)");
     println!("cargo:rustc-check-cfg=cfg(mrb_bigint)");
     println!("cargo:rustc-check-cfg=cfg(mrb_int64)");
-    println!("cargo:rustc-check-cfg=cfg(mrb_float32)");
 
     let debug_hook = std::env::var(DEBUG_HOOK_METADATA).ok();
     if configured_mrb_debug_hook(debug_hook.as_deref()) {
@@ -40,7 +40,5 @@ fn main() {
     }
 
     let float = std::env::var(FLOAT_WIDTH_METADATA).ok();
-    if configured_mrb_float32(float.as_deref()) {
-        println!("cargo:rustc-cfg=mrb_float32");
-    }
+    configured_mrb_float32(float.as_deref());
 }
