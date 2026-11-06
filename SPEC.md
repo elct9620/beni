@@ -368,11 +368,12 @@ A third-party trait that bounds a core capability is no dependency feature:
 
 The crate owns every Rust-level abstraction over the C API: an RAII interpreter
 handle (`Mrb`, opened via `Mrb::open`), `Value` newtypes, and class and module
-definition. Three typed conversions cross the Rust/Ruby boundary:
+definition. These typed conversions cross the Rust/Ruby boundary:
 
 | Conversion | Role |
 |---|---|
 | `IntoValue` | out of Rust |
+| `IntoRString` | out of Rust into a string handle, for an argument only a string fills, mirroring `magnus`'s `IntoRString` |
 | `FromValue` | the downcast that reads a value only as what its type tag already is |
 | `TryConvert` | the conversion a method's receiver and arguments cross, mirroring `magnus`'s `TryConvert` |
 
@@ -683,7 +684,7 @@ Rust reads an mruby string's bytes these ways. The reads below never raise. A St
 
 | Read | Yields | Rejects |
 |---|---|---|
-| borrowed slice | a byte view of the string | — |
+| borrowed slice | a byte view of the string, mirroring `magnus`'s `unsafe` `RString::as_slice` | — |
 | owned `String` | the bytes when valid UTF-8 | a non-string tag, or non-UTF-8 bytes |
 | owned `Vec<u8>` | arbitrary bytes | a non-string tag |
 | owned `Bytes`, read from a string handle with the `bytes` feature | arbitrary bytes | — |
@@ -1072,7 +1073,7 @@ mirroring `magnus`'s signatures. The typed array carries Ruby `Array`'s surface:
 | extend | append another array's elements |
 | replace | mutate the receiver in place to hold a copy of another array's elements, not a new array |
 | splice | replace a subsequence in place |
-| join | render the elements into one string |
+| join | render the elements into one string, an `IntoRString` separator between each two elements |
 | clear | empty it |
 | duplicate | copy it |
 | convert to a Rust sequence | each element through `TryConvert` |
