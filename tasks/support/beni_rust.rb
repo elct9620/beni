@@ -4,7 +4,7 @@
 # =============================
 #
 # Pure-Ruby helpers backing +tasks/rust.rake+. Owns cargo and
-# wasm32-wasip1 target detection, the environment each leg runs cargo
+# WASI target detection, the environment each leg runs cargo
 # under, and the documentation build. The .rake wrapper is the rake DSL
 # surface that glues these helpers to the +rust:*+ tasks.
 
@@ -21,7 +21,9 @@ module BeniRust
   ROOT = File.expand_path("../..", __dir__)
   VENDOR_DIR = File.join(ROOT, "vendor")
   MRUBY_SOURCE_DIR = File.join(VENDOR_DIR, "mruby")
-  WASM_TARGET = "wasm32-wasip1"
+  # Each WASI target the crates link for, mapped to the validation
+  # config's build staging its archive.
+  WASM_BUILDS = { "wasm32-wasip1" => "wasi", "wasm32-wasip2" => "wasip2" }.freeze
 
   # Whether cargo can be spawned. Asking cargo itself needs no lookup
   # tool, which +which+ is on POSIX hosts and is not on Windows.
@@ -38,10 +40,10 @@ module BeniRust
   end
 
   # Stop a wasm leg whose target standard library is not installed.
-  def self.require_wasm_target!
-    return if wasm_target_installed?
+  def self.require_wasm_target!(target)
+    return if wasm_target_installed?(target)
 
-    abort "#{WASM_TARGET} is not installed; run `rustup target add #{WASM_TARGET}` " \
+    abort "#{target} is not installed; run `rustup target add #{target}` " \
           "(rust-toolchain.toml declares it, so a rustup-managed toolchain has it)"
   end
 
@@ -54,10 +56,10 @@ module BeniRust
   end
 
   # Archive discovery env for wasm32 cargo runs: cross targets never
-  # read the vendor tree, so the wasi staged path and the unpacked
-  # wasi-sdk root are named directly. +lib_dir+ defaults to the wasi
-  # archive `beni:build` stages.
-  def self.wasm_env(lib_dir = File.join(MRUBY_SOURCE_DIR, "build", "wasi", "lib"))
+  # read the vendor tree, so the staged path and the unpacked wasi-sdk
+  # root are named directly. +lib_dir+ defaults to the archive
+  # `beni:build` stages for +target+.
+  def self.wasm_env(target, lib_dir = File.join(MRUBY_SOURCE_DIR, "build", WASM_BUILDS.fetch(target), "lib"))
     {
       "MRUBY_LIB_DIR" => lib_dir,
       "WASI_SDK_PATH" => File.join(VENDOR_DIR, "wasi-sdk")
@@ -117,8 +119,8 @@ module BeniRust
   # Whether the wasm target's standard library is installed. The sysroot
   # prints for any triple rustc knows, installed or not, so what settles
   # it is the target's own lib directory holding the compiled std.
-  def self.wasm_target_installed?
-    libdir, status = Open3.capture2("rustc", "--print", "target-libdir", "--target", WASM_TARGET)
+  def self.wasm_target_installed?(target)
+    libdir, status = Open3.capture2("rustc", "--print", "target-libdir", "--target", target)
     status.success? && !Dir.glob(File.join(libdir.strip, "*.rlib")).empty?
   rescue StandardError
     false

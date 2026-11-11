@@ -7,9 +7,9 @@
 # `crates/beni-sys`'s archive discovery is environment-driven
 # (`MRUBY_LIB_DIR` > `BENI_VENDOR_DIR`, no fallback), so each task
 # names the repo's vendor artifacts explicitly: host tasks point
-# `BENI_VENDOR_DIR` at the vendor tree, the wasm task points
-# `MRUBY_LIB_DIR` / `WASI_SDK_PATH` at the wasi staged path and
-# toolchain. The artifacts come from the gem's own `beni:build` task
+# `BENI_VENDOR_DIR` at the vendor tree, the wasm tasks point
+# `MRUBY_LIB_DIR` / `WASI_SDK_PATH` at each WASI target's staged path
+# and the toolchain. The artifacts come from the gem's own `beni:build` task
 # (dogfooding — see Beni::Tasks in the Rakefile); running a task
 # without them fails naming the missing archive.
 #
@@ -22,7 +22,8 @@
 #                              every capability feature off, which is
 #                              the shape a consumer embedding mruby
 #                              without a compiler gets.
-#   $ rake rust:check:wasm   — cargo check on wasm32-wasip1
+#   $ rake rust:check:wasm   — cargo check on wasm32-wasip1 and
+#                              wasm32-wasip2
 #   $ rake rust:check:docs   — what a documentation host builds: no
 #                              archive, documentation bindings standing
 #                              in for one. Generates them first, so what
@@ -30,9 +31,10 @@
 #                              compiles before it renders — a render
 #                              passes over function bodies, which is
 #                              where the bindings surface grows.
-#   $ rake rust:link:wasm    — link wasm32-wasip1 test binaries against the
-#                              staged archive. `cargo check` never reaches
-#                              the linker, so this is what exercises the
+#   $ rake rust:link:wasm    — link wasm32-wasip1 and wasm32-wasip2 test
+#                              binaries, each against its staged
+#                              archive. `cargo check` never reaches the
+#                              linker, so this is what exercises the
 #                              link set the sidecar names.
 #   $ rake rust:test:default — cargo test against an mruby built with the
 #                              untouched upstream default config — the
@@ -88,11 +90,12 @@ namespace :rust do
   end
 
   namespace :check do
-    desc "cargo check the workspace on wasm32-wasip1"
+    desc "cargo check the workspace on every WASI target"
     cargo_task(:wasm) do
-      BeniRust.require_wasm_target!
-
-      sh(BeniRust.wasm_env, "cargo", "check", "--workspace", "--target", BeniRust::WASM_TARGET)
+      BeniRust::WASM_BUILDS.each_key do |target|
+        BeniRust.require_wasm_target!(target)
+        sh(BeniRust.wasm_env(target), "cargo", "check", "--workspace", "--target", target)
+      end
     end
 
     # Cargo unifies features across the members it builds together, so
@@ -124,11 +127,12 @@ namespace :rust do
     # search paths — are only exercised by producing a real artifact.
     # wasm32 is held to building and linking, as the other cross target
     # is, so the binaries are built and not run.
-    desc "link wasm32-wasip1 test binaries against the staged archive"
+    desc "link test binaries for every WASI target against its staged archive"
     cargo_task(:wasm) do
-      BeniRust.require_wasm_target!
-
-      sh(BeniRust.wasm_env, "cargo", "test", "--workspace", "--target", BeniRust::WASM_TARGET, "--no-run")
+      BeniRust::WASM_BUILDS.each_key do |target|
+        BeniRust.require_wasm_target!(target)
+        sh(BeniRust.wasm_env(target), "cargo", "test", "--workspace", "--target", target, "--no-run")
+      end
     end
   end
 
@@ -153,7 +157,7 @@ namespace :rust do
     # BeniRust.no_boxing_test for the mechanics.
     desc "cargo test against a MRB_NO_BOXING mruby build, and link it on wasm32-wasip1"
     cargo_task(no_boxing: "beni:vendor:setup") do
-      BeniRust.require_wasm_target!
+      BeniRust.require_wasm_target!(BeniRust::WASM_BUILDS.key("wasi"))
       BeniRust.no_boxing_test
     end
   end

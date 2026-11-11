@@ -49,8 +49,9 @@ module BeniRust
   def self.no_boxing_test
     host_lib_dir, wasi_lib_dir = no_boxing_lib_dirs
     abi_test(host_lib_dir, "no-boxing")
-    run!(wasm_env(wasi_lib_dir),
-         "cargo", "test", "--workspace", "--target", WASM_TARGET, "--no-run",
+    target = WASM_BUILDS.key("wasi")
+    run!(wasm_env(target, wasi_lib_dir),
+         "cargo", "test", "--workspace", "--target", target, "--no-run",
          "--target-dir", File.join(ROOT, "target", "no-boxing"),
          chdir: ROOT)
   end
