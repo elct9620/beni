@@ -279,9 +279,10 @@ fn main() {
     );
     require_supported_mruby(&include_root);
 
-    let wasi_sdk = is_wasm.then(|| {
+    let wasi_sysroot = is_wasm.then(|| {
         require_archive_target(&target, parse_target(&sidecar).as_deref(), &lib_dir);
-        resolve_wasi_sdk(&lib_dir, &sidecar)
+        let wasi_sdk = resolve_wasi_sdk(&lib_dir, &sidecar);
+        format!("{wasi_sdk}/share/wasi-sysroot")
     });
 
     // The archive's actual compile defines, from its flags.mak
@@ -299,7 +300,7 @@ fn main() {
         &manifest_dir,
         &include_root,
         &target,
-        wasi_sdk.as_deref(),
+        wasi_sysroot.as_deref(),
         &declaration_flags,
         &bindings_rs,
         &static_wrappers_c,
@@ -313,8 +314,8 @@ fn main() {
     // archive's target rather than Rust's own (Rust's self-contained
     // WASI set carries libc alone).
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
-    if let Some(wasi_sdk) = wasi_sdk.as_deref() {
-        println!("cargo:rustc-link-search=native={wasi_sdk}/share/wasi-sysroot/lib/{target}");
+    if let Some(wasi_sysroot) = wasi_sysroot.as_deref() {
+        println!("cargo:rustc-link-search=native={wasi_sysroot}/lib/{target}");
     }
     let archive_file_name = parse_archive_file_name(&sidecar);
     for lib in parse_link_libs(&sidecar) {
@@ -373,17 +374,17 @@ fn run_bindgen(
     manifest_dir: &Path,
     include_root: &Path,
     target: &str,
-    wasi_sdk: Option<&str>,
+    wasi_sysroot: Option<&str>,
     declaration_flags: &[String],
     bindings_rs: &Path,
     static_wrappers_c: &Path,
 ) {
     let wrapper_h = manifest_dir.join("src/wrapper.h");
     let mut builder = bindgen::Builder::default().header(wrapper_h.to_str().unwrap());
-    if let Some(wasi_sdk) = wasi_sdk {
+    if let Some(wasi_sysroot) = wasi_sysroot {
         builder = builder
             .clang_arg(format!("--target={target}"))
-            .clang_arg(format!("--sysroot={}/share/wasi-sysroot", wasi_sdk));
+            .clang_arg(format!("--sysroot={wasi_sysroot}"));
     }
     // These decide what the archive's headers declare. libclang is not
     // the compiler the sidecar names, so nothing deciding how code is
