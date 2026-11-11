@@ -32,8 +32,6 @@ module Beni
       def selected_names: () -> Array[String]
 
       def selected_toolchain: (String name) -> SelectedToolchain
-
-      def mruby_version: () -> String
     end
   end
 end

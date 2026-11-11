@@ -99,12 +99,8 @@ module Beni
         definition = @definitions[name]
         return SelectedToolchain.new(name: name, version: definition.version, sha256: definition.sha256) if definition
 
-        version = name == "mruby" ? mruby_version : Vendor::BUILT_IN_PAIRS.fetch(name).fetch(:version)
+        version = (@settings[:version] if name == "mruby") || Vendor.built_in_version(name)
         SelectedToolchain.new(name: name, version: version, sha256: Vendor.built_in_sha256(name, version))
-      end
-
-      def mruby_version
-        @settings[:version] || Vendor::BUILT_IN_PAIRS.fetch("mruby").fetch(:version)
       end
     end
   end

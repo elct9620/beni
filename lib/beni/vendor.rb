@@ -134,7 +134,6 @@ module Beni
     def built_in_version(name)
       BUILT_IN_PAIRS.fetch(name).fetch(:version)
     end
-    private_class_method :built_in_version
 
     # Where +name+ unpacks, relative to the vendor tree.
     def staged_dir(name)
