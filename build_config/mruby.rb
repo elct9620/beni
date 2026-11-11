@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# The repo's validation mruby build config.
-# ==========================================
+# The verification config beni:build stages.
+# ===========================================
 #
 # A tuned build beyond the upstream defaults — the consumer posture
 # `rake beni:config` seeds (generate the upstream default, then edit):

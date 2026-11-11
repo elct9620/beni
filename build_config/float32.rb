@@ -6,11 +6,11 @@
 # One host target built with +MRB_USE_FLOAT32+, so `mrb_float` is
 # `float` rather than `double`. The beni crates offer a different set of
 # float conversions under each configured float width; this is the
-# archive that compiles and runs the 32-bit set, which the validation
-# config's double-width build never reaches.
+# archive that compiles and runs the 32-bit set, which
+# build_config/mruby.rb's double-width build never reaches.
 #
 # It also pins +MRB_INT32+ without the arbitrary-width Integer gem, the
-# one integer posture no other verification build covers: the crates
+# one integer posture no other verification config covers: the crates
 # offer a narrower set of integer conversions where a 32-bit +mrb_int+
 # has no bigint to fall back on. Nothing here is a product posture — it
 # exists to be verified against.

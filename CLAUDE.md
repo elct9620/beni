@@ -103,7 +103,7 @@ A tool-vs-tool conflict is the one allowed lint widening: `Style/DataInheritance
 
 ## Build Pipeline
 
-The repo dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validation config `build_config/mruby.rb`. That config builds host and wasi, ABI-pinned with `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`; the gem's default stays mruby's untouched upstream config. `rake rust:verify` is the single local gate.
+The repo dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the verification config `build_config/mruby.rb`. That config builds host and both WASI targets, ABI-pinned with `MRB_INT32` and `MRB_WORDBOX_NO_INLINE_FLOAT`; the gem's default stays mruby's untouched upstream config. `rake rust:verify` is the single local gate.
 
 | Task | Command |
 |------|---------|
@@ -113,6 +113,7 @@ The repo dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validat
 | Run one Ruby test by name | `bundle exec ruby -Ilib -Itest test/beni/test_builder.rb -n /pattern/` |
 | Steep type check only | `bundle exec rake steep` |
 | Full Rust verification chain | `bundle exec rake rust:verify` |
+| Lint every verification config (after `rust:verify`) | `bundle exec rake rust:clippy` |
 | Build vendored mruby (both targets) | `bundle exec rake beni:build` |
 | Point the chain at another mruby release | `BENI_MRUBY_VERSION=4.1.0-rc2 bundle exec rake beni:build` |
 | Stage toolchains only | `bundle exec rake beni:vendor:setup` |
@@ -179,7 +180,7 @@ Each entry point's own header or module doc is the authority for its area; read 
 | Wrapper macros | `crates/beni-macros/src/` | tested on `beni`'s re-exports |
 | Wrapper tests | `crates/beni-tests/src/` | run by `rake rust:test` only |
 | Consumer scenarios | `test/scenarios/*/Rakefile` | headers list covered postures |
-| Verification chain | `tasks/rust.rake` | header explains each leg |
+| Verification chain | `tasks/rust.rake` | header explains each task |
 | Documentation bindings | `tasks/docs.rake` | generated, never tracked |
 | CI lanes | `.github/workflows/main.yml` | rationale inline |
 | RBS signatures | `sig/beni/` | mirrors `lib/beni/` 1:1 |

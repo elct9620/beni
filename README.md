@@ -184,7 +184,7 @@ lockstep, in both this repo and kobako; host builds are unaffected.
 
 After checking out the repo, run `bin/setup` to install dependencies, then
 `bundle exec rake` for the default gate (tests + RuboCop + Steep). The repo
-dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validation
+dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the verification
 config `build_config/mruby.rb`. It builds host, wasm32-wasip1 and
 wasm32-wasip2 archives, and a repo-local rake chain verifies the crates
 against each:

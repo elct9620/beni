@@ -47,7 +47,7 @@ module BeniDocsBindings
   # Write the bindings a documentation build reads and return the path.
   # Generated where it is read, so any host may write its own.
   def generate
-    out_dir = build_out_dir(BeniRust.upstream_default_lib_dir)
+    out_dir = build_out_dir(BeniRust.stage(BeniRust::VerificationConfig::DEFAULT).lib_dir("host"))
     File.write(TARGET, HEADER + File.read(File.join(out_dir, "bindings.rs")))
     TARGET
   end

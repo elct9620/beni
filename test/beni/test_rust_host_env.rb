@@ -4,10 +4,10 @@ require "test_helper"
 
 require_relative "../../tasks/support/beni_rust"
 
-# The host legs discover the vendor tree's archive, so a shell that
+# The host tasks discover the vendor tree's archive, so a shell that
 # exports an archive path of its own must not redirect them.
 class TestRustHostEnv < Minitest::Test
-  def test_the_host_legs_read_the_vendor_tree
+  def test_the_host_tasks_read_the_vendor_tree
     assert_equal BeniRust::VENDOR_DIR, BeniRust.host_env.fetch("BENI_VENDOR_DIR")
   end
 

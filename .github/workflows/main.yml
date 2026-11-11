@@ -119,23 +119,10 @@ jobs:
       - name: Full compile verification
         run: bundle exec rake rust:verify
       # The checks below read what rust:verify staged and do not vary by
-      # host, so one cell runs them. clippy covers every staged ABI,
-      # since each compiles a different shape of the crates.
-      - name: cargo clippy (linked, every staged ABI + wasm32-wasip1)
+      # host, so one cell runs them.
+      - name: cargo clippy (every verification config)
         if: matrix.static_checks
-        run: |
-          BENI_VENDOR_DIR="$PWD/vendor" \
-            cargo clippy --workspace --all-targets -- -D warnings
-          MRUBY_LIB_DIR="$PWD/tmp/mruby-default-build/host/lib" \
-            cargo clippy --workspace --all-targets --target-dir target/default-abi -- -D warnings
-          MRUBY_LIB_DIR="$PWD/tmp/mruby-float32-build/host/lib" \
-            cargo clippy --workspace --all-targets --target-dir target/float32 -- -D warnings
-          MRUBY_LIB_DIR="$PWD/tmp/mruby-no-boxing-build/host/lib" \
-            cargo clippy --workspace --all-targets --target-dir target/no-boxing -- -D warnings
-          MRUBY_LIB_DIR="$PWD/tmp/mruby-no-boxing-build/wasi/lib" WASI_SDK_PATH="$PWD/vendor/wasi-sdk" \
-            cargo clippy --workspace --target wasm32-wasip1 --target-dir target/no-boxing -- -D warnings
-          MRUBY_LIB_DIR="$PWD/vendor/mruby/build/wasi/lib" WASI_SDK_PATH="$PWD/vendor/wasi-sdk" \
-            cargo clippy --workspace --target wasm32-wasip1 -- -D warnings
+        run: bundle exec rake rust:clippy
       # Private items carry the reasoning the public surface leans on.
       - name: cargo doc (private items)
         if: matrix.static_checks
@@ -235,7 +222,7 @@ jobs:
       - name: Build through the gem's task interface
         run: rake scenario:setup beni:build scenario:verify
         working-directory: test/scenarios/${{ matrix.scenario }}
-      # The staged archive is upstream-default: rust:test:default's leg.
+      # The staged archive is upstream-default: rust:test:default's.
       - name: Run the crates' suite against the staged archive
         if: matrix.suite
         env:

@@ -4,10 +4,10 @@
 # ===========================================================
 #
 # Each config below +build_config/+ decides its own targets and ABI;
-# what they share is the mrbgem baseline, and the ABI defines the
-# validation build pins. Kept in one file so a config verifying a
+# what they share is the mrbgem baseline, and the ABI defines
+# build_config/mruby.rb pins. Kept in one file so a config verifying a
 # different ABI differs from the others in the ABI alone. The repo's
-# Rakefile and Rust tasks read the validation build's WASI builds from
+# Rakefile and Rust tasks read build_config/mruby.rb's WASI builds from
 # here too, so the builds declared, built, and checked stay one set.
 
 # Only defined on first load, so `load`-ing a config twice in the same
@@ -15,13 +15,13 @@
 unless defined?(BeniBuildConfig)
   # Config-time constants shared across the repo's build configs.
   module BeniBuildConfig
-    # ABI-bearing defines the validation build applies to BOTH its host
-    # and wasi targets, keeping `mrb_int` width and float boxing
+    # ABI-bearing defines build_config/mruby.rb applies to every one of
+    # its targets, keeping `mrb_int` width and float boxing
     # identical across them (without MRB_INT32 a 64-bit host defaults to
     # MRB_INT64 while wasm32 stays 32-bit — see mruby's mrbconf.h), and
     # carrying the debug hooks, whose fields `mrb_state` holds only
     # under MRB_USE_DEBUG_HOOK, so the typed suite reaches the hook
-    # surface; the other validation configs leave it out. The
+    # surface; the other verification configs leave it out. The
     # beni crates align themselves automatically: their build script
     # parses the `libmruby.flags.mak` sidecar each build leaves next to
     # the archive, so edits here flow into bindgen without code changes.
@@ -31,7 +31,7 @@ unless defined?(BeniBuildConfig)
       MRB_USE_DEBUG_HOOK
     ].freeze
 
-    # Each WASI cross build of the validation config, keyed by its
+    # Each WASI cross build of build_config/mruby.rb, keyed by its
     # mruby build name, with the WASI target it compiles for.
     WASI_BUILDS = { "wasi" => "wasm32-wasip1", "wasip2" => "wasm32-wasip2" }.freeze
 

@@ -13,8 +13,8 @@ fn rest_count(mrb: &Mrb, _self: Value, _args: &[Value]) -> Result<Value, Error> 
 // The `"*"` count out-param is written by mruby through `mrb_int*`
 // (`GET_ARG(mrb_int*)` in vendor/mruby/src/class.c). Typing it
 // narrower compiles under MRB_INT32 but corrupts the stack under
-// 64-bit mrb_int — a width coincidence the repo's validation
-// config cannot see. Exercising the full bridge → scan_args →
+// 64-bit mrb_int — a width coincidence build_config/mruby.rb
+// cannot see. Exercising the full bridge → scan_args →
 // count path under whatever ABI the linked archive uses keeps
 // that coincidence from coming back (`rake rust:test:default`
 // runs this against an upstream-default 64-bit-mrb_int archive).

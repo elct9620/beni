@@ -40,30 +40,34 @@
 #                              untouched upstream default config — the
 #                              gem's clean-build behaviour (64-bit
 #                              mrb_int on 64-bit hosts). Catches
-#                              width-coincidence bugs that the repo's
-#                              MRB_INT32 validation config masks.
+#                              width-coincidence bugs that
+#                              build_config/mruby.rb's MRB_INT32 masks.
 #   $ rake rust:test:float32 — cargo test against an mruby built with
 #                              MRB_USE_FLOAT32, where `mrb_float` is
 #                              `float`. The crates convert a different
 #                              set of Rust floats under each configured
-#                              float width, and this is the only leg
+#                              float width, and this is the only task
 #                              that compiles the 32-bit set. It pins
-#                              MRB_INT32 without bigint, the integer
-#                              posture no other leg builds.
+#                              MRB_INT32 without bigint, a pairing no
+#                              other task builds.
 #   $ rake rust:test:no_boxing
 #                            — cargo test against an mruby built with
 #                              MRB_NO_BOXING and MRB_INT64, then link the
 #                              wasm32-wasip1 test binaries against the
-#                              same config's wasi archive. The only leg
+#                              same config's wasi archive. The only task
 #                              where `mrb_value` is a tagged union, and
 #                              the only one pairing a 64-bit `mrb_int`
 #                              with a 32-bit pointer.
+#   $ rake rust:clippy       — cargo clippy against every build of every
+#                              verification config the tasks above
+#                              stage; fails naming the task that stages
+#                              a missing one.
 #   $ rake rust:verify       — beni:build + the tasks above; the
 #                              single local entry point for "does the
 #                              Rust side build on every target and pass
 #                              where it runs".
 #
-# Every cargo test leg skips the tests BENI_TEST_SKIP names, so a chain
+# Every cargo test task skips the tests BENI_TEST_SKIP names, so a chain
 # run against a release the crates do not support yet can list the
 # failures it already knows.
 
@@ -78,31 +82,42 @@ def cargo_task(spec, &body)
   end
 end
 
+vendored = BeniRust::VerificationConfig::MRUBY
+wasi_builds = vendored.builds.compact.keys
+
 namespace :rust do
   desc "cargo check the workspace on the host target"
   cargo_task(:check) do
-    sh(BeniRust.host_env, "cargo", "check", "--workspace")
+    BeniRust.cargo(vendored, "host", "check", "--workspace")
   end
 
   desc "cargo test the workspace on the host (wasm32 is held to building and linking)"
   cargo_task(:test) do
-    sh(BeniRust.host_env, "cargo", "test", "--workspace", *BeniRust.test_harness_args)
+    BeniRust.cargo(vendored, "host", "test", "--workspace", *BeniRust.test_harness_args)
+  end
+
+  # Every verification config compiles a different shape of the crates,
+  # so each is linted. Reads what the other tasks staged rather than
+  # building it, failing on a missing archive and naming its task.
+  desc "cargo clippy the workspace against every build of every verification config"
+  cargo_task(:clippy) do
+    BeniRust.clippy
   end
 
   namespace :check do
     desc "cargo check the workspace on every WASI target"
     cargo_task(:wasm) do
-      BeniRust.cargo_on_wasm_targets("check", "--workspace")
+      wasi_builds.each { |build| BeniRust.cargo(vendored, build, "check", "--workspace") }
     end
 
     # Cargo unifies features across the members it builds together, so
     # a workspace-wide --no-default-features still hands `beni` the
     # defaults a sibling asked for. Naming the one package is what makes
     # the shape a consumer gets with default features off the shape this
-    # leg actually compiles.
+    # task actually compiles.
     desc "cargo check the beni crate with every capability feature off"
     cargo_task(:nodefault) do
-      sh(BeniRust.host_env, "cargo", "check", "-p", "beni", "--no-default-features")
+      BeniRust.cargo(vendored, "host", "check", "-p", "beni", "--no-default-features")
     end
 
     # What a documentation host builds, against bindings this host
@@ -126,36 +141,24 @@ namespace :rust do
     # is, so the binaries are built and not run.
     desc "link test binaries for every WASI target against its staged archive"
     cargo_task(:wasm) do
-      BeniRust.cargo_on_wasm_targets("test", "--workspace", "--no-run")
+      wasi_builds.each { |build| BeniRust.cargo(vendored, build, "test", "--workspace", "--no-run") }
     end
   end
 
+  # Each builds mruby under one more verification config — see
+  # BeniRust::VerificationConfig for what each covers.
   namespace :test do
-    # Catches type/width coincidences the repo's MRB_INT32 validation
-    # config masks — see BeniRust.default_abi_test for the mechanics.
     desc "cargo test against an upstream-default mruby build (64-bit mrb_int on 64-bit hosts)"
-    cargo_task(default: "beni:vendor:setup") do
-      BeniRust.default_abi_test
-    end
+    cargo_task(default: "beni:vendor:setup") { BeniRust.test_against(BeniRust::VerificationConfig::DEFAULT) }
 
-    # The crates offer a different set of float conversions under each
-    # configured float width, and every other leg builds the 64-bit one
-    # — see BeniRust.float32_test for the mechanics.
     desc "cargo test against a MRB_USE_FLOAT32 mruby build (32-bit mrb_float)"
-    cargo_task(float32: "beni:vendor:setup") do
-      BeniRust.float32_test
-    end
+    cargo_task(float32: "beni:vendor:setup") { BeniRust.test_against(BeniRust::VerificationConfig::FLOAT32) }
 
-    # The crates read every value through mruby's own expansion, which
-    # differs per boxing, and every other leg builds word boxing — see
-    # BeniRust.no_boxing_test for the mechanics.
     desc "cargo test against a MRB_NO_BOXING mruby build, and link it on wasm32-wasip1"
-    cargo_task(no_boxing: "beni:vendor:setup") do
-      BeniRust.no_boxing_test
-    end
+    cargo_task(no_boxing: "beni:vendor:setup") { BeniRust.test_against(BeniRust::VerificationConfig::NO_BOXING) }
   end
 
-  desc "Full local compile verification: build + host, feature-off, wasm32, documentation and per-ABI legs"
+  desc "Full local compile verification: build + host, feature-off, wasm32, documentation and every verification config"
   task verify: ["beni:build", "rust:check", "rust:test", "rust:check:nodefault", "rust:check:wasm",
                 "rust:link:wasm", "rust:check:docs", "rust:test:default", "rust:test:float32",
                 "rust:test:no_boxing"]

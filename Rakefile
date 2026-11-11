@@ -20,9 +20,9 @@ Steep::RakeTask.new
 
 # Dogfooding: the repo builds its own vendored mruby through the gem's
 # task library, exactly like a consumer with a custom build config
-# would. build_config/mruby.rb is the repo's validation harness — host
-# + wasm32-wasip1 + wasm32-wasip2 with the ABI defines the beni
-# crates' verification mirrors. The gem's default stays mruby's
+# would. build_config/mruby.rb is the verification config beni:build
+# stages — host + wasm32-wasip1 + wasm32-wasip2 with the ABI defines
+# the beni crates' verification mirrors. The gem's default stays mruby's
 # untouched upstream build_config/default.rb.
 require "beni/tasks"
 require_relative "build_config/beni_build_config"
@@ -40,7 +40,7 @@ PRISM_SOURCES = {
 }.freeze
 
 Beni::Tasks.new do
-  # The Rust legs read this tree, so it stays put whatever
+  # The Rust tasks read this tree, so it stays put whatever
   # BENI_VENDOR_DIR a shell exports.
   vendor_dir "vendor"
   build_config "build_config/mruby.rb"

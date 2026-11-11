@@ -4,9 +4,9 @@
 # =============================
 #
 # Pure-Ruby helpers backing +tasks/rust.rake+. Owns cargo and
-# WASI target detection, the environment each leg runs cargo
-# under, and the documentation build. The .rake wrapper is the rake DSL
-# surface that glues these helpers to the +rust:*+ tasks.
+# WASI target detection, the verification configs each task runs cargo
+# against, and the documentation build. The .rake wrapper is the rake
+# DSL surface that glues these helpers to the +rust:*+ tasks.
 
 require "fileutils"
 require "open3"
@@ -37,7 +37,7 @@ module BeniRust
     abort "cargo not on PATH; install Rust toolchain to run #{task}"
   end
 
-  # Stop a wasm leg whose target standard library is not installed.
+  # Stop a wasm task whose target standard library is not installed.
   def self.require_wasm_target!(target)
     return if wasm_target_installed?(target)
 
@@ -63,17 +63,7 @@ module BeniRust
     }
   end
 
-  # Run cargo with +args+ once per WASI target, each against the
-  # archive `beni:build` stages for it.
-  def self.cargo_on_wasm_targets(*args)
-    builder = Beni::Builder.new(vendor_dir: VENDOR_DIR)
-    BeniBuildConfig::WASI_BUILDS.each do |build, target|
-      require_wasm_target!(target)
-      run!(wasm_env(builder.staged_path(build)), "cargo", *args, "--target", target, chdir: ROOT)
-    end
-  end
-
-  # What every cargo test leg hands its test binaries: a skip for each
+  # What every cargo test task hands its test binaries: a skip for each
   # test BENI_TEST_SKIP names, whitespace-separated. A lane running a
   # release the crates do not support yet lists its known failures
   # there, so the chain still fails on any other.
@@ -134,4 +124,4 @@ module BeniRust
   end
 end
 
-require_relative "beni_rust/abi_legs"
+require_relative "beni_rust/verification_configs"

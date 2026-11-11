@@ -3,17 +3,19 @@
 require "test_helper"
 require "rake"
 
-# A leg that builds mruby from the staged source needs the whole vendor
+# A task that builds mruby from the staged source needs the whole vendor
 # tree beni:vendor:setup stages, the prism tree and the wasi toolchain
 # file included, not the mruby source alone.
-class TestMrubyBuildingLegs < Minitest::Test
+class TestMrubyBuildingTasks < Minitest::Test
   TASKS_DIR = File.expand_path("../../tasks", __dir__)
-  LEGS = %w[rust:test:default rust:test:float32 rust:test:no_boxing docs:bindings docs:bindings:release].freeze
+  MRUBY_BUILDING = %w[
+    rust:test:default rust:test:float32 rust:test:no_boxing docs:bindings docs:bindings:release
+  ].freeze
 
-  def test_each_mruby_building_leg_runs_after_the_whole_vendor_setup
+  def test_each_mruby_building_task_runs_after_the_whole_vendor_setup
     with_repo_tasks do |app|
-      LEGS.each do |leg|
-        assert_includes app[leg].prerequisites, "beni:vendor:setup", leg
+      MRUBY_BUILDING.each do |name|
+        assert_includes app[name].prerequisites, "beni:vendor:setup", name
       end
     end
   end
