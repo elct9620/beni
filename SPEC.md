@@ -25,8 +25,8 @@ Each row names a mechanism and its effect.
 |---|---|
 | `beni` crate dependency | a Rust project calls mruby without writing or maintaining FFI declarations by hand |
 | `rake beni:build` | a Rust project produces the archive without vendoring mruby source or scripting tarball downloads |
-| `conf.toolchain :wasi` | once a target declaration references `wasi-sdk`, a build config cross-compiles for wasm32-wasip1 |
-| wasm32-wasip1 cross-compile settings | ship with beni and update with it, instead of living hand-maintained inside the consumer's config |
+| `conf.toolchain :wasi` | once a target declaration references `wasi-sdk`, a build config cross-compiles for a wasm32 WASI target, `wasm32-wasip1` unless it names another |
+| wasm32 WASI cross-compile settings | come with the mruby release, or with beni for a release carrying none, instead of living hand-maintained inside the consumer's config |
 | one installed beni release | the same `version`, `build_config`, `target`, and `toolchain` declarations always build the same way: same toolchain versions, compile flags, and staged layout |
 | documentation host | renders the published crates without an archive, so the typed surface can be read before a build chain exists to try it against |
 | disabling default features | a project embedding mruby without a gem a capability feature carries — compiling Ruby at run time, running fibers — drops the surface that needs that gem, rather than linking code it never calls |
@@ -43,7 +43,7 @@ Beni succeeds when every condition yields its outcome.
 | default features disabled; archive built without mruby's compiler and fiber gems | the `beni` crate builds and links; none of the capability features' surface is reachable |
 | outside a documentation build; no archive discovery variable set | the build fails on every cargo target, naming the variables archive discovery consults |
 | documentation build; no archive present | renders the typed surface from documentation bindings the published package carries and the repository does not |
-| a target declaration references `wasi-sdk`; the build config defines a target cross-compiled for wasm32; `MRUBY_LIB_DIR` names that target's staged path; `WASI_SDK_PATH` names the unpacked wasi-sdk root | a `wasm32-wasip1` cross-build succeeds |
+| a target declaration references `wasi-sdk`; the build config defines a target cross-compiled for wasm32; `MRUBY_LIB_DIR` names that target's staged path; `WASI_SDK_PATH` names the unpacked wasi-sdk root | a `wasm32-wasip1` or `wasm32-wasip2` cross-build for the target that archive was built for succeeds |
 | the build config defines a target cross-compiled for the other macOS architecture; `MRUBY_LIB_DIR` names that target's staged path | a cross-build for that architecture succeeds |
 
 ## Non-goals
@@ -52,7 +52,7 @@ Beni excludes the following scope.
 
 | Non-goal | Boundary |
 |---|---|
-| A WebAssembly project | wasm32-wasip1 is a downstream verification target only |
+| A WebAssembly project | `wasm32-wasip1` and `wasm32-wasip2` are downstream verification targets only |
 | Embedding mruby into Ruby programs | the gem only manages the toolchain for Rust consumers |
 | CRuby extension support | magnus and rb-sys own that boundary |
 
@@ -122,7 +122,7 @@ Each task leaves this state.
 | `beni:build` | toolchains staged, the archive built per target |
 | `beni:clean` | every mruby build tree removed, declared or not, the vendored source and mruby's cloned gem sources kept |
 | `beni:config` | self-contained, editable build config generated at the `build_config` path |
-| `beni:vendor:setup` | selected toolchains downloaded and unpacked; the wasi toolchain file staged when `wasi-sdk` is selected |
+| `beni:vendor:setup` | selected toolchains downloaded and unpacked; a wasi toolchain file in place when `wasi-sdk` is selected |
 | `beni:vendor:clean` | every toolchain beni stages removed, selected or not, the tarball cache kept |
 | `beni:vendor:clobber` | vendor tree removed entirely, tarball cache included |
 
@@ -155,13 +155,15 @@ A per-platform built-in pair vendors one checksum per tarball; a toolchain defin
 
 #### Wasi Toolchain File
 
-The wasi toolchain file carries beni's wasm32-wasip1 cross-compile settings. A re-extracted tree never lacks it, and a build config using it needs no toolchain setup of its own.
+The wasi toolchain file carries the wasm32 WASI cross-compile settings. A staged mruby source already holding one that beni did not write — an mruby release's own — keeps it; beni supplies one to any other. A re-extracted tree never lacks it, and a build config using it needs no toolchain setup of its own.
 
 | Aspect | Contract |
 |---|---|
-| Written | into the staged mruby source by every `beni:vendor:setup` run selecting `wasi-sdk` |
+| Not written by beni | kept; its settings apply instead of beni's |
+| Beni's | written into the staged mruby source by every `beni:vendor:setup` run selecting `wasi-sdk` whose source holds no file beni did not write; replaces one an earlier beni wrote |
 | Activation | `conf.toolchain :wasi` inside the build config's cross-build definition |
-| wasi-sdk root | `WASI_SDK_PATH` when set; otherwise the vendor tree's unpacked `wasi-sdk` |
+| Beni's WASI target | the activation's `target` parameter, `wasm32-wasip1` when omitted — the parameter and default mruby's own file takes |
+| wasi-sdk root | `WASI_SDK_PATH`, `/opt/wasi-sdk` when unset; `beni:build` sets it to the vendor tree's unpacked `wasi-sdk` unless the caller has |
 
 #### Prism Source
 
@@ -226,7 +228,7 @@ The supported cross targets are wasm32 and the other macOS architecture. A build
 
 The sidecar does not record which macOS architecture an archive was built for. `MRUBY_LIB_DIR` naming the other architecture's archive resolves and fails at link.
 
-For wasm32, the sidecar records the toolchain root the archive was built against, and the root in effect is that one. A build finding a different root, or none recorded, fails naming what it has. One root reached by two spellings is one root.
+For wasm32, the sidecar records the toolchain root and the target the archive was built against. The root in effect is that root, and the cargo target is that target; a build finding a different one, or none recorded, fails naming what it has. One root reached by two spellings is one root. The libraries the sidecar names link from that root's sysroot for that target.
 
 #### Version Bounds
 
@@ -2494,6 +2496,7 @@ measures complete.
 | wasm32 build missing its archive or the wasi-sdk toolchain | `beni-sys` build fails |
 | The wasi-sdk root in effect (`WASI_SDK_PATH` when set, `/opt/wasi-sdk` otherwise) lacks the wasi-sdk toolchain | `beni-sys` build fails and names the root |
 | The wasi-sdk root in effect differs from the one the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the roots it has |
+| A wasm32 cargo target differing from the target the archive's sidecar records, or the sidecar records none | `beni-sys` build fails and names the targets it has |
 | Bindings a `beni-sys` build uses that declare no integer width, no release, no float, a fixed-size GC arena, or NaN boxing | `beni-sys` build fails and names the bindings it read |
 | A `beni-sys` build with the layout check on whose bindings lay a type out differently from its headers | `beni-sys` build fails to compile and names the type |
 | A `beni` build that receives no integer-width metadata, no float-width metadata, or no release metadata | `beni` build fails and names the metadata it expected |
@@ -2577,7 +2580,7 @@ measures complete.
 | staged | present in the vendor tree and ready to consume — toolchains unpacked, archives built |
 | staged path | `mruby/build/<name>/lib/` under the vendor tree, holding one target's archive and compile-flags sidecar |
 | prism tree | `mrbgems/mruby-compiler/lib/prism` under the staged mruby source — the path mruby's compiler gem reads its Prism submodule from, holding the `prism` definition's commit |
-| wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — beni's wasm32-wasip1 cross-compile settings, staged whenever `wasi-sdk` is selected and activated by a build config via `conf.toolchain :wasi` |
+| wasi toolchain file | `tasks/toolchains/wasi.rake` under the staged mruby source — the wasm32 WASI cross-compile settings, one the staged source already holds that beni did not write or else beni's, activated by a build config via `conf.toolchain :wasi` |
 | compile-flags sidecar | `libmruby.flags.mak`, the per-archive record of the archive's file name, the compiler that built it, the flags that compiler was given, and the libraries it needs linked |
 | configured integer width | the bit width of mruby's integer the bindings a build uses declare — 32 or 64; mruby settles it from the archive's flags and the target, and the documentation bindings carry the 64-bit width of the upstream default configuration |
 | integer-width metadata | the `links` metadata key `defines_mrb_int64` the `beni-sys` build publishes, reaching a direct dependent's build as `DEP_MRUBY_DEFINES_MRB_INT64` — `true` for a 64-bit configured integer width, `false` for a 32-bit one |
