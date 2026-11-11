@@ -35,14 +35,11 @@ TASKS = Beni::Tasks.new do
   target :host
   target :cross
 end
-VENDOR = TASKS.configuration.vendor_dir
+BUILDER = Beni::Builder.new(vendor_dir: TASKS.configuration.vendor_dir,
+                            targets: TASKS.configuration.targets)
 
 def mruby_target(triple)
   triple == NATIVE_TRIPLE ? "host" : "cross"
-end
-
-def lib_dir(target)
-  File.join(VENDOR, "mruby", "build", target, "lib")
 end
 
 def slice_dylib(triple)
@@ -50,7 +47,7 @@ def slice_dylib(triple)
 end
 
 def cargo(*, triple:)
-  sh({ "MRUBY_LIB_DIR" => lib_dir(mruby_target(triple)) },
+  sh({ "MRUBY_LIB_DIR" => BUILDER.staged_path(mruby_target(triple)) },
      "cargo", *, "--target", triple, "--manifest-path", MANIFEST)
 end
 
@@ -72,7 +69,7 @@ end
 def assert_each_archive
   ARCHES.each do |triple, arch|
     target = mruby_target(triple)
-    assert_architectures(File.join(lib_dir(target), "libmruby.a"), [arch], "the #{target} archive")
+    assert_architectures(BUILDER.archive_path(target), [arch], "the #{target} archive")
   end
 end
 
