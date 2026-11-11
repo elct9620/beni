@@ -251,11 +251,22 @@ fn parse_toolchain_root(sidecar: &Sidecar) -> Option<std::path::PathBuf> {
     Some(bin.parent()?.to_path_buf())
 }
 
+/// The target triple the archive was compiled for, as its compile
+/// flags name it. A cross build names one; the compiler takes the last
+/// it is given, and so does this read. A host build names none.
+fn parse_target(sidecar: &Sidecar) -> Option<String> {
+    parse_compile_flags(sidecar)
+        .iter()
+        .rev()
+        .find_map(|flag| flag.strip_prefix("--target="))
+        .map(str::to_owned)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         declaration_flags, names_the_archive, parse_archive_file_name, parse_compile_flags,
-        parse_compiler, parse_link_libs, parse_toolchain_root, Sidecar,
+        parse_compiler, parse_link_libs, parse_target, parse_toolchain_root, Sidecar,
     };
 
     /// A sidecar with the given body, in a directory named after the
@@ -581,6 +592,20 @@ mod tests {
             "MRUBY_CC = /usr/local/clang\nMRUBY_CFLAGS = -DMRB_INT32\n",
         );
         assert_eq!(parse_toolchain_root(&sidecar), None);
+    }
+
+    #[test]
+    fn a_cross_builds_target_is_the_last_its_flags_name() {
+        let sidecar = sidecar(
+            "target-cross",
+            "MRUBY_CFLAGS = --target=wasm32-wasip1 -DMRB_INT32 --target=wasm32-wasip2\n",
+        );
+        assert_eq!(parse_target(&sidecar), Some("wasm32-wasip2".to_owned()));
+    }
+
+    #[test]
+    fn a_host_build_names_no_target() {
+        assert_eq!(parse_target(&sidecar("target-host", HOST_SIDECAR)), None);
     }
 
     #[test]

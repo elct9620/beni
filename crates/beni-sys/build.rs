@@ -68,7 +68,9 @@
 // `/opt/wasi-sdk` when unset, and fail naming the root in effect when
 // it lacks the toolchain, when it is not the root the archive's
 // sidecar records as having built it, or when the sidecar records
-// none. One root reached by two spellings is one root.
+// none. One root reached by two spellings is one root. The archive's
+// target, which its sidecar records the same way, must be the cargo
+// target; the sysroot's libraries for that target are the ones linked.
 //
 // The discovered lib dir is self-contained: mruby's build copies the
 // complete public header tree (source headers, generated headers,
@@ -277,7 +279,10 @@ fn main() {
     );
     require_supported_mruby(&include_root);
 
-    let wasi_sdk = is_wasm.then(|| resolve_wasi_sdk(&lib_dir, &sidecar));
+    let wasi_sdk = is_wasm.then(|| {
+        require_archive_target(&target, parse_target(&sidecar).as_deref(), &lib_dir);
+        resolve_wasi_sdk(&lib_dir, &sidecar)
+    });
 
     // The archive's actual compile defines, from its flags.mak
     // sidecar. Re-run when the sidecar changes — a rebuilt archive
@@ -293,6 +298,7 @@ fn main() {
     run_bindgen(
         &manifest_dir,
         &include_root,
+        &target,
         wasi_sdk.as_deref(),
         &declaration_flags,
         &bindings_rs,
@@ -303,14 +309,12 @@ fn main() {
 
     // The archive sits where discovery found it; every other library
     // its sidecar names comes from the toolchain that built it, which
-    // for a cross build is the wasi-sdk sysroot rather than Rust's own
-    // (Rust's wasm32-wasip1 self-contained set carries libc alone).
+    // for a cross build is the wasi-sdk sysroot's directory for the
+    // archive's target rather than Rust's own (Rust's self-contained
+    // WASI set carries libc alone).
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
     if let Some(wasi_sdk) = wasi_sdk.as_deref() {
-        println!(
-            "cargo:rustc-link-search=native={}/share/wasi-sysroot/lib/wasm32-wasip1",
-            wasi_sdk
-        );
+        println!("cargo:rustc-link-search=native={wasi_sdk}/share/wasi-sysroot/lib/{target}");
     }
     let archive_file_name = parse_archive_file_name(&sidecar);
     for lib in parse_link_libs(&sidecar) {
@@ -368,6 +372,7 @@ impl bindgen::callbacks::ParseCallbacks for HeaderComments {
 fn run_bindgen(
     manifest_dir: &Path,
     include_root: &Path,
+    target: &str,
     wasi_sdk: Option<&str>,
     declaration_flags: &[String],
     bindings_rs: &Path,
@@ -377,7 +382,7 @@ fn run_bindgen(
     let mut builder = bindgen::Builder::default().header(wrapper_h.to_str().unwrap());
     if let Some(wasi_sdk) = wasi_sdk {
         builder = builder
-            .clang_arg("--target=wasm32-wasip1")
+            .clang_arg(format!("--target={target}"))
             .clang_arg(format!("--sysroot={}/share/wasi-sysroot", wasi_sdk));
     }
     // These decide what the archive's headers declare. libclang is not
