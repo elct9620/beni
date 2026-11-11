@@ -21,7 +21,7 @@ Steep::RakeTask.new
 # Dogfooding: the repo builds its own vendored mruby through the gem's
 # task library, exactly like a consumer with a custom build config
 # would. build_config/mruby.rb is the repo's validation harness — host
-# + wasm32-wasip1 with the ABI defines the beni crates' verification
+# + wasm32-wasip1 + wasm32-wasip2 with the ABI defines the beni crates' verification
 # mirrors. The gem's default stays mruby's untouched upstream
 # build_config/default.rb.
 require "beni/tasks"
@@ -55,6 +55,9 @@ Beni::Tasks.new do
 
   target :host
   target :wasi do
+    toolchain "wasi-sdk"
+  end
+  target :wasip2 do
     toolchain "wasi-sdk"
   end
 end

@@ -2,6 +2,7 @@
 
 require "test_helper"
 require "tmpdir"
+require_relative "environment_overrides"
 require_relative "fixtures"
 
 module Beni
@@ -9,6 +10,7 @@ module Beni
   # and artifact verification. Path/cleanup behavior lives in
   # TestBuilder.
   class TestBuilderBuild < Minitest::Test
+    include EnvironmentOverrides
     include Fixtures
 
     # Extract-and-override seam: pretends mruby's rake ran without
@@ -103,6 +105,22 @@ module Beni
 
       assert_includes builder.recorded_cmd, "default"
       assert_includes builder.recorded_cmd, flags_mak
+    end
+
+    def test_build_points_wasi_toolchains_at_the_vendored_wasi_sdk
+      builder = fake_built_builder
+
+      with_env("WASI_SDK_PATH" => nil) { capture_io { builder.build } }
+
+      assert_equal File.join(@dir, "wasi-sdk"), builder.recorded_env["WASI_SDK_PATH"]
+    end
+
+    def test_build_keeps_a_wasi_sdk_root_the_caller_chose
+      builder = fake_built_builder
+
+      with_env("WASI_SDK_PATH" => "/opt/wasi-sdk") { capture_io { builder.build } }
+
+      refute_includes builder.recorded_env, "WASI_SDK_PATH"
     end
 
     def test_build_runs_mruby_rake_in_parallel

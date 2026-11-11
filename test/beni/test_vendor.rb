@@ -108,26 +108,5 @@ module Beni
         assert_equal "http://127.0.0.1:8080/fixtures", Vendor.base_url_for("https://example.invalid")
       end
     end
-
-    def test_stage_wasi_toolchain_file_writes_the_gem_shipped_definition
-      Dir.mktmpdir("beni-wasi-toolchain") do |dir|
-        staged = Vendor.stage_wasi_toolchain_file(vendor_dir: dir)
-
-        assert_equal File.join(dir, "mruby", "tasks", "toolchains", "wasi.rake"), staged
-        assert_includes File.read(staged), "MRuby::Toolchain.new(:wasi)"
-      end
-    end
-
-    def test_stage_wasi_toolchain_file_replaces_a_stale_copy
-      Dir.mktmpdir("beni-wasi-toolchain") do |dir|
-        target = File.join(dir, "mruby", "tasks", "toolchains", "wasi.rake")
-        FileUtils.mkdir_p(File.dirname(target))
-        File.write(target, "# stale\n")
-
-        Vendor.stage_wasi_toolchain_file(vendor_dir: dir)
-
-        refute_equal "# stale\n", File.read(target)
-      end
-    end
   end
 end

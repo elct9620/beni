@@ -1,15 +1,17 @@
 # frozen_string_literal: true
 
-# beni's wasm32-wasip1 cross-compile toolchain — the wasi toolchain
-# file, staged into the mruby tree's +tasks/toolchains/+ by
-# +beni:vendor:setup+ whenever wasi-sdk is selected. A build config
-# activates it with +conf.toolchain :wasi+.
-MRuby::Toolchain.new(:wasi) do |conf, _params|
-  # WASI_SDK_PATH overrides the wasi-sdk root; the default is the
-  # vendor tree this mruby source is staged in (MRUBY_ROOT's parent).
-  wasi_sdk = ENV["WASI_SDK_PATH"] || File.join(File.expand_path("..", MRUBY_ROOT), "wasi-sdk")
+# beni's wasm32 WASI cross-compile toolchain — the wasi toolchain file,
+# staged into the mruby tree's +tasks/toolchains/+ by
+# +beni:vendor:setup+ when the tree holds none of its own. A build
+# config activates it with +conf.toolchain :wasi+, or names another
+# WASI target with +conf.toolchain :wasi, target: "wasm32-wasip2"+ —
+# the parameter mruby's own wasi toolchain file takes.
+MRuby::Toolchain.new(:wasi) do |conf, params|
+  # +beni:build+ points WASI_SDK_PATH at the vendored wasi-sdk.
+  wasi_sdk = ENV["WASI_SDK_PATH"] || "/opt/wasi-sdk"
   bin = File.join(wasi_sdk, "bin")
-  target_flags = ["--target=wasm32-wasip1", "--sysroot=#{File.join(wasi_sdk, "share", "wasi-sysroot")}"]
+  target = params[:target] || "wasm32-wasip1"
+  target_flags = ["--target=#{target}", "--sysroot=#{File.join(wasi_sdk, "share", "wasi-sysroot")}"]
   # setjmp/longjmp via the wasm exception-handling mechanism: these
   # flags go to every compile and the link, and the link adds the
   # setjmp library.

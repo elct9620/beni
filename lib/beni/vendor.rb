@@ -26,8 +26,8 @@ module Beni
     # digests); mruby's source archive is host-agnostic with a single
     # checksum.
     #
-    # wasi-sdk: must be >= 26 for native wasm32-wasip1 setjmp/longjmp
-    # support. 33's +libc.a+ supplies +__wasi_init_tp+, which Rust's
+    # wasi-sdk: must be >= 26 for native WASI setjmp/longjmp support.
+    # 33's +libc.a+ supplies +__wasi_init_tp+, which Rust's
     # wasm32-wasip1 +crt1-command.o+ references from 1.96 onward. Keep in
     # lockstep with the channel in +rust-toolchain.toml+ — in both this
     # repo and kobako.
@@ -62,6 +62,10 @@ module Beni
       "wasi-sdk" => :wasi_sdk,
       "prism" => :prism
     }.freeze
+
+    # What every wasi toolchain file beni has shipped says about itself,
+    # and an mruby release's own does not.
+    WASI_TOOLCHAIN_MARK = "beni:vendor:setup"
 
     # Where a toolchain staging somewhere other than its own name under
     # the vendor tree unpacks; every other one unpacks at its name.
@@ -154,16 +158,19 @@ module Beni
       checksum.fetch(platform) { UnvendoredChecksum.new(name:, version:, platform:) }
     end
 
-    # Write the gem-shipped wasi toolchain file into the staged mruby
-    # source, where mruby's +conf.toolchain :wasi+ resolves it from.
-    # Idempotent and always overwriting, so a re-extracted tree or an
-    # older beni's copy converges on this release's definition. Returns
-    # the staged path.
+    # Put a wasi toolchain file in the staged mruby source, where
+    # mruby's +conf.toolchain :wasi+ resolves it from. One the tree
+    # already holds that beni did not write — an mruby release's own —
+    # is kept; otherwise the gem-shipped file is written, so a
+    # re-extracted tree or an older beni's copy converges on this
+    # release's definition. Returns the staged path.
     def stage_wasi_toolchain_file(vendor_dir:)
+      target = File.join(vendor_dir, "mruby", "tasks", "toolchains", "wasi.rake")
+      return target if File.exist?(target) && !File.read(target).include?(WASI_TOOLCHAIN_MARK)
+
       # `__dir__ || "."`: __dir__ is only nil under eval, which never
       # loads this file; the fallback satisfies steep's String? typing.
       source = File.expand_path("vendor/toolchains/wasi.rake", __dir__ || ".")
-      target = File.join(vendor_dir, "mruby", "tasks", "toolchains", "wasi.rake")
       FileUtils.mkdir_p(File.dirname(target))
       FileUtils.cp(source, target)
       target

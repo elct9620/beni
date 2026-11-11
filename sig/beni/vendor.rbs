@@ -5,6 +5,7 @@ module Beni
     BUILT_IN_PAIRS: Hash[String, built_in_pair]
     DEPENDENCIES: Hash[String, Array[String]]
     TOOLCHAIN_FACTORIES: Hash[String, Symbol]
+    WASI_TOOLCHAIN_MARK: String
     STAGED_DIRS: Hash[String, String]
     SELECTED_BY_DEFINITION: Array[String]
 
