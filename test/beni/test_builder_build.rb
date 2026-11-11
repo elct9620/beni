@@ -120,7 +120,7 @@ module Beni
 
       with_env("WASI_SDK_PATH" => "/opt/wasi-sdk") { capture_io { builder.build } }
 
-      refute_includes builder.recorded_env, "WASI_SDK_PATH"
+      assert_equal "/opt/wasi-sdk", builder.recorded_env["WASI_SDK_PATH"]
     end
 
     def test_build_raises_when_artifacts_are_missing_after_the_run

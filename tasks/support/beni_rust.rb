@@ -62,14 +62,8 @@ module BeniRust
   def self.wasm_env(target, lib_dir = File.join(MRUBY_SOURCE_DIR, "build", WASM_BUILDS.fetch(target), "lib"))
     {
       "MRUBY_LIB_DIR" => lib_dir,
-      "WASI_SDK_PATH" => wasi_sdk_path
+      "WASI_SDK_PATH" => Beni::Vendor.wasi_sdk_root(vendor_dir: VENDOR_DIR)
     }
-  end
-
-  # The wasi-sdk root a wasi toolchain file builds against, as
-  # +beni:build+ hands it one: the caller's, else the vendored one.
-  def self.wasi_sdk_path
-    ENV.fetch("WASI_SDK_PATH", File.join(VENDOR_DIR, Beni::Vendor.staged_dir("wasi-sdk")))
   end
 
   # Run cargo with +args+ once per WASI target, each against the

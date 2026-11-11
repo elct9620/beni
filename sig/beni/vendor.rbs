@@ -21,6 +21,8 @@ module Beni
 
     def self?.staged_dir: (String name) -> String
 
+    def self?.wasi_sdk_root: (vendor_dir: String) -> String
+
     def self?.built_in_sha256: (String name, String version, ?String platform) -> (String | UnvendoredChecksum)?
 
     def self?.stage_wasi_toolchain_file: (vendor_dir: String) -> String

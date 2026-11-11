@@ -97,7 +97,8 @@ module BeniRust
   def self.staged_abi_lib_dirs(build_dir, env = {}, targets: %w[host])
     converge_build_dir(build_dir)
     lib_dirs = targets.map { |target| File.join(build_dir, target, "lib") }
-    run!({ "MRUBY_BUILD_DIR" => build_dir, "WASI_SDK_PATH" => wasi_sdk_path, **env },
+    wasi_sdk_root = Beni::Vendor.wasi_sdk_root(vendor_dir: VENDOR_DIR)
+    run!({ "MRUBY_BUILD_DIR" => build_dir, "WASI_SDK_PATH" => wasi_sdk_root, **env },
          RbConfig.ruby, "-S", "rake", "default",
          *lib_dirs.map { |lib_dir| File.join(lib_dir, Beni::Builder::FLAGS_MAK) },
          chdir: MRUBY_SOURCE_DIR)

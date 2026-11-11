@@ -131,12 +131,10 @@ module Beni
     # for an explicit config — absent, mruby falls back to its own
     # +build_config/default.rb+ (lib/mruby/build.rb#mruby_config_path).
     # +WASI_SDK_PATH+ is how a wasi toolchain file — beni's or the mruby
-    # release's own — finds wasi-sdk, so it names the vendored one
-    # unless the caller already chose a root.
+    # release's own — finds wasi-sdk.
     def env
-      env = { "BENI_VENDOR_DIR" => vendor_dir }
+      env = { "BENI_VENDOR_DIR" => vendor_dir, "WASI_SDK_PATH" => Vendor.wasi_sdk_root(vendor_dir:) }
       env["MRUBY_CONFIG"] = build_config if build_config
-      env["WASI_SDK_PATH"] = File.join(vendor_dir, Vendor.staged_dir("wasi-sdk")) unless ENV.key?("WASI_SDK_PATH")
       env
     end
 

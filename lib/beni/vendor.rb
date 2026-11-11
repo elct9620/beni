@@ -140,6 +140,12 @@ module Beni
       STAGED_DIRS.fetch(name, name)
     end
 
+    # The wasi-sdk root +beni:build+ hands a wasi toolchain file: the
+    # caller's +WASI_SDK_PATH+, else the one unpacked in +vendor_dir+.
+    def wasi_sdk_root(vendor_dir:)
+      ENV.fetch("WASI_SDK_PATH") { File.join(vendor_dir, staged_dir("wasi-sdk")) }
+    end
+
     # The built-in checksum for +name+ at +version+: the build platform's
     # entry when the toolchain's checksums are platform-keyed, +nil+ for
     # any version other than the vendored one — mruby's TOFU pinning path.
