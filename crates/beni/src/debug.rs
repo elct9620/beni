@@ -27,7 +27,6 @@ use crate::{sys, ClassOrModule, Error, FromValue, Id, Mrb, Value};
 use core::marker::PhantomData;
 use core::num::NonZero;
 use std::borrow::Cow;
-use std::ffi::CStr;
 
 /// The closure a code fetch hook runs, with its return projected.
 #[cfg(mrb_debug_hook)]
@@ -503,15 +502,9 @@ unsafe fn path_at<'a>(
 ) -> Option<Cow<'a, str>> {
     // SAFETY: forwarded from the caller.
     let name = unsafe { sys::mrb_debug_get_filename(mrb, irep, offset(irep, pc)) };
-    // SAFETY: a non-NULL name is a NUL-terminated string, read here
+    // SAFETY: a non-NULL name is a NUL-terminated string, copied here
     // before any other name read can reuse its buffer.
-    (!name.is_null()).then(|| {
-        Cow::Owned(
-            unsafe { CStr::from_ptr(name) }
-                .to_string_lossy()
-                .into_owned(),
-        )
-    })
+    unsafe { sys::owned_str(name) }.map(Cow::Owned)
 }
 
 /// The index of `pc` in `irep`'s instructions, the form mruby's debug

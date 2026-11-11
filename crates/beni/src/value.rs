@@ -306,15 +306,8 @@ pub trait ReprValue: private::ReprValue {
         // SAFETY: `mrb` is alive by the borrow; `self` originates
         // from the same VM by the interpreter pairing.
         let ptr = unsafe { sys::mrb_obj_classname(mrb.as_ptr(), self.as_value().0) };
-        if ptr.is_null() {
-            return String::new();
-        }
-        // SAFETY: `ptr` is a valid C string for the duration of this
-        // call; copy its bytes before the temporary it points into
-        // can be collected.
-        unsafe { core::ffi::CStr::from_ptr(ptr) }
-            .to_string_lossy()
-            .into_owned()
+        // SAFETY: mruby answers NULL or a C string valid for this call.
+        unsafe { crate::sys::owned_str(ptr) }.unwrap_or_default()
     }
 
     /// Coerce to a Rust `String` by calling `Object#to_s` and copying

@@ -465,15 +465,8 @@ pub trait Class: crate::Module {
         // SAFETY: `mrb` is alive by the borrow; `self` originates
         // from the same VM by the interpreter pairing.
         let ptr = unsafe { sys::mrb_class_name(mrb.as_ptr(), self.raw()) };
-        if ptr.is_null() {
-            return String::new();
-        }
-        // SAFETY: `ptr` is a valid C string for the duration of this
-        // call; copy its bytes before the temporary it points into
-        // can be collected.
-        unsafe { core::ffi::CStr::from_ptr(ptr) }
-            .to_string_lossy()
-            .into_owned()
+        // SAFETY: mruby answers NULL or a C string valid for this call.
+        unsafe { crate::sys::owned_str(ptr) }.unwrap_or_default()
     }
 
     /// The general class handle on this same class, for the operations

@@ -110,3 +110,19 @@ impl FromRawId for crate::Id {
         crate::Id::from_raw_unchecked(id)
     }
 }
+
+/// Copy a C string mruby answered into an owned `String`, reading a byte
+/// sequence that is not UTF-8 as U+FFFD; `None` for NULL. The copy is
+/// made at once, so nothing borrows a buffer mruby may reuse or collect.
+///
+/// # Safety
+///
+/// `ptr` is NULL or a NUL-terminated string valid for this call.
+pub(crate) unsafe fn owned_str(ptr: *const core::ffi::c_char) -> Option<String> {
+    // SAFETY: non-NULL, so valid and NUL-terminated by the caller.
+    (!ptr.is_null()).then(|| {
+        unsafe { core::ffi::CStr::from_ptr(ptr) }
+            .to_string_lossy()
+            .into_owned()
+    })
+}
