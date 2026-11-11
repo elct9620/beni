@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sdk and builds the mruby archive through Rake, and two Rust crates (`beni-sys` bindgen FFI, `beni` typed wrapper) bind the resulting archive — the magnus / rb-sys split applied at the mruby boundary — with `beni-macros` carrying the `beni` crate's proc macros as magnus-macros does magnus's. The unpublished `beni-tests` crate holds the typed suite in consumer position. wasm32-wasip1 is a downstream verification target only (for kobako), not a product target. All four published packages release in lockstep under one version.
+beni is an mruby toolchain monorepo: a Ruby gem (`beni`) vendors mruby + wasi-sdk and builds the mruby archive through Rake, and two Rust crates (`beni-sys` bindgen FFI, `beni` typed wrapper) bind the resulting archive — the magnus / rb-sys split applied at the mruby boundary — with `beni-macros` carrying the `beni` crate's proc macros as magnus-macros does magnus's. The unpublished `beni-tests` crate holds the typed suite in consumer position. wasm32-wasip1 and wasm32-wasip2 are downstream verification targets only (for kobako), not product targets. All four published packages release in lockstep under one version.
 
 ## Principles
 

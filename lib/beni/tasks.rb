@@ -12,7 +12,7 @@ module Beni
   #
   #   Beni::Tasks.new
   #
-  # or with declarations (a custom config cross-building to wasm32-wasip1):
+  # or with declarations (a custom config cross-building to a WASI target):
   #
   #   Beni::Tasks.new do
   #     build_config "build_config/mruby.rb"

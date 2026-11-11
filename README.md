@@ -107,7 +107,7 @@ fails naming the ones it looked for, rather than handing you a crate
 whose every call aborts later. Any C API the typed wrapper does not
 cover stays reachable through the unsafe `beni::sys` escape hatch.
 
-### Cross-compile for wasm32-wasip1
+### Cross-compile for WASI
 
 Declare a `wasi` target referencing the `wasi-sdk` toolchain:
 
@@ -122,25 +122,29 @@ Beni::Tasks.new do
 end
 ```
 
-and append the cross build to the generated config:
+and append the cross build to the generated config. `target:` picks
+the WASI target, `wasm32-wasip1` when omitted:
 
 ```ruby
 MRuby::CrossBuild.new("wasi") do |conf|
-  conf.toolchain :wasi
+  conf.toolchain :wasi, target: "wasm32-wasip2"
 end
 ```
 
-`conf.toolchain :wasi` resolves to the wasi toolchain file
-`beni:vendor:setup` stages into the mruby tree whenever `wasi-sdk` is
-selected — the cross-compile settings ship with beni and update with it.
-After `rake beni:build`, name the staged archive and the wasi-sdk root
-explicitly for the cargo side (a cross-compiled cargo target never reads
-the vendor tree on its own):
+| mruby release | `conf.toolchain :wasi` resolves to |
+|---|---|
+| ships its own wasi toolchain file (4.1 onward) | that file, kept as is |
+| ships none | the one `beni:vendor:setup` stages, taking the same `target:` |
+
+`rake beni:build` points either file at the vendored wasi-sdk. A
+cross-compiled cargo target never reads the vendor tree, so name the
+staged archive and the wasi-sdk root. Cargo must build for the target
+the archive was built for:
 
 ```bash
 MRUBY_LIB_DIR=$PWD/vendor/mruby/build/wasi/lib \
 WASI_SDK_PATH=$PWD/vendor/wasi-sdk \
-cargo build --target wasm32-wasip1
+cargo build --target wasm32-wasip2
 ```
 
 ### Prism Source
@@ -167,9 +171,9 @@ The commit is the one the release records for
 ## Toolchain
 
 beni targets plain mruby and is not bound to WebAssembly. `rust-toolchain.toml`
-keeps `wasm32-wasip1` only as a build-verification target for downstream wasi
-consumers (kobako). For that target two versions move in lockstep, in both this
-repo and kobako; host builds are unaffected.
+keeps `wasm32-wasip1` and `wasm32-wasip2` only as build-verification targets
+for downstream wasi consumers (kobako). For those targets two versions move in
+lockstep, in both this repo and kobako; host builds are unaffected.
 
 | Version | Lockstep reason |
 |---|---|
@@ -181,12 +185,12 @@ repo and kobako; host builds are unaffected.
 After checking out the repo, run `bin/setup` to install dependencies, then
 `bundle exec rake` for the default gate (tests + RuboCop + Steep). The repo
 dogfoods its own gem: the Rakefile wires `Beni::Tasks` with the validation
-config `build_config/mruby.rb` (host + wasi targets), and a repo-local rake
-chain verifies the crates compile against a real archive on both the host
-target and wasm32-wasip1:
+config `build_config/mruby.rb`. It builds host, wasm32-wasip1 and
+wasm32-wasip2 archives, and a repo-local rake chain verifies the crates
+against each:
 
 ```bash
-bundle exec rake rust:verify   # beni:build + check/test (host) + check (wasm32)
+bundle exec rake rust:verify   # beni:build + check/test (host) + check/link (wasm32)
 ```
 
 Behavior contracts live in `SPEC.md` — the source of truth the
