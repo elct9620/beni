@@ -105,6 +105,14 @@ module Beni
       assert_includes builder.recorded_cmd, flags_mak
     end
 
+    def test_build_runs_mruby_rake_in_parallel
+      builder = fake_built_builder
+
+      capture_io { builder.build }
+
+      assert_includes builder.recorded_cmd, "-m"
+    end
+
     def test_build_raises_when_artifacts_are_missing_after_the_run
       builder = FakeRakeBuilder.new(vendor_dir: @dir)
 

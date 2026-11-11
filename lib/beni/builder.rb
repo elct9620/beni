@@ -83,10 +83,11 @@ module Beni
     # ABI aligned with the archive. (The file task is defined per
     # target but not part of mruby's default products.) The underlying
     # build is make-style incremental, so re-running on a partially
-    # built tree only compiles what is missing.
+    # built tree only compiles what is missing. +-m+ runs independent
+    # compiles in parallel, the way mruby's own CI invokes its rake.
     def build
       check_build_config!
-      cmd = [RbConfig.ruby, "-S", "rake", "default", *flags_mak_paths]
+      cmd = [RbConfig.ruby, "-S", "rake", "-m", "default", *flags_mak_paths]
       puts "[beni] cd #{mruby_dir} && #{env.map { |k, v| "#{k}=#{v}" }.join(" ")} #{cmd.join(" ")}"
       run_mruby_rake(env, cmd)
       verify_artifacts!
