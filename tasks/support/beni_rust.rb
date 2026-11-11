@@ -14,6 +14,7 @@ require "rbconfig"
 
 require "beni/builder"
 require "beni/vendor"
+require_relative "../../build_config/beni_build_config"
 
 # Helpers for the Cargo workspace at the repo root. See sibling
 # +tasks/rust.rake+ for the rake DSL.
@@ -21,9 +22,6 @@ module BeniRust
   ROOT = File.expand_path("../..", __dir__)
   VENDOR_DIR = File.join(ROOT, "vendor")
   MRUBY_SOURCE_DIR = File.join(VENDOR_DIR, "mruby")
-  # Each WASI target the crates link for, mapped to the validation
-  # config's build staging its archive.
-  WASM_BUILDS = { "wasm32-wasip1" => "wasi", "wasm32-wasip2" => "wasip2" }.freeze
 
   # Whether cargo can be spawned. Asking cargo itself needs no lookup
   # tool, which +which+ is on POSIX hosts and is not on Windows.
@@ -55,11 +53,10 @@ module BeniRust
     { "BENI_VENDOR_DIR" => VENDOR_DIR, "MRUBY_LIB_DIR" => nil }
   end
 
-  # Archive discovery env for wasm32 cargo runs: cross targets never
-  # read the vendor tree, so the staged path and the unpacked wasi-sdk
-  # root are named directly. +lib_dir+ defaults to the archive
-  # `beni:build` stages for +target+.
-  def self.wasm_env(target, lib_dir = File.join(MRUBY_SOURCE_DIR, "build", WASM_BUILDS.fetch(target), "lib"))
+  # Archive discovery env for wasm32 cargo runs against the archive
+  # staged in +lib_dir+: cross targets never read the vendor tree, so
+  # the staged path and the wasi-sdk root are named directly.
+  def self.wasm_env(lib_dir)
     {
       "MRUBY_LIB_DIR" => lib_dir,
       "WASI_SDK_PATH" => Beni::Vendor.wasi_sdk_root(vendor_dir: VENDOR_DIR)
@@ -69,9 +66,10 @@ module BeniRust
   # Run cargo with +args+ once per WASI target, each against the
   # archive `beni:build` stages for it.
   def self.cargo_on_wasm_targets(*args)
-    WASM_BUILDS.each_key do |target|
+    builder = Beni::Builder.new(vendor_dir: VENDOR_DIR)
+    BeniBuildConfig::WASI_BUILDS.each do |build, target|
       require_wasm_target!(target)
-      run!(wasm_env(target), "cargo", *args, "--target", target, chdir: ROOT)
+      run!(wasm_env(builder.staged_path(build)), "cargo", *args, "--target", target, chdir: ROOT)
     end
   end
 

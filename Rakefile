@@ -25,6 +25,7 @@ Steep::RakeTask.new
 # crates' verification mirrors. The gem's default stays mruby's
 # untouched upstream build_config/default.rb.
 require "beni/tasks"
+require_relative "build_config/beni_build_config"
 
 # BENI_MRUBY_VERSION selects the mruby release the chain builds; unset,
 # it builds the gem's default. A release whose compiler gem parses with
@@ -54,11 +55,8 @@ Beni::Tasks.new do
   end
 
   target :host
-  target :wasi do
-    toolchain "wasi-sdk"
-  end
-  target :wasip2 do
-    toolchain "wasi-sdk"
+  BeniBuildConfig::WASI_BUILDS.each_key do |name|
+    target(name.to_sym) { toolchain "wasi-sdk" }
   end
 end
 

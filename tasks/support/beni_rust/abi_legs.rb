@@ -54,7 +54,7 @@ module BeniRust
     require_wasm_target!(NO_BOXING_WASM_TARGET)
     host_lib_dir, wasi_lib_dir = no_boxing_lib_dirs
     abi_test(host_lib_dir, "no-boxing")
-    run!(wasm_env(NO_BOXING_WASM_TARGET, wasi_lib_dir),
+    run!(wasm_env(wasi_lib_dir),
          "cargo", "test", "--workspace", "--target", NO_BOXING_WASM_TARGET, "--no-run",
          "--target-dir", File.join(ROOT, "target", "no-boxing"),
          chdir: ROOT)

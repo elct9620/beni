@@ -6,7 +6,9 @@
 # Each config below +build_config/+ decides its own targets and ABI;
 # what they share is the mrbgem baseline, and the ABI defines the
 # validation build pins. Kept in one file so a config verifying a
-# different ABI differs from the others in the ABI alone.
+# different ABI differs from the others in the ABI alone. The repo's
+# Rakefile and Rust tasks read the validation build's WASI builds from
+# here too, so the builds declared, built, and checked stay one set.
 
 # Only defined on first load, so `load`-ing a config twice in the same
 # process does not warn about constant redefinition.
@@ -28,6 +30,10 @@ unless defined?(BeniBuildConfig)
       MRB_WORDBOX_NO_INLINE_FLOAT
       MRB_USE_DEBUG_HOOK
     ].freeze
+
+    # Each WASI cross build of the validation config, keyed by its
+    # mruby build name, with the WASI target it compiles for.
+    WASI_BUILDS = { "wasi" => "wasm32-wasip1", "wasip2" => "wasm32-wasip2" }.freeze
 
     # Core-gem baseline shared by every config: mruby-compiler (the
     # wrapper's `mrb_load_nstring` needs it) plus the portable core

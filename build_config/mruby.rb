@@ -47,7 +47,7 @@ MRuby::Build.new("host") do |conf|
 end
 
 # One cross build per WASI target the crates link for.
-{ "wasi" => "wasm32-wasip1", "wasip2" => "wasm32-wasip2" }.each do |name, target|
+BeniBuildConfig::WASI_BUILDS.each do |name, target|
   MRuby::CrossBuild.new(name) do |conf|
     conf.toolchain :wasi, target: target
 
