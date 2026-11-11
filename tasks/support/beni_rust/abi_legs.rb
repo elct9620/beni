@@ -93,11 +93,17 @@ module BeniRust
   def self.staged_abi_lib_dirs(build_dir, env = {}, targets: %w[host])
     converge_build_dir(build_dir)
     lib_dirs = targets.map { |target| File.join(build_dir, target, "lib") }
-    run!({ "MRUBY_BUILD_DIR" => build_dir, **env },
+    run!({ "MRUBY_BUILD_DIR" => build_dir, "WASI_SDK_PATH" => wasi_sdk_path, **env },
          RbConfig.ruby, "-S", "rake", "default",
          *lib_dirs.map { |lib_dir| File.join(lib_dir, Beni::Builder::FLAGS_MAK) },
          chdir: MRUBY_SOURCE_DIR)
     lib_dirs
+  end
+
+  # The wasi-sdk root a wasi toolchain file builds against, as
+  # +beni:build+ hands it one: the caller's, else the vendored one.
+  def self.wasi_sdk_path
+    ENV.fetch("WASI_SDK_PATH", File.join(VENDOR_DIR, "wasi-sdk"))
   end
 
   # Start +build_dir+ over unless it was built from the mruby release

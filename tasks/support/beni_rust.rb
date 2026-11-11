@@ -62,7 +62,7 @@ module BeniRust
   def self.wasm_env(target, lib_dir = File.join(MRUBY_SOURCE_DIR, "build", WASM_BUILDS.fetch(target), "lib"))
     {
       "MRUBY_LIB_DIR" => lib_dir,
-      "WASI_SDK_PATH" => File.join(VENDOR_DIR, "wasi-sdk")
+      "WASI_SDK_PATH" => wasi_sdk_path
     }
   end
 
