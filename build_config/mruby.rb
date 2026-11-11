@@ -11,7 +11,8 @@
 # the arbitrary-width Integer gem beside the baseline, making this the
 # bigint archive with a 32-bit +mrb_int+ — the pairing where values a
 # Rust +i64+ holds already outgrow the fixed-width tag — while the
-# float32 and no-boxing configs stay without it. mruby-rational needs it to build.
+# float32 and no-boxing configs stay without it. mruby-rational needs
+# it to build.
 #
 # The file is `load`ed by mruby's rake when +Beni::Builder+ sets
 # +MRUBY_CONFIG+ to its absolute path. The wasi cross builds'

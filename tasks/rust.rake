@@ -9,9 +9,9 @@
 # names the repo's vendor artifacts explicitly: host tasks point
 # `BENI_VENDOR_DIR` at the vendor tree, the wasm tasks point
 # `MRUBY_LIB_DIR` / `WASI_SDK_PATH` at each WASI target's staged path
-# and the toolchain. The artifacts come from the gem's own `beni:build` task
-# (dogfooding — see Beni::Tasks in the Rakefile); running a task
-# without them fails naming the missing archive.
+# and the toolchain. The artifacts come from the gem's own
+# `beni:build` task (dogfooding — see Beni::Tasks in the Rakefile);
+# running a task without them fails naming the missing archive.
 #
 #   $ rake rust:check        — cargo check, host target, linked against
 #                              the vendored archive
