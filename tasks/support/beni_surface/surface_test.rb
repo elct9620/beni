@@ -3,14 +3,14 @@
 require_relative "gate"
 
 module BeniSurface
-  # Reads the drift net in +beni-tests+ into one reference body per
+  # Reads the surface test in +beni-tests+ into one reference body per
   # capability feature, keyed by the feature the body is gated on and
   # +nil+ for the ungated one. An entry a feature carries belongs in
   # that feature's body, so a reference sitting in the wrong body reads
   # as missing rather than passing. A body some other +#[cfg]+ makes
   # build-specific compiles in only some builds, so it stands for no
   # axis and answers no entry.
-  class Net
+  class SurfaceTest
     # The key of the bodies no expectation reads.
     BUILD_SPECIFIC = :build_specific
 
@@ -43,8 +43,8 @@ module BeniSurface
       @gate = @gate.after(line, Gate.at(nil))
     end
 
-    # A feature's body is every reference body gated on it, so a net
-    # split across several fns is read whole rather than by its last.
+    # A feature's body is every test fn gated on it, so references
+    # split across several fns are read whole rather than by the last.
     def collect(index)
       stop = closing_brace(index)
       key = @gate.excluded ? BUILD_SPECIFIC : @gate.feature

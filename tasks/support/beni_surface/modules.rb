@@ -33,7 +33,7 @@ module BeniSurface
     end
 
     # A module written inline has no file to carry its gate to, so its
-    # items would read as ungated and pass a net that never names them.
+    # items would read as ungated and pass a surface test that never names them.
     # The map refuses the source rather than measuring it wrong.
     def refuse_inline(line, feature)
       name = feature && line[Syntax::INLINE_MOD, :name]

@@ -5,7 +5,7 @@ require "test_helper"
 require_relative "../../tasks/support/beni_rust"
 require_relative "environment_overrides"
 
-# BENI_TEST_SKIP names the tests a chain leaves out by name, so a lane
+# BENI_TEST_SKIP names the tests a chain leaves out by name, so a CI job
 # can list the failures it already knows and still fail on a new one.
 class TestRustTestSkip < Minitest::Test
   include Beni::EnvironmentOverrides

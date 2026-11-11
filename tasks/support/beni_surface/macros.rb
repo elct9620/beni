@@ -2,7 +2,7 @@
 
 module BeniSurface
   # One macro +beni-macros+ exports, reached through +beni+'s
-  # re-exports: an attribute the net applies as +#[beni::name]+, or a
+  # re-exports: an attribute the surface test applies as +#[beni::name]+, or a
   # derive it names inside +derive(...)+ as +beni::Name+.
   MacroEntry = Data.define(:kind, :name) do
     def ref

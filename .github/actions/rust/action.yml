@@ -1,7 +1,7 @@
 name: Set up Rust
 description: >-
   Install the toolchain rust-toolchain.toml names, with whichever
-  components, cross targets and cargo cache the calling lane asks for.
+  components, cross targets and cargo cache the calling job asks for.
 
 inputs:
   components:
@@ -37,7 +37,7 @@ runs:
       run: echo "channel=$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
 
     # An empty components or targets list expands to no rustup flag, so
-    # a lane that wants neither passes neither.
+    # a job that wants neither passes neither.
     - name: Install the toolchain
       uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
       with:

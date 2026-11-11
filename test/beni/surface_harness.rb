@@ -5,19 +5,19 @@ require "tmpdir"
 
 require_relative "../../tasks/support/beni_surface"
 
-# Runs the surface gate against fixture sources written to a scratch
-# tree: the crate's modules, the net file, and the proc-macro crate
+# Runs api:surface against fixture sources written to a scratch
+# tree: the crate's modules, the surface test, and the proc-macro crate
 # root, which exports nothing unless a case gives it macros.
 module SurfaceHarness
   private
 
-  def verify(crate:, net:, macros: "")
+  def verify(crate:, surface_test:, macros: "")
     Dir.mktmpdir do |dir|
       src = File.join(dir, "src")
       Dir.mkdir(src)
       write_crate(src, crate)
       BeniSurface.verify(crate_src: src,
-                         net_file: write(dir, "surface_test.rs", net),
+                         surface_test_file: write(dir, "surface_test.rs", surface_test),
                          macro_src: write(dir, "macros.rs", macros))
     end
   end

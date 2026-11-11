@@ -3,28 +3,28 @@
 require "test_helper"
 require_relative "surface_harness"
 
-# The drift net's feature axis. An item a capability feature carries
+# The surface test's feature axis. An item a capability feature carries
 # used to leave the expectation the moment it was gated, so the gate
-# stayed green while the net stopped naming it. These pin that a gated
-# item is expected in its own feature's net body and nowhere else.
+# stayed green while the surface test stopped naming it. These pin that a gated
+# item is expected in its own feature's surface test fn and nowhere else.
 class TestSurfaceGate < Minitest::Test
   include SurfaceHarness
 
   def test_expects_a_feature_gated_fn_in_that_feature_body
-    report = verify(crate: gated_crate, net: complete_net)
+    report = verify(crate: gated_crate, surface_test: complete_surface_test)
 
     assert_predicate report, :ok?
     assert_equal 3, report.total
   end
 
-  def test_reports_a_feature_gated_fn_the_net_never_names
-    report = verify(crate: gated_crate, net: ungated_net_only)
+  def test_reports_a_feature_gated_fn_the_surface_test_never_names
+    report = verify(crate: gated_crate, surface_test: ungated_surface_test_only)
 
     assert_equal %w[Ccontext::load_nstring Mrb::load_string], report.missing.map(&:ref).sort
   end
 
   def test_reports_a_feature_gated_fn_named_in_the_ungated_body
-    net = <<~RUST
+    surface_test = <<~RUST
       #[test]
       fn ungated() {
           let _ = Mrb::open;
@@ -33,13 +33,13 @@ class TestSurfaceGate < Minitest::Test
       }
     RUST
 
-    report = verify(crate: gated_crate, net: net)
+    report = verify(crate: gated_crate, surface_test: surface_test)
 
-    refute_predicate report, :ok?, "a gated item named in the ungated body is in the wrong net"
+    refute_predicate report, :ok?, "a gated item named in the ungated body is in the wrong fn"
   end
 
   def test_names_the_feature_in_a_missing_entry_diagnostic
-    report = verify(crate: gated_crate, net: ungated_net_only)
+    report = verify(crate: gated_crate, surface_test: ungated_surface_test_only)
 
     assert_includes report.missing.map(&:label), "Mrb::load_string (feature compiler)"
   end
@@ -54,7 +54,7 @@ class TestSurfaceGate < Minitest::Test
       }
     RUST
 
-    report = verify(crate: crate, net: "#[test]\nfn ungated() {\n    let _ = Mrb::open;\n}\n")
+    report = verify(crate: crate, surface_test: "#[test]\nfn ungated() {\n    let _ = Mrb::open;\n}\n")
 
     assert_predicate report, :ok?
     assert_equal 1, report.total, "a build-specific fn is neither expected nor counted"
@@ -63,11 +63,11 @@ class TestSurfaceGate < Minitest::Test
   def test_expects_an_archive_cfg_gated_module_in_that_cfg_body
     crate = { "lib.rs" => "#[cfg(mrb_debug_hook)]\npub mod debug;\n",
               "debug.rs" => "impl TraceArg {\n    pub fn lineno() {}\n}\n" }
-    net = "#[cfg(mrb_debug_hook)]\n#[test]\nfn hooked() {\n    let _ = TraceArg::lineno;\n}\n"
+    surface_test = "#[cfg(mrb_debug_hook)]\n#[test]\nfn hooked() {\n    let _ = TraceArg::lineno;\n}\n"
 
-    assert_predicate verify(crate: crate, net: net), :ok?
+    assert_predicate verify(crate: crate, surface_test: surface_test), :ok?
     assert_equal ["TraceArg::lineno (cfg mrb_debug_hook)"],
-                 verify(crate: crate, net: "").missing.map(&:label)
+                 verify(crate: crate, surface_test: "").missing.map(&:label)
   end
 
   def test_refuses_a_gated_inline_module
@@ -80,7 +80,7 @@ class TestSurfaceGate < Minitest::Test
       }
     RUST
 
-    error = assert_raises(RuntimeError) { verify(crate: crate, net: "") }
+    error = assert_raises(RuntimeError) { verify(crate: crate, surface_test: "") }
 
     assert_match(/gated inline module `ccontext`/, error.message)
   end
@@ -126,7 +126,7 @@ class TestSurfaceGate < Minitest::Test
     RUST
   end
 
-  def complete_net
+  def complete_surface_test
     <<~RUST
       #[test]
       fn ungated() {
@@ -142,7 +142,7 @@ class TestSurfaceGate < Minitest::Test
     RUST
   end
 
-  def ungated_net_only
+  def ungated_surface_test_only
     <<~RUST
       #[test]
       fn ungated() {

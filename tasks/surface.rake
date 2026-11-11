@@ -2,7 +2,7 @@
 
 require_relative "support/beni_surface"
 
-# Public-surface drift gate: the net in beni-tests only catches a
+# Public-surface check: the surface test in beni-tests only catches a
 # removal it names, so the reference list is checked against the
 # crate's own surface mechanically instead of by hand.
 namespace :api do

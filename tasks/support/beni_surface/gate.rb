@@ -21,7 +21,7 @@ module BeniSurface
 
     # The gate key for an item behind both +outer+ and +inner+: every
     # axis either names, so an item an impl and its own fn each gate is
-    # expected in a net body gated on both rather than on the inner one.
+    # expected in a surface test fn gated on both rather than on the inner one.
     def self.combine(outer, inner)
       names = [outer, inner].compact.flat_map { |key| key.split(AXIS_SEPARATOR) }.uniq.sort
       names.join(AXIS_SEPARATOR) unless names.empty?

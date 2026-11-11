@@ -10,9 +10,9 @@
 # build_config/mruby.rb's double-width build never reaches.
 #
 # It also pins +MRB_INT32+ without the arbitrary-width Integer gem, the
-# one integer posture no other verification config covers: the crates
+# one integer-width pairing no other verification config covers: the crates
 # offer a narrower set of integer conversions where a 32-bit +mrb_int+
-# has no bigint to fall back on. Nothing here is a product posture — it
+# has no bigint to fall back on. Nothing here is a setting to ship — it
 # exists to be verified against.
 #
 # The file is `load`ed by mruby's rake when +MRUBY_CONFIG+ points at it.

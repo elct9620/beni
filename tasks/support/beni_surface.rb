@@ -3,18 +3,18 @@
 require_relative "beni_surface/syntax"
 require_relative "beni_surface/scan"
 require_relative "beni_surface/modules"
-require_relative "beni_surface/net"
+require_relative "beni_surface/surface_test"
 require_relative "beni_surface/macros"
 
-# Public-surface drift gate support
-# =================================
+# Public-surface check support
+# ============================
 #
 # Backs the +api:surface+ rake task: scans the +beni+ crate for the
-# inherent +pub fn+ surface and verifies the drift net in +beni-tests+
-# names every entry. The net lives in consumer position, so a
-# reference there also carries the root re-exports its path runs
-# through; this scan is what keeps the net and the surface from
-# drifting apart as items are added or removed.
+# inherent +pub fn+ surface and verifies the surface test in
+# +beni-tests+ names every entry. The surface test lives in consumer
+# position, so a reference there also carries the root re-exports its
+# path runs through; this scan is what keeps the surface test and the
+# surface from drifting apart as items are added or removed.
 #
 # Scope: inherent +pub fn+s declared in column-zero +impl+ blocks, and
 # the macros +beni-macros+ exports through +beni+. Trait items stay
@@ -22,20 +22,20 @@ require_relative "beni_surface/macros"
 # without a reference.
 #
 # A capability feature is an axis of the expectation rather than an
-# exemption from it: an item a feature carries is expected in the net
-# body gated on that feature, so enabling the feature has a net of its
-# own and disabling it leaves the ungated net whole. An archive cfg the
+# exemption from it: an item a feature carries is expected in the
+# surface test fns gated on that feature, so enabling the feature has
+# references of its own and disabling it leaves the ungated ones whole. An archive cfg the
 # build script reads from the archive (+mrb_debug_hook+) is an axis the
-# same way. An item two axes gate is expected in a net body gated on
-# both. A fn carrying some other +#[cfg]+ is build-specific and stays
-# out of the expectation, and a net body behind one answers no entry.
+# same way. An item two axes gate is expected in a surface test fn
+# gated on both. A fn carrying some other +#[cfg]+ is build-specific and stays
+# out of the expectation, and a surface test fn behind one answers no entry.
 module BeniSurface
   ROOT = File.expand_path("../..", __dir__)
   CRATE_SRC = File.join(ROOT, "crates", "beni", "src")
   SURFACE_TEST_FILE = File.join(ROOT, "crates", "beni-tests", "src", "surface_test.rs")
   MACRO_SRC = File.join(ROOT, "crates", "beni-macros", "src", "lib.rs")
 
-  # Comparison outcome between the scanned surface and the net bodies.
+  # Comparison outcome between the scanned surface and the surface test.
   Report = Data.define(:missing, :stale, :total) do
     def ok?
       missing.empty? && stale.empty?
@@ -44,22 +44,22 @@ module BeniSurface
 
   module_function
 
-  def verify(crate_src: CRATE_SRC, net_file: SURFACE_TEST_FILE, macro_src: MACRO_SRC)
+  def verify(crate_src: CRATE_SRC, surface_test_file: SURFACE_TEST_FILE, macro_src: MACRO_SRC)
     entries = surface(crate_src)
     macros = Macros.call(File.read(macro_src))
-    bodies = Net.call(net_file)
-    net = bodies.values.join
-    Report.new(missing: missing(entries, bodies) + macros.reject { |entry| entry.referenced?(net) },
-               stale: stale_refs(entries, net), total: entries.size + macros.size)
+    bodies = SurfaceTest.call(surface_test_file)
+    references = bodies.values.join
+    Report.new(missing: missing(entries, bodies) + macros.reject { |entry| entry.referenced?(references) },
+               stale: stale_refs(entries, references), total: entries.size + macros.size)
   end
 
-  # Entries no net body names — each looked for in the body its
+  # Entries no surface test body names — each looked for in the body its
   # feature gates, the ungated one for an ungated entry.
   def missing(entries, bodies)
     entries.reject { |entry| referenced?(bodies[entry.feature], entry) }
   end
 
-  # Whether one net body names the entry. A generic type instantiates
+  # Whether one surface test body names the entry. A generic type instantiates
   # between the segments (+DataType::<u8>::new+), so the matcher
   # tolerates one turbofish.
   def referenced?(body, entry)
@@ -79,7 +79,7 @@ module BeniSurface
   end
 
   # References naming a scanned type but no scanned fn — a rename or
-  # removal the net has not caught up with.
+  # removal the surface test has not caught up with.
   def stale_refs(entries, body)
     known_types = entries.map(&:type).uniq
     known_refs = entries.map(&:ref)

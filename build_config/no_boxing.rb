@@ -9,7 +9,7 @@
 # the archive that compiles the crates against a 64-bit `mrb_int`
 # beside a 32-bit pointer, a pairing no other build in the chain
 # reaches. It carries the debug hooks too, so the debug surface compiles
-# and runs over the tagged union. Nothing here is a product posture — it
+# and runs over the tagged union. Nothing here is a setting to ship — it
 # exists to be verified against.
 #
 # The file is `load`ed by mruby's rake when +MRUBY_CONFIG+ points at it.

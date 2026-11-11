@@ -3,8 +3,8 @@
 # The verification config beni:build stages.
 # ===========================================
 #
-# A tuned build beyond the upstream defaults — the consumer posture
-# `rake beni:config` seeds (generate the upstream default, then edit):
+# A tuned build beyond the upstream defaults — the workflow
+# `rake beni:config` starts (generate the upstream default, then edit):
 # a native +host+ build plus wasm32-wasip1 and wasm32-wasip2 cross
 # builds, sharing one set of ABI-bearing defines and one mrbgem
 # baseline, so the beni crates verify against every target. All add

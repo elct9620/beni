@@ -7,12 +7,12 @@ require_relative "surface_harness"
 # scanners read that rule from one place, so a fixture carrying the
 # doc comment on both sides would move both together and see nothing;
 # only the crate side carries one here, so a gate the scan drops shows
-# up as an entry the net no longer names.
+# up as an entry the surface test no longer names.
 class TestSurfaceAttributes < Minitest::Test
   include SurfaceHarness
 
   def test_carries_a_gate_across_the_doc_comment_below_it
-    report = verify(crate: doc_comment_crate, net: doc_comment_net)
+    report = verify(crate: doc_comment_crate, surface_test: doc_comment_surface_test)
 
     assert_predicate report, :ok?, "the doc comment must not drop either gate"
     assert_equal 2, report.total
@@ -33,8 +33,8 @@ class TestSurfaceAttributes < Minitest::Test
     RUST
   end
 
-  # The matching net, whose own gate sits directly on its fn.
-  def doc_comment_net
+  # The matching surface test, whose own gate sits directly on its fn.
+  def doc_comment_surface_test
     <<~RUST
       #[test]
       fn ungated() {

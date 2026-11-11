@@ -3,17 +3,17 @@
 require "test_helper"
 require_relative "surface_harness"
 
-# The drift net's axes past one gate each: an item two axes gate is
-# expected where both gate the net, and a net body only some builds
+# The surface test's axes past one gate each: an item two axes gate is
+# expected where both gate the surface test, and a surface test fn only some builds
 # compile answers for no axis.
 class TestSurfaceGateAxes < Minitest::Test
   include SurfaceHarness
 
-  def test_a_build_specific_net_body_names_nothing_for_the_expectation
+  def test_a_build_specific_surface_test_fn_names_nothing_for_the_expectation
     crate = { "lib.rs" => "impl Mrb {\n    pub fn open() {}\n}\n" }
-    net = "#[cfg(not(mrb_int64))]\n#[test]\nfn narrow() {\n    let _ = Mrb::open;\n}\n"
+    surface_test = "#[cfg(not(mrb_int64))]\n#[test]\nfn narrow() {\n    let _ = Mrb::open;\n}\n"
 
-    assert_equal ["Mrb::open"], verify(crate: crate, net: net).missing.map(&:ref)
+    assert_equal ["Mrb::open"], verify(crate: crate, surface_test: surface_test).missing.map(&:ref)
   end
 
   def test_expects_an_item_two_axes_gate_in_a_body_gated_on_both
@@ -28,8 +28,8 @@ class TestSurfaceGateAxes < Minitest::Test
     both = "#[cfg(feature = \"compiler\")]\n#[cfg(mrb_debug_hook)]\n#[test]\nfn both() {\n    let _ = Mrb::hooked;\n}\n"
 
     assert_equal ["Mrb::hooked (feature compiler, cfg mrb_debug_hook)"],
-                 verify(crate: crate, net: one_axis).missing.map(&:label)
-    assert_predicate verify(crate: crate, net: both), :ok?
+                 verify(crate: crate, surface_test: one_axis).missing.map(&:label)
+    assert_predicate verify(crate: crate, surface_test: both), :ok?
   end
 
   def test_expects_an_item_nested_gated_modules_carry_behind_both
@@ -38,6 +38,6 @@ class TestSurfaceGateAxes < Minitest::Test
               "outer/inner.rs" => "impl TraceArg {\n    pub fn lineno() {}\n}\n" }
 
     assert_equal ["TraceArg::lineno (feature compiler, cfg mrb_debug_hook)"],
-                 verify(crate: crate, net: "").missing.map(&:label)
+                 verify(crate: crate, surface_test: "").missing.map(&:label)
   end
 end

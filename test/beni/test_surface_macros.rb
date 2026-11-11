@@ -3,14 +3,14 @@
 require "test_helper"
 require_relative "surface_harness"
 
-# The macros +beni-macros+ exports are surface too: the net applies
+# The macros +beni-macros+ exports are surface too: the surface test applies
 # each one — an attribute as +#[beni::name]+, a derive inside
-# +derive(...)+ — so dropping a re-export breaks the net's compilation.
+# +derive(...)+ — so dropping a re-export breaks the surface test's compilation.
 class TestSurfaceMacros < Minitest::Test
   include SurfaceHarness
 
-  def test_expects_each_exported_macro_applied_in_the_net
-    net = <<~RUST
+  def test_expects_each_exported_macro_applied_in_the_surface_test
+    surface_test = <<~RUST
       #[test]
       fn ungated() {
           let _ = Mrb::open;
@@ -22,14 +22,14 @@ class TestSurfaceMacros < Minitest::Test
       }
     RUST
 
-    report = verify(crate: ungated_crate, net: net, macros: macro_crate)
+    report = verify(crate: ungated_crate, surface_test: surface_test, macros: macro_crate)
 
     assert_predicate report, :ok?
     assert_equal 3, report.total
   end
 
-  def test_reports_an_exported_macro_the_net_never_applies
-    report = verify(crate: ungated_crate, net: ungated_net_only, macros: macro_crate)
+  def test_reports_an_exported_macro_the_surface_test_never_applies
+    report = verify(crate: ungated_crate, surface_test: ungated_surface_test_only, macros: macro_crate)
 
     assert_equal ["#[beni::wrap]", "derive(beni::TypedData)"], report.missing.map(&:ref).sort
   end
@@ -40,7 +40,7 @@ class TestSurfaceMacros < Minitest::Test
     { "lib.rs" => "impl Mrb {\n    pub fn open() {}\n}\n" }
   end
 
-  def ungated_net_only
+  def ungated_surface_test_only
     "#[test]\nfn ungated() {\n    let _ = Mrb::open;\n}\n"
   end
 

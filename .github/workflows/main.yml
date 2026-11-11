@@ -11,9 +11,9 @@ permissions:
   contents: read
 
 jobs:
-  # Fast lane: fixture-based unit tests + RuboCop + Steep + the surface
-  # and format drift checks. No network, no Rust — the gem's pure-Ruby
-  # surface across supported Rubies.
+  # Fast job: fixture-based unit tests + RuboCop + Steep + the
+  # api:surface and api:formats checks. No network, no Rust — the gem's
+  # pure-Ruby surface across supported Rubies.
   test:
     runs-on: ubuntu-latest
     name: Ruby ${{ matrix.ruby }}
@@ -37,8 +37,8 @@ jobs:
       - name: Run the default task
         run: bundle exec rake
 
-  # Archive-free lane: what can be judged without a staged archive.
-  # Anything needing the real FFI surface waits for the verify lane.
+  # Archive-free job: what can be judged without a staged archive.
+  # Anything needing the real FFI surface waits for the verify job.
   lint:
     runs-on: ubuntu-latest
     name: Rust lint
@@ -63,10 +63,10 @@ jobs:
             exit 1
           fi
 
-  # Integration lane: rust:verify, the full dogfooding chain, per build
+  # Integration job: rust:verify, the full dogfooding chain, per build
   # platform and mruby release. Tarballs are not cached: a real
   # download is what exercises each platform's detection. A release
-  # candidate's cell is experimental and only warns, since the crates
+  # candidate's combination is experimental and only warns, since the crates
   # promise behavior on final releases alone. It skips its known
   # failures by name, so a new failure still turns it red.
   verify:
@@ -119,7 +119,7 @@ jobs:
       - name: Full compile verification
         run: bundle exec rake rust:verify
       # The checks below read what rust:verify staged and do not vary by
-      # host, so one cell runs them.
+      # host, so one matrix combination runs them.
       - name: cargo clippy (every verification config)
         if: matrix.static_checks
         run: bundle exec rake rust:clippy
@@ -137,10 +137,10 @@ jobs:
           bundle exec rake api:coverage
           git diff --exit-code docs/api_coverage.md
 
-  # Consumer lane: each test/scenarios/ harness through the gem's task
+  # Consumer job: each test/scenarios/ harness through the gem's task
   # interface alone, plain rake without Bundler. A scenario runs on more
   # than one OS only where its outcome depends on the platform. Windows
-  # cells build with MSVC, the toolchain a downstream Rust extension for
+  # combinations build with MSVC, the toolchain a downstream Rust extension for
   # Windows uses. wasi-sdk has no Windows tarball, so only host-target
   # scenarios run there.
   scenario:
@@ -162,11 +162,11 @@ jobs:
             scenario: default_host
             msvc: true
           # beni:config → cross build; the generated config itself
-          # builds on every platform in the verify lane.
+          # builds on every platform in the verify job.
           - os: ubuntu-latest
             scenario: generated_config
           # Discovery from outside the workspace. MSVC's longjmp unwinds
-          # the frames a raise crosses, so the Windows cell also runs the
+          # the frames a raise crosses, so the Windows combination also runs the
           # crates' suite.
           - os: ubuntu-latest
             scenario: rust_consumer
@@ -180,7 +180,7 @@ jobs:
           - os: ubuntu-latest
             scenario: embedded_no_compiler
             rust: true
-          # The macOS shipping posture: one build per architecture,
+          # How a macOS build ships: one build per architecture,
           # merged with lipo; the only cross target outside wasm32.
           - os: macos-latest
             scenario: macos_universal
@@ -195,8 +195,8 @@ jobs:
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           ruby-version: '3.4'
-      # A scenario is its own cargo workspace; the suite cells also
-      # build the repo's.
+      # A scenario is its own cargo workspace; the combinations running
+      # the suite also build the repo's.
       - name: Set up Rust
         if: matrix.rust
         uses: ./.github/actions/rust
@@ -212,7 +212,7 @@ jobs:
       - name: Set up MSVC
         if: matrix.msvc
         uses: ./.github/actions/msvc
-      # The verify lane already proves the download per platform. The key
+      # The verify job already proves the download per platform. The key
       # carries the built-in pairs, and a hit still verifies checksums.
       - name: Cache the scenario's toolchain tarballs
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

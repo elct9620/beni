@@ -1,11 +1,12 @@
-//! Public-surface drift net, held from consumer position.
+//! Public-surface test, held from consumer position.
 //!
 //! Every inherent `pub fn` the `beni` crate declares is named here
 //! once, through the paths a consumer reaches it by, and every macro
 //! it re-exports is applied once. An item that stops being public — or
 //! a root re-export its path runs through that stops being exported —
-//! breaks this file's compilation, which no in-crate test can see. `rake api:surface` keeps the list and
-//! the crate's own surface from drifting apart in either direction.
+//! breaks this file's compilation, which no in-crate test can see.
+//! `rake api:surface` keeps the list and the crate's own surface from
+//! drifting apart in either direction.
 
 use beni::*;
 
@@ -477,9 +478,9 @@ fn raw_layer_helpers_are_reachable_from_outside() {
     let _ = beni::sys::catch_unwind::<fn() -> u8, u8>;
 }
 
-/// The drift net for the `compiler` capability feature. An item the
-/// feature carries is named here rather than above, so the ungated net
-/// stays whole for a consumer who never enables it and `rake
+/// The surface test for the `compiler` capability feature. An item the
+/// feature carries is named here rather than above, so the ungated fns
+/// stay whole for a consumer who never enables it and `rake
 /// api:surface` can tell the two apart.
 #[cfg(feature = "compiler")]
 #[test]
@@ -491,8 +492,8 @@ fn compiler_surface_is_reachable_from_outside() {
     let _ = Mrb::eval::<Value>;
 }
 
-/// The drift net for the `fiber` capability feature, kept apart from
-/// the ungated net as the `compiler` one is.
+/// The surface test for the `fiber` capability feature, kept apart
+/// from the ungated fns as the `compiler` one is.
 #[cfg(feature = "fiber")]
 #[test]
 fn fiber_surface_is_reachable_from_outside() {

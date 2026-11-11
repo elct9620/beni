@@ -1364,12 +1364,12 @@ fn arithmetic_surfaces_integer_overflow_as_err() {
     let max = beni::sys::mrb_int::MAX.into_value(&mrb);
     match max.add(&mrb, 1i32.into_value(&mrb)) {
         Err(Error::Exception(exc)) => {
-            // The fixed-width lane stays strict: the surfaced exception is
+            // A fixed-width config stays strict: the surfaced exception is
             // exactly the RangeError the SPEC mandates for that config.
             assert_eq!(exc.classname(&mrb), "RangeError");
         }
         Ok(promoted) => {
-            // The bigint lane lawfully promotes instead of raising; the
+            // A bigint config lawfully promotes instead of raising; the
             // result keeps the Integer class (a BigInt is allocated on
             // mruby's integer_class), so the value stays a numeric
             // Integer rather than degrading to another type.

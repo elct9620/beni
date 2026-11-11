@@ -64,7 +64,7 @@ module BeniRust
   end
 
   # What every cargo test task hands its test binaries: a skip for each
-  # test BENI_TEST_SKIP names, whitespace-separated. A lane running a
+  # test BENI_TEST_SKIP names, whitespace-separated. A CI job running a
   # release the crates do not support yet lists its known failures
   # there, so the chain still fails on any other.
   def self.test_harness_args
