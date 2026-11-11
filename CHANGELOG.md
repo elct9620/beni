@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.27.0](https://github.com/elct9620/beni/compare/v0.26.0...v0.27.0) (2026-11-11)
+
+
+### Features
+
+* **beni-sys:** link a wasm32 archive for the WASI target it was built for ([8fca530](https://github.com/elct9620/beni/commit/8fca5307a20e68bf2f484522c6c09f2c104a05eb))
+* **wasi:** take the WASI target and keep mruby's own wasi toolchain ([fde5584](https://github.com/elct9620/beni/commit/fde5584ff9a6f88190e4f549c1a1e62927733796))
+
+
+### Bug Fixes
+
+* **tasks:** hand the ABI legs' wasi builds the wasi-sdk root beni:build does ([77a628d](https://github.com/elct9620/beni/commit/77a628d3699759d619944fa04ff56267912d0a00))
+
+
+### Performance Improvements
+
+* **build:** run mruby's rake with parallel compiles ([0089cee](https://github.com/elct9620/beni/commit/0089ceeab292fc9a7b77854559f3397ad061a3ac))
+
+
+### Reverts
+
+* run mruby's rake without parallel compiles ([dce48d5](https://github.com/elct9620/beni/commit/dce48d5615b8823f0af4075065eae208ddf74c68))
+
 ## [0.26.0](https://github.com/elct9620/beni/compare/v0.25.0...v0.26.0) (2026-11-06)
 
 
