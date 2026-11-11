@@ -18,6 +18,10 @@ module BeniRust
   # trees for the same reason.
   NO_BOXING_BUILD_DIR = File.join(ROOT, "tmp", "mruby-no-boxing-build")
 
+  # The WASI target build_config/no_boxing.rb's wasi build compiles for:
+  # it names none, so `conf.toolchain :wasi` builds its default.
+  NO_BOXING_WASM_TARGET = "wasm32-wasip1"
+
   # The default-ABI leg: build the vendored mruby with NO MRUBY_CONFIG
   # (mruby falls back to its own build_config/default.rb — what a
   # clean consumer build gets), then run the wrapper tests against
@@ -47,11 +51,11 @@ module BeniRust
   # only build where `mrb_value` is a tagged union, and its wasi archive
   # the only one pairing a 64-bit `mrb_int` with a 32-bit pointer.
   def self.no_boxing_test
+    require_wasm_target!(NO_BOXING_WASM_TARGET)
     host_lib_dir, wasi_lib_dir = no_boxing_lib_dirs
     abi_test(host_lib_dir, "no-boxing")
-    target = WASM_BUILDS.key("wasi")
-    run!(wasm_env(target, wasi_lib_dir),
-         "cargo", "test", "--workspace", "--target", target, "--no-run",
+    run!(wasm_env(NO_BOXING_WASM_TARGET, wasi_lib_dir),
+         "cargo", "test", "--workspace", "--target", NO_BOXING_WASM_TARGET, "--no-run",
          "--target-dir", File.join(ROOT, "target", "no-boxing"),
          chdir: ROOT)
   end
@@ -98,12 +102,6 @@ module BeniRust
          *lib_dirs.map { |lib_dir| File.join(lib_dir, Beni::Builder::FLAGS_MAK) },
          chdir: MRUBY_SOURCE_DIR)
     lib_dirs
-  end
-
-  # The wasi-sdk root a wasi toolchain file builds against, as
-  # +beni:build+ hands it one: the caller's, else the vendored one.
-  def self.wasi_sdk_path
-    ENV.fetch("WASI_SDK_PATH", File.join(VENDOR_DIR, "wasi-sdk"))
   end
 
   # Start +build_dir+ over unless it was built from the mruby release

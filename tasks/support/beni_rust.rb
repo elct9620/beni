@@ -66,6 +66,21 @@ module BeniRust
     }
   end
 
+  # The wasi-sdk root a wasi toolchain file builds against, as
+  # +beni:build+ hands it one: the caller's, else the vendored one.
+  def self.wasi_sdk_path
+    ENV.fetch("WASI_SDK_PATH", File.join(VENDOR_DIR, Beni::Vendor.staged_dir("wasi-sdk")))
+  end
+
+  # Run cargo with +args+ once per WASI target, each against the
+  # archive `beni:build` stages for it.
+  def self.cargo_on_wasm_targets(*args)
+    WASM_BUILDS.each_key do |target|
+      require_wasm_target!(target)
+      run!(wasm_env(target), "cargo", *args, "--target", target, chdir: ROOT)
+    end
+  end
+
   # What every cargo test leg hands its test binaries: a skip for each
   # test BENI_TEST_SKIP names, whitespace-separated. A lane running a
   # release the crates do not support yet lists its known failures

@@ -92,10 +92,7 @@ namespace :rust do
   namespace :check do
     desc "cargo check the workspace on every WASI target"
     cargo_task(:wasm) do
-      BeniRust::WASM_BUILDS.each_key do |target|
-        BeniRust.require_wasm_target!(target)
-        sh(BeniRust.wasm_env(target), "cargo", "check", "--workspace", "--target", target)
-      end
+      BeniRust.cargo_on_wasm_targets("check", "--workspace")
     end
 
     # Cargo unifies features across the members it builds together, so
@@ -129,10 +126,7 @@ namespace :rust do
     # is, so the binaries are built and not run.
     desc "link test binaries for every WASI target against its staged archive"
     cargo_task(:wasm) do
-      BeniRust::WASM_BUILDS.each_key do |target|
-        BeniRust.require_wasm_target!(target)
-        sh(BeniRust.wasm_env(target), "cargo", "test", "--workspace", "--target", target, "--no-run")
-      end
+      BeniRust.cargo_on_wasm_targets("test", "--workspace", "--no-run")
     end
   end
 
@@ -157,7 +151,6 @@ namespace :rust do
     # BeniRust.no_boxing_test for the mechanics.
     desc "cargo test against a MRB_NO_BOXING mruby build, and link it on wasm32-wasip1"
     cargo_task(no_boxing: "beni:vendor:setup") do
-      BeniRust.require_wasm_target!(BeniRust::WASM_BUILDS.key("wasi"))
       BeniRust.no_boxing_test
     end
   end
