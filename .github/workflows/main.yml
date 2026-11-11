@@ -208,11 +208,18 @@ jobs:
         uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
         with:
           ruby-version: '3.4'
+      # A scenario is its own cargo workspace; the suite cells also
+      # build the repo's.
       - name: Set up Rust
         if: matrix.rust
         uses: ./.github/actions/rust
         with:
           targets: ${{ matrix.rust_targets }}
+          cache: "true"
+          cache-key: ${{ matrix.scenario }}
+          cache-workspaces: |
+            test/scenarios/${{ matrix.scenario }} -> target
+            . -> target
       # Later steps keep the runner's default shell: bash would put its
       # GNU tools ahead of MSVC's link.exe.
       - name: Set up MSVC

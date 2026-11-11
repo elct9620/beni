@@ -16,6 +16,14 @@ inputs:
     description: Restore the cargo build cache when "true".
     required: false
     default: "false"
+  cache-key:
+    description: Separates the cache of jobs sharing one job id and host.
+    required: false
+    default: ""
+  cache-workspaces:
+    description: Newline-separated `workspace -> target` pairs to cache.
+    required: false
+    default: ". -> target"
 
 runs:
   using: composite
@@ -47,3 +55,6 @@ runs:
     - name: Cache cargo
       if: inputs.cache == 'true'
       uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      with:
+        key: ${{ inputs.cache-key }}
+        workspaces: ${{ inputs.cache-workspaces }}
